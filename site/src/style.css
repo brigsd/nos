@@ -1,0 +1,191 @@
+/*
+ * Dark theme built from the game's own palette (Resurrect 64, see
+ * assets/palette.json) - the Nucleo's violet/crimson glow becomes the HUD
+ * accent, so the chrome reads as part of the same world as the sprites.
+ */
+:root {
+  --nos-bg: #100c15;
+  --nos-panel: rgba(46, 34, 47, 0.72);
+  --nos-panel-border: rgba(168, 132, 243, 0.28);
+  --nos-text: #c7dcd0;
+  --nos-text-dim: #9babb2;
+  --nos-accent: #a884f3;
+  --nos-pulse: #c32454;
+  --nos-font:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--nos-bg);
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  font-family: var(--nos-font);
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--nos-bg);
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+  cursor: grab;
+}
+
+#map:active {
+  cursor: grabbing;
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--nos-text);
+  visibility: hidden;
+}
+
+.hud-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hud-brand {
+  font-size: 11px;
+  letter-spacing: 0.35em;
+  color: var(--nos-text-dim);
+  opacity: 0.55;
+  font-weight: 600;
+  padding-top: 4px;
+}
+
+.hud-panel {
+  background: var(--nos-panel);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 14px;
+  padding: 10px 16px 12px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  max-width: min(80vw, 320px);
+}
+
+.hud-title {
+  margin: 0 0 8px;
+  font-size: clamp(16px, 4.4vw, 20px);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--nos-text);
+  text-shadow: 0 0 12px rgba(168, 132, 243, 0.45);
+}
+
+.hud-stats {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+}
+
+.hud-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.hud-stat dt {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--nos-text-dim);
+}
+
+.hud-stat dd {
+  margin: 2px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--nos-accent);
+  display: flex;
+  align-items: center;
+}
+
+.pulse-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nos-pulse);
+  margin-right: 6px;
+  box-shadow: 0 0 8px var(--nos-pulse);
+  animation: nos-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes nos-pulse {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+.hud-hint {
+  align-self: center;
+  margin: 0 0 2px;
+  font-size: 11px;
+  color: var(--nos-text-dim);
+  opacity: 0.65;
+  background: rgba(16, 12, 21, 0.55);
+  padding: 6px 14px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  text-align: center;
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  color: var(--nos-text);
+  background: var(--nos-bg);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.status[hidden] {
+  display: none;
+}
