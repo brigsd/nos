@@ -3,8 +3,8 @@
 ## v0 — Fundação
 - [x] Nome, visão e decisões estruturais
 - [x] Harness (CLAUDE.md), documentação e agentes
-- [ ] Repositório público `brigsd/nos` criado e estrutura enviada
-- [ ] Backlog inicial como issues com labels/milestones
+- [x] Repositório público `brigsd/nos` criado e estrutura enviada
+- [x] Backlog inicial como issues (#1–#9)
 
 ## v1 — O Coração pulsa (meta: jogável)
 - [ ] T1 · Engine: tipos do mundo + JSON Schema + validador

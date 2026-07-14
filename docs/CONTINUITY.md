@@ -6,13 +6,13 @@
 
 - Fase: **v0 — Fundação**.
 - Feito: visão, GDD, arquitetura, plano, lore inicial, harness e 6 agentes definidos.
-- Bloqueio: criação do repositório `brigsd/nos` (o token da integração não pode criar repos — o Tiago cria manualmente em github.com/new).
+- Feito também: repo `brigsd/nos` publicado, fundação na `main`, backlog v1 criado como issues #1–#9.
 
 ## Próximo passo imediato
 
-1. Repo criado → `add_repo` → push desta estrutura para `main`.
-2. Criar backlog v1 como issues (T1–T9 do plano) com milestone "v1 — O Coração pulsa".
-3. Começar T1 (tipos + schema) e T2 (gerador do mapa) — podem ir em paralelo via subagentes.
+1. ~~Repo criado e estrutura publicada~~ ✅
+2. ~~Backlog v1 como issues~~ ✅ (#1–#9)
+3. Começar T1 (tipos + schema) e T2 (gerador do mapa) — em paralelo via subagentes; T7 (arte) também pode iniciar.
 
 ## Decisões pendentes (perguntar ao Tiago quando relevante)
 
