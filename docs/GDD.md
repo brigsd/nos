@@ -40,7 +40,7 @@ Estilo JRPG: jogador submete intenções (`/atacar goblin ruinas`), o tick rola 
 
 ## Economia (v2)
 
-Moeda: **Pulso (₱)**. Fontes: coleta, quests, comércio com NPCs. Drenos: construção, itens, viagens de portal. O tick é o banco central; inflação monitorada por relatório automático.
+Moeda: **Pulso (₱)**. Fontes: coleta, quests, comércio com NPCs. Drenos: construção, itens, viagens de portal. O tick é o banco central; inflação monitorada por relatório automático. **O Pulso jamais terá conversão para dinheiro real, em nenhuma direção (D-20)** — seu valor é de jogo e social (cosméticos, governança, memória na Crônica).
 
 ## NPCs
 

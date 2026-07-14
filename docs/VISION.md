@@ -15,6 +15,7 @@ Um mundo persistente que pertence a todos e a ninguém, feito de commits, que co
 ## O que o NÓS nunca será
 
 - ❌ Tempo real / PvP frame a frame (exigiria servidor fora do GitHub).
+- ❌ Monetizado, em qualquer forma: sem anúncios, sem patrocínio, sem prêmios de valor real, sem taxas (D-20). Dinheiro não entra e não sai.
 - ❌ Pay-to-win, microtransações, cripto ou NFT.
 - ❌ Dependente de infraestrutura própria: se roda, roda no GitHub.
 - ❌ Um jogo com "dono": decisões de mundo tendem à comunidade com o tempo.

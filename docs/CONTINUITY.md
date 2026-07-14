@@ -18,7 +18,7 @@
 
 - Cadência definitiva do tick na v1 (proposta: 1h).
 - Divulgação do lançamento v1 (onde/como).
-- Monetização: proposta faseada registrada na conversa (Sponsors cosmético pós-tração; resgate de valor real adiado — maior risco do projeto). Formalizar como D-20 quando o Tiago confirmar.
+- ~~Monetização~~ → resolvida: **D-20, sem dinheiro em nenhuma forma, decisão definitiva do Tiago.**
 
 ## Como retomar do zero
 
