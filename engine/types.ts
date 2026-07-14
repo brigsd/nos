@@ -15,10 +15,10 @@
 // World dimensions and shared constants
 // ---------------------------------------------------------------------------
 
-/** Width of O Coracao in tiles (v1 ships a single fixed 64x64 map). */
+/** Width of O Coração in tiles (v1 ships a single fixed 64x64 map). */
 export const WORLD_WIDTH = 64;
 
-/** Height of O Coracao in tiles. */
+/** Height of O Coração in tiles. */
 export const WORLD_HEIGHT = 64;
 
 /** Size of one tile in pixels (pixel art 16x16, see docs/GDD.md). */
@@ -136,7 +136,7 @@ export type WorldEvent =
 // ---------------------------------------------------------------------------
 
 export interface WorldMeta {
-  /** World name (v1: "O Coracao"). */
+  /** World name (v1: "O Coração"). */
   name: string;
   /** Deterministic seed driving mapgen and every RNG draw in this world. */
   seed: string;

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://brigsd.github.io/nos/engine/schema/world.schema.json",
   "title": "World",
-  "description": "Official state of a NOS world (e.g. O Coracao). Mirrors engine/types.ts field-for-field - the two must never drift apart.",
+  "description": "Official state of a NOS world (e.g. O Coração). Mirrors engine/types.ts field-for-field - the two must never drift apart.",
   "type": "object",
   "additionalProperties": false,
   "required": ["meta", "width", "height", "tiles", "players", "events"],

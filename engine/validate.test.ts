@@ -40,7 +40,7 @@ function validWorld(): World {
         quantity: 1,
         position: { x: 1, y: 0 },
       },
-      { type: 'player_said', tick: 2, worldTime: 120, login: 'octocat', message: 'Ola, Coracao.' },
+      { type: 'player_said', tick: 2, worldTime: 120, login: 'octocat', message: 'Olá, Coração.' },
       { type: 'core_pulse', tick: 3, worldTime: 180 },
     ],
   };

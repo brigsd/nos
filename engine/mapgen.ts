@@ -1,7 +1,7 @@
 /**
  * engine/mapgen.ts
  *
- * Deterministic procedural generator for O Coracao, the origin world: a
+ * Deterministic procedural generator for O Coração, the origin world: a
  * central meadow around the pulsing Core, a river crossing the map bank to
  * bank, organic forest patches, a few small ruins, and resources scattered
  * according to their biome (see docs/GDD.md, docs/LORE.md).
@@ -14,10 +14,10 @@
 import { Rng } from './rng';
 import { WORLD_WIDTH, WORLD_HEIGHT, isInBounds, tileIndex, type Tile, type World } from './types';
 
-/** The one and only seed for O Coracao - the world is one, per the GDD. */
+/** The one and only seed for O Coração - the world is one, per the GDD. */
 export const HEART_WORLD_SEED = 'commit-primordial';
 
-export const HEART_WORLD_NAME = 'O Coracao';
+export const HEART_WORLD_NAME = 'O Coração';
 
 /** Top-left tile of the Core's 2x2 footprint. */
 export const CORE_ORIGIN = { x: 32, y: 32 } as const;
@@ -140,7 +140,7 @@ function carveRiver(tiles: Tile[], width: number, height: number, rng: Rng, keep
 
     if (!moved) {
       // Boxed in by the map edge and the Core's clearing at once (should be
-      // geometrically impossible for O Coracao, but fail safe rather than
+      // geometrically impossible for O Coração, but fail safe rather than
       // corrupt the walker's position): try any of the four directions.
       for (const [dx, dy] of allDirs) {
         const nx = x + dx;
@@ -314,7 +314,7 @@ function scatterResources(tiles: Tile[], width: number, height: number, rng: Rng
 // ---------------------------------------------------------------------------
 
 /**
- * Generates O Coracao from scratch: a deterministic function of `seed`
+ * Generates O Coração from scratch: a deterministic function of `seed`
  * alone. Calling this twice with the same seed always yields
  * deep-equal (byte-identical once serialized) worlds.
  */
