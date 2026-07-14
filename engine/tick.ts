@@ -1,0 +1,124 @@
+/**
+ * engine/tick.ts
+ *
+ * The Pulse (docs/GDD.md "O tick", D-11, D-19): advances a World by however
+ * many beats are due at `nowUnixSeconds`. Pure and deterministic - time
+ * always arrives as an explicit parameter; this module never reads the
+ * system clock (see scripts/tick.ts for the one place that boundary is
+ * allowed to be crossed).
+ *
+ * Each beat: +1 meta.tickCount, +WORLD_MINUTES_PER_TICK meta.worldTime, and
+ * one `core_pulse` event appended to the log. That event type already
+ * exists in engine/types.ts ("O Núcleo bate a cada tick", GDD) - it was
+ * reserved by T1 for exactly this, so no new event type is needed here.
+ *
+ * Scheduling model (D-19 self-correction):
+ * Beats are anchored to a fixed genesis instant instead of a persisted
+ * "last tick" timestamp, so no extra wall-clock field has to live in
+ * WorldMeta/the schema. Beat N is due once real time reaches
+ * `HEART_GENESIS_UNIX_SECONDS + N * TICK_INTERVAL_SECONDS`. Given the
+ * current `tickCount` and `nowUnixSeconds`, the number of beats due is:
+ *
+ *   dueByNow       = floor((now - GENESIS) / TICK_INTERVAL_SECONDS)
+ *   ticksToProcess = dueByNow - tickCount
+ *
+ * - 0  -> the world is already caught up (e.g. a workflow_dispatch fired a
+ *         few minutes after the last cron beat) - advanceWorld is a no-op.
+ * - 1  -> the common case: the cron fired on schedule.
+ * - 2+ -> the cron was delayed or skipped one or more times; advanceWorld
+ *         processes every missed beat in this one call (capped - see
+ *         MAX_CATCHUP_TICKS below) instead of letting worldTime/tickCount
+ *         silently drift away from real time.
+ *
+ * This only stays correct because every call that processes >=1 beat always
+ * advances tickCount to exactly `dueByNow` (or the cap). So the next call's
+ * `dueByNow - tickCount` is always a true count of NEW intervals that
+ * started since the last confirmed beat, with nothing extra to persist.
+ *
+ * Callers that want to know how many beats a call processed (e.g. to log
+ * D-19 compensation, or to build the `tick: batida #N` commit message) can
+ * just diff `result.meta.tickCount - world.meta.tickCount`; a diff > 1
+ * means (diff - 1) beats were compensated.
+ */
+
+import type { CorePulseEvent, World, WorldEvent } from './types';
+
+/**
+ * Real-world seconds between two beats - matches the hourly cron in
+ * .github/workflows/tick.yml (D-11, GDD "o tick").
+ */
+export const TICK_INTERVAL_SECONDS = 60 * 60;
+
+/** Minutes of world-time a single beat advances (1 beat = 1 in-world hour). */
+export const WORLD_MINUTES_PER_TICK = 60;
+
+/**
+ * Unix seconds (UTC) for 2026-07-14T00:00:00Z - the day every decision in
+ * docs/DECISIONS.md was made and O Coração's "commit-primordial" seed was
+ * born. The fixed anchor for tick scheduling (tick 0's instant); see the
+ * module docs above. A constant, never Date.now().
+ */
+export const HEART_GENESIS_UNIX_SECONDS = 1_783_987_200;
+
+/**
+ * Hard cap on world.events: the oldest events are dropped once exceeded so
+ * world/*.json (and every tick's diff) stays small forever, independent of
+ * how long the world has been running (D-04's "constant cost per tick").
+ */
+export const MAX_EVENTS = 500;
+
+/**
+ * Safety cap on how many missed beats a single advanceWorld() call will
+ * backfill (D-19). Keeps one tick job's work bounded and fast
+ * (docs/ARCHITECTURE.md: "jobs de tick devem terminar em minutos") even if
+ * the schedule were somehow dormant for a long stretch. Beats beyond the
+ * cap are simply left for later calls to pick up - a world that's behind
+ * self-heals a bit more on every subsequent invocation instead of one job
+ * doing unbounded work.
+ */
+export const MAX_CATCHUP_TICKS = 24;
+
+/** Appends `event`, trimming the oldest entries so the log never exceeds MAX_EVENTS. */
+function appendEvent(events: readonly WorldEvent[], event: WorldEvent): WorldEvent[] {
+  const kept = events.length >= MAX_EVENTS ? events.slice(events.length - MAX_EVENTS + 1) : events.slice();
+  kept.push(event);
+  return kept;
+}
+
+/** Applies exactly one beat: +1 tick, +WORLD_MINUTES_PER_TICK world-time, one core_pulse event. */
+function beatOnce(world: World): World {
+  const tickCount = world.meta.tickCount + 1;
+  const worldTime = world.meta.worldTime + WORLD_MINUTES_PER_TICK;
+  const pulse: CorePulseEvent = { type: 'core_pulse', tick: tickCount, worldTime };
+
+  return {
+    ...world,
+    meta: { ...world.meta, tickCount, worldTime },
+    events: appendEvent(world.events, pulse),
+  };
+}
+
+/** How many beats are due at `nowUnixSeconds`, given `tickCount` have already happened. Never negative. */
+function ticksDue(tickCount: number, nowUnixSeconds: number): number {
+  const dueByNow = Math.floor((nowUnixSeconds - HEART_GENESIS_UNIX_SECONDS) / TICK_INTERVAL_SECONDS);
+  return Math.max(0, dueByNow - tickCount);
+}
+
+/**
+ * Advances `world` to `nowUnixSeconds`, processing every beat that's due
+ * (capped at MAX_CATCHUP_TICKS per call - see the D-19 self-correction note
+ * in the module docs above). Pure: never mutates `world` or any of its
+ * nested objects/arrays, never touches the clock. Deterministic: the same
+ * (world, nowUnixSeconds) pair always produces a deep-equal result.
+ *
+ * When no beat is due yet, returns `world` unchanged (by reference).
+ */
+export function advanceWorld(world: World, nowUnixSeconds: number): World {
+  const ticksToProcess = Math.min(ticksDue(world.meta.tickCount, nowUnixSeconds), MAX_CATCHUP_TICKS);
+
+  let next = world;
+  for (let i = 0; i < ticksToProcess; i++) {
+    next = beatOnce(next);
+  }
+  return next;
+}

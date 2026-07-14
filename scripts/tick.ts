@@ -1,0 +1,73 @@
+#!/usr/bin/env node
+/**
+ * scripts/tick.ts
+ *
+ * The tick entrypoint: loads world/heart.json, validates it, advances it to
+ * "now" via engine/tick.ts's advanceWorld, validates the result, and writes
+ * it back with the canonical serializer. Invoked by
+ * .github/workflows/tick.yml on every cron/workflow_dispatch firing, and
+ * locally via `npm run tick`.
+ *
+ * NON-DETERMINISM BOUNDARY: this is the ONLY place in the whole tick
+ * pipeline allowed to read the real clock. engine/tick.ts never calls
+ * Date.now() - "now" always arrives as an explicit parameter, so the same
+ * (world, now) pair advances identically no matter who calls it. That
+ * boundary is what makes the engine testable and replayable; keep any
+ * future changes to this file on the right side of it.
+ *
+ * Usage:
+ *   npm run tick                        # now = the real wall clock
+ *   TICK_NOW=1783990800 npm run tick    # now = a fixed Unix-seconds value (tests/dry runs)
+ *   npm run tick -- 1783990800          # same, as a CLI argument
+ */
+
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { advanceWorld } from '../engine/tick';
+import { serializeWorld } from '../engine/serialize';
+import { assertValidWorld } from '../engine/validate';
+
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const worldPath = path.join(moduleDir, '..', 'world', 'heart.json');
+
+/** Resolves "now" from a CLI arg, then TICK_NOW, then (only as a last resort) the real clock. */
+function resolveNow(argv: readonly string[], env: NodeJS.ProcessEnv): number {
+  const override = argv[2] ?? env['TICK_NOW'];
+  if (override !== undefined && override !== '') {
+    const parsed = Number(override);
+    if (!Number.isFinite(parsed)) {
+      throw new Error(`Invalid time override ${JSON.stringify(override)}: expected Unix seconds.`);
+    }
+    return Math.floor(parsed);
+  }
+  return Math.floor(Date.now() / 1000);
+}
+
+function main(): void {
+  const raw: unknown = JSON.parse(readFileSync(worldPath, 'utf-8'));
+  assertValidWorld(raw); // raw is now narrowed to World
+
+  const tickCountBefore = raw.meta.tickCount;
+  const now = resolveNow(process.argv, process.env);
+  const result = advanceWorld(raw, now);
+
+  assertValidWorld(result); // never write state the tick's own gate wouldn't accept
+
+  writeFileSync(worldPath, serializeWorld(result), 'utf-8');
+
+  const processed = result.meta.tickCount - tickCountBefore;
+  if (processed === 0) {
+    console.log(`No beat due yet - tick #${tickCountBefore} stands, world unchanged.`);
+    return;
+  }
+
+  const compensated = processed - 1;
+  console.log(
+    `Tick #${result.meta.tickCount}: processed ${processed} beat(s)` +
+      (compensated > 0 ? ` (${compensated} compensated per D-19)` : '') +
+      ` - world time now ${result.meta.worldTime} min.`,
+  );
+}
+
+main();

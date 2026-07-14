@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "genworld": "tsx engine/scripts/genworld.ts",
-    "mapascii": "tsx engine/scripts/mapascii.ts"
+    "mapascii": "tsx engine/scripts/mapascii.ts",
+    "tick": "tsx scripts/tick.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0"
