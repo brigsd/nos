@@ -64,6 +64,9 @@ function main(): void {
 
   writeFileSync(worldPath, serializeWorld(result), 'utf-8');
 
+  // Update README stats
+  updateReadme(result.meta.tickCount, Object.keys(result.players).length);
+
   // Write command results if we processed any
   if (commands.length > 0) {
     writeFileSync(commandResultsPath, JSON.stringify(commandResults, null, 2), 'utf-8');
@@ -82,6 +85,28 @@ function main(): void {
       (compensated > 0 ? ` (${compensated} compensated per D-19)` : '') +
       ` - world time now ${result.meta.worldTime} min.`,
   );
+}
+
+function updateReadme(tickCount: number, playerCount: number): void {
+  const readmePath = path.join(moduleDir, '..', 'README.md');
+  if (!existsSync(readmePath)) return;
+  try {
+    const content = readFileSync(readmePath, 'utf-8');
+    const statsString = `<!-- stats-start -->
+### Status do Mundo
+
+- 💓 **Batidas (Ticks):** \`${tickCount}\`
+- 👥 **Jogadores Ativos:** \`${playerCount}\`
+<!-- stats-end -->`;
+
+    const updated = content.replace(
+      /<!-- stats-start -->[\s\S]*<!-- stats-end -->/,
+      statsString
+    );
+    writeFileSync(readmePath, updated, 'utf-8');
+  } catch (err) {
+    console.error('Failed to update README.md:', err);
+  }
 }
 
 main();

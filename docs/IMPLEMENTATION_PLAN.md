@@ -14,8 +14,8 @@
 - [x] T5 · Avatar local andável (toque/WASD) com sprite próprio
 - [ ] T6 · Comandos `/entrar`, `/mover`, `/coletar`, `/dizer` via issue-form + processamento no tick
 - [x] T7 · Arte base: tileset adaptado à paleta + sprite do Núcleo pulsante (PR #10; refinos em #12)
-- [ ] T8 · CI guardrails: testes, schema, lint de sprites — bloqueando merge
-- [ ] T9 · README vivo: contador de batidas + jogadores ativos
+- [x] T8 · CI guardrails: testes, schema, lint de sprites — bloqueando merge
+- [x] T9 · README vivo: contador de batidas + jogadores ativos
 - [ ] 🎉 Lançamento v1: primeiro jogador externo entra no mundo
 
 ## v2 — O mundo responde
