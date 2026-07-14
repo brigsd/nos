@@ -1,0 +1,418 @@
+#!/usr/bin/env node
+'use strict';
+/**
+ * One-off (but re-runnable) authoring script that generates the initial
+ * pixel-index matrices for every T7 sprite and writes them as the "source
+ * of truth" JSON files under assets/sprites/src/.
+ *
+ * This is deliberately separate from render.js: render.js only ever reads
+ * static JSON matrices and turns them into PNGs. This script is how those
+ * matrices get *drawn* — via small geometric rules (circles, gradients,
+ * ordered dithering) instead of typing 256+ numbers by hand per tile.
+ * After running it, the JSON files are the real source of truth; targeted
+ * fixes from the art-reviewer pass are applied as direct edits to those
+ * JSON files (see git history / PR notes), not by re-running this script
+ * blindly.
+ *
+ * Usage: node assets/tools/author-sprites.js
+ */
+
+const path = require('path');
+const { PAL } = require('./lib/palette-names');
+const { ditherBand, lightT, bayerThreshold } = require('./lib/dither');
+const { makeGrid, set, get } = require('./lib/grid');
+const { writeSpriteSrc } = require('./lib/spritesrc');
+
+const SRC_DIR = path.join(__dirname, '..', 'sprites', 'src');
+
+// ---------------------------------------------------------------------
+// Shared ground helpers
+// ---------------------------------------------------------------------
+
+/**
+ * Paint a smooth dithered gradient (dark -> light, top-left lit) across the
+ * whole grid.
+ *
+ * Art-reviewer round 1 finding: a full-amplitude corner-to-corner gradient
+ * measured ~50/255 luma difference between a tile's darkest and lightest
+ * edge columns. Ground tiles repeat edge-to-edge across the map, so that
+ * shows up as a visible grid — every tile boundary flashes dark-meets-light.
+ * Compressing the gradient around the midpoint keeps the top-left-lit cue
+ * (readable when judging one tile in isolation) while keeping the seam
+ * between repeated tiles subtle instead of a hard brightness cliff.
+ */
+function paintGroundGradient(g, w, h, tones) {
+  const AMPLITUDE = 0.4; // 1.0 = original full-range sweep; lower = softer tile seams
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const raw = lightT(x, y, w, h);
+      const t = 0.5 + (raw - 0.5) * AMPLITUDE;
+      set(g, x, y, tones[ditherBand(x, y, t, tones.length)]);
+    }
+  }
+}
+
+function neighbors4(x, y) {
+  return [
+    [x - 1, y],
+    [x + 1, y],
+    [x, y - 1],
+    [x, y + 1],
+  ];
+}
+
+// ---------------------------------------------------------------------
+// campina_1 / campina_2 (grassland base, 2 variations)
+// ---------------------------------------------------------------------
+
+function genCampina1(w, h) {
+  const g = makeGrid(w, h);
+  paintGroundGradient(g, w, h, [PAL.darkGreenGrey, PAL.moss, PAL.sage]);
+  // Hand-placed blade tufts: bright tip (catches top-left light) + dark
+  // base immediately below (grounding shadow) — a tiny 2px blade, not noise.
+  const tufts = [
+    [2, 3], [5, 9], [9, 2], [12, 6], [7, 13], [13, 12], [3, 11], [11, 9],
+  ];
+  for (const [x, y] of tufts) {
+    set(g, x, y, PAL.lightGreen);
+    set(g, x, y + 1, PAL.darkTealGreen);
+  }
+  return g;
+}
+
+function genCampina2(w, h) {
+  const g = makeGrid(w, h);
+  // Same family, shifted lighter/warmer so it reads as a natural
+  // neighboring patch of the same meadow rather than a different material.
+  paintGroundGradient(g, w, h, [PAL.moss, PAL.sage, PAL.paleSage]);
+  const tufts = [
+    [4, 4], [10, 3], [1, 8], [8, 7], [13, 4], [6, 12], [11, 13], [3, 14],
+  ];
+  for (const [x, y] of tufts) {
+    set(g, x, y, PAL.paleYellowGreen);
+    set(g, x, y + 1, PAL.forestGreen);
+  }
+  return g;
+}
+
+// ---------------------------------------------------------------------
+// campina_flores (campina_1 base + small flowers)
+// ---------------------------------------------------------------------
+
+function genCampinaFlores(w, h) {
+  const g = genCampina1(w, h);
+  function flower(cx, cy, center, petal) {
+    set(g, cx, cy, center);
+    set(g, cx - 1, cy, petal);
+    set(g, cx + 1, cy, petal);
+    set(g, cx, cy - 1, petal);
+    set(g, cx, cy + 1, petal);
+    // Grounding shadow opposite the light (down-right) — doubles as a
+    // minimal "contour" cue at the scale a full 1px outline would blur.
+    set(g, cx + 1, cy + 1, PAL.darkTealGreen);
+  }
+  flower(4, 7, PAL.gold, PAL.paleYellow);
+  flower(13, 9, PAL.crimsonPink, PAL.lightPink);
+  flower(5, 4, PAL.gold, PAL.paleYellow);
+  flower(9, 12, PAL.crimsonPink, PAL.lightPink);
+  set(g, 8, 8, PAL.paleYellow); // small unopened bud
+  return g;
+}
+
+// ---------------------------------------------------------------------
+// floresta (single stylised tree, grass showing at the tile corners)
+// ---------------------------------------------------------------------
+
+function genFloresta(w, h) {
+  const g = makeGrid(w, h);
+  paintGroundGradient(g, w, h, [PAL.darkGreenGrey, PAL.moss, PAL.sage]);
+
+  const circles = [
+    [6, 7, 4.3],
+    [10, 6.6, 4.0],
+    [8, 4.6, 3.9],
+    [8, 8.3, 3.6],
+  ];
+  const inCanopy = (x, y) => {
+    if (x < 0 || y < 0 || x >= w || y >= h) return false;
+    return circles.some(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r);
+  };
+  const trunkX0 = 7, trunkX1 = 8, trunkY0 = 11, trunkY1 = 13;
+  const inTrunk = (x, y) => x >= trunkX0 && x <= trunkX1 && y >= trunkY0 && y <= trunkY1;
+
+  const canopyTones = [PAL.darkTealGreen, PAL.forestGreen, PAL.green, PAL.lightGreen];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!inCanopy(x, y)) continue;
+      const t = lightT(x, y, w, h);
+      set(g, x, y, canopyTones[ditherBand(x, y, t, canopyTones.length)]);
+    }
+  }
+  // 1px dark outline around the canopy silhouette (living element).
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!inCanopy(x, y) || inTrunk(x, y)) continue;
+      const isEdge = neighbors4(x, y).some(([nx, ny]) => !inCanopy(nx, ny) && !inTrunk(nx, ny));
+      if (isEdge) set(g, x, y, PAL.black);
+    }
+  }
+  // Art-reviewer round 1 finding: the trunk had no outline while the canopy
+  // did, breaking "same contour weight across one sprite". The trunk's top
+  // merges into the canopy (no exposed edge there, no outline needed) but
+  // its left/right/bottom edges are exposed against the grass, so those get
+  // the same 1px black treatment as the canopy.
+  for (let y = trunkY0; y <= trunkY1; y++) {
+    set(g, trunkX0 - 1, y, PAL.black);
+    set(g, trunkX1 + 1, y, PAL.black);
+  }
+  for (let x = trunkX0 - 1; x <= trunkX1 + 1; x++) {
+    set(g, x, trunkY1 + 1, PAL.black);
+  }
+  // Trunk: small 2-wide bark fill, left column lit (top-left light), right in shadow.
+  for (let y = trunkY0; y <= trunkY1; y++) {
+    set(g, trunkX0, y, PAL.tan);
+    set(g, trunkX1, y, PAL.darkOliveBrown);
+  }
+  return g;
+}
+
+// ---------------------------------------------------------------------
+// ruina (broken stone slab, mossy, sitting on packed earth)
+// ---------------------------------------------------------------------
+
+function genRuina(w, h) {
+  const g = makeGrid(w, h);
+
+  const inRectA = (x, y) => x >= 2 && x <= 12 && y >= 3 && y <= 9;
+  const inRectB = (x, y) => x >= 5 && x <= 14 && y >= 9 && y <= 14;
+  const chips = new Set([
+    '2,3', '3,3', '2,4', // top-left corner chipped off
+    '12,9', '12,10', '11,10', // junction between the two slabs chipped
+    '14,14', '13,14', '14,13', // bottom-right corner chipped off
+  ]);
+  const inStone = (x, y) => {
+    if (x < 0 || y < 0 || x >= w || y >= h) return false;
+    if (chips.has(`${x},${y}`)) return false;
+    return inRectA(x, y) || inRectB(x, y);
+  };
+
+  // Ground background (packed earth), dithered 2-tone, same light rule.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const t = lightT(x, y, w, h);
+      set(g, x, y, [PAL.darkOliveBrown, PAL.tan][ditherBand(x, y, t, 2)]);
+    }
+  }
+  // Stone fill.
+  const stoneTones = [PAL.plumDark, PAL.plumMid, PAL.greyPurple, PAL.paleBlueGrey];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!inStone(x, y)) continue;
+      const t = lightT(x, y, w, h);
+      set(g, x, y, stoneTones[ditherBand(x, y, t, stoneTones.length)]);
+    }
+  }
+  // Cracks / mortar lines.
+  const cracks = [
+    [6, 5], [7, 6], [8, 7], [9, 8],
+    [11, 11], [12, 12],
+  ];
+  for (const [x, y] of cracks) if (inStone(x, y)) set(g, x, y, PAL.black);
+
+  // Moss/lichen accents (melancholic "ruins sinking a little further" detail).
+  const moss = [[4, 9], [4, 10], [9, 13], [10, 13], [6, 4]];
+  for (const [x, y] of moss) if (inStone(x, y)) set(g, x, y, PAL.moss);
+
+  return g;
+}
+
+// ---------------------------------------------------------------------
+// caminho_terra (worn dirt path)
+// ---------------------------------------------------------------------
+
+function genCaminhoTerra(w, h) {
+  const g = makeGrid(w, h);
+  paintGroundGradient(g, w, h, [PAL.darkOliveBrown, PAL.clay, PAL.tan]);
+
+  const pebblePairs = [
+    [[3, 3], [4, 3]],
+    [[12, 5], [13, 5]],
+    [[6, 11], [7, 11]],
+  ];
+  for (const pair of pebblePairs) for (const [x, y] of pair) set(g, x, y, PAL.plumMid);
+
+  const cracks = [[9, 3], [2, 9], [13, 12]];
+  for (const [x, y] of cracks) set(g, x, y, PAL.black);
+
+  const sunFlecks = [[5, 2], [10, 7]];
+  for (const [x, y] of sunFlecks) set(g, x, y, PAL.lightGold);
+
+  return g;
+}
+
+// ---------------------------------------------------------------------
+// agua_ondula_2frames (water, 2-frame shimmer)
+// ---------------------------------------------------------------------
+
+function genAguaFrame(w, h, shift) {
+  const g = makeGrid(w, h);
+  paintGroundGradient(g, w, h, [PAL.darkTeal, PAL.teal, PAL.tealGreen]);
+
+  const waveRows = [
+    { y: 3, dashes: [{ x: 1, len: 2, tone: 'bright' }, { x: 9, len: 2, tone: 'bright' }] },
+    { y: 7, dashes: [{ x: 5, len: 3, tone: 'pale' }, { x: 13, len: 2, tone: 'bright' }] },
+    { y: 11, dashes: [{ x: 2, len: 2, tone: 'bright' }, { x: 10, len: 3, tone: 'pale' }] },
+  ];
+  // Art-reviewer round 1 finding: the shadow pixel sat one column past the
+  // dash and one row down (a diagonal offset), reading as a stray dark
+  // speck instead of a wave's shadowed underside. Now the shadow runs the
+  // same columns directly beneath the highlight, so crest+trough read as
+  // one wave shape.
+  for (const row of waveRows) {
+    for (const dash of row.dashes) {
+      const color = dash.tone === 'bright' ? PAL.brightCyan : PAL.paleCyan;
+      for (let i = 0; i < dash.len; i++) {
+        const x = (dash.x + i + shift + w) % w;
+        set(g, x, row.y, color);
+        set(g, x, row.y + 1, PAL.darkIndigo);
+      }
+    }
+  }
+  return g;
+}
+
+// ---------------------------------------------------------------------
+// nucleo_pulse_4frames (32x32, the heart of the world)
+// ---------------------------------------------------------------------
+
+function genNucleoFrame(w, h, { coreR, glowR, warm }) {
+  const g = makeGrid(w, h);
+  const cx = w / 2;
+  const cy = h / 2;
+  const lightX = cx - 4;
+  const lightY = cy - 4;
+
+  const inCore = (x, y) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= coreR;
+  const coreTones = [PAL.darkIndigo, PAL.violet, PAL.lightViolet, PAL.paleLavender];
+  const auraTones = [PAL.indigo, PAL.violet, PAL.lightViolet];
+
+  // Fissure offset from true center — a small scar, present at every frame,
+  // always inside the core (min coreR is comfortably larger than this offset).
+  const crackPixels = [
+    [Math.round(cx), Math.round(cy) - 4],
+    [Math.round(cx), Math.round(cy) - 3],
+    [Math.round(cx) - 1, Math.round(cy) - 2],
+  ];
+  const crackSet = new Set(crackPixels.map(([x, y]) => `${x},${y}`));
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      if (d <= coreR) {
+        const isEdge = neighbors4(x, y).some(([nx, ny]) => Math.hypot(nx + 0.5 - cx, ny + 0.5 - cy) > coreR);
+        if (isEdge) {
+          set(g, x, y, PAL.black);
+          continue;
+        }
+        const dl = Math.hypot(x + 0.5 - lightX, y + 0.5 - lightY);
+        const t = 1 - dl / (coreR * 1.7);
+        let color = coreTones[ditherBand(x, y, t, coreTones.length)];
+
+        // Warm "heartbeat" flush near the very center, strongest at peak frames.
+        if (warm > 0) {
+          const dc = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+          const innerR = coreR * 0.35;
+          const outerR = coreR * 0.72 * warm;
+          if (dc <= innerR) color = PAL.crimsonPink;
+          else if (dc <= outerR) color = PAL.deepMagenta;
+        }
+
+        if (crackSet.has(`${x},${y}`)) color = PAL.black;
+        set(g, x, y, color);
+        continue;
+      }
+      if (d <= glowR) {
+        const tGlow = 1 - d / glowR;
+        if (tGlow < 0.18 && bayerThreshold(x, y) > tGlow / 0.18) continue; // dissolve into transparency
+        set(g, x, y, auraTones[ditherBand(x, y, tGlow, auraTones.length)]);
+      }
+    }
+  }
+
+  // Cracked earth/stone socket the core rests in — only fills pixels still
+  // transparent, so it never eats into the glow or the core itself.
+  const socketRows = [
+    { y: 26, x0: 13, x1: 18 },
+    { y: 27, x0: 12, x1: 19 },
+    { y: 28, x0: 12, x1: 19 },
+    { y: 29, x0: 13, x1: 19 },
+    { y: 30, x0: 14, x1: 18 },
+  ];
+  const socketAccent = new Set(['14,27', '17,28', '15,29']);
+  for (const row of socketRows) {
+    for (let x = row.x0; x <= row.x1; x++) {
+      if (get(g, x, row.y) !== -1) continue;
+      set(g, x, row.y, socketAccent.has(`${x},${row.y}`) ? PAL.plumDark : PAL.darkOliveBrown);
+    }
+  }
+
+  return g;
+}
+
+// ---------------------------------------------------------------------
+// Write everything out
+// ---------------------------------------------------------------------
+
+function writeTile(name, gridFn) {
+  const w = 16, h = 16;
+  writeSpriteSrc(path.join(SRC_DIR, `${name}.json`), {
+    name,
+    kind: 'tile',
+    width: w,
+    height: h,
+    frames: [{ pixels: gridFn(w, h) }],
+  });
+  console.log(`authored ${name}.json`);
+}
+
+function run() {
+  writeTile('campina_1', genCampina1);
+  writeTile('campina_2', genCampina2);
+  writeTile('campina_flores', genCampinaFlores);
+  writeTile('floresta', genFloresta);
+  writeTile('ruina', genRuina);
+  writeTile('caminho_terra', genCaminhoTerra);
+
+  writeSpriteSrc(path.join(SRC_DIR, 'agua_ondula_2frames.json'), {
+    name: 'agua_ondula_2frames',
+    kind: 'tile',
+    width: 16,
+    height: 16,
+    notes: '2-frame water shimmer loop; frame1 shifts the wave dashes +3px.',
+    frames: [{ pixels: genAguaFrame(16, 16, 0) }, { pixels: genAguaFrame(16, 16, 3) }],
+  });
+  console.log('authored agua_ondula_2frames.json');
+
+  writeSpriteSrc(path.join(SRC_DIR, 'nucleo_pulse_4frames.json'), {
+    name: 'nucleo_pulse_4frames',
+    kind: 'object',
+    width: 32,
+    height: 32,
+    notes:
+      'Breathing loop: f0 small/dim -> f1 growing -> f2 peak bright -> f3 receding -> loops to f0. ' +
+      'Warm crimson/magenta flush near center scales with `warm` to read as a heartbeat rather than a flat glow.',
+    frames: [
+      { pixels: genNucleoFrame(32, 32, { coreR: 5.0, glowR: 10.0, warm: 0.15 }) },
+      { pixels: genNucleoFrame(32, 32, { coreR: 6.2, glowR: 12.0, warm: 0.55 }) },
+      { pixels: genNucleoFrame(32, 32, { coreR: 7.0, glowR: 13.5, warm: 1.0 }) },
+      { pixels: genNucleoFrame(32, 32, { coreR: 6.0, glowR: 11.5, warm: 0.4 }) },
+    ],
+  });
+  console.log('authored nucleo_pulse_4frames.json');
+}
+
+if (require.main === module) {
+  run();
+}
+
+module.exports = { run };
