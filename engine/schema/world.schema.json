@@ -1,0 +1,181 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brigsd.github.io/nos/engine/schema/world.schema.json",
+  "title": "World",
+  "description": "Official state of a NOS world (e.g. O Coração). Mirrors engine/types.ts field-for-field - the two must never drift apart.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "width", "height", "tiles", "players", "events"],
+  "properties": {
+    "meta": { "$ref": "#/definitions/WorldMeta" },
+    "width": { "type": "integer", "minimum": 1 },
+    "height": { "type": "integer", "minimum": 1 },
+    "tiles": {
+      "type": "array",
+      "description": "Row-major tile grid: index = y * width + x.",
+      "items": { "$ref": "#/definitions/Tile" }
+    },
+    "players": {
+      "type": "object",
+      "description": "Living players indexed by GitHub login.",
+      "propertyNames": { "$ref": "#/definitions/Login" },
+      "additionalProperties": { "$ref": "#/definitions/Player" }
+    },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/WorldEvent" }
+    }
+  },
+  "definitions": {
+    "Biome": {
+      "type": "string",
+      "enum": ["meadow", "forest", "water", "ruins", "core"]
+    },
+    "ResourceType": {
+      "type": "string",
+      "enum": ["wood", "stone", "pulse_fragment"]
+    },
+    "Login": {
+      "description": "GitHub login shape: 1-39 chars, alphanumeric with single interior hyphens.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 39,
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+    },
+    "Tile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["biome"],
+      "properties": {
+        "biome": { "$ref": "#/definitions/Biome" },
+        "resource": { "$ref": "#/definitions/ResourceType" }
+      },
+      "allOf": [
+        {
+          "description": "Wood only grows in forest tiles.",
+          "if": { "properties": { "resource": { "const": "wood" } }, "required": ["resource"] },
+          "then": { "properties": { "biome": { "const": "forest" } } }
+        },
+        {
+          "description": "Stone is only quarried from ruins.",
+          "if": { "properties": { "resource": { "const": "stone" } }, "required": ["resource"] },
+          "then": { "properties": { "biome": { "const": "ruins" } } }
+        },
+        {
+          "description": "Pulse fragments sit on the riverbank (meadow/forest ground), never on water itself.",
+          "if": { "properties": { "resource": { "const": "pulse_fragment" } }, "required": ["resource"] },
+          "then": { "properties": { "biome": { "enum": ["meadow", "forest"] } } }
+        }
+      ]
+    },
+    "Position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wood": { "type": "integer", "minimum": 0 },
+        "stone": { "type": "integer", "minimum": 0 },
+        "pulse_fragment": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Player": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login", "position", "inventory", "energy"],
+      "properties": {
+        "login": { "$ref": "#/definitions/Login" },
+        "position": { "$ref": "#/definitions/Position" },
+        "inventory": { "$ref": "#/definitions/Inventory" },
+        "energy": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "WorldMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "seed", "tickCount", "worldTime"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "seed": { "type": "string", "minLength": 1 },
+        "tickCount": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "WorldEvent": {
+      "oneOf": [
+        { "$ref": "#/definitions/PlayerJoinedEvent" },
+        { "$ref": "#/definitions/PlayerMovedEvent" },
+        { "$ref": "#/definitions/ResourceCollectedEvent" },
+        { "$ref": "#/definitions/PlayerSaidEvent" },
+        { "$ref": "#/definitions/CorePulseEvent" }
+      ]
+    },
+    "PlayerJoinedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime", "login"],
+      "properties": {
+        "type": { "const": "player_joined" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 },
+        "login": { "$ref": "#/definitions/Login" }
+      }
+    },
+    "PlayerMovedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime", "login", "from", "to"],
+      "properties": {
+        "type": { "const": "player_moved" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 },
+        "login": { "$ref": "#/definitions/Login" },
+        "from": { "$ref": "#/definitions/Position" },
+        "to": { "$ref": "#/definitions/Position" }
+      }
+    },
+    "ResourceCollectedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime", "login", "resource", "quantity", "position"],
+      "properties": {
+        "type": { "const": "resource_collected" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 },
+        "login": { "$ref": "#/definitions/Login" },
+        "resource": { "$ref": "#/definitions/ResourceType" },
+        "quantity": { "type": "integer", "minimum": 1 },
+        "position": { "$ref": "#/definitions/Position" }
+      }
+    },
+    "PlayerSaidEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime", "login", "message"],
+      "properties": {
+        "type": { "const": "player_said" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 },
+        "login": { "$ref": "#/definitions/Login" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 280 }
+      }
+    },
+    "CorePulseEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime"],
+      "properties": {
+        "type": { "const": "core_pulse" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
