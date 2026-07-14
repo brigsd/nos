@@ -23,12 +23,16 @@
 - [ ] Combate por turnos autoritativo com replay animado no cliente
 - [ ] Economia: Pulso (₱), inventário, comércio com Nativos
 - [ ] Construção de estruturas persistentes
-- [ ] Mural do mundo + registro de eventos (a "crônica")
+- [ ] Mural do mundo + registro de eventos — a Crônica auto-escrita (D-16)
 - [ ] Login com GitHub no site (OAuth device flow, D-13) — agir sem sair do jogo
+- [ ] v2.5 · Nativos com IA via GitHub Models (D-15)
+- [ ] Tick auto-corretivo + snapshots como releases (D-19)
 
 ## v3 — O metaverso
 - [ ] Portais e segundo mundo
 - [ ] Kit de criação de mundos + pipeline de PR comunitário (validação automática)
+- [ ] Federação: protocolo de portais entre repositórios (D-17)
+- [ ] Quests que rendem achievements reais de GitHub (D-18)
 - [ ] A Caçada: enigmas escondidos no jogo E no histórico do repositório
 - [ ] PWA (instalável no celular)
 - [ ] Governança comunitária das decisões de mundo

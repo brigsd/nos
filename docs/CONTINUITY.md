@@ -12,12 +12,13 @@
 
 1. ~~Repo criado e estrutura publicada~~ ✅
 2. ~~Backlog v1 como issues~~ ✅ (#1–#9)
-3. Começar T1 (tipos + schema) e T2 (gerador do mapa) — em paralelo via subagentes; T7 (arte) também pode iniciar.
+3. **Em andamento:** leva 1 da v1 via subagentes — T1+T2 (engine: tipos, schema, mapa) na branch `claude/v1-t1-t2-engine` e T7 (arte base) na branch `claude/v1-t7-art`. Ao concluírem: passar code-reviewer/art-reviewer nos PRs antes do merge.
 
 ## Decisões pendentes (perguntar ao Tiago quando relevante)
 
 - Cadência definitiva do tick na v1 (proposta: 1h).
 - Divulgação do lançamento v1 (onde/como).
+- Monetização: proposta faseada registrada na conversa (Sponsors cosmético pós-tração; resgate de valor real adiado — maior risco do projeto). Formalizar como D-20 quando o Tiago confirmar.
 
 ## Como retomar do zero
 

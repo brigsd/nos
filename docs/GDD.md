@@ -46,7 +46,7 @@ Moeda: **Pulso (₱)**. Fontes: coleta, quests, comércio com NPCs. Drenos: cons
 
 - v1: nenhum (mundo puro).
 - v2: **Nativos** com árvores de comportamento procedurais + falas escritas pelo lore-writer (sem LLM em runtime).
-- v2.5 (opcional): decisões de NPCs enriquecidas por LLM no tick, se houver API key como secret.
+- v2.5: decisões e falas enriquecidas por IA via **GitHub Models** (D-15) — inferência gratuita no Actions com o token nativo; procedural permanece como fallback.
 
 ## Arte
 
