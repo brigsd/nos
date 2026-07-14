@@ -1,0 +1,12 @@
+name: "Comando: /coletar"
+description: "Coletar recursos do tile atual"
+title: "Comando: /coletar"
+labels: ["comando"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Coletar Recursos
+        
+        Clique em **Submit new issue** para coletar recursos do tile onde seu avatar está posicionado.
+        Cada coleta consome **5 de energia**.

@@ -42,6 +42,8 @@
  */
 
 import type { CorePulseEvent, World, WorldEvent } from './types';
+import type { Command, CommandResult } from './commands';
+import { processCommands } from './commands';
 
 /**
  * Real-world seconds between two beats - matches the hourly cron in
@@ -104,21 +106,43 @@ function ticksDue(tickCount: number, nowUnixSeconds: number): number {
   return Math.max(0, dueByNow - tickCount);
 }
 
+export interface AdvanceWorldResult {
+  world: World;
+  commandResults: CommandResult[];
+}
+
 /**
- * Advances `world` to `nowUnixSeconds`, processing every beat that's due
- * (capped at MAX_CATCHUP_TICKS per call - see the D-19 self-correction note
- * in the module docs above). Pure: never mutates `world` or any of its
- * nested objects/arrays, never touches the clock. Deterministic: the same
- * (world, nowUnixSeconds) pair always produces a deep-equal result.
+ * Advances `world` to `nowUnixSeconds`, processing player commands on the first beat
+ * and processing every beat that's due (capped at MAX_CATCHUP_TICKS per call).
  *
- * When no beat is due yet, returns `world` unchanged (by reference).
+ * When no beat is due yet, returns the input world and empty command results.
  */
-export function advanceWorld(world: World, nowUnixSeconds: number): World {
+export function advanceWorld(
+  world: World,
+  nowUnixSeconds: number,
+  commands: Command[] = []
+): AdvanceWorldResult {
   const ticksToProcess = Math.min(ticksDue(world.meta.tickCount, nowUnixSeconds), MAX_CATCHUP_TICKS);
 
+  if (ticksToProcess === 0) {
+    return { world, commandResults: [] };
+  }
+
   let next = world;
+  let commandResults: CommandResult[] = [];
+
+  // Process commands on the very first beat transition
+  if (commands.length > 0) {
+    const nextTick = world.meta.tickCount + 1;
+    const nextWorldTime = world.meta.worldTime + WORLD_MINUTES_PER_TICK;
+    const processed = processCommands(world, commands, nextTick, nextWorldTime);
+    next = processed.world;
+    commandResults = processed.results;
+  }
+
   for (let i = 0; i < ticksToProcess; i++) {
     next = beatOnce(next);
   }
-  return next;
+
+  return { world: next, commandResults };
 }

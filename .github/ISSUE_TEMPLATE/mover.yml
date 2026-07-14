@@ -1,0 +1,27 @@
+name: "Comando: /mover"
+description: "Mover seu avatar no mapa"
+title: "Comando: /mover"
+labels: ["comando"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Mover seu avatar
+        
+        Digite as coordenadas para onde deseja se mover.
+        Lembre-se: você só pode se mover para tiles adjacentes (máximo 1 de distância).
+        Cada movimento custa **1 de energia**.
+  - type: input
+    id: x
+    attributes:
+      label: "Coordenada X"
+      placeholder: "Ex: 30"
+    validations:
+      required: true
+  - type: input
+    id: y
+    attributes:
+      label: "Coordenada Y"
+      placeholder: "Ex: 30"
+    validations:
+      required: true

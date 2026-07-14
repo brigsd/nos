@@ -1,0 +1,19 @@
+name: "Comando: /dizer"
+description: "Dizer algo no mural do mundo"
+title: "Comando: /dizer"
+labels: ["comando"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Escrever no Mural
+        
+        Envie uma mensagem de texto (máximo de 280 caracteres) para ficar registrada nos eventos do mundo.
+        Esta ação custa **0 de energia**.
+  - type: textarea
+    id: message
+    attributes:
+      label: "Mensagem"
+      placeholder: "Digite sua mensagem..."
+    validations:
+      required: true

@@ -8,28 +8,23 @@
  * .github/workflows/tick.yml on every cron/workflow_dispatch firing, and
  * locally via `npm run tick`.
  *
- * NON-DETERMINISM BOUNDARY: this is the ONLY place in the whole tick
- * pipeline allowed to read the real clock. engine/tick.ts never calls
- * Date.now() - "now" always arrives as an explicit parameter, so the same
- * (world, now) pair advances identically no matter who calls it. That
- * boundary is what makes the engine testable and replayable; keep any
- * future changes to this file on the right side of it.
- *
- * Usage:
- *   npm run tick                        # now = the real wall clock
- *   TICK_NOW=1783990800 npm run tick    # now = a fixed Unix-seconds value (tests/dry runs)
- *   npm run tick -- 1783990800          # same, as a CLI argument
+ * It also processes pending player commands from `pending_commands.json` if present
+ * and writes the results to `command_results.json` for feedback.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { advanceWorld } from '../engine/tick';
 import { serializeWorld } from '../engine/serialize';
 import { assertValidWorld } from '../engine/validate';
+import { parseRawIssues } from '../engine/commands';
+import type { Command } from '../engine/commands';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const worldPath = path.join(moduleDir, '..', 'world', 'heart.json');
+const pendingCommandsPath = path.join(moduleDir, '..', 'pending_commands.json');
+const commandResultsPath = path.join(moduleDir, '..', 'command_results.json');
 
 /** Resolves "now" from a CLI arg, then TICK_NOW, then (only as a last resort) the real clock. */
 function resolveNow(argv: readonly string[], env: NodeJS.ProcessEnv): number {
@@ -48,13 +43,32 @@ function main(): void {
   const raw: unknown = JSON.parse(readFileSync(worldPath, 'utf-8'));
   assertValidWorld(raw); // raw is now narrowed to World
 
+  let commands: Command[] = [];
+  if (existsSync(pendingCommandsPath)) {
+    try {
+      const rawIssues = JSON.parse(readFileSync(pendingCommandsPath, 'utf-8'));
+      if (Array.isArray(rawIssues)) {
+        commands = parseRawIssues(rawIssues);
+        console.log(`Loaded ${commands.length} pending command(s) from pending_commands.json`);
+      }
+    } catch (err) {
+      console.error('Error reading pending_commands.json:', err);
+    }
+  }
+
   const tickCountBefore = raw.meta.tickCount;
   const now = resolveNow(process.argv, process.env);
-  const result = advanceWorld(raw, now);
+  const { world: result, commandResults } = advanceWorld(raw, now, commands);
 
   assertValidWorld(result); // never write state the tick's own gate wouldn't accept
 
   writeFileSync(worldPath, serializeWorld(result), 'utf-8');
+
+  // Write command results if we processed any
+  if (commands.length > 0) {
+    writeFileSync(commandResultsPath, JSON.stringify(commandResults, null, 2), 'utf-8');
+    console.log(`Wrote ${commandResults.length} command result(s) to command_results.json`);
+  }
 
   const processed = result.meta.tickCount - tickCountBefore;
   if (processed === 0) {
