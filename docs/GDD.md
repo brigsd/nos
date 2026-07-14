@@ -8,7 +8,7 @@ Sensação instantânea no cliente (andar, olhar, abrir painéis); consequência
 
 ## O tick (o Pulso)
 
-- Workflow agendado (cron) — cadência inicial: **a cada 1 hora** (ajustável).
+- **Híbrido (D-11):** batida do mundo por cron — **a cada 1 hora** (natureza, NPCs, safras) — MAIS processamento de comandos disparado por evento de issue (confirmação em ~30–60s). `concurrency` aglutina comandos simultâneos num único lote.
 - Lê todos os comandos pendentes (issues/comentários), valida, aplica em lote, avança o tempo do mundo (clima, safras, NPCs), grava `world/*.json` e faz **1 commit**.
 - Ordem de resolução determinística: por timestamp do comando; empates por número da issue.
 - Limite de justiça: **N ações por jogador por tick** (v1: 3).
@@ -58,4 +58,7 @@ Moeda: **Pulso (₱)**. Fontes: coleta, quests, comércio com NPCs. Drenos: cons
 
 - Canvas 2D, TypeScript puro, mobile-first: toque para mover, d-pad virtual opcional, painéis deslizantes.
 - Lê `world/*.json` publicado com o site; botão de ação monta a issue pré-preenchida.
+- **UI otimista (D-12):** ação vira "fantasma pendente" na hora e reconcilia na confirmação; posições de terceiros interpoladas entre batidas.
+- **v2 — login GitHub (D-13):** OAuth device flow direto do site estático; comandos criados via API sem sair do jogo.
+- **Notificações (D-14):** resposta do tick na issue do jogador = push gratuito pelo app oficial do GitHub.
 - PWA na v3 (ícone na tela inicial, tela cheia).

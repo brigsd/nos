@@ -9,7 +9,7 @@
 ## v1 — O Coração pulsa (meta: jogável)
 - [ ] T1 · Engine: tipos do mundo + JSON Schema + validador
 - [ ] T2 · Gerador procedural do mapa d'O Coração (64×64, seed fixa)
-- [ ] T3 · Tick mínimo: cron de hora em hora, avança o tempo, 1 commit ("batida" visível)
+- [ ] T3 · Tick mínimo: cron horário + disparo por evento de comando (D-11), 1 commit por lote ("batida" visível)
 - [ ] T4 · Site no Pages: renderiza o mapa em canvas, mobile + desktop
 - [ ] T5 · Avatar local andável (toque/WASD) com sprite próprio
 - [ ] T6 · Comandos `/entrar`, `/mover`, `/coletar`, `/dizer` via issue-form + processamento no tick
@@ -24,6 +24,7 @@
 - [ ] Economia: Pulso (₱), inventário, comércio com Nativos
 - [ ] Construção de estruturas persistentes
 - [ ] Mural do mundo + registro de eventos (a "crônica")
+- [ ] Login com GitHub no site (OAuth device flow, D-13) — agir sem sair do jogo
 
 ## v3 — O metaverso
 - [ ] Portais e segundo mundo
