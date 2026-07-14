@@ -12,7 +12,9 @@
 
 1. ~~Repo criado e estrutura publicada~~ ✅
 2. ~~Backlog v1 como issues~~ ✅ (#1–#9)
-3. **Em andamento:** leva 1 da v1 via subagentes — T1+T2 (engine: tipos, schema, mapa) na branch `claude/v1-t1-t2-engine` e T7 (arte base) na branch `claude/v1-t7-art`. Ao concluírem: passar code-reviewer/art-reviewer nos PRs antes do merge.
+3. ~~Leva 1 (T1+T2 engine, T7 arte)~~ ✅ — PRs #10 e #11 revisados e mesclados. Follow-ups abertos: #12 (refinos de arte) e #13 (endurecer validador — fazer antes/junto do T3 gravar eventos).
+4. **Em andamento:** leva 2 — T3 (tick, branch `claude/v1-t3-tick`) e T4 (site canvas + Pages, branch `claude/v1-t4-site`). Fluxo: PR → code-reviewer → merge. Depois: T5, T6, T8, T9.
+5. Pós-merge do T4: conferir se o GitHub Pages ativou via workflow (`actions/configure-pages` com enablement); se não, ativar em Settings → Pages (source: GitHub Actions).
 
 ## Decisões pendentes (perguntar ao Tiago quando relevante)
 
