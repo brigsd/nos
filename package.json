@@ -1,0 +1,26 @@
+{
+  "name": "nos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NOS - world engine: shared types, JSON Schema, validator and O Coracao's procedural map generator.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "genworld": "tsx engine/scripts/genworld.ts",
+    "mapascii": "tsx engine/scripts/mapascii.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
