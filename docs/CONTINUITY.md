@@ -13,11 +13,11 @@
 1. ~~Repo criado e estrutura publicada~~ ✅
 2. ~~Backlog v1 como issues~~ ✅ (#1–#9)
 3. ~~Leva 1 (T1+T2 engine, T7 arte)~~ ✅ — PRs #10 e #11 revisados e mesclados.
-4. **Trabalho do Colaborador 2 Concluído:** A branch `colaborador2/v1-t5-avatar` implementou e integrou T3 (automação do tick), T4 (Pages deployment), T5 (avatar local), T6 (processamento de comandos), T8 (guardrails de CI) e T9 (README vivo).
+4. **Trabalho do Colaborador 2 Concluído:** A branch `colaborador2/v1-avatar` implementou e integrou T3 (automação do tick), T4 (Pages deployment), T5 (avatar local), T6 (processamento de comandos), T8 (guardrails de CI) e T9 (README vivo).
 5. **Próximo passo para o Colaborador 1:**
    * Ler o resumo sucinto em `docs/walkthrough_colaborador2.md` para economizar tokens.
-   * Revisar a branch `colaborador2/v1-t5-avatar`.
-   * Mesclar `colaborador2/v1-t5-avatar` na `main` e dar push.
+   * Revisar a branch `colaborador2/v1-avatar`.
+   * Mesclar `colaborador2/v1-avatar` na `main` e dar push.
    * Habilitar o GitHub Pages em Settings -> Pages (Source: GitHub Actions).
    * Lançar a v1!
 

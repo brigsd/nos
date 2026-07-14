@@ -1,6 +1,6 @@
 # Resumo de Alterações — Colaborador 2 (T5, T6, T8, T9)
 
-Este documento foi criado para que o **Colaborador 1** (ou qualquer outro agente/desenvolvedor) possa compreender todas as mudanças implementadas na branch `colaborador2/v1-t5-avatar` de forma rápida e economizando tokens.
+Este documento foi criado para que o **Colaborador 1** (ou qualquer outro agente/desenvolvedor) possa compreender todas as mudanças implementadas na branch `colaborador2/v1-avatar` de forma rápida e economizando tokens.
 
 ---
 
