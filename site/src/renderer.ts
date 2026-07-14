@@ -2,14 +2,16 @@
  * src/renderer.ts
  *
  * Draws one frame: dark background, every visible tile (viewport-culled),
- * and the Core sprite pulsing over its tile footprint. Pure presentation -
- * no game rules live here (see docs/ARCHITECTURE.md, "cliente burro").
+ * the Core sprite pulsing over its tile footprint, and all players (both other
+ * players in world state and the local player with smooth movement).
+ * Pure presentation - no game rules live here.
  */
 import type { World } from '../../engine/types';
 import { TILE_SIZE_PX } from '../../engine/types';
 import type { Camera } from './camera';
 import { hashTile } from './hash';
 import type { Sprites, SpriteSheet } from './sprites';
+import type { LocalPlayer } from './player';
 
 /** Water alternates frames roughly once a second (GDD: gentle shimmer, not a strobe). */
 const WATER_FRAME_MS = 1000;
@@ -27,6 +29,7 @@ export interface RenderContext {
   camera: Camera;
   /** devicePixelRatio at the time the canvas backing store was sized. */
   dpr: number;
+  localPlayer: LocalPlayer;
 }
 
 /** Deterministic meadow variant so tile choice never depends on draw order/frame - and never forms a checkerboard. */
@@ -61,8 +64,37 @@ function drawSpriteFrame(
   );
 }
 
+function drawPlayerName(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  px0: number,
+  py0: number,
+  px1: number,
+  isLocal: boolean,
+): void {
+  ctx.save();
+  ctx.font = 'bold 9px "Courier New", Courier, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+
+  const cx = (px0 + px1) / 2;
+  const cy = py0 - 3;
+
+  // Shadow/border
+  ctx.fillStyle = '#2e222f'; // Black from Resurrect 64
+  ctx.fillText(name, cx - 1, cy);
+  ctx.fillText(name, cx + 1, cy);
+  ctx.fillText(name, cx, cy - 1);
+  ctx.fillText(name, cx, cy + 1);
+
+  // Text color
+  ctx.fillStyle = isLocal ? '#fbff86' : '#ffffff'; // paleYellow for local player, white for others
+  ctx.fillText(name, cx, cy);
+  ctx.restore();
+}
+
 export function drawFrame(rc: RenderContext, nowMs: number): void {
-  const { ctx, world, sprites, camera, dpr } = rc;
+  const { ctx, world, sprites, camera, dpr, localPlayer } = rc;
   const { width: cssW, height: cssH } = camera.viewport;
   if (cssW <= 0 || cssH <= 0) return;
 
@@ -86,6 +118,7 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
   let coreMaxX = -Infinity;
   let coreMaxY = -Infinity;
 
+  // 1. Draw biomes/tiles
   for (let y = tileMinY; y <= tileMaxY; y++) {
     const sy0 = camera.worldToScreenY(y * TILE_SIZE_PX);
     const sy1 = camera.worldToScreenY((y + 1) * TILE_SIZE_PX);
@@ -125,6 +158,7 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     }
   }
 
+  // 2. Draw Core (O Nucleo)
   if (coreMinX <= coreMaxX && coreMinY <= coreMaxY) {
     const frame = Math.floor(nowMs / CORE_FRAME_MS) % sprites.nucleo.frameCount;
     const nx0 = camera.worldToScreenX(coreMinX * TILE_SIZE_PX);
@@ -132,5 +166,41 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     const ny0 = camera.worldToScreenY(coreMinY * TILE_SIZE_PX);
     const ny1 = camera.worldToScreenY((coreMaxY + 1) * TILE_SIZE_PX);
     drawSpriteFrame(ctx, sprites.nucleo, frame, nx0, ny0, nx1, ny1);
+  }
+
+  // 3. Draw other players (official world state)
+  for (const [login, player] of Object.entries(world.players)) {
+    // If the official player is the local player, we skip rendering it here
+    // because we render the local player smoothly at its visual position.
+    if (login === localPlayer.username) continue;
+
+    const px = player.position.x;
+    const py = player.position.y;
+
+    // Viewport check
+    if (px >= tileMinX && px <= tileMaxX && py >= tileMinY && py <= tileMaxY) {
+      const px0 = camera.worldToScreenX(px * TILE_SIZE_PX);
+      const px1 = camera.worldToScreenX((px + 1) * TILE_SIZE_PX);
+      const py0 = camera.worldToScreenY(py * TILE_SIZE_PX);
+      const py1 = camera.worldToScreenY((py + 1) * TILE_SIZE_PX);
+
+      drawSpriteFrame(ctx, sprites.no_avatar, 0, px0, py0, px1, py1);
+      drawPlayerName(ctx, `@${player.login}`, px0, py0, px1, false);
+    }
+  }
+
+  // 4. Draw local player (optimistic and smooth)
+  const lpx = localPlayer.visualX;
+  const lpy = localPlayer.visualY;
+
+  // Viewport check
+  if (lpx >= tileMinX - 1 && lpx <= tileMaxX + 1 && lpy >= tileMinY - 1 && lpy <= tileMaxY + 1) {
+    const px0 = camera.worldToScreenX(lpx * TILE_SIZE_PX);
+    const px1 = camera.worldToScreenX((lpx + 1) * TILE_SIZE_PX);
+    const py0 = camera.worldToScreenY(lpy * TILE_SIZE_PX);
+    const py1 = camera.worldToScreenY((lpy + 1) * TILE_SIZE_PX);
+
+    drawSpriteFrame(ctx, sprites.no_avatar, 0, px0, py0, px1, py1);
+    drawPlayerName(ctx, localPlayer.username, px0, py0, px1, true);
   }
 }

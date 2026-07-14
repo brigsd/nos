@@ -43,10 +43,12 @@ export interface Sprites {
   agua: SpriteSheet;
   /** 4-frame breathing pulse, 32x32 per frame (covers the Core's 2x2 tile footprint). */
   nucleo: SpriteSheet;
+  /** Player avatar: small hooded traveler. */
+  no_avatar: SpriteSheet;
 }
 
 export async function loadSprites(): Promise<Sprites> {
-  const [campina1, campina2, campinaFlores, floresta, ruina, agua, nucleo] = await Promise.all([
+  const [campina1, campina2, campinaFlores, floresta, ruina, agua, nucleo, no_avatar] = await Promise.all([
     loadSheet('campina_1.png', 16, 16, 1),
     loadSheet('campina_2.png', 16, 16, 1),
     loadSheet('campina_flores.png', 16, 16, 1),
@@ -54,6 +56,7 @@ export async function loadSprites(): Promise<Sprites> {
     loadSheet('ruina.png', 16, 16, 1),
     loadSheet('agua_ondula_2frames.png', 16, 16, 2),
     loadSheet('nucleo_pulse_4frames.png', 32, 32, 4),
+    loadSheet('no_avatar.png', 16, 16, 1),
   ]);
-  return { campina1, campina2, campinaFlores, floresta, ruina, agua, nucleo };
+  return { campina1, campina2, campinaFlores, floresta, ruina, agua, nucleo, no_avatar };
 }

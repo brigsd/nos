@@ -1,9 +1,8 @@
 /**
  * src/main.ts
  *
- * Entry point: loads world state + sprites, wires up the camera/input, and
- * runs the render loop. Kept intentionally thin - see world.ts, sprites.ts,
- * camera.ts, input.ts and renderer.ts for the actual logic.
+ * Entry point: loads world state + sprites, instantiates the local player,
+ * wires up keydown and tap controls, and runs the render loop.
  */
 import './style.css';
 import { TILE_SIZE_PX } from '../../engine/types';
@@ -12,6 +11,7 @@ import { attachPointerControls } from './input';
 import { drawFrame } from './renderer';
 import { loadSprites, type Sprites } from './sprites';
 import { loadWorld } from './world';
+import { LocalPlayer } from './player';
 
 function pluralPt(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -66,7 +66,13 @@ async function main(): Promise<void> {
   hudEl.style.visibility = 'visible';
   worldNameEl.textContent = world.meta.name;
   tickEl.textContent = String(world.meta.tickCount);
-  playersEl.textContent = pluralPt(Object.keys(world.players).length, 'jogador', 'jogadores');
+
+  // localPlayer instantiation
+  const localPlayer = new LocalPlayer(30, 30);
+
+  // Update total players (other players + 1 local player)
+  const totalPlayersCount = Object.keys(world.players).length + 1;
+  playersEl.textContent = pluralPt(totalPlayersCount, 'jogador', 'jogadores');
 
   const camera = new Camera(world.width * TILE_SIZE_PX, world.height * TILE_SIZE_PX);
   let dpr = Math.min(window.devicePixelRatio || 1, 3);
@@ -85,10 +91,60 @@ async function main(): Promise<void> {
   window.visualViewport?.addEventListener('resize', resize);
   resize();
 
-  attachPointerControls(canvas, camera);
+  // Center camera on local player initially
+  camera.centerOnWorld(localPlayer.x * TILE_SIZE_PX, localPlayer.y * TILE_SIZE_PX);
+  camera.clamp();
+
+  // Keyboard controls
+  window.addEventListener('keydown', (e) => {
+    if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+      return;
+    }
+
+    switch (e.key) {
+      case 'w':
+      case 'W':
+      case 'ArrowUp':
+        localPlayer.moveDir(0, -1, world);
+        break;
+      case 's':
+      case 'S':
+      case 'ArrowDown':
+        localPlayer.moveDir(0, 1, world);
+        break;
+      case 'a':
+      case 'A':
+      case 'ArrowLeft':
+        localPlayer.moveDir(-1, 0, world);
+        break;
+      case 'd':
+      case 'D':
+      case 'ArrowRight':
+        localPlayer.moveDir(1, 0, world);
+        break;
+    }
+  });
+
+  // Tap-to-move click callback
+  attachPointerControls(canvas, camera, (clickX, clickY) => {
+    const worldX = camera.screenToWorldX(clickX);
+    const worldY = camera.screenToWorldY(clickY);
+
+    const tileX = Math.floor(worldX / TILE_SIZE_PX);
+    const tileY = Math.floor(worldY / TILE_SIZE_PX);
+
+    localPlayer.findPathTo(tileX, tileY, world);
+  });
+
+  let lastTimeMs = performance.now();
 
   function frame(nowMs: number): void {
-    drawFrame({ ctx, world, sprites, camera, dpr }, nowMs);
+    const deltaTimeSeconds = Math.min(0.1, (nowMs - lastTimeMs) / 1000);
+    lastTimeMs = nowMs;
+
+    localPlayer.update(deltaTimeSeconds, world);
+
+    drawFrame({ ctx, world, sprites, camera, dpr, localPlayer }, nowMs);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

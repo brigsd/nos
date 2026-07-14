@@ -106,4 +106,12 @@ export class Camera {
   worldToScreenY(worldY: number): number {
     return Math.round((worldY - this.y) * this.zoom);
   }
+
+  screenToWorldX(screenX: number): number {
+    return this.x + screenX / this.zoom;
+  }
+
+  screenToWorldY(screenY: number): number {
+    return this.y + screenY / this.zoom;
+  }
 }

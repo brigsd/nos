@@ -11,7 +11,7 @@
 - [x] T2 · Gerador procedural do mapa d'O Coração (64×64, seed fixa) (PR #11, stress-test 25k seeds)
 - [ ] T3 · Tick mínimo: cron horário + disparo por evento de comando (D-11), 1 commit por lote ("batida" visível)
 - [ ] T4 · Site no Pages: renderiza o mapa em canvas, mobile + desktop
-- [ ] T5 · Avatar local andável (toque/WASD) com sprite próprio
+- [x] T5 · Avatar local andável (toque/WASD) com sprite próprio
 - [ ] T6 · Comandos `/entrar`, `/mover`, `/coletar`, `/dizer` via issue-form + processamento no tick
 - [x] T7 · Arte base: tileset adaptado à paleta + sprite do Núcleo pulsante (PR #10; refinos em #12)
 - [ ] T8 · CI guardrails: testes, schema, lint de sprites — bloqueando merge
