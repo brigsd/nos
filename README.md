@@ -2,6 +2,12 @@
 
 > O contrário de Jogador Nº 1.
 
+## ▶ [JOGAR — abrir O Coração](https://brigsd.github.io/nos/)
+
+Roda no navegador do **PC ou do celular**. O mundo está vivo agora. 🌍
+
+---
+
 **NÓS** é um metaverso 2D em pixel art que vive **inteiramente dentro do GitHub**:
 
 - 🗄️ O repositório é o banco de dados — o mundo é feito de commits.
@@ -22,7 +28,11 @@ O primeiro mundo se chama **O Coração**. Ele pulsa. Mesmo agora.
 
 ## Como jogar
 
-Em breve. A v1 trará: avatar, exploração d'O Coração e as primeiras ações via issue.
+**▶ [Abrir O Coração](https://brigsd.github.io/nos/)** — PC ou celular, sem instalar nada.
+
+- **Explorar é instantâneo:** arraste para andar pelo mapa, pinça ou roda do mouse para dar zoom.
+- **Agir no mundo é por comando** (via issue): `/entrar` cria seu avatar; depois `/mover`, `/coletar` e `/dizer`. O tick processa em segundos e responde na sua própria issue.
+- Os **Nativos** (gota, raiz, cinza) vivem no mundo e agem a cada batida, mesmo sem ninguém online.
 
 ## Como contribuir
 
