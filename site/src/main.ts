@@ -12,7 +12,8 @@ import { attachPointerControls } from './input';
 import { drawFrame } from './renderer';
 import { renderMural } from './mural';
 import { renderAuth } from './auth-ui';
-import { renderMeuNo } from './meu-no';
+import { getSavedLogin, renderMeuNo } from './meu-no';
+import { peekLogin } from './auth';
 import { renderComercio } from './trade';
 import { renderNativos } from './nativos';
 import { renderOficinas } from './oficinas';
@@ -178,9 +179,32 @@ async function main(): Promise<void> {
   renderMural(muralListEl, world);
 
   function updatePlayerCount(): void {
-    // other players in world state + 1 local player
-    const totalPlayersCount = Object.keys(world.players).length + 1;
+    // Registro players + the local avatar — WITHOUT double-counting the
+    // local player once their login is already in the Registro: the solid
+    // avatar and their own world entry are the same person (o Eco, D-25b),
+    // matching the identity rule renderer.ts uses for the pale echo.
+    // Object.hasOwn, not `in`/direct lookup: the key is player-typed text.
+    const isRegistered = Object.hasOwn(world.players, localPlayer.username);
+    const totalPlayersCount = Object.keys(world.players).length + (isRegistered ? 0 : 1);
     playersEl.textContent = pluralPt(totalPlayersCount, 'jogador', 'jogadores');
+  }
+
+  /**
+   * Keeps the local avatar's identity in sync with the best known login
+   * (auth token first, Meu Nó's saved login as fallback). Nothing was
+   * ever calling setUsername, so localPlayer.username stayed 'Você'
+   * forever — which silently killed the Eco (renderer.ts matches the
+   * Registro entry against localPlayer.username to draw it pale, D-25b:
+   * the player saw their own clone SOLID, duplicated) and double-counted
+   * the player in the HUD ("2 jogadores" with one person in the world).
+   * Called at startup and on every auth/Meu Nó login change; never
+   * reverts to 'Você' on logout — the Registro entry, if any, still
+   * belongs to that login.
+   */
+  function syncLocalIdentity(): void {
+    const login = peekLogin() ?? getSavedLogin();
+    if (login && login !== localPlayer.username) localPlayer.setUsername(login);
+    updatePlayerCount();
   }
 
   // Auth-dependent panels (Meu Nó's auto-fill from the authenticated login,
@@ -202,7 +226,15 @@ async function main(): Promise<void> {
   }
   function refreshAuthenticatedPanels(): void {
     const readOnly = visitingWorldId !== null;
-    renderMeuNo(meuNoEl, world, refreshOficinas, readOnly);
+    renderMeuNo(
+      meuNoEl,
+      world,
+      () => {
+        refreshOficinas();
+        syncLocalIdentity(); // typing/forgetting a login in Meu Nó changes who the local avatar IS (Eco + contador)
+      },
+      readOnly,
+    );
     renderComercio(comercioBodyEl, world, readOnly);
     renderNativos(nativosBodyEl, world, readOnly);
     refreshOficinas();
@@ -213,6 +245,7 @@ async function main(): Promise<void> {
   // exists to drive - by the time a login/logout can actually fire this
   // callback, the assignment below has long since run).
   function handleAuthChange(): void {
+    syncLocalIdentity(); // login/logout changes who the local avatar IS (Eco + contador)
     refreshAuthenticatedPanels();
     liveHandle?.refreshNow();
     p2pController?.refresh(); // R7: logging out mid-session must drop any active P2P connection (see p2p-ui.ts's render())
@@ -245,7 +278,9 @@ async function main(): Promise<void> {
   // localPlayer instantiation
   const localPlayer = new LocalPlayer(30, 30);
 
-  updatePlayerCount();
+  // First identity sync AFTER localPlayer exists (handleAuthChange/Meu Nó
+  // only re-fire it on user action, so this is the startup path).
+  syncLocalIdentity();
 
   const camera = new Camera(world.width * TILE_SIZE_PX, world.height * TILE_SIZE_PX);
   let dpr = Math.min(window.devicePixelRatio || 1, 3);
