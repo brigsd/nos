@@ -76,6 +76,34 @@ export interface Player {
 }
 
 // ---------------------------------------------------------------------------
+// Natives (os Nativos) - v2, GDD "NPCs": procedural behavior trees + scripted
+// (non-LLM) dialogue, see docs/DECISIONS.md D-09. Only the NPC shape lives
+// here for this slice - combat/economy/structures are separate fatias and
+// deliberately not represented in this file yet.
+// ---------------------------------------------------------------------------
+
+export type NativeFaction = 'wanderer' | 'merchant' | 'guardian';
+
+/** Ceiling on a `native_spoke` message's length (mirrors PlayerSaidEvent's own cap). */
+export const NATIVE_MESSAGE_MAX_LENGTH = 280;
+
+export interface Native {
+  /** Unique identifier for this NPC (e.g. "gota"). Doubles as its key in World.natives. */
+  id: string;
+  /** Display name shown to players (e.g. "Gota"). */
+  name: string;
+  position: Position;
+  /** Key into engine/behavior.ts's BEHAVIOR_TREES. */
+  behaviorTree: string;
+  /** Serialized (JSON string) scratch state the behavior tree persists between beats, e.g. dialogue cooldown. */
+  behaviorState: string;
+  /** Goods this Native carries (for future trading; not yet actionable in this slice). */
+  inventory: Inventory;
+  hp: number;
+  faction: NativeFaction;
+}
+
+// ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
 
@@ -84,7 +112,8 @@ export type WorldEventType =
   | 'player_moved'
   | 'resource_collected'
   | 'player_said'
-  | 'core_pulse';
+  | 'core_pulse'
+  | 'native_spoke';
 
 interface WorldEventBase {
   type: WorldEventType;
@@ -124,12 +153,19 @@ export interface CorePulseEvent extends WorldEventBase {
   type: 'core_pulse';
 }
 
+export interface NativeSpokeEvent extends WorldEventBase {
+  type: 'native_spoke';
+  nativeId: string;
+  message: string;
+}
+
 export type WorldEvent =
   | PlayerJoinedEvent
   | PlayerMovedEvent
   | ResourceCollectedEvent
   | PlayerSaidEvent
-  | CorePulseEvent;
+  | CorePulseEvent
+  | NativeSpokeEvent;
 
 // ---------------------------------------------------------------------------
 // World
@@ -155,6 +191,8 @@ export interface World {
   /** Living players, indexed by GitHub login. */
   players: Record<string, Player>;
   events: WorldEvent[];
+  /** NPCs (os Nativos) inhabiting the world, indexed by id (v2, optional for backward compatibility with pre-Nativos worlds). */
+  natives?: Record<string, Native>;
 }
 
 // ---------------------------------------------------------------------------

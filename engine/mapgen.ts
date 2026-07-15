@@ -12,7 +12,17 @@
  */
 
 import { Rng } from './rng';
-import { WORLD_WIDTH, WORLD_HEIGHT, isInBounds, tileIndex, type Tile, type World } from './types';
+import {
+  WORLD_WIDTH,
+  WORLD_HEIGHT,
+  isInBounds,
+  tileIndex,
+  type Tile,
+  type World,
+  type Native,
+  type Position,
+  type Biome,
+} from './types';
 
 /** The one and only seed for O Coração - the world is one, per the GDD. */
 export const HEART_WORLD_SEED = 'commit-primordial';
@@ -337,7 +347,7 @@ export function generateHeartWorld(seed: string = HEART_WORLD_SEED): World {
   placeCore(tiles, width);
   scatterResources(tiles, width, height, rng);
 
-  return {
+  const world: World = {
     meta: {
       name: HEART_WORLD_NAME,
       seed,
@@ -350,4 +360,104 @@ export function generateHeartWorld(seed: string = HEART_WORLD_SEED): World {
     players: {},
     events: [],
   };
+
+  // A brand-new O Coração is born with its 3 Nativos already in place - see
+  // seedInitialNatives() below, the same function scripts/tick.ts uses to
+  // retrofit a world that predates them.
+  return seedInitialNatives(world);
+}
+
+// ---------------------------------------------------------------------------
+// Natives (os Nativos) seeding - v2. Kept in mapgen.ts (rather than
+// natives.ts, which only coordinates the per-beat behavior tick) because
+// this is world-generation logic: it decides *where in the map* gota, raiz
+// and cinza start out, the same way carveRiver/scatterForest/placeRuins
+// decide where everything else goes.
+// ---------------------------------------------------------------------------
+
+/**
+ * First walkable tile of `biome`, scanning row-major from (0, 0). Not
+ * random on purpose: a Native's starting spot only needs to be deterministic
+ * and inside the right biome, and a fixed scan order means a fresh
+ * generateHeartWorld() call and a seedInitialNatives() retrofit of an
+ * already-generated world (same seed => same tiles) always agree, with no
+ * RNG draw to keep in sync between the two call sites.
+ */
+function findWalkableTileForBiome(
+  tiles: readonly Tile[],
+  biome: Biome,
+  width: number,
+  height: number,
+): Position {
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (tiles[tileIndex(x, y, width)]?.biome === biome) {
+        return { x, y };
+      }
+    }
+  }
+  // Unreachable for O Coração's real biome mix (meadow/forest/ruins all
+  // exist by construction) - fail safe to the player spawn tile instead of
+  // throwing and blocking the whole tick.
+  return { x: 30, y: 30 };
+}
+
+/**
+ * Seeds the 3 Nativos - gota (wanderer), raiz (merchant), cinza (guardian) -
+ * into `world` if it doesn't have any yet. Pure and idempotent: calling it
+ * on a world that already has `natives` returns that world unchanged, so
+ * `if (!world.natives) world = seedInitialNatives(world)` (scripts/tick.ts)
+ * is always safe to run on every tick, forever, without ever duplicating or
+ * resetting a Native that has since moved or spoken.
+ *
+ * Positions are derived only from `world.tiles` - no RNG, no Date.now() - so
+ * a brand-new genesis world (generateHeartWorld) and a live world retrofitted
+ * later (same seed => byte-identical tiles, see engine/mapgen.test.ts "the
+ * committed world/heart.json") always place the same 3 Nativos on the same
+ * tiles. NEVER hand-edit world/heart.json to add natives - this function,
+ * run by the tick, is the only sanctioned way (docs/CONTINUITY.md v2 audit).
+ */
+export function seedInitialNatives(world: World): World {
+  if (world.natives && Object.keys(world.natives).length > 0) {
+    return world;
+  }
+
+  const gotaPos = findWalkableTileForBiome(world.tiles, 'meadow', world.width, world.height);
+  const raizPos = findWalkableTileForBiome(world.tiles, 'forest', world.width, world.height);
+  const cinzaPos = findWalkableTileForBiome(world.tiles, 'ruins', world.width, world.height);
+
+  const natives: Record<string, Native> = {
+    gota: {
+      id: 'gota',
+      name: 'Gota',
+      position: gotaPos,
+      behaviorTree: 'wanderer',
+      behaviorState: '{}',
+      inventory: { pulse_fragment: 5 },
+      hp: 100,
+      faction: 'wanderer',
+    },
+    raiz: {
+      id: 'raiz',
+      name: 'Raiz',
+      position: raizPos,
+      behaviorTree: 'merchant',
+      behaviorState: '{}',
+      inventory: { wood: 10 },
+      hp: 100,
+      faction: 'merchant',
+    },
+    cinza: {
+      id: 'cinza',
+      name: 'Cinza',
+      position: cinzaPos,
+      behaviorTree: 'guardian',
+      behaviorState: '{}',
+      inventory: { stone: 10 },
+      hp: 120,
+      faction: 'guardian',
+    },
+  };
+
+  return { ...world, natives };
 }

@@ -24,6 +24,11 @@
     "events": {
       "type": "array",
       "items": { "$ref": "#/definitions/WorldEvent" }
+    },
+    "natives": {
+      "type": "object",
+      "description": "NPCs (os Nativos) inhabiting the world, indexed by id (v2).",
+      "additionalProperties": { "$ref": "#/definitions/Native" }
     }
   },
   "definitions": {
@@ -114,7 +119,8 @@
         { "$ref": "#/definitions/PlayerMovedEvent" },
         { "$ref": "#/definitions/ResourceCollectedEvent" },
         { "$ref": "#/definitions/PlayerSaidEvent" },
-        { "$ref": "#/definitions/CorePulseEvent" }
+        { "$ref": "#/definitions/CorePulseEvent" },
+        { "$ref": "#/definitions/NativeSpokeEvent" }
       ]
     },
     "PlayerJoinedEvent": {
@@ -175,6 +181,37 @@
         "type": { "const": "core_pulse" },
         "tick": { "type": "integer", "minimum": 0 },
         "worldTime": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "NativeFaction": {
+      "type": "string",
+      "enum": ["wanderer", "merchant", "guardian"]
+    },
+    "Native": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "position", "behaviorTree", "behaviorState", "inventory", "hp", "faction"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "position": { "$ref": "#/definitions/Position" },
+        "behaviorTree": { "type": "string", "minLength": 1 },
+        "behaviorState": { "type": "string" },
+        "inventory": { "$ref": "#/definitions/Inventory" },
+        "hp": { "type": "integer", "minimum": 0 },
+        "faction": { "$ref": "#/definitions/NativeFaction" }
+      }
+    },
+    "NativeSpokeEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime", "nativeId", "message"],
+      "properties": {
+        "type": { "const": "native_spoke" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 },
+        "nativeId": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 280 }
       }
     }
   }

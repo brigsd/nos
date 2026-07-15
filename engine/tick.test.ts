@@ -8,7 +8,7 @@ import {
   WORLD_MINUTES_PER_TICK,
 } from './tick';
 import { validateWorld } from './validate';
-import type { CorePulseEvent, World, WorldEvent } from './types';
+import type { CorePulseEvent, Native, World, WorldEvent } from './types';
 
 function tinyWorld(metaOverrides: Partial<World['meta']> = {}, events: WorldEvent[] = []): World {
   return {
@@ -18,6 +18,33 @@ function tinyWorld(metaOverrides: Partial<World['meta']> = {}, events: WorldEven
     tiles: [{ biome: 'meadow' }],
     players: {},
     events,
+  };
+}
+
+function gota(overrides: Partial<Native> = {}): Native {
+  return {
+    id: 'gota',
+    name: 'Gota',
+    position: { x: 2, y: 2 },
+    behaviorTree: 'wanderer',
+    behaviorState: '{}',
+    inventory: {},
+    hp: 100,
+    faction: 'wanderer',
+    ...overrides,
+  };
+}
+
+/** A larger open-meadow world (wander needs room to move) with a lone Native, no players. */
+function worldWithNative(metaOverrides: Partial<World['meta']> = {}): World {
+  return {
+    meta: { name: 'Test', seed: 'seed', tickCount: 0, worldTime: 0, ...metaOverrides },
+    width: 5,
+    height: 5,
+    tiles: Array.from({ length: 25 }, () => ({ biome: 'meadow' as const })),
+    players: {},
+    natives: { gota: gota() },
+    events: [],
   };
 }
 
@@ -159,5 +186,77 @@ describe('advanceWorld - result always passes the validator', () => {
   it('validates a genesis world (tickCount 0) advanced for the first time', () => {
     const { world: result } = advanceWorld(tinyWorld({ tickCount: 0, worldTime: 0 }), nowForDueTicks(0, 1));
     expect(validateWorld(result).valid).toBe(true);
+  });
+});
+
+describe('advanceWorld - os Nativos act every beat', () => {
+  it('a lone wanderer Native moves on a single beat', () => {
+    const world = worldWithNative({ tickCount: 4, worldTime: 240 });
+    const { world: result } = advanceWorld(world, nowForDueTicks(4, 1));
+
+    const before = world.natives!['gota']!.position;
+    const after = result.natives!['gota']!.position;
+    expect(after).not.toEqual(before);
+    expect(Math.abs(after.x - before.x) + Math.abs(after.y - before.y)).toBe(1);
+  });
+
+  it('the Native beat happens before the core_pulse event, appended in the same beat', () => {
+    // Native events (if any) land before that beat's core_pulse in the log
+    // - see engine/tick.ts's beatOnce. With a lone wanderer and no players,
+    // no native_spoke fires, so only core_pulse should appear either way;
+    // this asserts the ordering contract holds when it does fire too (a
+    // guardian placed right next to a player).
+    const world: World = {
+      meta: { name: 'Test', seed: 'seed', tickCount: 0, worldTime: 0 },
+      width: 5,
+      height: 5,
+      tiles: Array.from({ length: 25 }, () => ({ biome: 'meadow' as const })),
+      players: { alice: { login: 'alice', position: { x: 2, y: 2 }, inventory: {}, energy: 100 } },
+      natives: { cinza: gota({ id: 'cinza', name: 'Cinza', behaviorTree: 'guardian', faction: 'guardian' }) },
+      events: [],
+    };
+
+    const { world: result } = advanceWorld(world, nowForDueTicks(0, 1));
+    expect(result.events.map((e) => e.type)).toEqual(['native_spoke', 'core_pulse']);
+  });
+
+  it('ticks the Natives once per compensated beat, not once per call', () => {
+    // Guardian starts away from its NPC_HOMES spot with no player around, so
+    // move_towards_home advances it by exactly 1 tile per beat.
+    const home = { x: 25, y: 8 }; // NPC_HOMES.cinza
+    const world: World = {
+      meta: { name: 'Test', seed: 'seed', tickCount: 0, worldTime: 0 },
+      width: 64,
+      height: 64,
+      tiles: Array.from({ length: 64 * 64 }, () => ({ biome: 'meadow' as const })),
+      players: {},
+      natives: {
+        cinza: gota({ id: 'cinza', name: 'Cinza', behaviorTree: 'guardian', faction: 'guardian', position: { x: home.x - 3, y: home.y } }),
+      },
+      events: [],
+    };
+
+    const { world: result } = advanceWorld(world, nowForDueTicks(0, 3));
+    expect(result.meta.tickCount).toBe(3);
+    expect(result.natives!['cinza']!.position).toEqual(home); // 3 beats x 1 tile closer = home, exactly
+  });
+
+  it('does not mutate the input world natives', () => {
+    const world = worldWithNative({ tickCount: 4, worldTime: 240 });
+    const snapshot = structuredClone(world);
+    advanceWorld(world, nowForDueTicks(4, 1));
+    expect(world).toEqual(snapshot);
+  });
+
+  it('a world with no natives ticks exactly as before (backward compatible no-op)', () => {
+    const { world: result } = advanceWorld(tinyWorld({ tickCount: 4, worldTime: 240 }), nowForDueTicks(4, 1));
+    expect(result.natives).toBeUndefined();
+    expect(validateWorld(result).valid).toBe(true);
+  });
+
+  it('keeps validating once Natives are present and acting', () => {
+    const world = worldWithNative({ tickCount: 4, worldTime: 240 });
+    const { world: result } = advanceWorld(world, nowForDueTicks(4, 3));
+    expect(validateWorld(result)).toEqual({ valid: true, errors: [] });
   });
 });

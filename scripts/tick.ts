@@ -20,6 +20,8 @@ import { serializeWorld } from '../engine/serialize';
 import { assertValidWorld } from '../engine/validate';
 import { parseRawIssues } from '../engine/commands';
 import type { Command } from '../engine/commands';
+import { seedInitialNatives } from '../engine/mapgen';
+import type { World } from '../engine/types';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const worldPath = path.join(moduleDir, '..', 'world', 'heart.json');
@@ -43,6 +45,19 @@ function main(): void {
   const raw: unknown = JSON.parse(readFileSync(worldPath, 'utf-8'));
   assertValidWorld(raw); // raw is now narrowed to World
 
+  // One-time, additive, idempotent retrofit: a world saved before os
+  // Nativos existed (like the live world/heart.json) gets gota/raiz/cinza
+  // seeded in here, deterministically, without touching tickCount/players/
+  // events. seedInitialNatives() is itself a no-op once world.natives is
+  // populated, so this guard is just an (unnecessary but cheap) early-out -
+  // never hand-edit world/heart.json to add this instead.
+  let world: World = raw;
+  const wasSeeded = !world.natives;
+  if (wasSeeded) {
+    world = seedInitialNatives(world);
+    assertValidWorld(world); // gate the seeded state exactly like any tick output
+  }
+
   let commands: Command[] = [];
   if (existsSync(pendingCommandsPath)) {
     try {
@@ -56,9 +71,9 @@ function main(): void {
     }
   }
 
-  const tickCountBefore = raw.meta.tickCount;
+  const tickCountBefore = world.meta.tickCount;
   const now = resolveNow(process.argv, process.env);
-  const { world: result, commandResults } = advanceWorld(raw, now, commands);
+  const { world: result, commandResults } = advanceWorld(world, now, commands);
 
   assertValidWorld(result); // never write state the tick's own gate wouldn't accept
 
@@ -75,7 +90,11 @@ function main(): void {
 
   const processed = result.meta.tickCount - tickCountBefore;
   if (processed === 0) {
-    console.log(`No beat due yet - tick #${tickCountBefore} stands, world unchanged.`);
+    console.log(
+      wasSeeded
+        ? `Nativos semeados (gota, raiz, cinza) - tick #${tickCountBefore} stands, no new beat due yet.`
+        : `No beat due yet - tick #${tickCountBefore} stands, world unchanged.`,
+    );
     return;
   }
 
@@ -83,6 +102,7 @@ function main(): void {
   console.log(
     `Tick #${result.meta.tickCount}: processed ${processed} beat(s)` +
       (compensated > 0 ? ` (${compensated} compensated per D-19)` : '') +
+      (wasSeeded ? ' (Nativos seeded this run)' : '') +
       ` - world time now ${result.meta.worldTime} min.`,
   );
 }

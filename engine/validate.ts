@@ -49,6 +49,26 @@ function boundsError(label: string, position: Position, world: World): string | 
   return `${label} (${position.x}, ${position.y}) is out of bounds`;
 }
 
+/** Structural check for "is this value shaped like a Position" - used to find position-bearing fields on any event, generically. */
+function isPosition(value: unknown): value is Position {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { x?: unknown }).x === 'number' &&
+    typeof (value as { y?: unknown }).y === 'number'
+  );
+}
+
+/**
+ * Field names that carry a Position on one or more WorldEvent variants today
+ * (player_moved's from/to, resource_collected's position). Deliberately not
+ * a per-event-type if/else: any current or future event whose payload has
+ * one of these fields gets bounds-checked automatically - e.g. if
+ * NativeSpokeEvent ever grows a `position`, or a v2.x event reuses `from`/
+ * `to`, no new branch has to be added here.
+ */
+const EVENT_POSITION_FIELDS = ['position', 'from', 'to'] as const;
+
 /** Cross-field invariants the JSON Schema alone cannot express. */
 function semanticErrors(world: World): string[] {
   const errors: string[] = [];
@@ -68,6 +88,17 @@ function semanticErrors(world: World): string[] {
     if (playerPositionError) errors.push(playerPositionError);
   }
 
+  // Os Nativos (v2, optional): same id-matches-its-map-key and in-bounds
+  // checks as players above, so a Native is held to exactly the same
+  // integrity bar a player is.
+  for (const [id, native] of Object.entries(world.natives ?? {})) {
+    if (native.id !== id) {
+      errors.push(`natives["${id}"].id ("${native.id}") does not match its map key`);
+    }
+    const nativePositionError = boundsError(`natives["${id}"].position`, native.position, world);
+    if (nativePositionError) errors.push(nativePositionError);
+  }
+
   world.events.forEach((event, index) => {
     const label = `events[${index}] (${event.type})`;
 
@@ -79,17 +110,21 @@ function semanticErrors(world: World): string[] {
       errors.push(`${label}.login ("${event.login}") does not exist in players`);
     }
 
-    // Position fields are only defined on these two event types (see
-    // engine/types.ts); the schema already guarantees x/y are non-negative
-    // integers, but only this layer knows the map's actual width/height.
-    if (event.type === 'player_moved') {
-      const fromError = boundsError(`${label}.from`, event.from, world);
-      if (fromError) errors.push(fromError);
-      const toError = boundsError(`${label}.to`, event.to, world);
-      if (toError) errors.push(toError);
-    } else if (event.type === 'resource_collected') {
-      const positionError = boundsError(`${label}.position`, event.position, world);
-      if (positionError) errors.push(positionError);
+    // Same idea as the login cross-check above, for the one event type that
+    // references a Native instead of a Player (native_spoke).
+    if ('nativeId' in event && !(event.nativeId in (world.natives ?? {}))) {
+      errors.push(`${label}.nativeId ("${event.nativeId}") does not exist in natives`);
+    }
+
+    // Generic position-bounds pass (see EVENT_POSITION_FIELDS above): the
+    // schema already guarantees x/y are non-negative integers wherever they
+    // appear, but only this layer knows the map's actual width/height.
+    for (const field of EVENT_POSITION_FIELDS) {
+      const value = (event as unknown as Record<string, unknown>)[field];
+      if (isPosition(value)) {
+        const positionError = boundsError(`${label}.${field}`, value, world);
+        if (positionError) errors.push(positionError);
+      }
     }
   });
 
