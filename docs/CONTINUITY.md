@@ -50,9 +50,19 @@ Auditoria completa da branch `colaborador2/v2` feita (relatório na conversa). A
 - **Ativado no mundo vivo**: o tick da issue #27 semeou os 3 Nativos preservando brigsd/tickCount/eventos (migração validada em produção). `world/heart.json` da main tem `natives: {gota, raiz, cinza}`. Site (live-fetch) mostra os três — pode levar ~5min pro CDN do raw atualizar.
 - Os Nativos agem a cada batida (behavior trees). Ainda NÃO há interação do jogador com eles (isso viria com economia/combate).
 
+## Segurança do pipeline — BLINDADO (2026-07-15, issue #28, PR #29)
+Análise: sem exploração ativa hoje, mas a arquitetura podia travar o mundo pra sempre (exceção não isolada + issue ofensora nunca fechada + tickNatives sem rede). Blindado:
+- try/catch por comando em `processCommands` → comando ruim vira falha + issue fechada (quebra o loop de travamento).
+- `tickNatives` isolado → bug dos Nativos pula a batida, relógio segue.
+- helper `getOwn` (Object.hasOwn) contra poluição de protótipo, já no lookup de `players[cmd.login]` — o `__proto__` de combate/economia nasce morto.
+- rede de segurança no `scripts/tick.ts` (loga contexto rico, não mascara bug real).
+- 189→202 testes. Também corrigido teste de migração obsoleto (#30, o mundo vivo já tem Nativos).
+**Pré-requisito de combate/economia cumprido.**
+
 ## Depois
 - Registro vs Eco (decisão adiada do Tiago).
-- Próximas fatias v2 na ordem recomendada; corrigir o bug de __proto__ antes de combate/economia.
+- Próxima fatia v2 recomendada: **economia** (T13) ou **interação leve com NPCs** — a fundação de segurança já está pronta. Ordem: T14 estruturas / T13 economia / T12 combate.
+- Ao integrar combate/economia: usar `getOwn` em TODOS os lookups por string de jogador (STRUCTURE_COSTS, TRADE_RECIPES, world.natives[alvo]).
 - Cosmético: Tiago deleta as branches órfãs (o token não deleta — 403).
 
 ### Acordo de trabalho (definido pelo Tiago)
