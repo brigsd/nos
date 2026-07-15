@@ -12,6 +12,7 @@ import { drawFrame } from './renderer';
 import { renderMural } from './mural';
 import { renderMeuNo } from './meu-no';
 import { renderComercio } from './trade';
+import { renderNativos } from './nativos';
 import { loadSprites, type Sprites } from './sprites';
 import { loadWorld } from './world';
 import { LocalPlayer } from './player';
@@ -46,6 +47,7 @@ async function main(): Promise<void> {
   const muralListEl = requireEl<HTMLOListElement>('hud-mural-list');
   const meuNoEl = requireEl<HTMLElement>('hud-meuno');
   const comercioBodyEl = requireEl<HTMLDivElement>('hud-comercio-body');
+  const nativosBodyEl = requireEl<HTMLDivElement>('hud-nativos-body');
 
   const maybeCtx = canvas.getContext('2d');
   if (!maybeCtx) {
@@ -75,6 +77,7 @@ async function main(): Promise<void> {
   renderMural(muralListEl, world);
   renderMeuNo(meuNoEl, world);
   renderComercio(comercioBodyEl, world);
+  renderNativos(nativosBodyEl, world);
 
   // localPlayer instantiation
   const localPlayer = new LocalPlayer(30, 30);

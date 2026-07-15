@@ -126,7 +126,8 @@
         { "$ref": "#/definitions/PlayerSaidEvent" },
         { "$ref": "#/definitions/CorePulseEvent" },
         { "$ref": "#/definitions/NativeSpokeEvent" },
-        { "$ref": "#/definitions/TradeCompletedEvent" }
+        { "$ref": "#/definitions/TradeCompletedEvent" },
+        { "$ref": "#/definitions/NativeRepliedEvent" }
       ]
     },
     "PlayerJoinedEvent": {
@@ -236,6 +237,20 @@
           "description": "Net change in the player's ₱ balance: positive = earned, negative = paid, 0 = pure barter.",
           "type": "integer"
         }
+      }
+    },
+    "NativeRepliedEvent": {
+      "description": "A Native answering a specific player's /conversar (v2). Unlike native_spoke, it is addressed: login is who the Native replied to.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime", "nativeId", "login", "message"],
+      "properties": {
+        "type": { "const": "native_replied" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 },
+        "nativeId": { "type": "string", "minLength": 1 },
+        "login": { "$ref": "#/definitions/Login" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 280 }
       }
     }
   }

@@ -9,10 +9,12 @@
 import type { World, Player, Position, WorldEvent, ResourceType } from './types';
 import { STARTING_ENERGY, STARTING_PULSO, MAX_ENERGY, ACTIONS_PER_TICK, getOwn, getTile, tileIndex } from './types';
 import { executeTrade, TRADE_ENERGY_COST, TRADE_RANGE_TILES } from './economy';
+import { conversationReply, PLAYER_PROXIMITY_TILES } from './behavior';
+import { Rng } from './rng';
 
 export { ACTIONS_PER_TICK };
 
-export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer' | 'trocar';
+export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer' | 'trocar' | 'conversar';
 
 export interface Command {
   id: number; // issue number
@@ -71,6 +73,24 @@ export function parseTrocarParams(body: string): { nativeId: string; tradeType: 
   return null;
 }
 
+/**
+ * Parser for the /conversar target from an issue-form markdown body
+ * ("### Nativo" heading), with a plain-text "conversar <nativo>" fallback.
+ * Normalized to lowercase; the handler re-validates via getOwn regardless -
+ * parsing is convenience, never the security gate.
+ */
+export function parseConversarTarget(body: string): string | null {
+  const match = body.match(/(?:### )?Nativo\s*[\r\n]+\s*([A-Za-z0-9_\-]+)/i);
+  if (match?.[1]) {
+    return match[1].trim().toLowerCase();
+  }
+  const words = body.trim().split(/\s+/);
+  if (words.length >= 2 && words[0]?.toLowerCase().replace(/^\//, '') === 'conversar' && words[1]) {
+    return words[1].toLowerCase();
+  }
+  return null;
+}
+
 /** Parser for message text from markdown body */
 export function parseDizerMessage(body: string): string {
   const match = body.match(/(?:Mensagem|### Mensagem)\s*[\r\n]+([\s\S]+)/i);
@@ -108,6 +128,9 @@ export function parseRawIssues(rawIssues: any[]): Command[] {
     } else if (title.toLowerCase().startsWith('comando: /trocar') || title.toLowerCase().includes('/trocar')) {
       type = 'trocar';
       params = parseTrocarParams(body);
+    } else if (title.toLowerCase().startsWith('comando: /conversar') || title.toLowerCase().includes('/conversar')) {
+      type = 'conversar';
+      params = parseConversarTarget(body);
     }
 
     if (type) {
@@ -502,6 +525,81 @@ export function applyCommand(
         login: cmd.login,
         success: true,
         message: `${outcome.message} Energia restante: ${updatedPlayer.energy}.`,
+      },
+    };
+  }
+
+  if (cmd.type === 'conversar') {
+    const nativeId = cmd.params;
+    if (typeof nativeId !== 'string' || nativeId.length === 0) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: 'Falha: Diga com qual Nativo você quer conversar (ex.: gota, raiz, cinza).',
+        },
+      };
+    }
+
+    // getOwn (issue #28): nativeId is player-supplied. A plain
+    // world.natives[nativeId] would resolve "__proto__"/"constructor" to an
+    // inherited built-in instead of "not found" - the exact class of the v2
+    // lockup bug, kept dead here by construction.
+    const native = getOwn(world.natives, nativeId);
+    if (!native) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: `Falha: Nenhum Nativo chamado "${nativeId}" habita O Coração.`,
+        },
+      };
+    }
+
+    // Talking costs no energy (like /dizer) but does need presence: the same
+    // radius in which a Native notices a player (behavior.ts).
+    const dx = Math.abs(player.position.x - native.position.x);
+    const dy = Math.abs(player.position.y - native.position.y);
+    if (dx > PLAYER_PROXIMITY_TILES || dy > PLAYER_PROXIMITY_TILES) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message:
+            `Falha: ${native.name} não te ouve daí (chegue a ${PLAYER_PROXIMITY_TILES} tiles). ` +
+            `Você em (${player.position.x}, ${player.position.y}), ${native.name} em (${native.position.x}, ${native.position.y}).`,
+        },
+      };
+    }
+
+    // Deterministic per-event seed: world seed + issue number, the same
+    // derivation family beatOnce uses for the Nativos (`seed-tick-N`). Same
+    // world + same command => same reply, no matter when the tick runs.
+    const rng = new Rng(`${world.meta.seed}-conversa-${cmd.id}`);
+    const reply = conversationReply(native, player, rng);
+
+    const repliedEvent: WorldEvent = {
+      type: 'native_replied',
+      tick: currentTick,
+      worldTime: currentWorldTime,
+      nativeId,
+      login: cmd.login,
+      message: reply,
+    };
+
+    return {
+      world: { ...world, events: [...world.events, repliedEvent] },
+      result: {
+        id: cmd.id,
+        login: cmd.login,
+        success: true,
+        message: `${native.name} responde: "${reply}"`,
       },
     };
   }

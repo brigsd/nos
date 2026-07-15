@@ -39,6 +39,7 @@ Sensação instantânea no cliente (andar, olhar, abrir painéis); consequência
 | Comando | Efeito |
 |---|---|
 | `/trocar nativo troca` | negocia com um Nativo a até 3 tiles (1 de energia); receitas fixas em `engine/economy.ts` |
+| `/conversar nativo` | puxa conversa com um Nativo a até 3 tiles (0 de energia); resposta roteirizada e determinística |
 
 ## Combate (v2) — autoritativo por turnos
 

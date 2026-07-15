@@ -279,10 +279,15 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
   }
 
   // 2.5. Draw Nativos (NPCs — official world state, so solid like other players).
-  // A Native that spoke on the current beat gets a small speech bubble (issue #23).
+  // A Native that spoke on the current beat — autonomously (native_spoke) or
+  // answering a player's /conversar (native_replied, v2) — gets a small
+  // speech bubble (issue #23).
   const spokeThisTick = new Set(
     world.events
-      .filter((e): e is Extract<typeof e, { type: 'native_spoke' }> => e.type === 'native_spoke')
+      .filter(
+        (e): e is Extract<typeof e, { type: 'native_spoke' | 'native_replied' }> =>
+          e.type === 'native_spoke' || e.type === 'native_replied',
+      )
       .filter((e) => e.tick === world.meta.tickCount)
       .map((e) => e.nativeId),
   );

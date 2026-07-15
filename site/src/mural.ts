@@ -2,8 +2,9 @@
  * src/mural.ts
  *
  * Renders "O Mural" — the HUD panel listing the world's most recent public
- * happenings: `/dizer` messages (`player_said`) and, since the v2 economy,
- * settled trades (`trade_completed`). This is a plain DOM overlay, not
+ * happenings: `/dizer` messages (`player_said`), settled trades
+ * (`trade_completed`, v2 economy) and Nativos answering players
+ * (`native_replied`, v2 light interaction). This is a plain DOM overlay, not
  * canvas: it reads `world.events` (already fetched once by src/world.ts,
  * same as the rest of the HUD) and writes list items. Deliberately kept out
  * of src/renderer.ts so it can't collide with the map-drawing work
@@ -15,17 +16,17 @@
  * be parsed as markup/script by a viewer's browser, no matter what a player
  * types.
  */
-import type { PlayerSaidEvent, TradeCompletedEvent, World, WorldEvent } from '../../engine/types';
+import type { NativeRepliedEvent, PlayerSaidEvent, TradeCompletedEvent, World, WorldEvent } from '../../engine/types';
 import { getOwn } from '../../engine/types';
 import { describeSide } from '../../engine/economy';
 
 /** How many of the most recent entries the Mural shows at once. */
 const MAX_ENTRIES = 8;
 
-type MuralEvent = PlayerSaidEvent | TradeCompletedEvent;
+type MuralEvent = PlayerSaidEvent | TradeCompletedEvent | NativeRepliedEvent;
 
 function isMuralEvent(event: WorldEvent): event is MuralEvent {
-  return event.type === 'player_said' || event.type === 'trade_completed';
+  return event.type === 'player_said' || event.type === 'trade_completed' || event.type === 'native_replied';
 }
 
 /** "agora" on the current beat, "há N pulsos" otherwise — Pulso/batida is the world's unit of time (docs/LORE.md). */
@@ -75,16 +76,34 @@ export function renderMural(listEl: HTMLOListElement, world: World): void {
 
     const author = document.createElement('span');
     author.className = 'hud-mural-author';
-    author.textContent = `@${event.login}`;
 
     // Untrusted player text (and engine-built summaries alike): textContent
     // only, never innerHTML.
     const message = document.createElement('span');
     message.className = 'hud-mural-message';
-    message.textContent = event.type === 'player_said' ? event.message : tradeSummary(event, world);
-    if (event.type === 'trade_completed') message.classList.add('hud-mural-trade');
 
-    line.append(author, document.createTextNode(' '), message);
+    if (event.type === 'player_said') {
+      author.textContent = `@${event.login}`;
+      message.textContent = event.message;
+      line.append(author, document.createTextNode(' '), message);
+    } else if (event.type === 'trade_completed') {
+      // A settled trade: "@alice deu 1 madeira e levou ₱5 — negócio com Raiz".
+      author.textContent = `@${event.login}`;
+      message.textContent = tradeSummary(event, world);
+      message.classList.add('hud-mural-trade');
+      line.append(author, document.createTextNode(' '), message);
+    } else {
+      // A Native answering someone: "Gota → @alice: ..." (getOwn - the
+      // nativeId inside a validated event is safe, but the habit is the rule).
+      const nativeName = getOwn(world.natives ?? {}, event.nativeId)?.name ?? event.nativeId;
+      author.textContent = nativeName;
+      author.classList.add('hud-mural-native');
+      message.textContent = event.message;
+      const addressee = document.createElement('span');
+      addressee.className = 'hud-mural-to';
+      addressee.textContent = `→ @${event.login}`;
+      line.append(author, document.createTextNode(' '), addressee, document.createTextNode(' '), message);
+    }
 
     const when = document.createElement('span');
     when.className = 'hud-mural-when';
