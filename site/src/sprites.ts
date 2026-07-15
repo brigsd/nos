@@ -51,10 +51,14 @@ export interface Sprites {
   nucleo: SpriteSheet;
   /** Player avatar: small hooded traveler. */
   no_avatar: SpriteSheet;
+  /** Nativos d'O Coração (v2, issue #23) - keyed to render by Native.id. */
+  nativoGota: SpriteSheet;
+  nativoRaiz: SpriteSheet;
+  nativoCinza: SpriteSheet;
 }
 
 export async function loadSprites(): Promise<Sprites> {
-  const [campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, nucleo, no_avatar] =
+  const [campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza] =
     await Promise.all([
       loadSheet('campina_1.png', 16, 16, 1),
       loadSheet('campina_2.png', 16, 16, 1),
@@ -66,6 +70,9 @@ export async function loadSprites(): Promise<Sprites> {
       loadSheet('margem_agua_4dir.png', 16, 16, 4),
       loadSheet('nucleo_pulse_4frames.png', 32, 32, 4),
       loadSheet('no_avatar.png', 16, 16, 1),
+      loadSheet('nativo_gota.png', 16, 16, 1),
+      loadSheet('nativo_raiz.png', 16, 16, 1),
+      loadSheet('nativo_cinza.png', 16, 16, 1),
     ]);
-  return { campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, nucleo, no_avatar };
+  return { campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza };
 }
