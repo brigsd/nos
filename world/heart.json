@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 24,
-    "worldTime": 1440
+    "tickCount": 25,
+    "worldTime": 1500
   },
   "width": 64,
   "height": 64,
@@ -4109,11 +4109,11 @@
     "brigsd": {
       "login": "brigsd",
       "position": {
-        "x": 30,
+        "x": 31,
         "y": 30
       },
       "inventory": {},
-      "energy": 100
+      "energy": 99
     }
   },
   "events": [
@@ -4242,6 +4242,25 @@
       "type": "core_pulse",
       "tick": 24,
       "worldTime": 1440
+    },
+    {
+      "type": "player_moved",
+      "tick": 25,
+      "worldTime": 1500,
+      "login": "brigsd",
+      "from": {
+        "x": 30,
+        "y": 30
+      },
+      "to": {
+        "x": 31,
+        "y": 30
+      }
+    },
+    {
+      "type": "core_pulse",
+      "tick": 25,
+      "worldTime": 1500
     }
   ]
 }
