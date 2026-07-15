@@ -103,6 +103,51 @@ O manuseio de token/XSS/escopo passou limpo, mas dois achados quebravam a featur
 - Nota LOW do reviewer atendida: comentário em `DEVICE_FLOW_SCOPE` reconhecendo que `public_repo` é largo demais e que GitHub App é o caminho futuro preferido.
 - Re-verificado após as correções: site `tsc --noEmit` + `npm run build` verdes, raiz 276/276.
 
+## v2.5 — R3 · Comparativo canvas vs. PixiJS (WebGL) — PR #41 aberto, NÃO mesclado (2026-07-15, branch `claude/r3-webgl-comparativo`)
+Sessão começou achando uma tentativa anterior morta: o worktree `/workspace/nos-gl` já tinha um protótipo
+inteiro (`site/gl/`) construído e verificado (screenshots, `results.json`, rascunho do doc) mas **nada
+commitado nem pushado**. Revisei tudo (li cada arquivo, rodei os builds/testes, olhei os PNGs) antes de
+assumir o trabalho como próprio — estava genuinamente sólido, então commitei em cima dele em vez de refazer.
+
+- **O que existe:** `site/gl/` — protótipo isolado (próprio `index.html`/`vite.config`, fora do
+  build/typecheck do site ao vivo) que renderiza o mesmo `world/heart.json` de duas formas alternáveis:
+  Canvas 2D (cópia do `renderer.ts` + tint dia/noite + luz pontual + bloom de 1 sprite) e PixiJS v8/WebGL
+  (batching, luz ambiente+pontual pulsando no Núcleo, *shimmer* de água via shader GLSL próprio, bloom,
+  CRT/scanline opcional). Estresse sintético determinístico (hash, sem `Math.random`) mede 1k/5k/10k sprites.
+  `pixi.js` 8.19.0 pinned em `site/package.json`, só usado pelo protótipo.
+- **Correção real feita nesta sessão:** reproduzi de forma independente os números de "bundle PixiJS isolado"
+  do rascunho herdado e NÃO bateram (751,8 kB/190,1 kB gzip alegados vs. ~200-300 kB/~60-76 kB gzip medidos,
+  dependendo do formato de build). Em vez de copiar o número não-verificado, escrevi
+  `gl/qa/bundle-pixi-isolated.mjs` (script pequeno, reproduzível, comentado) que isola exatamente os símbolos
+  do Pixi que o protótipo usa via build de biblioteca Vite (ES module — o formato real de um `import()`
+  dinâmico), e troquei os números do doc pelos medidos por ele: **~76 kB gzip** é a "taxa" realista do Pixi
+  no cenário de migração recomendado (lazy `import()`), não os ~186 kB do rascunho original.
+- **Também:** fiz merge do `origin/main` (7 commits — R2/login GitHub PR #38, batidas #38/#39) para dentro do
+  branch (sem conflito — arquivos diferentes) e re-rodei toda a bateria de FPS/memória/screenshots contra o
+  mundo atual (batida #39) em vez de deixar o doc referenciando a batida #37 congelada da tentativa morta.
+- **Números (sandbox sem GPU real, SwiftShader software-GL — ver ressalva no doc):** Canvas2D venceu em
+  throughput bruto de sprites em toda a bateria (ex.: 10k sprites, 24,7 fps Canvas vs. 18,8 fps Pixi) — o
+  oposto do que se espera em GPU real; documentado como característica do sandbox, não conclusão sobre
+  hardware real. Bundle: site ao vivo hoje 10,4 kB gzip de JS; protótipo `site/gl/` completo 177,7 kB gzip;
+  Pixi isolado/*tree-shaken* ~76 kB gzip.
+- **Recomendação registrada no PR:** adotar a janela PixiJS como upgrade **opt-in/lazy-loaded** (`import()`
+  dinâmico, flag de jogador em `localStorage`) — Canvas2D continua padrão e fallback permanente. O argumento
+  decisivo não é performance (não sustentada pelos números deste sandbox); é visual — água com movimento
+  real, bloom que generaliza e CRT como *pass* de custo fixo só são práticos com shaders de verdade (D-25e:
+  luz Eastward/Octopath). Plano de migração de 6 passos, incremental, sem tocar `engine/`/`world/heart.json`,
+  no doc.
+- **Intocados, como pedido pela tarefa:** `site/src/`, `engine/`, `world/heart.json`, workflows. Verificado
+  de ponta a ponta: `cd site && npx tsc --noEmit && npm run build` verde, `npm ci` em `site/` limpo (igual ao
+  CI), raiz `npm test` 276/276, `npm run typecheck`/`lint:sprites`/`validate-world` verdes (réplica local do
+  `ci.yml`), `site/gl/` com typecheck/build próprios verdes.
+- **Doc completo:** `docs/R3_COMPARATIVO_RENDER.md` (metodologia, tabelas, screenshots em `site/qa/r3/`,
+  prós/contras, "o que isto não prova", plano de migração, passos de reprodução).
+- **PR #41 aberto, NÃO mesclado** (tarefa pediu explicitamente para não mesclar — é evidência para decisão,
+  não feature pronta). `docs/IMPLEMENTATION_PLAN.md` — checkbox do R3 deixado como está (`[ ]`) até a decisão
+  de merge, seguindo o padrão do fluxo (checkbox some quando mescla).
+- **Pendente para quando alguém decidir:** rodar o teste manual num navegador com GPU de verdade (5 min,
+  comando no doc) antes de confiar no argumento de performance — este sandbox não tem GPU.
+
 ## Nota de segurança — proteção de branch (dúvida do Tiago, 2026-07-15)
 Só quem tem acesso de escrita (Tiago + token da integração) empurra na `main`; desconhecido não force-pusha. Recomendado ao Tiago: ligar SÓ "block force-push + deletion" (inofensivo). NÃO exigir PR/status-checks na main — **o tick (bot) commita direto na main a cada batida**; exigir PR quebraria o coração do jogo. Decisão final é do Tiago.
 
