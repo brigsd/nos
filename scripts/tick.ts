@@ -129,4 +129,20 @@ function updateReadme(tickCount: number, playerCount: number): void {
   }
 }
 
-main();
+try {
+  main();
+} catch (err) {
+  // Issue #28: last line of defense for the "Run world tick" Action step.
+  // This deliberately does NOT mask the failure or write any fallback
+  // state - a genuine state/seed/validation bug (corrupt world/heart.json,
+  // assertValidWorld rejecting the input or the freshly-advanced result, a
+  // bad TICK_NOW override, a disk write failure, ...) is real and must
+  // still fail this step loudly (non-zero exit) so a human notices, same as
+  // an unhandled throw always did. All this adds is richer context in the
+  // log before that happens.
+  console.error('FATAL: npm run tick failed. Nothing here retries or writes fallback state on top of it.');
+  console.error(`  world file: ${worldPath}`);
+  console.error(`  pending commands file present: ${existsSync(pendingCommandsPath)}`);
+  console.error(err instanceof Error ? (err.stack ?? `${err.name}: ${err.message}`) : String(err));
+  process.exitCode = 1;
+}

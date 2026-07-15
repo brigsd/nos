@@ -7,7 +7,7 @@
  */
 
 import type { World, Player, Position, WorldEvent, ResourceType } from './types';
-import { STARTING_ENERGY, MAX_ENERGY, getTile, tileIndex } from './types';
+import { STARTING_ENERGY, MAX_ENERGY, getOwn, getTile, tileIndex } from './types';
 
 export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer';
 
@@ -121,7 +121,12 @@ export function applyCommand(
   }
   actionCounts.set(cmd.login, count + 1);
 
-  const player = world.players[cmd.login];
+  // getOwn (issue #28): cmd.login is player-supplied. A plain
+  // world.players[cmd.login] would resolve hostile keys like "__proto__" or
+  // "constructor" to an inherited Object.prototype built-in (truthy, but
+  // shaped nothing like a Player) instead of "not found" - getOwn collapses
+  // that to a clean `undefined`, same as any other absent player.
+  const player = getOwn(world.players, cmd.login);
 
   if (cmd.type === 'entrar') {
     if (player) {
@@ -384,8 +389,22 @@ export function applyCommand(
   };
 }
 
-/** Processes a batch of commands sequentially. Sorting is deterministic. */
-export function processCommands(world: World, commands: Command[], tickNum: number, worldTime: number): ProcessedCommandsResult {
+/**
+ * Processes a batch of commands sequentially. Sorting is deterministic.
+ *
+ * `applyCommandFn` defaults to the real `applyCommand` and exists as a test
+ * seam only (issue #28): it lets tests inject a handler that throws, to
+ * prove the per-command try/catch below actually isolates a bad command
+ * without a real throwing code path having to exist in `applyCommand` today.
+ * No production caller ever passes it.
+ */
+export function processCommands(
+  world: World,
+  commands: Command[],
+  tickNum: number,
+  worldTime: number,
+  applyCommandFn: typeof applyCommand = applyCommand,
+): ProcessedCommandsResult {
   // Sort by time, then issue id
   const sorted = [...commands].sort((a, b) => {
     const timeA = new Date(a.createdAt).getTime();
@@ -399,15 +418,37 @@ export function processCommands(world: World, commands: Command[], tickNum: numb
   let currentWorld = world;
 
   for (const cmd of sorted) {
-    const { world: nextWorld, result } = applyCommand(
-      currentWorld,
-      cmd,
-      actionCounts,
-      tickNum,
-      worldTime
-    );
-    currentWorld = nextWorld;
-    results.push(result);
+    // Issue #28: a command handler is untrusted-input surface. If
+    // applyCommand throws for any reason, the world is left exactly as it
+    // was before this command (currentWorld is simply not reassigned), the
+    // offending command still gets a failure CommandResult - so
+    // scripts/respond-issues.ts can comment on and close its issue,
+    // breaking the "issue never closes -> reappears every tick -> tick
+    // jams forever" loop - and the loop continues with the rest of the
+    // batch. One bad command must never be able to take down the whole
+    // tick.
+    try {
+      const { world: nextWorld, result } = applyCommandFn(
+        currentWorld,
+        cmd,
+        actionCounts,
+        tickNum,
+        worldTime
+      );
+      currentWorld = nextWorld;
+      results.push(result);
+    } catch (err) {
+      console.error(
+        `processCommands: applyCommand threw for command #${cmd.id} (${cmd.type} by ${cmd.login}) - skipping it, world left unchanged for this command:`,
+        err,
+      );
+      results.push({
+        id: cmd.id,
+        login: cmd.login,
+        success: false,
+        message: 'Falha inesperada ao processar este comando.',
+      });
+    }
   }
 
   return {
