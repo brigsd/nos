@@ -10,16 +10,39 @@
  *
  * Prices/recipes are imported from engine/economy.ts - the price board on
  * screen is the very object the tick trades with, so they cannot drift.
+ *
+ * R2 (D-13): when the player is logged in (auth.ts), each offer also gets an
+ * "agir daqui" button that POSTs the /trocar issue directly via the API
+ * instead of opening the link - same command, same tick, one fewer tab. If
+ * the API call fails for any reason (no scope, offline, ...) it falls back
+ * to opening the very link that was already there.
  */
 import type { Native, World } from '../../engine/types';
 import { RESOURCE_LABELS_PTBR, RESOURCE_TYPES } from '../../engine/types';
 import { describeRecipe, TRADE_RANGE_TILES, TRADE_RECIPES, type TradeRecipe } from '../../engine/economy';
+import { createCommandIssue, isLoggedIn } from './auth';
 
 const ISSUE_BASE_URL = 'https://github.com/brigsd/nos/issues/new';
 
 function tradeIssueUrl(nativeId: string, tradeType: string): string {
   const params = new URLSearchParams({ template: 'trocar.yml', nativo: nativeId, troca: tradeType });
   return `${ISSUE_BASE_URL}?${params.toString()}`;
+}
+
+/** Handles a click on "agir daqui": POST the /trocar issue via the API, falling back to the pre-filled link on any failure. */
+function actOnOffer(button: HTMLButtonElement, fallbackHref: string, nativeId: string, tradeType: string): void {
+  button.disabled = true;
+  button.textContent = 'enviando…';
+  createCommandIssue('Comando: /trocar', { Nativo: nativeId, Troca: tradeType })
+    .then(({ number }) => {
+      button.textContent = `enviado (#${number})`;
+    })
+    .catch((err: unknown) => {
+      console.warn('Não deu para agir direto, abrindo a issue:', err);
+      window.open(fallbackHref, '_blank', 'noopener,noreferrer');
+      button.disabled = false;
+      button.textContent = 'agir daqui';
+    });
 }
 
 /** Whether `native` carries every item this recipe would hand to the player. */
@@ -62,6 +85,15 @@ function stallFor(native: Native): HTMLElement {
     link.rel = 'noopener noreferrer';
     link.title = `Abrir a issue /trocar ${native.id} ${tradeType}`;
     offer.appendChild(link);
+
+    if (isLoggedIn()) {
+      const act = el('button', 'trade-offer-act', 'agir daqui');
+      act.type = 'button';
+      act.title = `Enviar /trocar ${native.id} ${tradeType} direto pela API`;
+      act.addEventListener('click', () => actOnOffer(act, link.href, native.id, tradeType));
+      offer.appendChild(act);
+    }
+
     offers.appendChild(offer);
   }
   stall.appendChild(offers);
