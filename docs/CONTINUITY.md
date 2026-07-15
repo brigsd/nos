@@ -44,9 +44,11 @@ Auditoria completa da branch `colaborador2/v2` feita (relatório na conversa). A
 
 **Decisão do Tiago:** integrar **uma feature completa até a tela** (não motor-primeiro), começando pelos **NPCs (Nativos)**.
 
-### Em andamento — fatia "Nativos até a tela"
-- **Fase A · motor** (issue #22, branch `claude/v2-npc-engine`): tipo Native + evento native_spoke, behavior.ts + natives.ts adaptados ao validador endurecido, behavior.test.ts novo, seeding idempotente pelo tick (preserva mundo vivo). Sem /atacar//trocar.
-- **Fase B · visual** (issue #23): sprites de gota/raiz/cinza (branch `claude/v2-npc-art`, em paralelo) + render no mapa (após Fase A).
+### ✅ CONCLUÍDA — fatia "Nativos até a tela" (2026-07-15)
+- **Fase A · motor** (issue #22, PR #25): tipo Native + evento native_spoke, behavior.ts + natives.ts, validador generalizado (bounds de eventos genérico + régua dos nativos), behavior.test.ts novo. 102→189 testes. Seeding idempotente pelo tick.
+- **Fase B · visual** (issue #23): sprites gota/raiz/cinza (PR #24) + render no mapa com nome e balão de fala (PR #26).
+- **Ativado no mundo vivo**: o tick da issue #27 semeou os 3 Nativos preservando brigsd/tickCount/eventos (migração validada em produção). `world/heart.json` da main tem `natives: {gota, raiz, cinza}`. Site (live-fetch) mostra os três — pode levar ~5min pro CDN do raw atualizar.
+- Os Nativos agem a cada batida (behavior trees). Ainda NÃO há interação do jogador com eles (isso viria com economia/combate).
 
 ## Depois
 - Registro vs Eco (decisão adiada do Tiago).
