@@ -269,6 +269,14 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
   }
 
   // 3. Draw other players (official world state)
+  // A player that spoke (/dizer) on the current beat gets the same speech bubble
+  // as a Native (issue #23 pattern) — the mural event, mirrored onto the map.
+  const saidThisTick = new Set(
+    world.events
+      .filter((e): e is Extract<typeof e, { type: 'player_said' }> => e.type === 'player_said')
+      .filter((e) => e.tick === world.meta.tickCount)
+      .map((e) => e.login),
+  );
   for (const [login, player] of Object.entries(world.players)) {
     // If the official player is the local player, we skip rendering it here
     // because we render the local player smoothly at its visual position.
@@ -286,6 +294,7 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
 
       drawSpriteFrame(ctx, sprites.no_avatar, 0, px0, py0, px1, py1);
       drawPlayerName(ctx, `@${player.login}`, px0, py0, px1, false);
+      if (saidThisTick.has(player.login)) drawSpeechMark(ctx, px0, py0, px1);
     }
   }
 
@@ -308,5 +317,8 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     drawSpriteFrame(ctx, sprites.no_avatar, 0, px0, py0, px1, py1);
     drawPlayerName(ctx, localPlayer.username, px0, py0, px1, true);
     ctx.globalAlpha = prevAlpha;
+    // Speech mark drawn at full alpha (unlike the ghost body/name) so a message
+    // you just published reads clearly, not faded like unwritten intention.
+    if (saidThisTick.has(localPlayer.username)) drawSpeechMark(ctx, px0, py0, px1);
   }
 }

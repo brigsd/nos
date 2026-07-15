@@ -9,6 +9,7 @@ import { TILE_SIZE_PX } from '../../engine/types';
 import { Camera } from './camera';
 import { attachPointerControls } from './input';
 import { drawFrame } from './renderer';
+import { renderMural } from './mural';
 import { loadSprites, type Sprites } from './sprites';
 import { loadWorld } from './world';
 import { LocalPlayer } from './player';
@@ -40,6 +41,7 @@ async function main(): Promise<void> {
   const worldNameEl = requireEl<HTMLElement>('hud-world-name');
   const tickEl = requireEl<HTMLElement>('stat-tick');
   const playersEl = requireEl<HTMLElement>('stat-players');
+  const muralListEl = requireEl<HTMLOListElement>('hud-mural-list');
 
   const maybeCtx = canvas.getContext('2d');
   if (!maybeCtx) {
@@ -66,6 +68,7 @@ async function main(): Promise<void> {
   hudEl.style.visibility = 'visible';
   worldNameEl.textContent = world.meta.name;
   tickEl.textContent = String(world.meta.tickCount);
+  renderMural(muralListEl, world);
 
   // localPlayer instantiation
   const localPlayer = new LocalPlayer(30, 30);
