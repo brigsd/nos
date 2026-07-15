@@ -219,3 +219,30 @@ export function getTile(world: World, x: number, y: number): Tile | undefined {
   if (!isInBounds(x, y, world.width, world.height)) return undefined;
   return world.tiles[tileIndex(x, y, world.width)];
 }
+
+// ---------------------------------------------------------------------------
+// Safe lookup helpers (issue #28 - defense-in-depth against prototype
+// pollution, ahead of combate/economia adding more string-keyed lookups)
+// ---------------------------------------------------------------------------
+
+/**
+ * Looks up `key` in `dict`, returning the value only if it is an *own*
+ * property - never one inherited from `Object.prototype` (`__proto__`,
+ * `constructor`, `toString`, `hasOwnProperty`, ...). A plain `dict[key]`
+ * with a hostile `key` string (e.g. a player login or future item/target id
+ * that happens to collide with a built-in name) can silently resolve to
+ * that built-in instead of `undefined`, and callers that just check
+ * truthiness (`if (player) ...`) would then misread "not found" as "found".
+ *
+ * `Object.hasOwn` settles that ambiguity structurally: it only reports keys
+ * that were actually set on `dict` itself. Use this wherever a dictionary is
+ * indexed by a string that ultimately comes from player/external input
+ * (e.g. `getOwn(world.players, cmd.login)`), in place of `dict[key]`.
+ *
+ * Returns `undefined` for a missing dict, an absent key, or an inherited
+ * key - i.e. every "not really there" case looks the same to callers.
+ */
+export function getOwn<T>(dict: Record<string, T> | undefined | null, key: string): T | undefined {
+  if (dict == null) return undefined;
+  return Object.hasOwn(dict, key) ? dict[key] : undefined;
+}

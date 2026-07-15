@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { World, Player } from './types';
-import { parseMoverCoords, parseDizerMessage, parseRawIssues, processCommands } from './commands';
+import { parseMoverCoords, parseDizerMessage, parseRawIssues, processCommands, applyCommand } from './commands';
 
 function mockWorld(): World {
   return {
@@ -184,5 +184,95 @@ describe('processCommands execution pipeline', () => {
       login: 'alice',
       message: 'Olá!',
     });
+  });
+});
+
+describe('processCommands - per-command failure isolation (issue #28)', () => {
+  it('a command whose handler throws does not take down the batch: the rest still process, the bad one becomes a failure result', () => {
+    const world = mockWorld();
+    const commands = [
+      { id: 1, login: 'alice', type: 'entrar' as const, params: null, createdAt: '2026-07-14T20:00:00Z' },
+      { id: 2, login: 'bob', type: 'entrar' as const, params: null, createdAt: '2026-07-14T20:01:00Z' },
+      { id: 3, login: 'carol', type: 'entrar' as const, params: null, createdAt: '2026-07-14T20:02:00Z' },
+    ];
+
+    // Injected handler (processCommands' applyCommandFn seam, issue #28):
+    // behaves exactly like the real applyCommand for every command except
+    // #2, which it makes throw - simulating a bug in a future handler
+    // (combate/economia) without needing a real throwing path in
+    // applyCommand today.
+    const throwingApply: typeof applyCommand = (w, cmd, counts, tick, wt) => {
+      if (cmd.id === 2) {
+        throw new Error('simulated handler bug (issue #28 test)');
+      }
+      return applyCommand(w, cmd, counts, tick, wt);
+    };
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = processCommands(world, commands, 6, 360, throwingApply);
+
+      expect(res.results).toHaveLength(3);
+      expect(res.results[0]).toMatchObject({ id: 1, login: 'alice', success: true });
+      expect(res.results[1]).toEqual({
+        id: 2,
+        login: 'bob',
+        success: false,
+        message: 'Falha inesperada ao processar este comando.',
+      });
+      expect(res.results[2]).toMatchObject({ id: 3, login: 'carol', success: true }); // batch kept going after the throw
+
+      // The two healthy commands actually landed; the thrown one left no trace.
+      expect(Object.keys(res.world.players).sort()).toEqual(['alice', 'carol']);
+
+      // The real error was logged for debugging, not swallowed silently.
+      expect(errorSpy).toHaveBeenCalled();
+      const loggedArgs = errorSpy.mock.calls.flat();
+      expect(loggedArgs.some((arg) => arg instanceof Error && arg.message === 'simulated handler bug (issue #28 test)')).toBe(true);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('a thrown command leaves the world exactly as it was before it (currentWorld is not advanced for it)', () => {
+    const world = mockWorld();
+    world.players['alice'] = { login: 'alice', position: { x: 30, y: 30 }, inventory: {}, energy: 10 };
+
+    const commands = [
+      // Would succeed if it ran, but the injected handler forces it to throw.
+      { id: 1, login: 'alice', type: 'mover' as const, params: { x: 29, y: 30 }, createdAt: '2026-07-14T20:00:00Z' },
+      // A second, real move right after - must still see alice at her ORIGINAL spot,
+      // proving command 1's throw did not partially apply or corrupt the world.
+      { id: 2, login: 'alice', type: 'mover' as const, params: { x: 29, y: 30 }, createdAt: '2026-07-14T20:01:00Z' },
+    ];
+
+    const throwingApply: typeof applyCommand = (w, cmd, counts, tick, wt) => {
+      if (cmd.id === 1) throw new Error('simulated handler bug');
+      return applyCommand(w, cmd, counts, tick, wt);
+    };
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = processCommands(world, commands, 6, 360, throwingApply);
+
+      expect(res.results[0]?.success).toBe(false);
+      expect(res.results[1]?.success).toBe(true);
+      // Only command 2's single move/energy cost applied - command 1 left no trace.
+      expect(res.world.players['alice']?.position).toEqual({ x: 29, y: 30 });
+      expect(res.world.players['alice']?.energy).toBe(9);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('a normal batch (no injected handler) behaves exactly as before - the test seam is a no-op by default', () => {
+    const world = mockWorld();
+    const commands = [
+      { id: 1, login: 'alice', type: 'entrar' as const, params: null, createdAt: '2026-07-14T20:00:00Z' },
+    ];
+    const res = processCommands(world, commands, 6, 360);
+    expect(res.results).toHaveLength(1);
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.world.players['alice']).toBeDefined();
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   advanceWorld,
   HEART_GENESIS_UNIX_SECONDS,
@@ -8,6 +8,7 @@ import {
   WORLD_MINUTES_PER_TICK,
 } from './tick';
 import { validateWorld } from './validate';
+import * as nativesModule from './natives';
 import type { CorePulseEvent, Native, World, WorldEvent } from './types';
 
 function tinyWorld(metaOverrides: Partial<World['meta']> = {}, events: WorldEvent[] = []): World {
@@ -258,5 +259,84 @@ describe('advanceWorld - os Nativos act every beat', () => {
     const world = worldWithNative({ tickCount: 4, worldTime: 240 });
     const { world: result } = advanceWorld(world, nowForDueTicks(4, 3));
     expect(validateWorld(result)).toEqual({ valid: true, errors: [] });
+  });
+});
+
+describe('advanceWorld - Nativos failure isolation (issue #28)', () => {
+  it('tickNatives throwing does not stop the beat: tickCount/worldTime/core_pulse still advance normally', () => {
+    const world = worldWithNative({ tickCount: 4, worldTime: 240 });
+    const nativesSpy = vi.spyOn(nativesModule, 'tickNatives').mockImplementation(() => {
+      throw new Error('simulated Nativos bug (issue #28 test)');
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { world: result } = advanceWorld(world, nowForDueTicks(4, 1));
+
+      expect(result.meta.tickCount).toBe(5);
+      expect(result.meta.worldTime).toBe(240 + WORLD_MINUTES_PER_TICK);
+      expect(result.events).toHaveLength(1);
+      expect(result.events[0]).toEqual({ type: 'core_pulse', tick: 5, worldTime: 300 });
+
+      // The Native itself is untouched - tickNatives never got to run.
+      expect(result.natives!['gota']).toEqual(world.natives!['gota']);
+
+      // The failure was logged for debugging, not swallowed silently.
+      expect(errorSpy).toHaveBeenCalled();
+      const loggedArgs = errorSpy.mock.calls.flat();
+      expect(
+        loggedArgs.some((arg) => arg instanceof Error && arg.message === 'simulated Nativos bug (issue #28 test)'),
+      ).toBe(true);
+
+      expect(validateWorld(result)).toEqual({ valid: true, errors: [] });
+    } finally {
+      nativesSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('keeps compensating every missed beat even when tickNatives always throws', () => {
+    const world = worldWithNative({ tickCount: 0, worldTime: 0 });
+    const nativesSpy = vi.spyOn(nativesModule, 'tickNatives').mockImplementation(() => {
+      throw new Error('always throws');
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { world: result } = advanceWorld(world, nowForDueTicks(0, 3));
+      expect(result.meta.tickCount).toBe(3);
+      expect(result.events.filter((e) => e.type === 'core_pulse')).toHaveLength(3);
+      expect(result.events.map((e) => e.tick)).toEqual([1, 2, 3]);
+      expect(errorSpy).toHaveBeenCalledTimes(3); // once per skipped beat
+    } finally {
+      nativesSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('a throwing tickNatives does not block player commands from processing on the same call', () => {
+    const world: World = {
+      meta: { name: 'Test', seed: 'seed', tickCount: 0, worldTime: 0 },
+      width: 5,
+      height: 5,
+      tiles: Array.from({ length: 25 }, () => ({ biome: 'meadow' as const })),
+      players: {},
+      natives: { gota: gota() },
+      events: [],
+    };
+    const nativesSpy = vi.spyOn(nativesModule, 'tickNatives').mockImplementation(() => {
+      throw new Error('simulated Nativos bug');
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const commands = [{ id: 1, login: 'alice', type: 'entrar' as const, params: null, createdAt: '2026-07-14T20:00:00Z' }];
+      const { world: result, commandResults } = advanceWorld(world, nowForDueTicks(0, 1), commands);
+
+      expect(commandResults).toHaveLength(1);
+      expect(commandResults[0]?.success).toBe(true);
+      expect(result.players['alice']).toBeDefined();
+      expect(result.meta.tickCount).toBe(1);
+    } finally {
+      nativesSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
   });
 });

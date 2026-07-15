@@ -99,7 +99,22 @@ function beatOnce(world: World): World {
   // Sub-seed derived from the world's own seed + this beat's tick number -
   // deterministic, never Date.now()/Math.random().
   const tickSeed = `${world.meta.seed}-tick-${tickCount}`;
-  const { world: worldAfterNatives, events: nativeEvents } = tickNatives(world, tickSeed, tickCount, worldTime);
+
+  // Issue #28: os Nativos run unattended on every single beat, forever - a
+  // bug in a behavior tree must never be able to freeze the whole world.
+  // If tickNatives throws, log it and skip the Nativos for this beat only;
+  // the clock (tickCount/worldTime) and the core_pulse event below still
+  // land exactly as if nothing had happened, and the next beat gets a fresh
+  // chance to run them again.
+  let worldAfterNatives = world;
+  let nativeEvents: WorldEvent[] = [];
+  try {
+    const nativesResult = tickNatives(world, tickSeed, tickCount, worldTime);
+    worldAfterNatives = nativesResult.world;
+    nativeEvents = nativesResult.events;
+  } catch (err) {
+    console.error(`beatOnce: tickNatives threw on beat #${tickCount} - skipping os Nativos for this beat:`, err);
+  }
 
   let events = worldAfterNatives.events;
   for (const nativeEvent of nativeEvents) {

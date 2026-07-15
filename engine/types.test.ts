@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getTile, isInBounds, tileIndex, type World } from './types';
+import { getOwn, getTile, isInBounds, tileIndex, type World } from './types';
 
 function tinyWorld(): World {
   return {
@@ -49,5 +49,52 @@ describe('getTile', () => {
     expect(getTile(world, -1, 0)).toBeUndefined();
     expect(getTile(world, 2, 0)).toBeUndefined();
     expect(getTile(world, 0, 2)).toBeUndefined();
+  });
+});
+
+describe('getOwn (issue #28 - prototype pollution defense-in-depth)', () => {
+  it('returns the value for an own key', () => {
+    const dict = { alice: { login: 'alice', energy: 100 } };
+    expect(getOwn(dict, 'alice')).toBe(dict.alice);
+  });
+
+  it('returns undefined for a plain missing key', () => {
+    const dict = { alice: 1 };
+    expect(getOwn(dict, 'bob')).toBeUndefined();
+  });
+
+  it('returns undefined for "__proto__" instead of the inherited Object.prototype', () => {
+    const dict: Record<string, number> = { alice: 1 };
+    // Sanity check first: this is exactly the footgun getOwn exists to
+    // avoid - a plain bracket lookup resolves the inherited accessor.
+    expect((dict as Record<string, unknown>)['__proto__']).toBe(Object.prototype);
+    expect(getOwn(dict, '__proto__')).toBeUndefined();
+  });
+
+  it('returns undefined for "constructor" instead of the inherited Object constructor', () => {
+    const dict: Record<string, number> = { alice: 1 };
+    expect((dict as Record<string, unknown>)['constructor']).toBe(Object);
+    expect(getOwn(dict, 'constructor')).toBeUndefined();
+  });
+
+  it('returns undefined for other Object.prototype-inherited keys too (toString, hasOwnProperty)', () => {
+    const dict: Record<string, number> = { alice: 1 };
+    expect(getOwn(dict, 'toString')).toBeUndefined();
+    expect(getOwn(dict, 'hasOwnProperty')).toBeUndefined();
+  });
+
+  it('still returns a real own value even when it happens to be named like a built-in', () => {
+    // A own data property literally called "__proto__" (e.g. set via a
+    // computed key, never via the exotic object-literal setter) must still
+    // be readable - getOwn only rejects *inherited* keys, not own ones.
+    const dict: Record<string, string> = {};
+    Object.defineProperty(dict, '__proto__', { value: 'not-a-prototype', enumerable: true, configurable: true, writable: true });
+    expect(Object.hasOwn(dict, '__proto__')).toBe(true);
+    expect(getOwn(dict, '__proto__')).toBe('not-a-prototype');
+  });
+
+  it('returns undefined for an undefined or null dict without throwing', () => {
+    expect(getOwn(undefined, 'alice')).toBeUndefined();
+    expect(getOwn(null, 'alice')).toBeUndefined();
   });
 });
