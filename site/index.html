@@ -18,21 +18,28 @@
       <canvas id="map" aria-label="Mapa de O Coração"></canvas>
 
       <div id="hud">
-        <div class="hud-top">
-          <div class="hud-panel">
-            <h1 class="hud-title" id="hud-world-name">O Coração</h1>
-            <dl class="hud-stats">
-              <div class="hud-stat">
-                <dt>Batida</dt>
-                <dd><span class="pulse-dot" aria-hidden="true"></span><span id="stat-tick">—</span></dd>
-              </div>
-              <div class="hud-stat">
-                <dt>Jogadores</dt>
-                <dd id="stat-players">—</dd>
-              </div>
-            </dl>
+        <div class="hud-top-group">
+          <div class="hud-top">
+            <div class="hud-panel">
+              <h1 class="hud-title" id="hud-world-name">O Coração</h1>
+              <dl class="hud-stats">
+                <div class="hud-stat">
+                  <dt>Batida</dt>
+                  <dd><span class="pulse-dot" aria-hidden="true"></span><span id="stat-tick">—</span></dd>
+                </div>
+                <div class="hud-stat">
+                  <dt>Jogadores</dt>
+                  <dd id="stat-players">—</dd>
+                </div>
+              </dl>
+            </div>
+            <div class="hud-brand" aria-hidden="true">NÓS</div>
           </div>
-          <div class="hud-brand" aria-hidden="true">NÓS</div>
+
+          <section class="hud-mural" id="hud-mural" aria-label="Mural do mundo — últimas falas">
+            <h2 class="hud-mural-title">Mural</h2>
+            <ol class="hud-mural-list" id="hud-mural-list"></ol>
+          </section>
         </div>
 
         <p class="hud-hint">Arraste para explorar · roda ou pinça para aproximar</p>
