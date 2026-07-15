@@ -12,11 +12,16 @@
  * raw sends `access-control-allow-origin: *` (cache max-age 300s) — fine for an
  * hourly world. The build-time copy under ./world/ stays as an offline/failure
  * fallback so the map still paints if raw is unreachable.
+ *
+ * This one-shot fetch only covers the page's initial paint; src/live.ts polls
+ * afterwards (R5, D-24) to keep it fresh without a reload — it re-exports
+ * `LIVE_WORLD_URL` below (its Camada C/anonymous source) so the raw CDN URL
+ * has exactly one definition site-wide.
  */
 import type { World } from '../../engine/types';
 
-/** Live world state on the default branch. */
-const LIVE_WORLD_URL = 'https://raw.githubusercontent.com/brigsd/nos/main/world/heart.json';
+/** Live world state on the default branch. Also Camada C's source in src/live.ts. */
+export const LIVE_WORLD_URL = 'https://raw.githubusercontent.com/brigsd/nos/main/world/heart.json';
 /** Build-time copy, relative to index.html (resolves at root and under /nos/ on Pages). */
 const FALLBACK_WORLD_URL = './world/heart.json';
 

@@ -5,6 +5,7 @@
  * wires up keydown and tap controls, and runs the render loop.
  */
 import './style.css';
+import type { World } from '../../engine/types';
 import { TILE_SIZE_PX } from '../../engine/types';
 import { Camera } from './camera';
 import { attachPointerControls } from './input';
@@ -18,6 +19,8 @@ import { renderOficinas } from './oficinas';
 import { loadSprites, type Sprites } from './sprites';
 import { loadWorld } from './world';
 import { LocalPlayer } from './player';
+import { startLivePolling } from './live';
+import { renderLiveIndicator } from './live-indicator';
 
 function pluralPt(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -52,6 +55,9 @@ async function main(): Promise<void> {
   const comercioBodyEl = requireEl<HTMLDivElement>('hud-comercio-body');
   const nativosBodyEl = requireEl<HTMLDivElement>('hud-nativos-body');
   const oficinasBodyEl = requireEl<HTMLDivElement>('hud-oficinas-body');
+  const liveEl = requireEl<HTMLElement>('hud-live');
+  const liveDotEl = requireEl<HTMLElement>('hud-live-dot');
+  const liveLabelEl = requireEl<HTMLElement>('hud-live-label');
 
   const maybeCtx = canvas.getContext('2d');
   if (!maybeCtx) {
@@ -71,14 +77,30 @@ async function main(): Promise<void> {
     return;
   }
 
-  const world = worldResult.value;
+  // `world` is reassigned by src/live.ts's onWorld callback (R5, D-24) every
+  // time a poll finds a genuinely fresher world, so every closure below that
+  // reads `world` at CALL time (frame(), the keydown/pointer handlers, every
+  // renderX(el, world)) automatically picks up the refresh - no need to pass
+  // it around explicitly. Only localPlayer stays untouched by a refresh
+  // (it's the "intenção", D-12/D-22/D-25b - see applyFreshWorld below).
+  let world = worldResult.value;
   const sprites: Sprites = spritesResult.value;
+  // Assigned near the end of main(), once the live indicator elements exist
+  // to drive - declared here (not `const`) only so handleAuthChange below
+  // can close over it ahead of time.
+  let liveHandle: ReturnType<typeof startLivePolling> | null = null;
 
   hideStatus(statusEl);
   hudEl.style.visibility = 'visible';
   worldNameEl.textContent = world.meta.name;
   tickEl.textContent = String(world.meta.tickCount);
   renderMural(muralListEl, world);
+
+  function updatePlayerCount(): void {
+    // other players in world state + 1 local player
+    const totalPlayersCount = Object.keys(world.players).length + 1;
+    playersEl.textContent = pluralPt(totalPlayersCount, 'jogador', 'jogadores');
+  }
 
   // Auth-dependent panels (Meu Nó's auto-fill from the authenticated login,
   // Comércio/Nativos' "agir daqui" buttons, Oficinas' materials preview) -
@@ -96,15 +118,22 @@ async function main(): Promise<void> {
     renderNativos(nativosBodyEl, world);
     refreshOficinas();
   }
-  renderAuth(authEl, refreshAuthenticatedPanels);
+  // R5: an actual login/logout is the one event worth waking the live poller
+  // for right away, so a Camada C -> B upgrade doesn't wait out a stale ~60s
+  // timer (liveHandle is assigned near the end of main(), once the indicator
+  // exists to drive - by the time a login/logout can actually fire this
+  // callback, the assignment below has long since run).
+  function handleAuthChange(): void {
+    refreshAuthenticatedPanels();
+    liveHandle?.refreshNow();
+  }
+  renderAuth(authEl, handleAuthChange);
   refreshAuthenticatedPanels();
 
   // localPlayer instantiation
   const localPlayer = new LocalPlayer(30, 30);
 
-  // Update total players (other players + 1 local player)
-  const totalPlayersCount = Object.keys(world.players).length + 1;
-  playersEl.textContent = pluralPt(totalPlayersCount, 'jogador', 'jogadores');
+  updatePlayerCount();
 
   const camera = new Camera(world.width * TILE_SIZE_PX, world.height * TILE_SIZE_PX);
   let dpr = Math.min(window.devicePixelRatio || 1, 3);
@@ -166,6 +195,31 @@ async function main(): Promise<void> {
     const tileY = Math.floor(worldY / TILE_SIZE_PX);
 
     localPlayer.findPathTo(tileX, tileY, world);
+  });
+
+  // R5 (Fluidez B, D-24): keep the world fresh within seconds without a
+  // reload - see live.ts for the tier design (Camada B logged-in ~3s /
+  // Camada C anonymous ~60s) and live-indicator.ts for the HUD dot+label.
+  const updateLiveIndicator = renderLiveIndicator({ root: liveEl, dot: liveDotEl, label: liveLabelEl });
+
+  function applyFreshWorld(freshWorld: World): void {
+    world = freshWorld;
+    tickEl.textContent = String(world.meta.tickCount);
+    updatePlayerCount();
+    renderMural(muralListEl, world);
+    refreshAuthenticatedPanels();
+    // localPlayer (the "intenção") is deliberately left untouched here: only
+    // the Registro (world state) refreshes on a live update: the player's
+    // own optimistic position and any pending path keep going uninterrupted
+    // (D-12/D-22/D-25b) - reassigning `world` above already makes THEIR OWN
+    // Registro entry in world.players (the pale echo, block 3 of renderer.ts)
+    // catch up to wherever the Pulse last wrote them, exactly like today.
+  }
+
+  liveHandle = startLivePolling({
+    initialWorld: world,
+    onWorld: applyFreshWorld,
+    onStatus: updateLiveIndicator,
   });
 
   let lastTimeMs = performance.now();

@@ -877,3 +877,57 @@ body {
   color: var(--nos-accent);
   font-variant-numeric: tabular-nums;
 }
+
+/* --- "pulso ao vivo" (R5, D-24, Fluidez B): indicador honesto de frescor + camada ativa --- */
+
+.live-indicator {
+  margin: 6px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--nos-text-dim);
+}
+
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nos-text-dim);
+  flex-shrink: 0;
+}
+
+.live-indicator-tier-b .live-dot {
+  background: #91db69; /* leaf do Resurrect 64 - mesmo verde de .oficina-status-ok: Camada B, ao vivo */
+  box-shadow: 0 0 6px rgba(145, 219, 105, 0.7);
+}
+
+.live-indicator-tier-c .live-dot {
+  background: var(--nos-accent);
+  box-shadow: 0 0 6px rgba(168, 132, 243, 0.6);
+}
+
+.live-indicator-paused .live-dot {
+  opacity: 0.5;
+}
+
+@keyframes nos-live-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(2);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.live-dot-pulse {
+  animation: nos-live-pulse 0.6s ease-out;
+}
