@@ -51,8 +51,19 @@ function qaSignalingOverride(): OpenSignaling | undefined {
   return (window as unknown as { __NOS_QA_SIGNALING__?: OpenSignaling }).__NOS_QA_SIGNALING__;
 }
 
+/**
+ * D-25c "transparência radical" — this copy must be ACCURATE, not
+ * reassuring: only the position DATA travels browser-to-browser. The
+ * connection INVITE travels through GitHub as a comment on a public issue,
+ * and that invite contains the player's public IP address, signed by their
+ * GitHub username, readable by anyone — and it can outlive the session
+ * (closing the tab skips the cleanup edit; only a graceful toggle-off/
+ * logout rewrites the comment). Say all of that plainly.
+ */
 const EXPLANATION =
-  'Conecta seu navegador diretamente ao de outros jogadores, sem passar por servidor nenhum: eles poderão ver seu endereço IP (como numa chamada de vídeo). O mundo oficial não passa por aqui — só a posição ao vivo do seu vulto (a Intenção). Pode desligar quando quiser.';
+  'Liga uma conexão direta entre o seu navegador e o de outros jogadores para ver o vulto deles se mover ao vivo. ' +
+  'Transparência total: o convite de conexão é publicado como comentário numa issue PÚBLICA do GitHub, assinado pelo seu usuário e contendo seu endereço IP — qualquer pessoa pode ler, e o comentário pode continuar lá depois que você sair (fechar a aba não o apaga; desligar o modo, sim). ' +
+  'Pela conexão direta só viaja a posição do seu vulto (a Intenção) — o mundo oficial não passa por aqui. Pode desligar quando quiser.';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);

@@ -144,6 +144,22 @@ const HEARTBEAT_INTERVAL_MS = 5000;
 /** No pos/hb heard for this long -> the peer is gone even if the transport never fired a close event. */
 const PEER_TIMEOUT_MS = 15000;
 const STALE_SWEEP_INTERVAL_MS = 5000;
+/**
+ * Backoff for CONNECTION FAILURES (a pair that negotiated but never reached
+ * an open DataChannel — e.g. both sides behind symmetric NAT, where
+ * STUN-only can never connect and TURN is forbidden by D-25c). Without
+ * this, offerer and answerer would re-offer/re-answer each other forever —
+ * every cycle posting real comments on the PUBLIC room issue with the same
+ * token the player's game commands use, until GitHub's content-creation
+ * rate limit locks the player out of the actual game. Clean departures
+ * (channel WAS open, then closed) are not failures and never back off.
+ */
+const FAILURE_BACKOFF_BASE_MS = 30_000;
+const FAILURE_BACKOFF_MAX_MS = 8 * 60_000;
+/** After this many consecutive failures with the same login, give up on that pair until the mode is toggled off/on. */
+const MAX_CONSECUTIVE_FAILURES = 4;
+/** Hard backstop on comment volume: total broadcast offers one session may post, whatever the reason. */
+const MAX_OFFERS_PER_SESSION = 20;
 /** Ghost catch-up speed — a little faster than LocalPlayer's own 5 tiles/s so sparse updates still feel caught-up rather than perpetually lagging. */
 const GHOST_LERP_TILES_PER_SEC = 8;
 
@@ -244,8 +260,53 @@ export function startP2P(options: P2POptions): P2PHandle {
   const peers = new Map<string, RTCPeerConnection>();
   const channels = new Map<string, RTCDataChannel>();
   const ghosts = new Map<string, GhostState>();
+  /** Valid messages only — doubles as the stale sweep's LIVENESS anchor, so garbage must never advance it (see handleInbound). */
   const lastInboundAt = new Map<string, number>();
+  /** EVERY inbound frame, valid or garbage — the processing throttle's anchor (see handleInbound). */
+  const lastParseAttemptAt = new Map<string, number>();
   const heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
+
+  /** Consecutive connection FAILURES per remote login (see FAILURE_BACKOFF_* doc) — cleared the moment a channel to that login actually opens. */
+  const failuresByLogin = new Map<string, { count: number; nextAttemptAt: number }>();
+  let offersPosted = 0;
+  let reOfferTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function recordFailure(peerLogin: string): void {
+    const count = (failuresByLogin.get(peerLogin)?.count ?? 0) + 1;
+    const delay = Math.min(FAILURE_BACKOFF_BASE_MS * 2 ** (count - 1), FAILURE_BACKOFF_MAX_MS);
+    failuresByLogin.set(peerLogin, { count, nextAttemptAt: Date.now() + delay });
+    if (count >= MAX_CONSECUTIVE_FAILURES) {
+      console.warn(`P2P: ${count} falhas seguidas ao conectar com @${peerLogin} — desistindo desse par até religar o modo.`);
+    }
+  }
+
+  /** May we (re-)attempt a connection with this login right now? False while inside its failure backoff window, or forever (this session) once it hit MAX_CONSECUTIVE_FAILURES. */
+  function canAttempt(peerLogin: string): boolean {
+    const f = failuresByLogin.get(peerLogin);
+    if (!f) return true;
+    if (f.count >= MAX_CONSECUTIVE_FAILURES) return false;
+    return Date.now() >= f.nextAttemptAt;
+  }
+
+  /** How long our own next broadcast offer must wait, given the failure history with the login that just failed us. */
+  function backoffDelayMs(peerLogin: string): number {
+    const f = failuresByLogin.get(peerLogin);
+    if (!f) return 0;
+    return Math.max(0, f.nextAttemptAt - Date.now());
+  }
+
+  /** At most ONE pending re-offer at a time; delay 0 posts immediately (clean-departure path). */
+  function scheduleReOffer(delayMs: number): void {
+    if (stopped || reOfferTimer !== null) return;
+    if (delayMs <= 0) {
+      void postBroadcastOffer();
+      return;
+    }
+    reOfferTimer = setTimeout(() => {
+      reOfferTimer = null;
+      if (!stopped && myOfferPc === null) void postBroadcastOffer();
+    }, delayMs);
+  }
 
   /**
    * PER-PEER outbound throttle state (never a single shared value): a
@@ -267,6 +328,11 @@ export function startP2P(options: P2POptions): P2PHandle {
   }
 
   function teardownPeer(peerLogin: string): void {
+    // A channel only ever enters `channels` in its own `onopen` — so its
+    // presence here distinguishes a clean DEPARTURE (pair connected fine,
+    // peer left) from a connection FAILURE (never reached open: ICE found
+    // no viable pair, negotiation error, ...). Only failures back off.
+    const hadOpenChannel = channels.has(peerLogin);
     channels.get(peerLogin)?.close();
     channels.delete(peerLogin);
     const pc = peers.get(peerLogin) ?? null;
@@ -274,19 +340,29 @@ export function startP2P(options: P2POptions): P2PHandle {
     peers.delete(peerLogin);
     ghosts.delete(peerLogin);
     lastInboundAt.delete(peerLogin);
+    lastParseAttemptAt.delete(peerLogin);
     lastSentByPeer.delete(peerLogin);
     const hb = heartbeatTimers.get(peerLogin);
     if (hb !== undefined) clearInterval(hb);
     heartbeatTimers.delete(peerLogin);
 
+    if (!stopped) {
+      if (hadOpenChannel) failuresByLogin.delete(peerLogin); // the pair CAN connect — a later drop is a departure, not incompatibility
+      else recordFailure(peerLogin);
+    }
+
     if (pc !== null && pc === myOfferPc) {
       // Our own offer's connection died — reset and re-announce so we can
       // still be found (see module doc: re-posting is the recovery path
-      // for a dropped peer, not a periodic background loop).
+      // for a dropped peer, not a periodic background loop). After a
+      // FAILURE the re-post waits out that login's backoff window first:
+      // an immediate fresh offer would just be re-answered by the same
+      // peer and fail again, looping comments onto the public room issue
+      // (see FAILURE_BACKOFF_* doc).
       myOfferPc = null;
       myOfferChannel = null;
       myOfferClaimed = false;
-      if (!stopped) void postBroadcastOffer();
+      if (!stopped) scheduleReOffer(hadOpenChannel ? 0 : backoffDelayMs(peerLogin));
     }
 
     emitStatus();
@@ -296,8 +372,17 @@ export function startP2P(options: P2POptions): P2PHandle {
 
   function handleInbound(peerLogin: string, raw: string): void {
     const now = Date.now();
-    const last = lastInboundAt.get(peerLogin) ?? 0;
-    if (now - last < INBOUND_MIN_INTERVAL_MS) return; // rate-limit PROCESSING, independent of the sender
+    // The throttle gate anchors to the last processing ATTEMPT (valid or
+    // garbage) — anchoring to the last VALID message would let a stream of
+    // unparseable frames bypass the gate entirely (each fails the parse,
+    // never advances the anchor, and the next gets JSON.parse'd at full
+    // DataChannel rate: a main-thread DoS). Two maps on purpose:
+    // lastInboundAt advances ONLY on valid messages because it doubles as
+    // the stale sweep's liveness anchor — advancing it on garbage would
+    // keep a garbage-only peer alive forever.
+    const lastAttempt = lastParseAttemptAt.get(peerLogin) ?? 0;
+    if (now - lastAttempt < INBOUND_MIN_INTERVAL_MS) return; // rate-limit PROCESSING, independent of the sender
+    lastParseAttemptAt.set(peerLogin, now);
     const msg = parseWireMessage(raw, options.getWorldBounds());
     if (!msg) return; // garbage — dropped silently
     lastInboundAt.set(peerLogin, now);
@@ -398,6 +483,7 @@ export function startP2P(options: P2POptions): P2PHandle {
       if (msg.to !== '*' && msg.to !== login) return;
       if (peers.has(msg.from)) return;
       if (!(login > msg.from)) return; // tie-break: only the lexicographically larger login answers a foreign offer (module doc)
+      if (!canAttempt(msg.from)) return; // repeated ICE failures with this login — inside its backoff window, or given up (FAILURE_BACKOFF_* doc). Answering would post a comment doomed to fail again.
       void answerOffer(msg.from, msg.sdp);
       return;
     }
@@ -425,6 +511,14 @@ export function startP2P(options: P2POptions): P2PHandle {
   }
 
   async function postBroadcastOffer(): Promise<void> {
+    if (offersPosted >= MAX_OFFERS_PER_SESSION) {
+      // Hard backstop on public-comment volume (FAILURE_BACKOFF_* doc). A
+      // legitimate session virtually never gets here; a pathological
+      // connect/drop churn would. Discovery stops until the player toggles
+      // the mode off/on — cosmetic feature, deliberate trade.
+      console.warn(`P2P: limite de ${MAX_OFFERS_PER_SESSION} convites por sessão atingido — desligue e religue o modo para voltar a procurar pares.`);
+      return;
+    }
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     myOfferPc = pc;
     const channel = pc.createDataChannel('intencao', { ordered: false, maxRetransmits: 0 });
@@ -443,6 +537,7 @@ export function startP2P(options: P2POptions): P2PHandle {
         pc.close();
         return;
       }
+      offersPosted += 1; // counted at the send — the comment-creating action the cap exists for
       await signaling?.send({ v: 1, kind: 'offer', from: login, to: '*', sdp: plainSdp(pc) });
     } catch (err) {
       console.warn('Falha ao publicar o convite P2P:', err);
@@ -538,6 +633,8 @@ export function startP2P(options: P2POptions): P2PHandle {
       if (stopped) return;
       stopped = true;
       clearInterval(staleSweepTimer);
+      if (reOfferTimer !== null) clearTimeout(reOfferTimer);
+      reOfferTimer = null;
       for (const channel of channels.values()) channel.close();
       for (const pc of peers.values()) pc.close();
       myOfferPc?.close();
@@ -545,6 +642,8 @@ export function startP2P(options: P2POptions): P2PHandle {
       channels.clear();
       ghosts.clear();
       lastInboundAt.clear();
+      lastParseAttemptAt.clear();
+      failuresByLogin.clear();
       for (const hb of heartbeatTimers.values()) clearInterval(hb);
       heartbeatTimers.clear();
       myOfferPc = null;

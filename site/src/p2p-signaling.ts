@@ -165,6 +165,18 @@ async function createRoomIssue(token: string): Promise<number> {
   return data.number;
 }
 
+/**
+ * Known limitation (accepted for this slice): GitHub's /search/issues is
+ * eventually consistent — right after the room is first created (or ever
+ * recreated), other sessions may not FIND it for seconds-to-minutes and
+ * create duplicates. The lowest-number tie-break in searchRoomIssue makes
+ * later sessions converge on one canonical room, but a session that
+ * CREATED a duplicate keeps polling its own issue until the next
+ * reload/re-toggle (this result is cached for the channel's lifetime), so
+ * peers split across duplicates don't see each other until then.
+ * Harmless beyond connectivity: duplicates fail tick.yml's `Comando:`
+ * title gate like everything else here, so the engine never sees them.
+ */
 async function findOrCreateRoomIssue(token: string): Promise<number> {
   const found = await searchRoomIssue(token);
   if (found !== null) return found;
