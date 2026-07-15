@@ -59,11 +59,21 @@ Análise: sem exploração ativa hoje, mas a arquitetura podia travar o mundo pr
 - 189→202 testes. Também corrigido teste de migração obsoleto (#30, o mundo vivo já tem Nativos).
 **Pré-requisito de combate/economia cumprido.**
 
+## Faxina de pendências — TUDO FECHADO (2026-07-15, parte 2)
+4 frentes disparadas em paralelo (3 agentes Sonnet 5 + 1 eu no fix delicado), revisadas e mescladas. Mundo vivo em **batida #34**, main verde (206 testes).
+- **#27 destravado + robustez do tick (PR #33, eu):** RAIZ REAL do #27 — `advanceWorld` descartava comandos quando `ticksToProcess===0`, então comando enviado *entre batidas* (o caso normal do gatilho `issues.opened`) evaporava: issue sem resposta, nunca fechava. Comandos antigos só funcionaram porque o mundo estava atrás do relógio. Fix: comandos agora processam mesmo sem batida devida (aplicados no tick atual, sem `core_pulse`); `tick.yml` empurra com rebase+retry (push concorrente não derruba mais a batida) e só fecha issue com push bem-sucedido (removido `if: always()`). O #27 foi destravado rodando o tick canônico (batida #34, `player_said` no mundo) e fechado com a resposta do motor. 202→206 testes.
+- **`ACTIONS_PER_TICK` fonte única (PR #31):** era duplicado em `types.ts` e `commands.ts`; agora só em `types.ts`, reexportado por `commands.ts`. Débito do review do #13 quitado.
+- **Margem d'água sem repetição (PR #34):** `drawMeadowRim` escolhe entre 2 variantes de relevo + flip horizontal por hash de tile (mesmo padrão do `meadowSprite`, determinístico). Nova sprite `margem_agua_4dir_b` pela pipeline `.cjs`; antes/depois em `site/qa/`. Débito do art-review do #12 quitado.
+- **`/dizer` visível — O Mural (PR #32):** o comando gerava `player_said` mas NADA renderizava. Agora: balão de fala sobre o jogador no mapa (espelha o padrão dos Nativos) + HUD DOM "O Mural" com as últimas 8 falas (`@login` + texto + "há N pulsos"). XSS-safe (`textContent`). Descoberta: o `/dizer` sempre persistiu (havia um `player_said` no tick 26); só faltava a tela.
+
+## Nota de segurança — proteção de branch (dúvida do Tiago, 2026-07-15)
+Só quem tem acesso de escrita (Tiago + token da integração) empurra na `main`; desconhecido não force-pusha. Recomendado ao Tiago: ligar SÓ "block force-push + deletion" (inofensivo). NÃO exigir PR/status-checks na main — **o tick (bot) commita direto na main a cada batida**; exigir PR quebraria o coração do jogo. Decisão final é do Tiago.
+
 ## Depois
 - Registro vs Eco (decisão adiada do Tiago).
-- Próxima fatia v2 recomendada: **economia** (T13) ou **interação leve com NPCs** — a fundação de segurança já está pronta. Ordem: T14 estruturas / T13 economia / T12 combate.
+- **Board limpo — próxima fatia v2 é a evolução "um nível acima"** (o Tiago pediu fechar pendências ANTES de subir de nível). Recomendada: **economia** (T13) ou **interação leve com NPCs**. Ordem: T14 estruturas / T13 economia / T12 combate. Fundação de segurança pronta.
 - Ao integrar combate/economia: usar `getOwn` em TODOS os lookups por string de jogador (STRUCTURE_COSTS, TRADE_RECIPES, world.natives[alvo]).
-- Cosmético: Tiago deleta as branches órfãs (o token não deleta — 403).
+- Cosmético: Tiago deleta as branches órfãs (o token não deleta — 403). Órfãs mescladas: v1 (claude/v1-*, colaborador2/v1-avatar), Nativos (claude/v2-npc-*, claude/p12-art, claude/p13-validator, claude/sec-harden-tick) e desta faxina (claude/tick-command-robustness, claude/debt-actions-per-tick, claude/art-water-rim, claude/mural-player-said). MANTER `colaborador2/v2` (v2 congelada).
 
 ### Acordo de trabalho (definido pelo Tiago)
 Tiago = **ideador** (visão, rumo, escopo). Claude = **coder** (integridade do código, decisões técnicas, merges). Não trazer implementação/merge para aprovação do Tiago; parar só em decisões de produto. Registrado aqui para todas as sessões futuras.
