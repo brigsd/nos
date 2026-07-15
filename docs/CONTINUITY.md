@@ -92,7 +92,7 @@ Decisão tomada seguindo a própria tarefa: **login por PAT (personal access tok
 - **Meu Nó auto-preenche**: `meu-no.ts` ganhou `setSavedLogin` (exportado); ao logar, o login autenticado grava em `nos_login` automaticamente.
 - **"agir daqui"**: `trade.ts` e `nativos.ts` ganharam um botão ao lado do link de sempre — quando logado, tenta `createCommandIssue` direto pela API; qualquer falha (sem escopo, offline, ...) cai de volta para abrir o link pré-preenchido (`window.open`), sem quebrar o fluxo existente.
 - Verificado: `cd site && npx tsc --noEmit` e `npm run build` verdes; `npm test` na raiz segue 276/276 (mudança é site-only, engine intocado); QA visual (`site/qa/screenshot.mjs`) confirma o painel de login renderizado no HUD, no mesmo estilo dos outros painéis.
-- **PR aberto, NÃO mesclado** (o Tiago/uma revisão humana pode querer ver antes) — branch `claude/r2-login-github`.
+- **PR #38 aberto, NÃO mesclado** (deixado para revisão) — branch `claude/r2-login-github`.
 - **Pendente para quando o app OAuth existir**: preencher `NOS_OAUTH_CLIENT_ID`; se o CORS do device flow não tiver mudado, também será preciso um pequeno relay (ou aceitar continuar só de PAT) — decisão de infra que fica para quando chegar lá.
 
 ## Nota de segurança — proteção de branch (dúvida do Tiago, 2026-07-15)
