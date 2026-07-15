@@ -36,7 +36,7 @@
 - [x] R4 · Motor de fabricação (PR #39, mesclado) + painel Oficinas na tela (PR #42, mesclado): 4 máquinas-sintetizador (D-25a), receitas JSON, comando /sintetizar, oficinas no mapa e no HUD — minijogos plugam depois (design do ideador)
 - [x] R5 · Fluidez B (PR #43): polling autenticado ~3s (ETag/304) + indicador "pulso ao vivo"
 - [x] R6 · Portais fase 1 (PR #44, D-27): `worlds/registry.json` (protocolo) + O Salão de Portais no HUD + O Átrio (2º mundo, estático, 32×32) + travessia real sem sair do site (fetch/valida/troca o mundo em tela, câmera, banner "de visita", pausa/retoma o pulso ao vivo) + marco do portal no mapa. Visitar é só-leitura por design nesta fase — check-in/check-out (D-21) e agir em mundo remoto ficam para quando a federação de repositórios de verdade chegar (`docs/PORTALS_PROTOCOL.md`, v3 abaixo)
-- [ ] R7 · Fluidez A: WebRTC P2P (camada Intenção; STUN público, opt-in com aviso de IP — D-25c)
+- [x] R7 · Fluidez A (PR #45, mesclado): WebRTC P2P, a camada Intenção (D-25c/D-28) — sinalização por comentários de issue, STUN público como única exceção, opt-in com copy honesta sobre IP em issue pública, anti-spam com backoff, vulto translúcido interpolado no renderer
 
 ## v3 — O metaverso
 - [ ] Portais e segundo mundo
