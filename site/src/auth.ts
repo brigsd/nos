@@ -4,14 +4,18 @@
  * Player login with GitHub, straight from the static site (D-13, D-25d) -
  * no server of our own (D-03). Two paths live here:
  *
- * 1. PAT-based login (WORKS TODAY, the default). The player pastes a
- *    fine-grained personal access token scoped to Issues: write on
- *    brigsd/nos (a ready-made "create token" link is offered by
- *    auth-ui.ts). The token is validated once against
+ * 1. PAT-based login (WORKS TODAY, the optional "modo avançado"). The
+ *    player pastes a CLASSIC personal access token with the `public_repo`
+ *    scope (a ready-made "create token" link is offered by auth-ui.ts).
+ *    Classic, not fine-grained, out of necessity: a fine-grained PAT can
+ *    only give write access to repos its owner controls/collaborates on,
+ *    so for a regular player it can never open issues on brigsd/nos (PR
+ *    #38 review finding). The token is validated once against
  *    `GET https://api.github.com/user` and then used to POST command
  *    issues directly (`POST /repos/{owner}/{repo}/issues`) instead of
  *    opening a pre-filled issue form - "agir sem sair do jogo" without any
- *    OAuth App at all.
+ *    OAuth App at all. The pre-filled issue links remain the default,
+ *    zero-risk path for everyone.
  *
  * 2. OAuth device flow (D-13's original target, RFC 8628) - implemented in
  *    full below, but NOT reachable today. It stays behind
@@ -67,7 +71,15 @@ const API_BASE = 'https://api.github.com';
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const DEVICE_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
-/** Scope requested by the (currently unreachable) device flow - full public-repo access, needed to open issues. */
+/**
+ * Scope requested by the (currently unreachable) device flow. `public_repo`
+ * is knowingly OVER-BROAD - it grants write access to all of the player's
+ * public repos, when all NÓS needs is "open issues on brigsd/nos". OAuth
+ * Apps simply have no narrower scope that can do it; the right long-term
+ * fix is a GitHub App (fine-grained `issues:write` permission, installed
+ * on just this repo) instead of an OAuth App - worth revisiting when the
+ * D-13 app registration actually happens.
+ */
 const DEVICE_FLOW_SCOPE = 'public_repo';
 
 /** localStorage keys. `nos_token` is the name the task spec fixes; the rest are this module's own. */
@@ -178,9 +190,16 @@ export async function loginWithToken(token: string): Promise<string> {
  * "### Campo\n\nvalor" blocks the engine's parsers already expect - the
  * exact same shape the GitHub issue-form templates render into (see
  * engine/commands.ts's parseTrocarParams/parseConversarTarget and their
- * tests). Requires the stored token to carry Issues: write on brigsd/nos;
- * throws a pt-BR message on any failure so callers can fall back to the
- * issue-form link.
+ * tests). Requires the stored token to be able to open issues on brigsd/nos
+ * (classic PAT, `public_repo`); throws a pt-BR message on any failure so
+ * callers can fall back to the issue-form link.
+ *
+ * Labels: `comando` is requested but NOT load-bearing. GitHub silently
+ * drops labels on issue creation when the author lacks triage/push access
+ * (i.e. every regular player), so the tick's ingestion and trigger match on
+ * the "Comando:" title prefix as well (.github/workflows/tick.yml, PR #38
+ * review finding). The label still lands when the author CAN set it (repo
+ * owner/collaborators), keeping their issues consistent with the templates.
  */
 export async function createCommandIssue(
   title: string,
@@ -209,7 +228,7 @@ export async function createCommandIssue(
   }
   if (res.status === 403 || res.status === 404) {
     throw new Error(
-      'Esse token não tem permissão para abrir issues em brigsd/nos (é preciso o escopo "Issues: Read and write").',
+      'Esse token não consegue abrir issues em brigsd/nos — é preciso um token clássico com o escopo "public_repo" (tokens refinados/fine-grained não funcionam aqui).',
     );
   }
   if (!res.ok) throw new Error(`O GitHub recusou o comando (HTTP ${res.status}).`);

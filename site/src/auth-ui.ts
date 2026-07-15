@@ -41,23 +41,30 @@ function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 /**
- * Pre-filled "create a fine-grained token" link (GitHub's template-URL
- * feature): scopes the token to brigsd/nos with Issues: write before the
- * player even opens the page, so there's nothing to get wrong by hand.
- * `target_name`/`repositories` are a best-effort pre-fill only - GitHub
- * still makes the player confirm the resource owner/repo themselves.
+ * Pre-filled "create a classic token" link, scope `public_repo` only.
+ *
+ * Why CLASSIC and not fine-grained (review finding on PR #38): a
+ * fine-grained PAT only grants write access to repos the token's owner
+ * controls or collaborates on - a regular player can give one at most
+ * READ-ONLY access to someone else's public repo, so a fine-grained token
+ * can never open issues on brigsd/nos for a non-collaborator. The only
+ * self-serve token a third-party player can mint that opens issues here is
+ * a classic PAT with `public_repo` - which unavoidably also grants write to
+ * ALL of the player's own public repos. That is why the copy below frames
+ * this as an optional "modo avançado", spells that scope out honestly, and
+ * tells the player to revoke the token when done. The zero-risk default for
+ * everyone remains the pre-filled issue links (trade.ts/nativos.ts).
  */
 const PAT_CREATE_URL = (() => {
   const params = new URLSearchParams({
-    name: 'NÓS (brigsd/nos)',
-    description: 'Agir em NOS sem preencher o formulario de issue toda vez - so precisa de Issues: Read and write.',
-    target_name: 'brigsd',
-    repositories: 'nos',
-    expires_in: '90',
-    issues: 'write',
+    scopes: 'public_repo',
+    description: 'NOS (brigsd/nos) - agir daqui',
   });
-  return `https://github.com/settings/personal-access-tokens/new?${params.toString()}`;
+  return `https://github.com/settings/tokens/new?${params.toString()}`;
 })();
+
+/** Where the player revokes the token when they're done playing. */
+const PAT_REVOKE_URL = 'https://github.com/settings/tokens';
 
 function clearError(rootEl: HTMLElement): void {
   rootEl.querySelector('.auth-error')?.remove();
@@ -90,15 +97,28 @@ function renderPatForm(rootEl: HTMLElement, onChange: () => void): void {
     el(
       'p',
       'auth-hint',
-      'Entre com um token do GitHub para agir sem preencher o formulário toda vez. Crie um token refinado (fine-grained) só do repositório brigsd/nos, com permissão "Issues: Read and write" — nada além disso é necessário. Ele fica só neste navegador (nunca é enviado a mais nada além do próprio GitHub); revogue quando não precisar mais dele.',
+      'Você não precisa entrar para jogar: os links de comando dos painéis já funcionam para todo mundo. Entrar é um modo avançado opcional, para enviar comandos daqui do site sem abrir outra aba.',
+    ),
+  );
+  rootEl.appendChild(
+    el(
+      'p',
+      'auth-hint',
+      'Atenção: isso pede um token clássico com o escopo "public_repo", que dá acesso de escrita a TODOS os seus repositórios públicos — o GitHub não oferece nada mais restrito que funcione aqui para quem não é colaborador do brigsd/nos. O token fica só neste navegador e só é enviado ao próprio GitHub. Recomendação: revogue-o quando terminar de jogar.',
     ),
   );
 
-  const createLink = el('a', 'auth-create-link', 'Criar token no GitHub →');
+  const createLink = el('a', 'auth-create-link', 'Criar token clássico no GitHub →');
   createLink.href = PAT_CREATE_URL;
   createLink.target = '_blank';
   createLink.rel = 'noopener noreferrer';
   rootEl.appendChild(createLink);
+
+  const revokeLink = el('a', 'auth-create-link', 'Revogar tokens (quando terminar) →');
+  revokeLink.href = PAT_REVOKE_URL;
+  revokeLink.target = '_blank';
+  revokeLink.rel = 'noopener noreferrer';
+  rootEl.appendChild(revokeLink);
 
   const form = el('form', 'auth-form');
   const input = el('input', 'auth-input');
