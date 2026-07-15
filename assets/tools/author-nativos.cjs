@@ -102,17 +102,22 @@ function genGota(w, h) {
 function genRaiz(w, h) {
   const g = makeGrid(w, h);
 
-  // twin leaf sprouts (asymmetric-looking pair, unlike gota's single tip)
+  // Twin flower buds (asymmetric-looking pair, unlike gota's single tip).
+  // Round 1 (art-reviewer): these were PAL.moss/PAL.sage (indices 36/37) -
+  // which are the *exact* indices campina_1.json itself paints its grass
+  // with (verified via the sprite source), so against the real meadow tile
+  // the sprouts visually vanished into the background. Pink is nowhere in
+  // any ground tile's palette, so it holds contrast on every biome.
   set(g, 6, 1, PAL.black);
   set(g, 10, 1, PAL.black);
-  set(g, 6, 2, PAL.moss);
-  set(g, 10, 2, PAL.moss);
+  set(g, 6, 2, PAL.pink);
+  set(g, 10, 2, PAL.mauvePink);
 
   // head/trunk: bark bands light(left) -> mid -> dark(right), same
   // top-left-lit column-banding technique as no_avatar/gota.
   const bark = (x) => (x <= 6 ? PAL.clay : x <= 9 ? PAL.rust : PAL.darkOliveBrown);
-  set(g, 5, 3, PAL.sage); // leaf tucked at left temple
-  set(g, 10, 3, PAL.sage); // leaf tucked at right temple
+  set(g, 5, 3, PAL.pink); // flower tucked at left temple (top-left lit: brighter)
+  set(g, 10, 3, PAL.mauvePink); // flower tucked at right temple (shadow side: darker)
   fillSpan(g, 3, 6, 9, bark);
   fillSpan(g, 4, 5, 10, bark);
   fillSpan(g, 5, 4, 11, bark);
@@ -126,8 +131,11 @@ function genRaiz(w, h) {
   set(g, 6, 7, PAL.black);
   set(g, 9, 7, PAL.black);
 
-  // closing hem before the roots
-  for (let x = 6; x <= 9; x++) set(g, x, 11, PAL.black);
+  // Closing hem before the roots. Round 1 (art-reviewer): this spanned only
+  // x6-9, so the outer left/right root pixels below (x5, x10) touched the
+  // body only diagonally - an orphan-pixel defect. Widened to x5-10 to match
+  // row 10's span exactly, so every root lands 4-connected under a hem pixel.
+  for (let x = 5; x <= 10; x++) set(g, x, 11, PAL.black);
 
   // 3 root tendrils, intentionally uneven lengths (organic, not a rendering
   // slip - left is a short stub, right medium, center longest).
@@ -163,17 +171,23 @@ function genCinza(w, h) {
   fillSpan(g, 7, 3, 12, stone);
   fillSpan(g, 8, 3, 12, stone);
   fillSpan(g, 9, 4, 11, stone);
-  fillSpan(g, 10, 4, 11, stone);
-  fillSpan(g, 11, 5, 10, stone); // waist pinch
+  // Waist pinch, 2 rows tall. Round 1 (art-reviewer): a single-row pinch
+  // (only row 11) was too subtle at 16x16 to read as an intentional
+  // "hourglass" guardian silhouette - it looked like edge noise instead.
+  // Two rows makes the step unambiguous.
+  fillSpan(g, 10, 5, 10, stone);
+  fillSpan(g, 11, 5, 10, stone);
   fillSpan(g, 12, 4, 11, stone); // base flares back out - stable footing
   fillSpan(g, 13, 4, 11, stone);
 
-  // ember eyes - quiet nod to the Detached Head lore, not graphic about it
+  // Ember eyes - quiet nod to the Detached Head lore, not graphic about it.
   set(g, 6, 6, PAL.crimson);
   set(g, 9, 6, PAL.crimson);
 
-  // weathering crack, single pixel
-  set(g, 10, 9, PAL.plumDark);
+  // Round 1 (art-reviewer): a single-pixel "weathering crack" (one shade
+  // darker, same hue family) was dropped here - at this scale it read as a
+  // stray/dirty pixel rather than a legible crack, so it was cut rather
+  // than kept as ambiguous noise.
 
   // two-block stubby feet with a gap (vs gota's single hem / raiz's roots)
   set(g, 5, 14, PAL.black);
