@@ -1055,6 +1055,12 @@ body {
   color: var(--nos-text-dim);
 }
 
+/* `hidden` must win over the display:flex above (PR #44 review) - same
+   pattern as .status[hidden] / .hud-visiting[hidden]. */
+.live-indicator[hidden] {
+  display: none;
+}
+
 .live-dot {
   display: inline-block;
   width: 6px;

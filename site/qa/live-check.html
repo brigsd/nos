@@ -31,7 +31,7 @@
     <pre id="log"></pre>
     <div id="done" data-status="running"></div>
     <script type="module">
-      import { startLivePolling } from '/src/live.ts';
+      import { startLivePolling, isPlausibleWorld } from '/src/live.ts';
 
       const logEl = document.getElementById('log');
       const doneEl = document.getElementById('done');
@@ -502,6 +502,45 @@
         assert(calls === callsAtStop, 'nenhuma busca nova acontece depois de stop()');
       }
 
+
+      // PR #44 review, finding 1: a stopped handle must never emit — even
+      // when stop() lands while a poll's body is still in flight.
+      async function testStoppedHandleNeverEmits() {
+        log('\n— cenário: stop() durante busca em voo não emite onWorld —');
+        let resolveBody;
+        const bodyGate = new Promise((resolve) => (resolveBody = resolve));
+        let emitted = 0;
+        const fetchFn = async () => {
+          await bodyGate; // hold the response until after stop()
+          return new Response(JSON.stringify(makeWorld(99)), { status: 200 });
+        };
+        const handle = startLivePolling({
+          initialWorld: makeWorld(1),
+          onWorld: () => emitted++,
+          onStatus: () => {},
+          fetchFn,
+          intervals: { initial: 1, normal: 30, backoff: 30, anon: 30 },
+        });
+        await sleep(20); // the poll is now awaiting bodyGate
+        handle.stop();
+        resolveBody();
+        await sleep(40);
+        assert(emitted === 0, 'mundo chegado depois de stop() é descartado (nenhum onWorld)');
+      }
+
+      // PR #44 review, finding 3: hostile world dimensions must be rejected
+      // by the shared validator before any downstream loop can freeze the page.
+      async function testHostileDimensionsRejected() {
+        log('\n— cenário: mundo hostil com dimensões absurdas é rejeitado —');
+        const hostile = { width: 100000, height: 100000, tiles: [], events: [], meta: { tickCount: 0 }, players: {} };
+        assert(isPlausibleWorld(hostile) === false, 'width/height 100000 rejeitado');
+        const mismatch = { ...makeWorld(1), tiles: [{ biome: 'meadow' }] };
+        assert(isPlausibleWorld(mismatch) === false, 'tiles.length != width*height rejeitado');
+        const fractional = { ...makeWorld(1), width: 2.5 };
+        assert(isPlausibleWorld(fractional) === false, 'width fracionário rejeitado');
+        assert(isPlausibleWorld(makeWorld(1)) === true, 'mundo legítimo 2x2 continua aceito');
+      }
+
       async function run() {
         await testEtag304();
         await testAuthDowngrade();
@@ -515,6 +554,8 @@
         await testFailedPollDoesNotFakeFreshness();
         await testRefreshNow();
         await testStop();
+        await testStoppedHandleNeverEmits();
+        await testHostileDimensionsRejected();
 
         doneEl.dataset.status = fail === 0 ? 'pass' : 'fail';
         doneEl.dataset.summary = `${pass} pass, ${fail} fail`;

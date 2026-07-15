@@ -164,7 +164,10 @@ export function findArrivalTile(world: World): Position {
   };
   if (isWalkable(cx, cy)) return { x: cx, y: cy };
 
-  const maxRadius = Math.max(world.width, world.height);
+  // Defense in depth (PR #44 review): isPlausibleWorld already caps world
+  // dimensions at 512, but this search must never be the thing that freezes
+  // the page - a small cap is plenty to find land on any sane map.
+  const maxRadius = Math.min(Math.max(world.width, world.height), 64);
   for (let radius = 1; radius <= maxRadius; radius++) {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {

@@ -379,7 +379,17 @@ async function main(): Promise<void> {
       camera.centerOnWorld((back.x + 0.5) * TILE_SIZE_PX, (back.y + 0.5) * TILE_SIZE_PX);
       camera.clamp();
       liveEl.hidden = false;
-      liveHandle = startLivePolling({ initialWorld: freshHeart, onWorld: applyFreshWorld, onStatus: updateLiveIndicator });
+      // Guard against a late in-flight poll landing after a travessia (PR #44
+      // review): only home may repaint from the live loop.
+      liveHandle = startLivePolling({
+        initialWorld: freshHeart,
+        onWorld: (w) => {
+          if (visitingWorldId === null) applyFreshWorld(w);
+        },
+        onStatus: (st) => {
+          if (visitingWorldId === null) updateLiveIndicator(st);
+        },
+      });
     } catch (err) {
       // loadWorld() itself already falls back live-raw -> bundled copy, so
       // this only fires if BOTH fail - stay put (still "visiting", banner
@@ -440,10 +450,15 @@ async function main(): Promise<void> {
 
   refreshPortaisUI();
 
+  // Same late-poll guard as the restart site above (PR #44 review).
   liveHandle = startLivePolling({
     initialWorld: world,
-    onWorld: applyFreshWorld,
-    onStatus: updateLiveIndicator,
+    onWorld: (w) => {
+      if (visitingWorldId === null) applyFreshWorld(w);
+    },
+    onStatus: (st) => {
+      if (visitingWorldId === null) updateLiveIndicator(st);
+    },
   });
 
   let lastTimeMs = performance.now();
