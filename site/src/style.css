@@ -240,6 +240,212 @@ body {
   opacity: 0.75;
 }
 
+.hud-mural-trade {
+  color: var(--nos-text-dim);
+  font-style: italic;
+}
+
+/* --- Meu Nó (v2 economia): o Registro do jogador — ₱, energia, mochila --- */
+
+.hud-meuno {
+  align-self: flex-start;
+  max-width: min(80vw, 320px);
+  pointer-events: auto;
+  background: var(--nos-panel);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 14px;
+  padding: 8px 14px 10px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meuno-line {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--nos-text);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.meuno-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--nos-text-dim);
+  min-width: 58px;
+}
+
+.meuno-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--nos-accent);
+}
+
+.meuno-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--nos-text-dim);
+}
+
+.meuno-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.meuno-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--nos-text);
+  background: rgba(16, 12, 21, 0.55);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  outline: none;
+}
+
+.meuno-input:focus {
+  border-color: var(--nos-accent);
+}
+
+.meuno-button,
+.meuno-forget {
+  font: inherit;
+  font-size: 11px;
+  color: var(--nos-text);
+  background: rgba(168, 132, 243, 0.18);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.meuno-forget {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--nos-text-dim);
+  background: transparent;
+  padding: 1px 6px;
+}
+
+.meuno-button:hover,
+.meuno-forget:hover {
+  border-color: var(--nos-accent);
+}
+
+.meuno-cta {
+  font-size: 12px;
+  color: var(--nos-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.meuno-cta:hover {
+  text-decoration: underline;
+}
+
+/* --- Comércio (v2 economia): bancas dos Nativos + trocas em 1 clique --- */
+
+.hud-comercio {
+  align-self: flex-start;
+  max-width: min(80vw, 320px);
+  pointer-events: auto;
+  background: var(--nos-panel);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 14px;
+  padding: 8px 14px 10px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.hud-comercio-summary {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: var(--nos-text-dim);
+  cursor: pointer;
+  list-style-position: outside;
+}
+
+.hud-comercio[open] .hud-comercio-summary {
+  margin-bottom: 6px;
+}
+
+.trade-stalls {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 30vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.trade-stall {
+  border-top: 1px solid rgba(168, 132, 243, 0.16);
+  padding-top: 6px;
+}
+
+.trade-stall:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.trade-stall-name {
+  margin: 0 0 3px;
+  font-size: 12px;
+  color: var(--nos-text);
+}
+
+.trade-stall-stock {
+  font-size: 11px;
+  color: var(--nos-text-dim);
+}
+
+.trade-offers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
+.trade-offer {
+  margin: 0;
+}
+
+.trade-offer-link {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--nos-accent);
+  text-decoration: none;
+  background: rgba(168, 132, 243, 0.12);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.trade-offer-link:hover {
+  border-color: var(--nos-accent);
+  background: rgba(168, 132, 243, 0.22);
+}
+
 .hud-hint {
   align-self: center;
   margin: 0 0 2px;

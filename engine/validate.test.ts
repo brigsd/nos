@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assertValidWorld, validateWorld, worldSchema } from './validate';
-import { MAX_ENERGY, NATIVE_MESSAGE_MAX_LENGTH, STARTING_ENERGY } from './types';
+import { MAX_ENERGY, NATIVE_MESSAGE_MAX_LENGTH, STARTING_ENERGY, STARTING_PULSO } from './types';
 import type { Native, World } from './types';
 
 function gota(overrides: Partial<Native> = {}): Native {
@@ -112,6 +112,45 @@ describe('validateWorld - accepts valid state', () => {
     const world = validWorld();
     world.natives = {};
     expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('accepts a player with a pulso balance and one without (pre-economy backward compatibility)', () => {
+    const world = validWorld();
+    world.players['octocat']!.pulso = 15;
+    expect(validateWorld(world).valid).toBe(true);
+
+    delete world.players['octocat']!.pulso;
+    expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('accepts a well-formed trade_completed event (₱ paid and ₱ earned)', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push(
+      {
+        type: 'trade_completed',
+        tick: 3,
+        worldTime: 180,
+        login: 'octocat',
+        nativeId: 'gota',
+        given: { wood: 1 },
+        received: {},
+        pulsoDelta: 5,
+      },
+      {
+        type: 'trade_completed',
+        tick: 3,
+        worldTime: 180,
+        login: 'octocat',
+        nativeId: 'gota',
+        given: {},
+        received: { pulse_fragment: 1 },
+        pulsoDelta: -25,
+      },
+    );
+    const result = validateWorld(world);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
   });
 });
 
@@ -387,6 +426,54 @@ describe('validateWorld - rejects invalid state', () => {
     world.natives = { gota: gota({ hp: -1 }) };
     expect(validateWorld(world).valid).toBe(false);
   });
+
+  it('rejects a negative pulso balance (₱ debt does not exist)', () => {
+    const world = structuredClone(validWorld());
+    world.players['octocat']!.pulso = -1;
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects a fractional pulso balance (₱ is indivisible)', () => {
+    const world = structuredClone(validWorld());
+    world.players['octocat']!.pulso = 2.5;
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects a trade_completed event whose login is not a living player', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'trade_completed',
+      tick: 3,
+      worldTime: 180,
+      login: 'fantasma',
+      nativeId: 'gota',
+      given: { wood: 1 },
+      received: {},
+      pulsoDelta: 5,
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join('\n')).toContain('does not exist in players');
+  });
+
+  it('rejects a trade_completed event whose nativeId is not a living native', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'trade_completed',
+      tick: 3,
+      worldTime: 180,
+      login: 'octocat',
+      nativeId: 'raiz',
+      given: { wood: 1 },
+      received: {},
+      pulsoDelta: 5,
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join('\n')).toContain('does not exist in natives');
+  });
 });
 
 describe('assertValidWorld', () => {
@@ -410,12 +497,15 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
   // rejected (or wrongly accepted).
   const schema = worldSchema as {
     definitions: {
-      Player: { properties: { energy: { minimum: number; maximum: number } } };
+      Player: {
+        properties: { energy: { minimum: number; maximum: number }; pulso: { minimum: number } };
+      };
       NativeSpokeEvent: { properties: { message: { minLength: number; maxLength: number } } };
     };
   };
   const energySchema = schema.definitions.Player.properties.energy;
   const nativeMessageSchema = schema.definitions.NativeSpokeEvent.properties.message;
+  const pulsoSchema = schema.definitions.Player.properties.pulso;
 
   it('keeps the schema Player.energy.maximum equal to MAX_ENERGY', () => {
     expect(energySchema.maximum).toBe(MAX_ENERGY);
@@ -442,5 +532,14 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
 
   it('keeps the schema NativeSpokeEvent.message.minLength at 1 (no empty falas)', () => {
     expect(nativeMessageSchema.minLength).toBe(1);
+  });
+
+  it('keeps the schema Player.pulso.minimum at zero (₱ debt does not exist)', () => {
+    expect(pulsoSchema.minimum).toBe(0);
+  });
+
+  it('keeps STARTING_PULSO schema-legal, so /entrar can never mint an invalid player', () => {
+    expect(STARTING_PULSO).toBeGreaterThanOrEqual(pulsoSchema.minimum);
+    expect(Number.isInteger(STARTING_PULSO)).toBe(true);
   });
 });

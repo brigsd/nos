@@ -1,12 +1,13 @@
 /**
  * src/mural.ts
  *
- * Renders "O Mural" — the HUD panel listing the most recent /dizer messages
- * published by players (engine/commands.ts's `player_said` event). This is
- * a plain DOM overlay, not canvas: it reads `world.events` (already fetched
- * once by src/world.ts, same as the rest of the HUD) and writes list items.
- * Deliberately kept out of src/renderer.ts so it can't collide with the
- * map-drawing work happening there in parallel.
+ * Renders "O Mural" — the HUD panel listing the world's most recent public
+ * happenings: `/dizer` messages (`player_said`) and, since the v2 economy,
+ * settled trades (`trade_completed`). This is a plain DOM overlay, not
+ * canvas: it reads `world.events` (already fetched once by src/world.ts,
+ * same as the rest of the HUD) and writes list items. Deliberately kept out
+ * of src/renderer.ts so it can't collide with the map-drawing work
+ * happening there in parallel.
  *
  * Security: a player's message is untrusted free text (issue-command input,
  * up to 280 chars, see engine/commands.ts's `/dizer` handler). Every piece
@@ -14,13 +15,17 @@
  * be parsed as markup/script by a viewer's browser, no matter what a player
  * types.
  */
-import type { PlayerSaidEvent, World, WorldEvent } from '../../engine/types';
+import type { PlayerSaidEvent, TradeCompletedEvent, World, WorldEvent } from '../../engine/types';
+import { getOwn } from '../../engine/types';
+import { describeSide } from '../../engine/economy';
 
-/** How many of the most recent messages the Mural shows at once. */
+/** How many of the most recent entries the Mural shows at once. */
 const MAX_ENTRIES = 8;
 
-function isPlayerSaid(event: WorldEvent): event is PlayerSaidEvent {
-  return event.type === 'player_said';
+type MuralEvent = PlayerSaidEvent | TradeCompletedEvent;
+
+function isMuralEvent(event: WorldEvent): event is MuralEvent {
+  return event.type === 'player_said' || event.type === 'trade_completed';
 }
 
 /** "agora" on the current beat, "há N pulsos" otherwise — Pulso/batida is the world's unit of time (docs/LORE.md). */
@@ -32,16 +37,28 @@ function pulseAgo(eventTick: number, currentTick: number): string {
 }
 
 /**
- * Renders the last `MAX_ENTRIES` `player_said` events (newest first) into
- * `listEl`. Pure function of `world` - call again whenever a freshly fetched
- * world should replace what's on screen.
+ * pt-BR one-line summary of a settled trade, e.g.
+ * "deu 1 madeira e levou ₱5 — negócio com Raiz". Item legs come straight
+ * from the event; the ₱ leg is reconstructed from pulsoDelta's sign.
+ */
+function tradeSummary(event: TradeCompletedEvent, world: World): string {
+  const nativeName = getOwn(world.natives ?? {}, event.nativeId)?.name ?? event.nativeId;
+  const gave = describeSide({ items: event.given, pulso: event.pulsoDelta < 0 ? -event.pulsoDelta : 0 });
+  const got = describeSide({ items: event.received, pulso: event.pulsoDelta > 0 ? event.pulsoDelta : 0 });
+  return `deu ${gave} e levou ${got} — negócio com ${nativeName}`;
+}
+
+/**
+ * Renders the last `MAX_ENTRIES` mural events (newest first) into `listEl`.
+ * Pure function of `world` - call again whenever a freshly fetched world
+ * should replace what's on screen.
  */
 export function renderMural(listEl: HTMLOListElement, world: World): void {
-  const messages = world.events.filter(isPlayerSaid).slice(-MAX_ENTRIES).reverse();
+  const entries = world.events.filter(isMuralEvent).slice(-MAX_ENTRIES).reverse();
 
   listEl.replaceChildren();
 
-  if (messages.length === 0) {
+  if (entries.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'hud-mural-empty';
     empty.textContent = 'Ninguém disse nada ainda.';
@@ -49,7 +66,7 @@ export function renderMural(listEl: HTMLOListElement, world: World): void {
     return;
   }
 
-  for (const event of messages) {
+  for (const event of entries) {
     const item = document.createElement('li');
     item.className = 'hud-mural-entry';
 
@@ -60,10 +77,12 @@ export function renderMural(listEl: HTMLOListElement, world: World): void {
     author.className = 'hud-mural-author';
     author.textContent = `@${event.login}`;
 
-    // Untrusted player text: textContent only, never innerHTML.
+    // Untrusted player text (and engine-built summaries alike): textContent
+    // only, never innerHTML.
     const message = document.createElement('span');
     message.className = 'hud-mural-message';
-    message.textContent = event.message;
+    message.textContent = event.type === 'player_said' ? event.message : tradeSummary(event, world);
+    if (event.type === 'trade_completed') message.classList.add('hud-mural-trade');
 
     line.append(author, document.createTextNode(' '), message);
 

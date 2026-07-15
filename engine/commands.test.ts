@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { World, Player } from './types';
-import { parseMoverCoords, parseDizerMessage, parseRawIssues, processCommands, applyCommand } from './commands';
+import type { Native, World, Player } from './types';
+import {
+  parseMoverCoords,
+  parseDizerMessage,
+  parseTrocarParams,
+  parseRawIssues,
+  processCommands,
+  applyCommand,
+} from './commands';
 
 function mockWorld(): World {
   return {
@@ -184,6 +191,185 @@ describe('processCommands execution pipeline', () => {
       login: 'alice',
       message: 'Olá!',
     });
+  });
+});
+
+describe('/trocar - comércio com os Nativos (v2 economia)', () => {
+  function raiz(overrides: Partial<Native> = {}): Native {
+    return {
+      id: 'raiz',
+      name: 'Raiz',
+      position: { x: 31, y: 29 },
+      behaviorTree: 'merchant',
+      behaviorState: '{}',
+      inventory: { wood: 10 },
+      hp: 100,
+      faction: 'merchant',
+      ...overrides,
+    };
+  }
+
+  function tradeWorld(): World {
+    const world = mockWorld();
+    world.players['alice'] = {
+      login: 'alice',
+      position: { x: 30, y: 30 },
+      inventory: { wood: 2 },
+      energy: 10,
+      pulso: 0,
+    };
+    world.natives = { raiz: raiz() };
+    return world;
+  }
+
+  function trocar(id: number, params: unknown) {
+    return { id, login: 'alice', type: 'trocar' as const, params: params as any, createdAt: '2026-07-14T20:00:00Z' };
+  }
+
+  it('completes a sale: item to the native, ₱ to the player, 1 energy spent, event recorded', () => {
+    const world = tradeWorld();
+    const res = processCommands(world, [trocar(1, { nativeId: 'raiz', tradeType: 'vender_madeira' })], 6, 360);
+
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.results[0]?.message).toContain('Troca selada com Raiz');
+    const alice = res.world.players['alice']!;
+    expect(alice.pulso).toBe(5);
+    expect(alice.inventory).toEqual({ wood: 1 });
+    expect(alice.energy).toBe(9);
+    expect(res.world.natives?.['raiz']?.inventory).toEqual({ wood: 11 });
+    expect(res.world.events).toHaveLength(1);
+    expect(res.world.events[0]).toEqual({
+      type: 'trade_completed',
+      tick: 6,
+      worldTime: 360,
+      login: 'alice',
+      nativeId: 'raiz',
+      given: { wood: 1 },
+      received: {},
+      pulsoDelta: 5,
+    });
+  });
+
+  it('is deterministic: the same world and command always settle identically', () => {
+    const cmd = trocar(1, { nativeId: 'raiz', tradeType: 'vender_madeira' });
+    const first = processCommands(tradeWorld(), [cmd], 6, 360);
+    const second = processCommands(tradeWorld(), [cmd], 6, 360);
+    expect(second.world).toEqual(first.world);
+    expect(second.results).toEqual(first.results);
+  });
+
+  it('rejects a trade with an unknown native, leaving the world untouched', () => {
+    const world = tradeWorld();
+    const res = processCommands(world, [trocar(1, { nativeId: 'fantasma', tradeType: 'vender_madeira' })], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Nenhum Nativo chamado "fantasma"');
+    expect(res.world.players['alice']?.energy).toBe(10); // nothing spent
+    expect(res.world.events).toHaveLength(0);
+  });
+
+  it.each(['__proto__', 'constructor', 'toString'])(
+    'treats hostile native id %s as "not found" (getOwn) without throwing or freezing the batch',
+    (hostileKey) => {
+      const world = tradeWorld();
+      const res = processCommands(
+        world,
+        [
+          trocar(1, { nativeId: hostileKey, tradeType: 'vender_madeira' }),
+          // A healthy command right after proves the batch keeps flowing.
+          { id: 2, login: 'alice', type: 'dizer' as const, params: 'sigo aqui', createdAt: '2026-07-14T20:01:00Z' },
+        ],
+        6,
+        360,
+      );
+      expect(res.results[0]?.success).toBe(false);
+      expect(res.results[0]?.message).toContain('Nenhum Nativo chamado');
+      expect(res.results[1]?.success).toBe(true);
+    },
+  );
+
+  it('treats a hostile trade type (__proto__) as an unknown recipe', () => {
+    const world = tradeWorld();
+    const res = processCommands(world, [trocar(1, { nativeId: 'raiz', tradeType: '__proto__' })], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Nenhum Nativo conhece a troca');
+    expect(res.world.events).toHaveLength(0);
+  });
+
+  it('rejects trading beyond the greeting radius (3 tiles, Chebyshev)', () => {
+    const world = tradeWorld();
+    world.natives!['raiz'] = raiz({ position: { x: 34, y: 30 } }); // dx 4 > 3
+    const res = processCommands(world, [trocar(1, { nativeId: 'raiz', tradeType: 'vender_madeira' })], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('longe demais');
+  });
+
+  it('allows trading exactly at the edge of the radius', () => {
+    const world = tradeWorld();
+    world.natives!['raiz'] = raiz({ position: { x: 33, y: 27 } }); // dx 3, dy 3
+    const res = processCommands(world, [trocar(1, { nativeId: 'raiz', tradeType: 'vender_madeira' })], 6, 360);
+    expect(res.results[0]?.success).toBe(true);
+  });
+
+  it('rejects the trade when energy is short, before anything moves', () => {
+    const world = tradeWorld();
+    world.players['alice']!.energy = 0;
+    const res = processCommands(world, [trocar(1, { nativeId: 'raiz', tradeType: 'vender_madeira' })], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Energia insuficiente');
+    expect(res.world.players['alice']?.inventory).toEqual({ wood: 2 });
+  });
+
+  it('surfaces the economy failure reason when the player cannot pay', () => {
+    const world = tradeWorld();
+    const res = processCommands(world, [trocar(1, { nativeId: 'raiz', tradeType: 'comprar_madeira' })], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Pulso insuficiente');
+    expect(res.world.players['alice']?.energy).toBe(10); // failed trade costs nothing
+  });
+
+  it('rejects malformed params without throwing', () => {
+    const world = tradeWorld();
+    const res = processCommands(world, [trocar(1, null), trocar(2, { nativeId: 42, tradeType: [] })], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[1]?.success).toBe(false);
+  });
+});
+
+describe('parseTrocarParams', () => {
+  it('parses the issue-form markdown body', () => {
+    const body = '### Nativo\n\nRaiz\n\n### Troca\n\nvender_madeira';
+    expect(parseTrocarParams(body)).toEqual({ nativeId: 'raiz', tradeType: 'vender_madeira' });
+  });
+
+  it('parses the free-text fallback "/trocar raiz vender_madeira"', () => {
+    expect(parseTrocarParams('/trocar raiz vender_madeira')).toEqual({
+      nativeId: 'raiz',
+      tradeType: 'vender_madeira',
+    });
+    expect(parseTrocarParams('trocar gota comprar_pedra')).toEqual({
+      nativeId: 'gota',
+      tradeType: 'comprar_pedra',
+    });
+  });
+
+  it('returns null when either field is missing', () => {
+    expect(parseTrocarParams('### Nativo\n\nraiz')).toBeNull();
+    expect(parseTrocarParams('')).toBeNull();
+    expect(parseTrocarParams('bom dia')).toBeNull();
+  });
+
+  it('is mapped from issues by parseRawIssues', () => {
+    const parsed = parseRawIssues([
+      {
+        number: 40,
+        title: 'Comando: /trocar',
+        body: '### Nativo\n\nraiz\n\n### Troca\n\nvender_madeira',
+        author: { login: 'tester1' },
+        createdAt: '2026-07-14T20:00:00Z',
+      },
+    ]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ type: 'trocar', params: { nativeId: 'raiz', tradeType: 'vender_madeira' } });
   });
 });
 
