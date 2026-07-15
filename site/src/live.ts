@@ -57,6 +57,16 @@
  * IMMEDIATE poll — not a stale queued timer — the moment the tab is visible
  * again.
  *
+ * Honesty of `LiveStatus.lastCheckedAt` (what live-indicator.ts's "atualizado
+ * há Xs" is anchored to): it only advances on a CONFIRMED read — a 304 ("still
+ * this") or a successfully parsed 200 — never on a network error, timeout,
+ * 401/403, or unexpected status. A network error still re-emits status (so
+ * the HUD's tier badge stays accurate) via `emitStatus`, but leaves
+ * `lastCheckedAt` alone via not calling `touchAndEmit` — otherwise a
+ * persistently offline Camada C would keep resetting to "agora" every failed
+ * cycle instead of honestly climbing to "há 2min", "há 5min", etc.
+ *
+
  * Determinism note: this is site code, not engine code. The `Date.now()`
  * calls below are wall-clock bookkeeping for a client-side polling timer
  * (freshness display, backoff windows) — the same category as main.ts's
@@ -101,6 +111,17 @@ export interface LiveStatus {
   tickCount: number | null;
 }
 
+/**
+ * The sliver of `Document` this module actually needs — narrow on purpose
+ * (interface segregation) so a QA/test harness can hand in a plain object
+ * literal instead of faking the entire real `Document` interface.
+ */
+export interface VisibilityHost {
+  readonly visibilityState: DocumentVisibilityState;
+  addEventListener(type: 'visibilitychange', listener: () => void): void;
+  removeEventListener(type: 'visibilitychange', listener: () => void): void;
+}
+
 export interface StartLiveOptions {
   /** The world already painted at page load (src/world.ts) — seeds the change-detection baseline and the tier/tickCount shown before the first poll completes. */
   initialWorld: World;
@@ -110,8 +131,8 @@ export interface StartLiveOptions {
   onStatus: (status: LiveStatus) => void;
   /** Test/QA seam — defaults to the global `fetch`. */
   fetchFn?: typeof fetch;
-  /** Test/QA seam — defaults to the global `document` (visibilityState/visibilitychange). */
-  documentRef?: Document;
+  /** Test/QA seam — defaults to the global `document`. */
+  documentRef?: VisibilityHost;
   /** Test/QA seam — override the real cadences so a mocked run doesn't take minutes. Defaults match the production cadences documented above. */
   intervals?: { initial?: number; normal?: number; backoff?: number; anon?: number };
 }
@@ -191,10 +212,16 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
   };
   onStatus({ ...status });
 
-  function touchAndEmit(tier: LiveTier): void {
-    status.lastCheckedAt = Date.now();
+  /** Updates the tier shown in the HUD and re-emits status, WITHOUT touching `lastCheckedAt` — for attempts that didn't actually confirm anything about the world (network error, 401/403, an unexpected status). */
+  function emitStatus(tier: LiveTier): void {
     status.tier = tier;
     onStatus({ ...status });
+  }
+
+  /** Same as `emitStatus`, but also stamps `lastCheckedAt` — only for a CONFIRMED read (304 "still this" or a parsed 200), so "atualizado há Xs" never lies by resetting to "agora" on a failed attempt (see module doc's honesty note). */
+  function touchAndEmit(tier: LiveTier): void {
+    status.lastCheckedAt = Date.now();
+    emitStatus(tier);
   }
 
   /**
@@ -240,12 +267,12 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
       res = await fetchWithTimeout(fetchFn, LIVE_WORLD_URL, {}, POLL_TIMEOUT_MS);
     } catch (err) {
       console.warn('Falha ao consultar o mundo ao vivo (Camada C):', err);
-      touchAndEmit('c');
+      emitStatus('c');
       return intervals.anon;
     }
     if (!res.ok) {
       console.warn(`Mundo ao vivo (Camada C) respondeu HTTP ${res.status}.`);
-      touchAndEmit('c');
+      emitStatus('c');
       return intervals.anon;
     }
     await consumeWorldResponse(res);
@@ -266,7 +293,7 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
       res = await fetchWithTimeout(fetchFn, CONTENTS_API_URL, { headers, cache: 'no-store' }, POLL_TIMEOUT_MS);
     } catch (err) {
       console.warn('Falha ao consultar o mundo ao vivo (Camada B):', err);
-      touchAndEmit('b');
+      emitStatus('b');
       return intervals.normal;
     }
 
@@ -281,12 +308,12 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
     if (res.status === 403) {
       const retryAfterHeader = res.headers.get('retry-after');
       if (retryAfterHeader) {
-        touchAndEmit('b');
+        emitStatus('b');
         return Math.max(intervals.backoff, Number(retryAfterHeader) * 1000);
       }
       if (res.headers.get('x-ratelimit-remaining') === '0') {
         const resetAtMs = Number(res.headers.get('x-ratelimit-reset') ?? '0') * 1000;
-        touchAndEmit('b');
+        emitStatus('b');
         return Math.min(Math.max(resetAtMs - Date.now(), intervals.backoff), MAX_BACKOFF_MS);
       }
       // Unexplained 403 on a public repo/path (not a rate limit) — treat like
@@ -303,7 +330,7 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
 
     if (!res.ok) {
       console.warn(`Mundo ao vivo (Camada B) respondeu HTTP ${res.status}.`);
-      touchAndEmit('b');
+      emitStatus('b');
       return intervals.normal;
     }
 
