@@ -1,0 +1,24 @@
+name: "Comando: /atacar"
+description: "Enfrentar um Nativo em combate por turnos"
+title: "Comando: /atacar"
+labels: ["comando"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Atacar um Nativo
+
+        Combate corpo a corpo: você precisa estar **colado** (1 tile) no alvo. Custa **10 de energia**.
+        O Pulso resolve a luta inteira na próxima batida — até 5 turnos — e o mundo grava o replay.
+        Vitória rende XP e um espólio; derrota te devolve ao ponto inicial, inteiro, mas mais leve.
+        Quem cai não morre: desfalece e se recompõe com as batidas.
+
+        Nativos d'O Coração: `gota`, `raiz` e `cinza` (a guardiã bate mais forte — e paga mais XP).
+  - type: input
+    id: alvo
+    attributes:
+      label: "Alvo"
+      description: "O id do Nativo a enfrentar"
+      placeholder: "cinza"
+    validations:
+      required: true

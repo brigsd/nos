@@ -7,11 +7,22 @@
  */
 
 import type { World, Player, Position, WorldEvent, ResourceType } from './types';
-import { STARTING_ENERGY, MAX_ENERGY, ACTIONS_PER_TICK, getOwn, getTile, tileIndex } from './types';
+import {
+  STARTING_ENERGY,
+  MAX_ENERGY,
+  ACTIONS_PER_TICK,
+  RESOURCE_TYPES,
+  getCombatStats,
+  getOwn,
+  getTile,
+  tileIndex,
+} from './types';
+import { ATTACK_ENERGY_COST, ATTACK_RANGE_TILES, MAX_COMBAT_ROUNDS, RESPAWN_ENERGY, applyXP, resolveCombat } from './combat';
+import { Rng } from './rng';
 
 export { ACTIONS_PER_TICK };
 
-export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer';
+export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer' | 'atacar';
 
 export interface Command {
   id: number; // issue number
@@ -50,6 +61,24 @@ export function parseMoverCoords(body: string): { x: number; y: number } | null 
   return null;
 }
 
+/**
+ * Parser for the /atacar target from an issue-form markdown body
+ * ("### Alvo" heading), with a plain-text "atacar <alvo>" fallback.
+ * Normalized to lowercase; the handler re-validates via getOwn regardless -
+ * parsing is convenience, never the security gate.
+ */
+export function parseAtacarTarget(body: string): string | null {
+  const match = body.match(/(?:### )?Alvo\s*[\r\n]+\s*([A-Za-z0-9_\-]+)/i);
+  if (match?.[1]) {
+    return match[1].trim().toLowerCase();
+  }
+  const words = body.trim().split(/\s+/);
+  if (words.length >= 2 && words[0]?.toLowerCase().replace(/^\//, '') === 'atacar' && words[1]) {
+    return words[1].toLowerCase();
+  }
+  return null;
+}
+
 /** Parser for message text from markdown body */
 export function parseDizerMessage(body: string): string {
   const match = body.match(/(?:Mensagem|### Mensagem)\s*[\r\n]+([\s\S]+)/i);
@@ -84,6 +113,9 @@ export function parseRawIssues(rawIssues: any[]): Command[] {
     } else if (title.toLowerCase().startsWith('comando: /dizer') || title.toLowerCase().includes('/dizer')) {
       type = 'dizer';
       params = parseDizerMessage(body);
+    } else if (title.toLowerCase().startsWith('comando: /atacar') || title.toLowerCase().includes('/atacar')) {
+      type = 'atacar';
+      params = parseAtacarTarget(body);
     }
 
     if (type) {
@@ -375,6 +407,160 @@ export function applyCommand(
         login: cmd.login,
         success: true,
         message: 'Fala publicada no mural do mundo.',
+      },
+    };
+  }
+
+  if (cmd.type === 'atacar') {
+    const targetId = cmd.params;
+    if (typeof targetId !== 'string' || targetId.length === 0) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: 'Falha: Diga quem você quer atacar (ex.: gota, raiz, cinza).',
+        },
+      };
+    }
+
+    // getOwn (issue #28): targetId is player-supplied. A plain
+    // world.natives[targetId] would resolve "__proto__"/"constructor" to an
+    // inherited built-in instead of "not found" - this is the exact v2
+    // `/atacar __proto__` lockup bug, kept dead here by construction.
+    const native = getOwn(world.natives, targetId);
+    if (!native) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: `Falha: Nenhum Nativo chamado "${targetId}" habita O Coração.`,
+        },
+      };
+    }
+
+    if (native.hp <= 0) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: `Falha: ${native.name} está desfalecido, se recompondo. Não há glória em bater em quem já caiu.`,
+        },
+      };
+    }
+
+    if (player.energy < ATTACK_ENERGY_COST) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: `Falha: Energia insuficiente para atacar (necessita de ${ATTACK_ENERGY_COST}, você tem ${player.energy}).`,
+        },
+      };
+    }
+
+    // Combat is body to body - unlike a shouted conversation, you must be
+    // on an adjacent tile.
+    const dx = Math.abs(player.position.x - native.position.x);
+    const dy = Math.abs(player.position.y - native.position.y);
+    if (dx > ATTACK_RANGE_TILES || dy > ATTACK_RANGE_TILES) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message:
+            `Falha: ${native.name} está fora do alcance do golpe (${ATTACK_RANGE_TILES} tile). ` +
+            `Você em (${player.position.x}, ${player.position.y}), ${native.name} em (${native.position.x}, ${native.position.y}).`,
+        },
+      };
+    }
+
+    // Deterministic per-event seed: world seed + issue number, the same
+    // derivation family beatOnce uses for the Nativos. The whole fight is
+    // rolled here, authoritatively; the client only replays the actions.
+    const rng = new Rng(`${world.meta.seed}-combate-${cmd.id}`);
+    const fight = resolveCombat(player, native, rng);
+    const statsBefore = getCombatStats(player);
+
+    let updatedPlayer: Player = {
+      ...player,
+      hp: fight.playerHpAfter,
+      maxHp: statsBefore.maxHp,
+      level: statsBefore.level,
+      xp: statsBefore.xp,
+      energy: player.energy - ATTACK_ENERGY_COST,
+    };
+
+    let feedback: string;
+    if (fight.outcome === 'victory') {
+      // Loot is a fixed faction drop, minted like any creature drop - the
+      // Native's own pack is untouched (see engine/combat.ts module docs).
+      const nextInventory = { ...updatedPlayer.inventory };
+      for (const resource of RESOURCE_TYPES) {
+        const qty = fight.loot[resource] ?? 0;
+        if (qty > 0) nextInventory[resource] = (nextInventory[resource] ?? 0) + qty;
+      }
+      updatedPlayer = applyXP({ ...updatedPlayer, inventory: nextInventory }, fight.xpGained);
+      const after = getCombatStats(updatedPlayer);
+      const leveled = after.level > statsBefore.level;
+      feedback =
+        `${native.name} recuou, desfalecido. Você ganhou ${fight.xpGained} XP` +
+        (leveled ? ` e subiu ao nível ${after.level} (vida restaurada)` : '') +
+        `. A Crônica registrou o combate.`;
+    } else if (fight.outcome === 'defeat') {
+      // Defeat: wake up at the spawn tile, whole but drained - half the XP
+      // toward the next level stays on the ground where you fell.
+      updatedPlayer = {
+        ...updatedPlayer,
+        hp: statsBefore.maxHp,
+        position: { x: 30, y: 30 },
+        energy: Math.min(updatedPlayer.energy, RESPAWN_ENERGY),
+        xp: Math.floor(statsBefore.xp / 2),
+      };
+      feedback = `${native.name} venceu. Você acordou em (30, 30), inteiro, mas mais leve: metade do progresso ficou para trás.`;
+    } else {
+      feedback =
+        `Depois de ${MAX_COMBAT_ROUNDS} turnos, vocês se mediram e recuaram. ` +
+        `Sua vida: ${fight.playerHpAfter}. ${native.name}: ${fight.nativeHpAfter}.`;
+    }
+
+    const updatedNative = { ...native, hp: fight.nativeHpAfter };
+
+    const combatEvent: WorldEvent = {
+      type: 'combat_resolved',
+      tick: currentTick,
+      worldTime: currentWorldTime,
+      login: cmd.login,
+      nativeId: targetId,
+      outcome: fight.outcome,
+      actions: fight.actions,
+      xpGained: fight.xpGained,
+      loot: fight.loot,
+      playerHpAfter: fight.playerHpAfter,
+      nativeHpAfter: fight.nativeHpAfter,
+    };
+
+    return {
+      world: {
+        ...world,
+        players: { ...world.players, [cmd.login]: updatedPlayer },
+        natives: { ...world.natives, [targetId]: updatedNative },
+        events: [...world.events, combatEvent],
+      },
+      result: {
+        id: cmd.id,
+        login: cmd.login,
+        success: true,
+        message: `${feedback} Energia restante: ${updatedPlayer.energy}.`,
       },
     };
   }

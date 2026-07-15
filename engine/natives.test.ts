@@ -3,6 +3,7 @@ import { tickNatives } from './natives';
 import { NPC_HOMES } from './behavior';
 import { validateWorld } from './validate';
 import type { Native, World } from './types';
+import { NATIVE_REGEN_PER_BEAT } from './types';
 
 function mockWorld(): World {
   return {
@@ -182,5 +183,51 @@ describe('tickNatives - safety and determinism', () => {
     // engine/tick.ts's beatOnce, does that) - validate the merged shape.
     const merged: World = { ...res.world, events: [...world.events, ...res.events] };
     expect(validateWorld(merged)).toEqual({ valid: true, errors: [] });
+  });
+});
+
+describe('tickNatives - combat aftermath (v2): faint and regen', () => {
+  it('a fainted Native (hp 0) spends the beat recovering: regen only, no wandering, no talking', () => {
+    const world = mockWorld();
+    world.natives!['gota'] = { ...world.natives!['gota']!, hp: 0 };
+    world.players['player1'] = { login: 'player1', position: { x: 31, y: 30 }, inventory: {}, energy: 100 };
+
+    const res = tickNatives(world, 'seed-1', 6, 360);
+    const gota = res.world.natives!['gota']!;
+    expect(gota.hp).toBe(NATIVE_REGEN_PER_BEAT);
+    expect(gota.position).toEqual({ x: 30, y: 30 }); // did not move
+    expect(res.events).toHaveLength(0); // did not speak, player nearby or not
+  });
+
+  it('a hurt-but-standing Native regens AND still acts', () => {
+    const world = mockWorld();
+    world.natives!['gota'] = { ...world.natives!['gota']!, hp: 40 };
+
+    const res = tickNatives(world, 'seed-1', 6, 360);
+    const gota = res.world.natives!['gota']!;
+    expect(gota.hp).toBe(40 + NATIVE_REGEN_PER_BEAT);
+    expect(gota.position).not.toEqual({ x: 30, y: 30 }); // wandered as usual
+  });
+
+  it('regen stops exactly at the ceiling and a full Native is untouched', () => {
+    const world = mockWorld();
+    world.natives!['gota'] = { ...world.natives!['gota']!, hp: 99 };
+    const res = tickNatives(world, 'seed-1', 6, 360);
+    expect(res.world.natives!['gota']!.hp).toBe(100);
+
+    const res2 = tickNatives(res.world, 'seed-1', 7, 420);
+    expect(res2.world.natives!['gota']!.hp).toBe(100);
+  });
+
+  it('a fainted Native fully recovers after enough beats and acts again', () => {
+    let world: World = mockWorld();
+    world.natives!['gota'] = { ...world.natives!['gota']!, hp: 0 };
+
+    const beatsToFull = Math.ceil(100 / NATIVE_REGEN_PER_BEAT);
+    for (let beat = 0; beat < beatsToFull; beat++) {
+      world = tickNatives(world, 'seed-1', 6 + beat, 360 + beat * 60).world;
+    }
+    expect(world.natives!['gota']!.hp).toBe(100);
+    expect(validateWorld(world).valid).toBe(true);
   });
 });

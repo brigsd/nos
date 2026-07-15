@@ -99,7 +99,27 @@
         "login": { "$ref": "#/definitions/Login" },
         "position": { "$ref": "#/definitions/Position" },
         "inventory": { "$ref": "#/definitions/Inventory" },
-        "energy": { "type": "integer", "minimum": 0, "maximum": 100 }
+        "energy": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "hp": {
+          "description": "Hit points - v2 combat. Optional: absent means full (pre-combat players).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxHp": {
+          "description": "Max hit points - v2 combat. Optional: absent means the level-derived default.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "level": {
+          "description": "Level - v2 combat. Optional: absent means 1.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "xp": {
+          "description": "Experience toward the next level - v2 combat. Optional: absent means 0.",
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "WorldMeta": {
@@ -120,7 +140,8 @@
         { "$ref": "#/definitions/ResourceCollectedEvent" },
         { "$ref": "#/definitions/PlayerSaidEvent" },
         { "$ref": "#/definitions/CorePulseEvent" },
-        { "$ref": "#/definitions/NativeSpokeEvent" }
+        { "$ref": "#/definitions/NativeSpokeEvent" },
+        { "$ref": "#/definitions/CombatResolvedEvent" }
       ]
     },
     "PlayerJoinedEvent": {
@@ -199,6 +220,11 @@
         "behaviorState": { "type": "string" },
         "inventory": { "$ref": "#/definitions/Inventory" },
         "hp": { "type": "integer", "minimum": 0 },
+        "maxHp": {
+          "description": "HP ceiling - v2 combat. Optional: absent means the faction baseline.",
+          "type": "integer",
+          "minimum": 1
+        },
         "faction": { "$ref": "#/definitions/NativeFaction" }
       }
     },
@@ -212,6 +238,41 @@
         "worldTime": { "type": "integer", "minimum": 0 },
         "nativeId": { "type": "string", "minLength": 1 },
         "message": { "type": "string", "minLength": 1, "maxLength": 280 }
+      }
+    },
+    "CombatAction": {
+      "description": "One turn-step of a resolved combat - the client replay script's unit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "target", "damage", "kind"],
+      "properties": {
+        "actor": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "damage": { "type": "integer", "minimum": 0 },
+        "kind": { "type": "string", "enum": ["attack", "counter", "dodge"] }
+      }
+    },
+    "CombatResolvedEvent": {
+      "description": "A whole fight, resolved authoritatively by the tick (D-05); the client only replays `actions`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime", "login", "nativeId", "outcome", "actions", "xpGained", "loot", "playerHpAfter", "nativeHpAfter"],
+      "properties": {
+        "type": { "const": "combat_resolved" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 },
+        "login": { "$ref": "#/definitions/Login" },
+        "nativeId": { "type": "string", "minLength": 1 },
+        "outcome": { "type": "string", "enum": ["victory", "defeat", "standoff"] },
+        "actions": {
+          "type": "array",
+          "maxItems": 10,
+          "items": { "$ref": "#/definitions/CombatAction" }
+        },
+        "xpGained": { "type": "integer", "minimum": 0 },
+        "loot": { "$ref": "#/definitions/Inventory" },
+        "playerHpAfter": { "type": "integer", "minimum": 0 },
+        "nativeHpAfter": { "type": "integer", "minimum": 0 }
       }
     }
   }

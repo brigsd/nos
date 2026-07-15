@@ -34,6 +34,36 @@ export const STARTING_ENERGY = 100;
 export const ACTIONS_PER_TICK = 3;
 
 // ---------------------------------------------------------------------------
+// Combat baselines (v2). A player written before combat existed simply has
+// no hp/maxHp/level/xp fields - these defaults are what those absences mean.
+// Read them through `getCombatStats`, never the raw optional fields.
+// ---------------------------------------------------------------------------
+
+/** Hit points a player has when the field is absent (pre-combat worlds) and at creation. */
+export const DEFAULT_MAX_HP = 100;
+
+/** Level a player has when the field is absent and at creation. */
+export const DEFAULT_LEVEL = 1;
+
+/** Extra max HP gained per level beyond the first. */
+export const MAX_HP_PER_LEVEL = 10;
+
+/** HP a fainted (hp 0) Native recovers per beat until back at its ceiling. */
+export const NATIVE_REGEN_PER_BEAT = 5;
+
+/** Fallback HP ceiling per Native faction, for Natives written before maxHp existed (mirrors seedInitialNatives). */
+export const NATIVE_MAX_HP_BY_FACTION: Record<NativeFaction, number> = {
+  wanderer: 100,
+  merchant: 100,
+  guardian: 120,
+};
+
+/** A Native's HP ceiling, treating the pre-combat `undefined` as its faction baseline. */
+export function getNativeMaxHp(native: Pick<Native, 'maxHp' | 'faction'>): number {
+  return native.maxHp ?? NATIVE_MAX_HP_BY_FACTION[native.faction];
+}
+
+// ---------------------------------------------------------------------------
 // Biomes and resources
 // ---------------------------------------------------------------------------
 
@@ -73,6 +103,23 @@ export interface Player {
   position: Position;
   inventory: Inventory;
   energy: number;
+  /** Hit points - v2 combat. Optional for backward compatibility; absent means full (see getCombatStats). */
+  hp?: number;
+  /** Max hit points - v2 combat. Absent means DEFAULT_MAX_HP + level bonus. */
+  maxHp?: number;
+  /** Level - v2 combat. Absent means DEFAULT_LEVEL. */
+  level?: number;
+  /** Experience points toward the next level - v2 combat. Absent means 0. */
+  xp?: number;
+}
+
+/** A player's combat numbers with every pre-combat absence resolved to its default. */
+export function getCombatStats(
+  player: Pick<Player, 'hp' | 'maxHp' | 'level' | 'xp'>,
+): { hp: number; maxHp: number; level: number; xp: number } {
+  const level = player.level ?? DEFAULT_LEVEL;
+  const maxHp = player.maxHp ?? DEFAULT_MAX_HP + (level - DEFAULT_LEVEL) * MAX_HP_PER_LEVEL;
+  return { hp: player.hp ?? maxHp, maxHp, level, xp: player.xp ?? 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +147,8 @@ export interface Native {
   /** Goods this Native carries (for future trading; not yet actionable in this slice). */
   inventory: Inventory;
   hp: number;
+  /** HP ceiling - v2 combat. Optional: absent means the faction baseline (getNativeMaxHp). */
+  maxHp?: number;
   faction: NativeFaction;
 }
 
@@ -113,7 +162,8 @@ export type WorldEventType =
   | 'resource_collected'
   | 'player_said'
   | 'core_pulse'
-  | 'native_spoke';
+  | 'native_spoke'
+  | 'combat_resolved';
 
 interface WorldEventBase {
   type: WorldEventType;
@@ -159,13 +209,47 @@ export interface NativeSpokeEvent extends WorldEventBase {
   message: string;
 }
 
+// --- Combate (v2, D-05): the tick resolves the whole fight; the client only replays. ---
+
+/** One turn-step of a resolved combat, in resolution order - the client's replay script. */
+export interface CombatAction {
+  /** Who acted: a player login or a Native id. */
+  actor: string;
+  /** Who was hit (or dodged): the other party. */
+  target: string;
+  /** Damage dealt; 0 on a dodge. */
+  damage: number;
+  /** attack = player hits Native, counter = Native hits back, dodge = the blow missed. */
+  kind: 'attack' | 'counter' | 'dodge';
+}
+
+export type CombatOutcome = 'victory' | 'defeat' | 'standoff';
+
+export interface CombatResolvedEvent extends WorldEventBase {
+  type: 'combat_resolved';
+  login: string;
+  /** The Native fought. Named nativeId (not targetId) so the validator's generic native cross-check covers it. */
+  nativeId: string;
+  outcome: CombatOutcome;
+  /** Turn-by-turn script for the client replay (bounded by max rounds x 2). */
+  actions: CombatAction[];
+  /** XP the player earned (0 unless victory). */
+  xpGained: number;
+  /** Items dropped for the player (empty unless victory). */
+  loot: Inventory;
+  /** Both sides' HP when the dust settled - the replay's final frame. */
+  playerHpAfter: number;
+  nativeHpAfter: number;
+}
+
 export type WorldEvent =
   | PlayerJoinedEvent
   | PlayerMovedEvent
   | ResourceCollectedEvent
   | PlayerSaidEvent
   | CorePulseEvent
-  | NativeSpokeEvent;
+  | NativeSpokeEvent
+  | CombatResolvedEvent;
 
 // ---------------------------------------------------------------------------
 // World

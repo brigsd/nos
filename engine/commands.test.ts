@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { World, Player } from './types';
-import { parseMoverCoords, parseDizerMessage, parseRawIssues, processCommands, applyCommand } from './commands';
+import type { CombatResolvedEvent, Native, World, Player } from './types';
+import { getCombatStats } from './types';
+import {
+  parseMoverCoords,
+  parseDizerMessage,
+  parseAtacarTarget,
+  parseRawIssues,
+  processCommands,
+  applyCommand,
+} from './commands';
+import { ATTACK_ENERGY_COST, LOOT_BY_FACTION, MAX_COMBAT_ROUNDS, RESPAWN_ENERGY, XP_BY_FACTION } from './combat';
 
 function mockWorld(): World {
   return {
@@ -274,5 +283,199 @@ describe('processCommands - per-command failure isolation (issue #28)', () => {
     expect(res.results).toHaveLength(1);
     expect(res.results[0]?.success).toBe(true);
     expect(res.world.players['alice']).toBeDefined();
+  });
+});
+
+describe('/atacar - combate por turnos (v2, D-05)', () => {
+  function cinzaAt(x: number, y: number, overrides: Partial<Native> = {}): Native {
+    return {
+      id: 'cinza',
+      name: 'Cinza',
+      position: { x, y },
+      behaviorTree: 'guardian',
+      behaviorState: '{}',
+      inventory: { stone: 10 },
+      hp: 120,
+      faction: 'guardian',
+      ...overrides,
+    };
+  }
+
+  function combatWorld(): World {
+    const world = mockWorld();
+    world.players['alice'] = { login: 'alice', position: { x: 30, y: 30 }, inventory: {}, energy: 50 };
+    world.natives = { cinza: cinzaAt(31, 30) };
+    return world;
+  }
+
+  function atacar(id: number, params: unknown) {
+    return {
+      id,
+      login: 'alice',
+      type: 'atacar' as const,
+      params: params as any,
+      createdAt: '2026-07-14T20:00:00Z',
+    };
+  }
+
+  it('resolves a full fight: event recorded with the replay script, energy spent, hp persisted', () => {
+    const world = combatWorld();
+    const res = processCommands(world, [atacar(1, 'cinza')], 6, 360);
+
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.world.events).toHaveLength(1);
+    const event = res.world.events[0] as CombatResolvedEvent;
+    expect(event).toMatchObject({ type: 'combat_resolved', tick: 6, worldTime: 360, login: 'alice', nativeId: 'cinza' });
+    expect(['victory', 'defeat', 'standoff']).toContain(event.outcome);
+    expect(event.actions.length).toBeGreaterThan(0);
+    expect(event.actions.length).toBeLessThanOrEqual(MAX_COMBAT_ROUNDS * 2);
+    expect(event.actions[0]?.actor).toBe('alice');
+
+    const alice = res.world.players['alice']!;
+    expect(alice.energy).toBe(50 - ATTACK_ENERGY_COST);
+    expect(res.world.natives?.['cinza']?.hp).toBe(event.nativeHpAfter);
+    // The Native is never deleted, whatever happened - it faints, it does not die.
+    expect(res.world.natives?.['cinza']).toBeDefined();
+  });
+
+  it('is deterministic: same world + same issue number => the same fight, blow by blow', () => {
+    const first = processCommands(combatWorld(), [atacar(9, 'cinza')], 6, 360);
+    const second = processCommands(combatWorld(), [atacar(9, 'cinza')], 6, 360);
+    expect(second.world).toEqual(first.world);
+    expect(second.results).toEqual(first.results);
+  });
+
+  it('victory: faints the Native (hp 0), mints faction loot and applies XP - the stall stock is untouched', () => {
+    const world = combatWorld();
+    world.natives!['cinza'] = cinzaAt(31, 30, { hp: 1 });
+    const res = processCommands(world, [atacar(1, 'cinza')], 6, 360);
+
+    const event = res.world.events[0] as CombatResolvedEvent;
+    expect(event.outcome).toBe('victory');
+    expect(event.xpGained).toBe(XP_BY_FACTION.guardian);
+    expect(res.world.natives?.['cinza']?.hp).toBe(0);
+    expect(res.world.natives?.['cinza']?.inventory).toEqual({ stone: 10 }); // never stolen
+
+    const alice = res.world.players['alice']!;
+    expect(alice.inventory).toEqual(LOOT_BY_FACTION.guardian);
+    expect(getCombatStats(alice).xp + (alice.level && alice.level > 1 ? 100 : 0)).toBe(XP_BY_FACTION.guardian);
+  });
+
+  it('defeat: the player wakes at (30, 30), healed, drained to the respawn energy, half XP gone', () => {
+    // hp 1 attacker vs full guardian: hunt a seed (issue id) where the guardian wins.
+    let defeat: { world: World; results: { success: boolean }[] } | undefined;
+    let defeatEvent: CombatResolvedEvent | undefined;
+    for (let issue = 1; issue <= 60 && !defeat; issue++) {
+      const world = combatWorld();
+      world.players['alice'] = { ...world.players['alice']!, hp: 1, maxHp: 100, xp: 50, position: { x: 31, y: 29 } };
+      const res = processCommands(world, [atacar(issue, 'cinza')], 6, 360);
+      const event = res.world.events[0] as CombatResolvedEvent;
+      if (event.outcome === 'defeat') {
+        defeat = res;
+        defeatEvent = event;
+      }
+    }
+    expect(defeat).toBeDefined();
+    const alice = defeat!.world.players['alice']!;
+    expect(alice.position).toEqual({ x: 30, y: 30 });
+    expect(alice.hp).toBe(100); // healed on respawn
+    expect(alice.energy).toBeLessThanOrEqual(RESPAWN_ENERGY);
+    expect(alice.xp).toBe(25); // half of 50
+    expect(defeatEvent!.xpGained).toBe(0);
+    expect(defeatEvent!.loot).toEqual({});
+  });
+
+  it('rejects attacking a fainted Native', () => {
+    const world = combatWorld();
+    world.natives!['cinza'] = cinzaAt(31, 30, { hp: 0 });
+    const res = processCommands(world, [atacar(1, 'cinza')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('desfalecido');
+    expect(res.world.events).toHaveLength(0);
+  });
+
+  it('rejects an unknown target, world untouched', () => {
+    const res = processCommands(combatWorld(), [atacar(1, 'fantasma')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Nenhum Nativo chamado "fantasma"');
+    expect(res.world.events).toHaveLength(0);
+  });
+
+  it.each(['__proto__', 'constructor', 'toString'])(
+    'treats hostile target %s as "not found" (getOwn) - the exact v2 lockup bug, dead - and the batch keeps flowing',
+    (hostileKey) => {
+      const res = processCommands(
+        combatWorld(),
+        [
+          atacar(1, hostileKey),
+          { id: 2, login: 'alice', type: 'dizer' as const, params: 'sigo de pé', createdAt: '2026-07-14T20:01:00Z' },
+        ],
+        6,
+        360,
+      );
+      expect(res.results[0]?.success).toBe(false);
+      expect(res.results[0]?.message).toContain('Nenhum Nativo chamado');
+      expect(res.results[1]?.success).toBe(true);
+    },
+  );
+
+  it('rejects a strike from beyond melee range (Chebyshev 1)', () => {
+    const world = combatWorld();
+    world.natives!['cinza'] = cinzaAt(32, 30);
+    const res = processCommands(world, [atacar(1, 'cinza')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('fora do alcance');
+  });
+
+  it('allows a diagonal strike (still adjacent)', () => {
+    const world = combatWorld();
+    world.natives!['cinza'] = cinzaAt(31, 29);
+    const res = processCommands(world, [atacar(1, 'cinza')], 6, 360);
+    expect(res.results[0]?.success).toBe(true);
+  });
+
+  it('rejects the attack when energy is short, before any blood', () => {
+    const world = combatWorld();
+    world.players['alice']!.energy = ATTACK_ENERGY_COST - 1;
+    const res = processCommands(world, [atacar(1, 'cinza')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Energia insuficiente');
+    expect(res.world.natives?.['cinza']?.hp).toBe(120);
+  });
+
+  it('rejects malformed params without throwing', () => {
+    const res = processCommands(combatWorld(), [atacar(1, null), atacar(2, 7)], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[1]?.success).toBe(false);
+  });
+});
+
+describe('parseAtacarTarget', () => {
+  it('parses the issue-form markdown body', () => {
+    expect(parseAtacarTarget('### Alvo\n\nCinza')).toBe('cinza');
+  });
+
+  it('parses the free-text fallback', () => {
+    expect(parseAtacarTarget('/atacar cinza')).toBe('cinza');
+    expect(parseAtacarTarget('atacar gota')).toBe('gota');
+  });
+
+  it('returns null when no target is present', () => {
+    expect(parseAtacarTarget('')).toBeNull();
+    expect(parseAtacarTarget('bom dia')).toBeNull();
+  });
+
+  it('is mapped from issues by parseRawIssues', () => {
+    const parsed = parseRawIssues([
+      {
+        number: 60,
+        title: 'Comando: /atacar',
+        body: '### Alvo\n\ncinza',
+        author: { login: 'tester1' },
+        createdAt: '2026-07-14T20:00:00Z',
+      },
+    ]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ type: 'atacar', params: 'cinza' });
   });
 });

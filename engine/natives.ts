@@ -10,6 +10,7 @@
 import type { World, WorldEvent } from './types';
 import { Rng } from './rng';
 import { BEHAVIOR_TREES, evaluateBTNode } from './behavior';
+import { regenNative } from './combat';
 
 export interface TickNativesResult {
   world: World;
@@ -37,7 +38,18 @@ export function tickNatives(world: World, rngSeed: string, tickNum: number, worl
     const native = currentWorld.natives?.[id];
     if (!native) continue; // defensive: a prior native's action cannot remove another, but never trust it blindly
 
-    const tree = BEHAVIOR_TREES[native.behaviorTree];
+    // Combat aftermath (v2): a hurt Native heals a little every beat; a
+    // fainted one (hp 0 at the start of the beat) spends the whole beat
+    // recovering - no wandering, no talking - and rejoins the world once
+    // regen has pulled it back above zero. Deterministic: no RNG involved.
+    const fainted = native.hp <= 0;
+    const recovered = regenNative(native);
+    if (recovered !== native) {
+      currentWorld = { ...currentWorld, natives: { ...currentWorld.natives, [id]: recovered } };
+    }
+    if (fainted) continue;
+
+    const tree = BEHAVIOR_TREES[recovered.behaviorTree];
     if (!tree) continue; // unknown behaviorTree key - stand still rather than throw and abort the whole beat
 
     // Deterministic sub-seed: same world seed + same native id + same beat

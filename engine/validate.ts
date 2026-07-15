@@ -17,7 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv, { type ErrorObject } from 'ajv';
 import type { Position, World } from './types';
-import { isInBounds } from './types';
+import { getNativeMaxHp, isInBounds } from './types';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const schemaPath = path.join(moduleDir, 'schema', 'world.schema.json');
@@ -86,6 +86,13 @@ function semanticErrors(world: World): string[] {
     }
     const playerPositionError = boundsError(`players["${login}"].position`, player.position, world);
     if (playerPositionError) errors.push(playerPositionError);
+
+    // Combat cross-field invariant (v2): hp can never exceed the ceiling.
+    // Only checkable when both fields are present - the schema already
+    // guards each field's own range.
+    if (player.hp !== undefined && player.maxHp !== undefined && player.hp > player.maxHp) {
+      errors.push(`players["${login}"].hp (${player.hp}) exceeds maxHp (${player.maxHp})`);
+    }
   }
 
   // Os Nativos (v2, optional): same id-matches-its-map-key and in-bounds
@@ -97,6 +104,13 @@ function semanticErrors(world: World): string[] {
     }
     const nativePositionError = boundsError(`natives["${id}"].position`, native.position, world);
     if (nativePositionError) errors.push(nativePositionError);
+
+    // Same hp-vs-ceiling invariant as players; an absent maxHp resolves to
+    // the faction baseline, exactly the value engine/combat.ts regens toward.
+    const nativeMaxHp = getNativeMaxHp(native);
+    if (native.hp > nativeMaxHp) {
+      errors.push(`natives["${id}"].hp (${native.hp}) exceeds its ceiling (${nativeMaxHp})`);
+    }
   }
 
   world.events.forEach((event, index) => {

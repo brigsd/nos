@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { assertValidWorld, validateWorld, worldSchema } from './validate';
 import { MAX_ENERGY, NATIVE_MESSAGE_MAX_LENGTH, STARTING_ENERGY } from './types';
+import { MAX_COMBAT_ROUNDS } from './combat';
 import type { Native, World } from './types';
 
 function gota(overrides: Partial<Native> = {}): Native {
@@ -112,6 +113,52 @@ describe('validateWorld - accepts valid state', () => {
     const world = validWorld();
     world.natives = {};
     expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('accepts a player with combat fields and one without (pre-combat backward compatibility)', () => {
+    const world = validWorld();
+    const octocat = world.players['octocat']!;
+    octocat.hp = 88;
+    octocat.maxHp = 110;
+    octocat.level = 2;
+    octocat.xp = 40;
+    expect(validateWorld(world).valid).toBe(true);
+
+    delete octocat.hp;
+    delete octocat.maxHp;
+    delete octocat.level;
+    delete octocat.xp;
+    expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('accepts a Native with an explicit maxHp and a fainted Native (hp 0)', () => {
+    const world = validWorld();
+    world.natives = { gota: gota({ hp: 0, maxHp: 100 }) };
+    expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('accepts a well-formed combat_resolved event', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'combat_resolved',
+      tick: 3,
+      worldTime: 180,
+      login: 'octocat',
+      nativeId: 'gota',
+      outcome: 'victory',
+      actions: [
+        { actor: 'octocat', target: 'gota', damage: 14, kind: 'attack' },
+        { actor: 'gota', target: 'octocat', damage: 0, kind: 'dodge' },
+      ],
+      xpGained: 40,
+      loot: { pulse_fragment: 1 },
+      playerHpAfter: 86,
+      nativeHpAfter: 0,
+    });
+    const result = validateWorld(world);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
   });
 });
 
@@ -387,6 +434,99 @@ describe('validateWorld - rejects invalid state', () => {
     world.natives = { gota: gota({ hp: -1 }) };
     expect(validateWorld(world).valid).toBe(false);
   });
+
+  it('rejects a player whose hp exceeds maxHp (semantic cross-field check)', () => {
+    const world = structuredClone(validWorld());
+    world.players['octocat']!.hp = 120;
+    world.players['octocat']!.maxHp = 100;
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join('\n')).toContain('exceeds maxHp');
+  });
+
+  it('rejects a Native whose hp exceeds its ceiling (explicit or faction baseline)', () => {
+    const world = structuredClone(validWorld());
+    world.natives = { gota: gota({ hp: 101 }) }; // wanderer baseline is 100
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join('\n')).toContain('exceeds its ceiling');
+
+    world.natives = { gota: gota({ hp: 150, maxHp: 140 }) };
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects a combat_resolved event whose login is not a living player', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'combat_resolved',
+      tick: 3,
+      worldTime: 180,
+      login: 'fantasma',
+      nativeId: 'gota',
+      outcome: 'standoff',
+      actions: [{ actor: 'fantasma', target: 'gota', damage: 1, kind: 'attack' }],
+      xpGained: 0,
+      loot: {},
+      playerHpAfter: 1,
+      nativeHpAfter: 1,
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join('\n')).toContain('does not exist in players');
+  });
+
+  it('rejects a combat_resolved event whose nativeId is not a living native', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'combat_resolved',
+      tick: 3,
+      worldTime: 180,
+      login: 'octocat',
+      nativeId: 'raiz',
+      outcome: 'standoff',
+      actions: [{ actor: 'octocat', target: 'raiz', damage: 1, kind: 'attack' }],
+      xpGained: 0,
+      loot: {},
+      playerHpAfter: 1,
+      nativeHpAfter: 1,
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join('\n')).toContain('does not exist in natives');
+  });
+
+  it('rejects a combat_resolved event with an unknown outcome, negative damage or an unknown action kind', () => {
+    const base = {
+      type: 'combat_resolved',
+      tick: 3,
+      worldTime: 180,
+      login: 'octocat',
+      nativeId: 'gota',
+      xpGained: 0,
+      loot: {},
+      playerHpAfter: 1,
+      nativeHpAfter: 1,
+    };
+
+    const withEvent = (extra: Record<string, unknown>) => {
+      const world = validWorld();
+      world.natives = { gota: gota() };
+      (world.events as unknown[]).push({ ...base, ...extra });
+      return world;
+    };
+
+    expect(
+      validateWorld(withEvent({ outcome: 'draw', actions: [{ actor: 'a', target: 'b', damage: 1, kind: 'attack' }] })).valid,
+    ).toBe(false);
+    expect(
+      validateWorld(withEvent({ outcome: 'standoff', actions: [{ actor: 'a', target: 'b', damage: -1, kind: 'attack' }] })).valid,
+    ).toBe(false);
+    expect(
+      validateWorld(withEvent({ outcome: 'standoff', actions: [{ actor: 'a', target: 'b', damage: 1, kind: 'fireball' }] })).valid,
+    ).toBe(false);
+  });
 });
 
 describe('assertValidWorld', () => {
@@ -442,5 +582,15 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
 
   it('keeps the schema NativeSpokeEvent.message.minLength at 1 (no empty falas)', () => {
     expect(nativeMessageSchema.minLength).toBe(1);
+  });
+
+  it('keeps the schema combat actions cap equal to MAX_COMBAT_ROUNDS x 2', () => {
+    // engine/combat.ts emits at most 2 actions per round; if either side of
+    // that pair ever changes alone, a legitimate fight could fail validation
+    // (or an oversized one could pass).
+    const combatSchema = (
+      worldSchema as { definitions: { CombatResolvedEvent: { properties: { actions: { maxItems: number } } } } }
+    ).definitions.CombatResolvedEvent;
+    expect(combatSchema.properties.actions.maxItems).toBe(MAX_COMBAT_ROUNDS * 2);
   });
 });
