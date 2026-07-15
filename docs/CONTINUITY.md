@@ -34,11 +34,24 @@
 - Pedido do Tiago: "deixa assim por hora" → mantido O Registro, sem publicar o Eco.
 - Como aplicar o Eco depois: no `site/src/renderer.ts`, mover o `globalAlpha` do bloco 4 (jogador local) para o bloco 3 (jogadores oficiais). Inversão de ~1 linha. Quando o login (D-13) existir, refinar pra só o *próprio* eco ficar pálido — outros jogadores são reais, ficam sólidos.
 
-## Próximo
-- Tudo da v1 está resolvido e no ar. **Nada pendente de código na v1.**
-- Decisão adiada do Tiago: **Registro vs Eco** (ver seção acima) — retomar quando ele quiser.
-- Grande próximo passo: retomar a **v2** (branch `colaborador2/v2`, congelada): combate, economia, NPCs, Crônica — revisar com calma antes de mesclar.
-- Cosmético: pedir ao Tiago pra deletar as branches órfãs (o token não deleta).
+## v2 — auditada e em integração faseada (2026-07-15)
+Auditoria completa da branch `colaborador2/v2` feita (relatório na conversa). Achados-chave:
+- **v2 é 100% headless** — combate/economia/NPCs/estruturas/Crônica só existem como dados+terminal; nunca tocou `site/`. Integrar o motor ≠ jogador ver a feature.
+- **Não mesclável como está**: `typecheck` falha na própria branch (3 erros em `commands.ts`); nunca passou por CI.
+- **Bug de segurança (bloqueador p/ combate/economia)**: `/atacar __proto__`, `/trocar __proto__` etc. travam o tick e o mundo **permanentemente** (poluição de protótipo + falta de try/catch no tick + workflow sem `if:always()`). NÃO está no ar (comandos só existem na v2). Corrigir antes de integrar T12/T13.
+- Conflito minúsculo (2 arquivos): `world.schema.json` (git auto-merge OK, regex endurecida do main preservada) e `world/heart.json` (mundo vivo — NÃO mesclar à mão; seeding aditivo pelo tick).
+- Ordem recomendada: T17→T10→T14(estruturas)→T11(NPCs)→T12(combate)→T13(economia)→T15(Crônica). Raycasting (doc `DEBATE_VISAO_3D.md`) = backlog v3+, PR só de doc.
+
+**Decisão do Tiago:** integrar **uma feature completa até a tela** (não motor-primeiro), começando pelos **NPCs (Nativos)**.
+
+### Em andamento — fatia "Nativos até a tela"
+- **Fase A · motor** (issue #22, branch `claude/v2-npc-engine`): tipo Native + evento native_spoke, behavior.ts + natives.ts adaptados ao validador endurecido, behavior.test.ts novo, seeding idempotente pelo tick (preserva mundo vivo). Sem /atacar//trocar.
+- **Fase B · visual** (issue #23): sprites de gota/raiz/cinza (branch `claude/v2-npc-art`, em paralelo) + render no mapa (após Fase A).
+
+## Depois
+- Registro vs Eco (decisão adiada do Tiago).
+- Próximas fatias v2 na ordem recomendada; corrigir o bug de __proto__ antes de combate/economia.
+- Cosmético: Tiago deleta as branches órfãs (o token não deleta — 403).
 
 ### Acordo de trabalho (definido pelo Tiago)
 Tiago = **ideador** (visão, rumo, escopo). Claude = **coder** (integridade do código, decisões técnicas, merges). Não trazer implementação/merge para aprovação do Tiago; parar só em decisões de produto. Registrado aqui para todas as sessões futuras.
