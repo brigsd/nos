@@ -7,7 +7,9 @@
  * system clock (see scripts/tick.ts for the one place that boundary is
  * allowed to be crossed).
  *
- * Each beat: +1 meta.tickCount, +WORLD_MINUTES_PER_TICK meta.worldTime, and
+ * Each beat: +1 meta.tickCount, +WORLD_MINUTES_PER_TICK meta.worldTime, every
+ * Native's behavior tree evaluated once (engine/natives.ts - a no-op until
+ * `world.natives` is seeded, see engine/mapgen.ts's seedInitialNatives), and
  * one `core_pulse` event appended to the log. That event type already
  * exists in engine/types.ts ("O Núcleo bate a cada tick", GDD) - it was
  * reserved by T1 for exactly this, so no new event type is needed here.
@@ -44,6 +46,7 @@
 import type { CorePulseEvent, World, WorldEvent } from './types';
 import type { Command, CommandResult } from './commands';
 import { processCommands } from './commands';
+import { tickNatives } from './natives';
 
 /**
  * Real-world seconds between two beats - matches the hourly cron in
@@ -87,16 +90,29 @@ function appendEvent(events: readonly WorldEvent[], event: WorldEvent): WorldEve
   return kept;
 }
 
-/** Applies exactly one beat: +1 tick, +WORLD_MINUTES_PER_TICK world-time, one core_pulse event. */
+/** Applies exactly one beat: +1 tick, +WORLD_MINUTES_PER_TICK world-time, one Natives tick, one core_pulse event. */
 function beatOnce(world: World): World {
   const tickCount = world.meta.tickCount + 1;
   const worldTime = world.meta.worldTime + WORLD_MINUTES_PER_TICK;
+
+  // Os Nativos act once per beat, before the pulse that marks it official.
+  // Sub-seed derived from the world's own seed + this beat's tick number -
+  // deterministic, never Date.now()/Math.random().
+  const tickSeed = `${world.meta.seed}-tick-${tickCount}`;
+  const { world: worldAfterNatives, events: nativeEvents } = tickNatives(world, tickSeed, tickCount, worldTime);
+
+  let events = worldAfterNatives.events;
+  for (const nativeEvent of nativeEvents) {
+    events = appendEvent(events, nativeEvent);
+  }
+
   const pulse: CorePulseEvent = { type: 'core_pulse', tick: tickCount, worldTime };
+  events = appendEvent(events, pulse);
 
   return {
-    ...world,
-    meta: { ...world.meta, tickCount, worldTime },
-    events: appendEvent(world.events, pulse),
+    ...worldAfterNatives,
+    meta: { ...worldAfterNatives.meta, tickCount, worldTime },
+    events,
   };
 }
 
