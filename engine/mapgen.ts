@@ -527,7 +527,7 @@ export function seedFactoryMachines(world: World): World {
 }
 
 // ---------------------------------------------------------------------------
-// A Cidade (R7, docs/CITY_PLAN.md) - city layout migration. Kept here for
+// A Cidade (R8, docs/CITY_PLAN.md) - city layout migration. Kept here for
 // the same reason seedInitialNatives/seedFactoryMachines are: this is
 // world-placement logic, deciding *where in the map* the city's districts
 // sit. Everything below is deterministic - no RNG, no Date.now(); the plan

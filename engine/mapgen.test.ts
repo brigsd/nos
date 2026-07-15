@@ -689,7 +689,7 @@ describe('seedFactoryMachines - retrofitting the live world/heart.json', () => {
   });
 });
 
-describe('seedCityLayout - A Cidade (R7, docs/CITY_PLAN.md) shape and determinism', () => {
+describe('seedCityLayout - A Cidade (R8, docs/CITY_PLAN.md) shape and determinism', () => {
   /** The full genesis chain a brand-new world goes through in scripts/tick.ts. */
   function freshCity(): World {
     return seedCityLayout(seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED)));
@@ -993,7 +993,7 @@ describe('seedCityLayout - retrofitting the live world/heart.json', () => {
     console.log(
       [
         '',
-        '=== Migração da cidade (R7, docs/CITY_PLAN.md) ===',
+        '=== Migração da cidade (R8, docs/CITY_PLAN.md) ===',
         `Antes:  tick #${onDisk.meta.tickCount}, máquinas nos cantos, ${preMigration.tiles.filter((t) => t.deco).length} tiles com deco`,
         `Depois: tick #${advanced.meta.tickCount}, máquinas nos portões cardeais, ${advanced.tiles.filter((t) => t.deco).length} tiles com deco`,
         `brigsd preservado: ${JSON.stringify(advanced.players['brigsd']) === JSON.stringify(onDisk.players['brigsd'])}`,

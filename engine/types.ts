@@ -69,7 +69,7 @@ export const RESOURCE_LABELS_PTBR: Record<ResourceType, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Purely visual city decoration layered on a tile (the R7 city migration,
+ * Purely visual city decoration layered on a tile (the R8 city migration,
  * docs/CITY_PLAN.md). Ground kinds (plaza/pavement/trail) repaint the floor;
  * object kinds (pylon/arch/arch_dormant/mural_stone) stand on it. The engine
  * itself never reads this field for rules - movement, collection, energy and

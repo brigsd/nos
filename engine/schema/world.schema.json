@@ -51,7 +51,7 @@
       "enum": ["forja", "cozinha", "bancada", "estaleiro"]
     },
     "TileDeco": {
-      "description": "Purely visual city decoration on a tile (R7 city migration, docs/CITY_PLAN.md) - mirrors engine/types.ts's TileDeco, pinned by an anti-drift test.",
+      "description": "Purely visual city decoration on a tile (R8 city migration, docs/CITY_PLAN.md) - mirrors engine/types.ts's TileDeco, pinned by an anti-drift test.",
       "type": "string",
       "enum": ["plaza", "pavement", "trail", "pylon", "arch", "arch_dormant", "mural_stone"]
     },

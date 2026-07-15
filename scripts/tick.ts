@@ -69,7 +69,7 @@ function main(): void {
     assertValidWorld(world); // gate the seeded state exactly like any tick output
   }
 
-  // Same one-time, additive, idempotent retrofit for the city layout (R7,
+  // Same one-time, additive, idempotent retrofit for the city layout (R8,
   // docs/CITY_PLAN.md): plaza flooring + pylons + Largo do Mural + Avenida
   // do Pulso + Salão de Portais, and the 4 oficinas moved from the clearing
   // corners to their cardinal gates. All the guarding lives inside

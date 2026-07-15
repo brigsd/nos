@@ -64,7 +64,7 @@ export interface Sprites {
   oficina: SpriteSheet;
   /** O Salão de Portais' map marker (R6, D-17) - drawn once, at a fixed spot in O Coração only. 2-frame slow hum (see renderer.ts's PORTAL_FRAME_MS). */
   portal: SpriteSheet;
-  /** A Cidade (R7, docs/CITY_PLAN.md) - Tile.deco layer. Plaza flagstone floor, 2 hash-picked variants (deco "plaza"; also the base under standing city objects). */
+  /** A Cidade (R8, docs/CITY_PLAN.md) - Tile.deco layer. Plaza flagstone floor, 2 hash-picked variants (deco "plaza"; also the base under standing city objects). */
   lajePraca: SpriteSheet;
   lajePracaB: SpriteSheet;
   /** Avenue pavement (deco "pavement"): plain courses / violet vein-node variant, hash-scattered. */

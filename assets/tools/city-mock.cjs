@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Scene-cohesion tool for A Cidade (R7, docs/CITY_PLAN.md) - the city-scale
+ * Scene-cohesion tool for A Cidade (R8, docs/CITY_PLAN.md) - the city-scale
  * sibling of map-mock.cjs: instead of a hand-typed 8x8 grid, it renders
  * REGIONS OF A REAL WORLD FILE (biomes + Tile.deco + machines + natives +
  * players), mirroring site/src/renderer.ts's draw rules tile for tile -

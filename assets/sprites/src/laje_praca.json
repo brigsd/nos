@@ -3,7 +3,7 @@
   "kind": "tile",
   "width": 16,
   "height": 16,
-  "notes": "Plaza flagstone ground (deco \"plaza\", R7 CITY_PLAN). Border-free irregular slabs in the ruina.json stone family; variant pair with laje_praca_b, picked per-tile by positional hash in site/src/renderer.ts.",
+  "notes": "Plaza flagstone ground (deco \"plaza\", R8 CITY_PLAN). Border-free irregular slabs in the ruina.json stone family; variant pair with laje_praca_b, picked per-tile by positional hash in site/src/renderer.ts.",
   "frames": [
     {
       "pixels": [

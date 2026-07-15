@@ -38,7 +38,7 @@ Um arco de pedra antigo (tons plum/cinza da família da `ruina.json` — liga o 
 
 Desenhado uma única vez no mapa (posição fixa `PORTAL_MARKER_POSITION` em `site/src/main.ts`, ver `docs/PORTALS_PROTOCOL.md` para a escolha do local) — landmark do cliente, nunca estado do motor (`world.machines`/`world.natives` não o conhecem).
 
-## Kit da Cidade (R7 — `docs/CITY_PLAN.md`)
+## Kit da Cidade (R8 — `docs/CITY_PLAN.md`)
 
 Oito sprites novos, 16×16, paleta Resurrect 64, **originais**, gerados por código (`tools/author-city.cjs`, mesma técnica dos demais `author-*.cjs`; achados do self-audit de arte registrados em comentários "R1-"/"R2-" no próprio gerador). Nenhum pack CC0 externo foi adaptado.
 
@@ -53,4 +53,4 @@ Oito sprites novos, 16×16, paleta Resurrect 64, **originais**, gerados por cód
 
 ## Ferramentas
 
-`tools/` (encoder PNG manual + compositor) é código original deste projeto, sem dependências externas (só `fs`, `path`, `zlib` do Node). `tools/author-nativos.cjs` e `tools/contact-sheet-nativos.cjs` (issue #23) seguem a mesma regra. `tools/author-portal.cjs` (R6 fase 1) idem. `tools/author-city.cjs` e `tools/city-mock.cjs` (R7) idem.
+`tools/` (encoder PNG manual + compositor) é código original deste projeto, sem dependências externas (só `fs`, `path`, `zlib` do Node). `tools/author-nativos.cjs` e `tools/contact-sheet-nativos.cjs` (issue #23) seguem a mesma regra. `tools/author-portal.cjs` (R6 fase 1) idem. `tools/author-city.cjs` e `tools/city-mock.cjs` (R8) idem.

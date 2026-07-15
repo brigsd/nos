@@ -78,7 +78,7 @@ const HOME_PORTAL_ID = 'coracao';
  * zoomed in yet. The east edge has no such conflict. See
  * docs/PORTALS_PROTOCOL.md / the PR description for the full check.
  *
- * Since the city migration (R7, docs/CITY_PLAN.md) the tile itself is owned
+ * Since the city migration (R8, docs/CITY_PLAN.md) the tile itself is owned
  * by the engine as SALAO_PORTAL_TILE - O Salão de Portais' arch row frames
  * exactly this spot - so the marker and its architecture can never drift
  * apart. This alias keeps the local name every call site below already uses.

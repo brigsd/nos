@@ -146,7 +146,7 @@ function calcadaSprite(sprites: Sprites, x: number, y: number): SpriteSheet {
 }
 
 /**
- * A Cidade's Tile.deco layer (R7, docs/CITY_PLAN.md) - purely visual, laid
+ * A Cidade's Tile.deco layer (R8, docs/CITY_PLAN.md) - purely visual, laid
  * by engine/mapgen.ts's seedCityLayout. Drawn INSIDE the tile loop, right
  * after the tile's biome ground (and rim), so every standing entity drawn
  * in later blocks (oficinas 2.1, portal 2.2, Nativos 2.5, players 3/4)
@@ -372,7 +372,7 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
   const tileMaxY = Math.min(world.height - 1, Math.ceil(viewWorldY1 / TILE_SIZE_PX) + 1);
 
   const waterFrame = Math.floor(nowMs / WATER_FRAME_MS) % sprites.agua.frameCount;
-  // The city's pylons breathe on the Núcleo's own clock (R7, CITY_PLAN).
+  // The city's pylons breathe on the Núcleo's own clock (R8, CITY_PLAN).
   const pilarFrame = Math.floor(nowMs / CORE_FRAME_MS) % sprites.pilarPulso.frameCount;
 
   let coreMinX = Infinity;
@@ -419,7 +419,7 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
           break;
       }
 
-      // 1.1. A Cidade's deco layer (R7) - after the tile's own ground, before
+      // 1.1. A Cidade's deco layer (R8) - after the tile's own ground, before
       // every standing entity of the later blocks. See drawTileDeco.
       if (tile.deco !== undefined) {
         drawTileDeco(ctx, sprites, tile.deco, x, y, pilarFrame, sx0, sy0, sx1, sy1);

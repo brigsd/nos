@@ -2,7 +2,7 @@
 /**
  * site/qa/city-screenshot.mjs
  *
- * QA captures for A Cidade (R7, docs/CITY_PLAN.md): drives the REAL built
+ * QA captures for A Cidade (R8, docs/CITY_PLAN.md): drives the REAL built
  * site (vite preview) in headless Chromium and captures the city at the
  * zoom levels a player actually sees - whole-map (the "does the city read
  * as a place?" shot), mid zoom on a Praça das Oficinas, close zoom, o

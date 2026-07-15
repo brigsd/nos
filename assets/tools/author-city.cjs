@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Authoring script for A Cidade's sprite kit (R7, docs/CITY_PLAN.md):
+ * Authoring script for A Cidade's sprite kit (R8, docs/CITY_PLAN.md):
  *
  *   ground tiles   laje_praca / laje_praca_b   (plaza flagstones, 2 variants)
  *                  calcada_veia / calcada_veia_b (avenue pavement, plain / light-vein node)
@@ -498,7 +498,7 @@ function run() {
   writeTile(
     'laje_praca',
     genLajePraca(16, 16, 'a'),
-    'Plaza flagstone ground (deco "plaza", R7 CITY_PLAN). Border-free irregular slabs in the ruina.json stone family; variant pair with laje_praca_b, picked per-tile by positional hash in site/src/renderer.ts.',
+    'Plaza flagstone ground (deco "plaza", R8 CITY_PLAN). Border-free irregular slabs in the ruina.json stone family; variant pair with laje_praca_b, picked per-tile by positional hash in site/src/renderer.ts.',
   );
   writeTile(
     'laje_praca_b',

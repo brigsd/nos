@@ -799,7 +799,7 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
     expect(itemIdSchema.enum.slice().sort()).toEqual(Object.keys(ITEM_CATALOG).sort());
   });
 
-  it('keeps the schema TileDeco enum equal to TILE_DECOS (A Cidade, R7) - hand-mirrored, pinned here', () => {
+  it('keeps the schema TileDeco enum equal to TILE_DECOS (A Cidade, R8) - hand-mirrored, pinned here', () => {
     const tileDecoSchema = (worldSchema as { definitions: { TileDeco: { enum: string[] } } }).definitions.TileDeco;
     expect(tileDecoSchema.enum.slice().sort()).toEqual(TILE_DECOS.slice().sort());
   });
@@ -810,7 +810,7 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
   });
 });
 
-describe('Tile.deco (A Cidade, R7 - purely visual decoration layer)', () => {
+describe('Tile.deco (A Cidade, R8 - purely visual decoration layer)', () => {
   it('accepts every TileDeco kind on a meadow tile', () => {
     for (const deco of TILE_DECOS) {
       const world = validWorld();
