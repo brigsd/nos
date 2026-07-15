@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { assertValidWorld, validateWorld, worldSchema } from './validate';
-import { MAX_ENERGY, STARTING_ENERGY } from './types';
-import type { World } from './types';
+import { MAX_ENERGY, NATIVE_MESSAGE_MAX_LENGTH, STARTING_ENERGY } from './types';
+import type { Native, World } from './types';
+
+function gota(overrides: Partial<Native> = {}): Native {
+  return {
+    id: 'gota',
+    name: 'Gota',
+    position: { x: 1, y: 1 },
+    behaviorTree: 'wanderer',
+    behaviorState: '{}',
+    inventory: { pulse_fragment: 2 },
+    hp: 100,
+    faction: 'wanderer',
+    ...overrides,
+  };
+}
 
 function validWorld(): World {
   return {
@@ -76,6 +90,27 @@ describe('validateWorld - accepts valid state', () => {
     delete world.players['octocat'];
     world.players['foo-bar-baz'] = { ...player, login: 'foo-bar-baz' };
     world.events = [];
+    expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('accepts a world with no natives field at all (pre-Nativos backward compatibility)', () => {
+    const world = validWorld();
+    expect(world.natives).toBeUndefined();
+    expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('accepts a well-formed Native and a native_spoke event referencing it', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({ type: 'native_spoke', tick: 3, worldTime: 180, nativeId: 'gota', message: 'Olá, viajante.' });
+    const result = validateWorld(world);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts an empty natives object', () => {
+    const world = validWorld();
+    world.natives = {};
     expect(validateWorld(world).valid).toBe(true);
   });
 });
@@ -285,6 +320,73 @@ describe('validateWorld - rejects invalid state', () => {
     expect(result.valid).toBe(false);
     expect(result.errors.join(' ')).toMatch(/does not exist in players/);
   });
+
+  it('rejects a Native positioned outside the map bounds', () => {
+    const world = structuredClone(validWorld());
+    world.natives = { gota: gota({ position: { x: 999999, y: 999999 } }) };
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/natives\["gota"\]\.position.*out of bounds/);
+  });
+
+  it('rejects a Native whose id does not match its map key', () => {
+    const world = structuredClone(validWorld());
+    world.natives = { gota: gota({ id: 'someoneelse' }) };
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/natives\["gota"\]\.id \("someoneelse"\) does not match its map key/);
+  });
+
+  it('rejects an unknown Native faction', () => {
+    const world = structuredClone(validWorld());
+    // @ts-expect-error - deliberately invalid for the test
+    world.natives = { gota: gota({ faction: 'villain' }) };
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects a Native missing a required field', () => {
+    const world = invalidatableClone();
+    const badGota: Record<string, unknown> = { ...gota() };
+    delete badGota['hp'];
+    world['natives'] = { gota: badGota };
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects a native_spoke event whose nativeId is absent from natives', () => {
+    const world = structuredClone(validWorld());
+    world.natives = { gota: gota() };
+    world.events.push({ type: 'native_spoke', tick: 4, worldTime: 240, nativeId: 'ghost', message: 'Eco...' });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/events\[\d+\] \(native_spoke\)\.nativeId \("ghost"\) does not exist in natives/);
+  });
+
+  it('rejects a native_spoke event when the world has no natives at all', () => {
+    const world = structuredClone(validWorld());
+    world.events.push({ type: 'native_spoke', tick: 4, worldTime: 240, nativeId: 'gota', message: 'Eco...' });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/does not exist in natives/);
+  });
+
+  it('rejects a native_spoke message over the 280-char limit', () => {
+    const world = structuredClone(validWorld());
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'native_spoke',
+      tick: 4,
+      worldTime: 240,
+      nativeId: 'gota',
+      message: 'x'.repeat(281),
+    });
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects negative Native hp', () => {
+    const world = structuredClone(validWorld());
+    world.natives = { gota: gota({ hp: -1 }) };
+    expect(validateWorld(world).valid).toBe(false);
+  });
 });
 
 describe('assertValidWorld', () => {
@@ -307,9 +409,13 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
   // of quietly letting the two disagree until a real player is wrongly
   // rejected (or wrongly accepted).
   const schema = worldSchema as {
-    definitions: { Player: { properties: { energy: { minimum: number; maximum: number } } } };
+    definitions: {
+      Player: { properties: { energy: { minimum: number; maximum: number } } };
+      NativeSpokeEvent: { properties: { message: { minLength: number; maxLength: number } } };
+    };
   };
   const energySchema = schema.definitions.Player.properties.energy;
+  const nativeMessageSchema = schema.definitions.NativeSpokeEvent.properties.message;
 
   it('keeps the schema Player.energy.maximum equal to MAX_ENERGY', () => {
     expect(energySchema.maximum).toBe(MAX_ENERGY);
@@ -325,5 +431,16 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
     // very first tick a player joins would produce an invalid world.
     expect(STARTING_ENERGY).toBeGreaterThanOrEqual(energySchema.minimum);
     expect(STARTING_ENERGY).toBeLessThanOrEqual(energySchema.maximum);
+  });
+
+  it('keeps the schema NativeSpokeEvent.message.maxLength equal to NATIVE_MESSAGE_MAX_LENGTH', () => {
+    // engine/behavior.ts truncates every spoken line to NATIVE_MESSAGE_MAX_LENGTH
+    // before emitting the event; if the schema's cap ever drifted below that,
+    // a Native speaking its own scripted dialogue could fail validation.
+    expect(nativeMessageSchema.maxLength).toBe(NATIVE_MESSAGE_MAX_LENGTH);
+  });
+
+  it('keeps the schema NativeSpokeEvent.message.minLength at 1 (no empty falas)', () => {
+    expect(nativeMessageSchema.minLength).toBe(1);
   });
 });

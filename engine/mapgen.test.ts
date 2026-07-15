@@ -10,9 +10,11 @@ import {
   generateHeartWorld,
   HEART_WORLD_NAME,
   HEART_WORLD_SEED,
+  seedInitialNatives,
 } from './mapgen';
-import { tileIndex, WORLD_HEIGHT, WORLD_WIDTH, type Biome, type Tile, type World } from './types';
-import { validateWorld } from './validate';
+import { tileIndex, WORLD_HEIGHT, WORLD_WIDTH, type Biome, type Native, type Tile, type World } from './types';
+import { advanceWorld, HEART_GENESIS_UNIX_SECONDS, TICK_INTERVAL_SECONDS } from './tick';
+import { assertValidWorld, validateWorld } from './validate';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const heartJsonPath = path.join(moduleDir, '..', 'world', 'heart.json');
@@ -308,5 +310,201 @@ describe('the committed world/heart.json', () => {
   it('validates against the schema', () => {
     const onDisk: unknown = JSON.parse(readFileSync(heartJsonPath, 'utf-8'));
     expect(validateWorld(onDisk).valid).toBe(true);
+  });
+});
+
+describe('seedInitialNatives - shape and determinism', () => {
+  it('generateHeartWorld() already carries the 3 Nativos, each on a tile of the right biome', () => {
+    const world = generateHeartWorld(HEART_WORLD_SEED);
+    expect(Object.keys(world.natives ?? {}).sort()).toEqual(['cinza', 'gota', 'raiz']);
+
+    const gota = world.natives!['gota']!;
+    const raiz = world.natives!['raiz']!;
+    const cinza = world.natives!['cinza']!;
+
+    expect(gota).toMatchObject({ id: 'gota', behaviorTree: 'wanderer', faction: 'wanderer' });
+    expect(raiz).toMatchObject({ id: 'raiz', behaviorTree: 'merchant', faction: 'merchant' });
+    expect(cinza).toMatchObject({ id: 'cinza', behaviorTree: 'guardian', faction: 'guardian' });
+
+    expect(world.tiles[tileIndex(gota.position.x, gota.position.y, world.width)]!.biome).toBe('meadow');
+    expect(world.tiles[tileIndex(raiz.position.x, raiz.position.y, world.width)]!.biome).toBe('forest');
+    expect(world.tiles[tileIndex(cinza.position.x, cinza.position.y, world.width)]!.biome).toBe('ruins');
+  });
+
+  it('is deterministic: repeated genesis generations place the same 3 Nativos on the same tiles', () => {
+    const a = generateHeartWorld(HEART_WORLD_SEED);
+    const b = generateHeartWorld(HEART_WORLD_SEED);
+    expect(a.natives).toEqual(b.natives);
+  });
+
+  it('a different seed can relocate the Nativos (positions follow the seed, not a hard-coded constant)', () => {
+    const heart = generateHeartWorld(HEART_WORLD_SEED);
+    const other = generateHeartWorld('outro-mundo');
+    // The map layout differs per seed (already covered above), so at least
+    // one of the 3 Nativos landing somewhere else is the expected outcome,
+    // not a hard requirement on which one.
+    expect(heart.natives).not.toEqual(other.natives);
+  });
+
+  it('the resulting world passes schema + semantic validation', () => {
+    const world = generateHeartWorld(HEART_WORLD_SEED);
+    expect(validateWorld(world)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('is idempotent: seeding an already-seeded world is a no-op', () => {
+    const world = generateHeartWorld(HEART_WORLD_SEED);
+    const seededAgain = seedInitialNatives(world);
+    expect(seededAgain).toEqual(world);
+    expect(seededAgain.natives).toBe(world.natives); // same reference - no new object allocated
+  });
+
+  it('is additive: seeding a natives-less world only adds the natives field, nothing else', () => {
+    const width = 10;
+    const height = 10;
+    const tiles: Tile[] = Array.from({ length: width * height }, () => ({ biome: 'meadow' as const }));
+    tiles[tileIndex(5, 5, width)] = { biome: 'forest' };
+    tiles[tileIndex(9, 9, width)] = { biome: 'ruins' };
+
+    const bare: World = {
+      meta: { name: 'Bare', seed: 'bare-seed', tickCount: 12, worldTime: 720 },
+      width,
+      height,
+      tiles,
+      players: { alice: { login: 'alice', position: { x: 1, y: 1 }, inventory: { wood: 2 }, energy: 90 } },
+      events: [{ type: 'player_joined', tick: 1, worldTime: 60, login: 'alice' }],
+    };
+
+    const seeded = seedInitialNatives(bare);
+
+    expect(seeded.meta).toEqual(bare.meta);
+    expect(seeded.width).toBe(bare.width);
+    expect(seeded.height).toBe(bare.height);
+    expect(seeded.tiles).toEqual(bare.tiles);
+    expect(seeded.players).toEqual(bare.players);
+    expect(seeded.events).toEqual(bare.events);
+    expect(Object.keys(seeded.natives!).sort()).toEqual(['cinza', 'gota', 'raiz']);
+  });
+
+  it('falls back to the (30, 30) spawn tile when a required biome is entirely absent from the map', () => {
+    const width = 3;
+    const height = 3;
+    const tiles: Tile[] = Array.from({ length: width * height }, () => ({ biome: 'meadow' as const }));
+    // No forest, no ruins anywhere on this tiny map.
+    const bare: World = {
+      meta: { name: 'Tiny', seed: 'tiny-seed', tickCount: 0, worldTime: 0 },
+      width,
+      height,
+      tiles,
+      players: {},
+      events: [],
+    };
+
+    const seeded = seedInitialNatives(bare);
+    expect(seeded.natives!['raiz']!.position).toEqual({ x: 30, y: 30 });
+    expect(seeded.natives!['cinza']!.position).toEqual({ x: 30, y: 30 });
+    expect(seeded.natives!['gota']!.position).toEqual({ x: 0, y: 0 }); // meadow is everywhere here
+  });
+});
+
+describe('seedInitialNatives - retrofitting the live world/heart.json (issue #22 migration check)', () => {
+  // This is the mandated pre-merge check for issue #22: load the REAL,
+  // currently-committed world/heart.json (already ticking, with a real
+  // player and real event history), run it through exactly the flow
+  // scripts/tick.ts uses (validate -> seed if needed -> advanceWorld ->
+  // validate), and confirm the migration is safe. world/heart.json itself
+  // is never written by this test or by this PR - only the real tick,
+  // post-merge, performs the live retrofit.
+  const onDiskRaw: unknown = JSON.parse(readFileSync(heartJsonPath, 'utf-8'));
+  assertValidWorld(onDiskRaw);
+  const onDisk = onDiskRaw;
+
+  it('sanity: the live world already has real playtime to protect (tickCount, a player, events)', () => {
+    expect(onDisk.meta.tickCount).toBeGreaterThanOrEqual(26);
+    expect(Object.keys(onDisk.players)).toContain('brigsd');
+    expect(onDisk.events.length).toBeGreaterThan(0);
+    expect(onDisk.natives).toBeUndefined(); // this world predates os Nativos
+  });
+
+  it('(a) seeding alone adds exactly the 3 Nativos, deterministically', () => {
+    const seeded = seedInitialNatives(onDisk);
+    expect(Object.keys(seeded.natives ?? {}).sort()).toEqual(['cinza', 'gota', 'raiz']);
+    // Same seed ("commit-primordial") + same tiles => same spots a fresh
+    // generateHeartWorld() would have used from genesis.
+    const fresh = generateHeartWorld(onDisk.meta.seed);
+    expect(seeded.natives).toEqual(fresh.natives);
+  });
+
+  it('(b) seeding alone preserves players.brigsd, tickCount and every pre-existing event byte-for-byte', () => {
+    const seeded = seedInitialNatives(onDisk);
+    expect(seeded.meta.tickCount).toBe(onDisk.meta.tickCount);
+    expect(seeded.meta.worldTime).toBe(onDisk.meta.worldTime);
+    expect(seeded.players).toEqual(onDisk.players);
+    expect(seeded.players['brigsd']).toEqual(onDisk.players['brigsd']);
+    expect(seeded.events).toEqual(onDisk.events);
+    expect(seeded.tiles).toEqual(onDisk.tiles);
+  });
+
+  it('(c) the seeded world passes the hardened validator', () => {
+    const seeded = seedInitialNatives(onDisk);
+    const result = validateWorld(seeded);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('seeding is idempotent when applied to the live world twice', () => {
+    const once = seedInitialNatives(onDisk);
+    const twice = seedInitialNatives(once);
+    expect(twice).toEqual(once);
+  });
+
+  it('the full tick flow (seed + advanceWorld, as scripts/tick.ts runs it) preserves brigsd/tickCount/events and stays valid', () => {
+    const seeded = seedInitialNatives(onDisk);
+    assertValidWorld(seeded);
+
+    // Deterministic "exactly 1 beat due" instant, independent of wall-clock
+    // time so this test's outcome never depends on when CI happens to run.
+    const now = HEART_GENESIS_UNIX_SECONDS + (onDisk.meta.tickCount + 1) * TICK_INTERVAL_SECONDS;
+    const { world: advanced } = advanceWorld(seeded, now, []);
+
+    // (a) still 3 Nativos, now possibly having taken one step/spoken.
+    expect(Object.keys(advanced.natives ?? {}).sort()).toEqual(['cinza', 'gota', 'raiz']);
+
+    // (b) tickCount advanced by exactly 1 beat (not reset, not skipped);
+    // brigsd is untouched (no commands were submitted in this simulation);
+    // every pre-existing event is still present, in order, as a prefix.
+    expect(advanced.meta.tickCount).toBe(onDisk.meta.tickCount + 1);
+    expect(advanced.players['brigsd']).toEqual(onDisk.players['brigsd']);
+    expect(advanced.events.slice(0, onDisk.events.length)).toEqual(onDisk.events);
+    expect(advanced.events.length).toBeGreaterThan(onDisk.events.length);
+
+    // (c) the hardened validator accepts the result.
+    expect(validateWorld(advanced)).toEqual({ valid: true, errors: [] });
+
+    console.log(
+      [
+        '',
+        '=== Migração do mundo vivo (issue #22) ===',
+        `Antes:  tick #${onDisk.meta.tickCount}, worldTime ${onDisk.meta.worldTime}min, ` +
+          `${Object.keys(onDisk.players).length} jogador(es), ${onDisk.events.length} evento(s), natives: nenhum`,
+        `Depois: tick #${advanced.meta.tickCount}, worldTime ${advanced.meta.worldTime}min, ` +
+          `${Object.keys(advanced.players).length} jogador(es), ${advanced.events.length} evento(s), ` +
+          `natives: ${Object.keys(advanced.natives ?? {}).join(', ')}`,
+        `brigsd preservado: ${JSON.stringify(advanced.players['brigsd']) === JSON.stringify(onDisk.players['brigsd'])}`,
+        `${onDisk.events.length} eventos pré-existentes preservados como prefixo: ${
+          JSON.stringify(advanced.events.slice(0, onDisk.events.length)) === JSON.stringify(onDisk.events)
+        }`,
+        `Validador endurecido: ${validateWorld(advanced).valid ? 'PASSOU' : 'FALHOU'}`,
+        '===========================================',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('the Nativos seeded onto the live world sit on walkable (non-water) tiles', () => {
+    const seeded = seedInitialNatives(onDisk);
+    for (const native of Object.values(seeded.natives!) as Native[]) {
+      const tile = seeded.tiles[tileIndex(native.position.x, native.position.y, seeded.width)]!;
+      expect(tile.biome).not.toBe('water');
+    }
   });
 });
