@@ -36,6 +36,18 @@ function clearLogin(): void {
   localStorage.removeItem(LOGIN_STORAGE_KEY);
 }
 
+/**
+ * Auto-fill hook for auth.ts/auth-ui.ts (R2, D-13): once the player has
+ * actually authenticated with GitHub, their login is no longer a guess - use
+ * it to pick the public entry to display, same as if they had typed it
+ * themselves. Silently ignores anything that doesn't look like a GitHub
+ * login (defense in depth; the caller already gets `login` from GitHub's own
+ * `GET /user`, but this module never trusts an input string on its say-so).
+ */
+export function setSavedLogin(login: string): void {
+  if (LOGIN_PATTERN.test(login) && login.length <= 39) saveLogin(login);
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className: string,

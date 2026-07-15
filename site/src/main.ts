@@ -10,6 +10,7 @@ import { Camera } from './camera';
 import { attachPointerControls } from './input';
 import { drawFrame } from './renderer';
 import { renderMural } from './mural';
+import { renderAuth } from './auth-ui';
 import { renderMeuNo } from './meu-no';
 import { renderComercio } from './trade';
 import { renderNativos } from './nativos';
@@ -45,6 +46,7 @@ async function main(): Promise<void> {
   const tickEl = requireEl<HTMLElement>('stat-tick');
   const playersEl = requireEl<HTMLElement>('stat-players');
   const muralListEl = requireEl<HTMLOListElement>('hud-mural-list');
+  const authEl = requireEl<HTMLElement>('hud-auth');
   const meuNoEl = requireEl<HTMLElement>('hud-meuno');
   const comercioBodyEl = requireEl<HTMLDivElement>('hud-comercio-body');
   const nativosBodyEl = requireEl<HTMLDivElement>('hud-nativos-body');
@@ -75,9 +77,17 @@ async function main(): Promise<void> {
   worldNameEl.textContent = world.meta.name;
   tickEl.textContent = String(world.meta.tickCount);
   renderMural(muralListEl, world);
-  renderMeuNo(meuNoEl, world);
-  renderComercio(comercioBodyEl, world);
-  renderNativos(nativosBodyEl, world);
+
+  // Auth-dependent panels (Meu Nó's auto-fill from the authenticated login,
+  // Comércio/Nativos' "agir daqui" buttons) - re-rendered together whenever
+  // login state changes (R2, D-13).
+  function refreshAuthenticatedPanels(): void {
+    renderMeuNo(meuNoEl, world);
+    renderComercio(comercioBodyEl, world);
+    renderNativos(nativosBodyEl, world);
+  }
+  renderAuth(authEl, refreshAuthenticatedPanels);
+  refreshAuthenticatedPanels();
 
   // localPlayer instantiation
   const localPlayer = new LocalPlayer(30, 30);

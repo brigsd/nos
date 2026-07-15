@@ -10,14 +10,36 @@
  *
  * DOM-overlay module in the mural.ts mold; every string that ever came from
  * a player (logins) or from world state lands via textContent.
+ *
+ * R2 (D-13): when the player is logged in (auth.ts), an "agir daqui" button
+ * sits next to "puxar conversa" and POSTs the /conversar issue directly via
+ * the API. Falls back to opening the link on any failure (no scope,
+ * offline, ...).
  */
 import type { Native, NativeRepliedEvent, World, WorldEvent } from '../../engine/types';
+import { createCommandIssue, isLoggedIn } from './auth';
 
 const ISSUE_BASE_URL = 'https://github.com/brigsd/nos/issues/new';
 
 function conversarIssueUrl(nativeId: string): string {
   const params = new URLSearchParams({ template: 'conversar.yml', nativo: nativeId });
   return `${ISSUE_BASE_URL}?${params.toString()}`;
+}
+
+/** Handles a click on "agir daqui": POST the /conversar issue via the API, falling back to the pre-filled link on any failure. */
+function actOnConversar(button: HTMLButtonElement, fallbackHref: string, nativeId: string): void {
+  button.disabled = true;
+  button.textContent = 'enviando…';
+  createCommandIssue('Comando: /conversar', { Nativo: nativeId })
+    .then(({ number }) => {
+      button.textContent = `enviado (#${number})`;
+    })
+    .catch((err: unknown) => {
+      console.warn('Não deu para agir direto, abrindo a issue:', err);
+      window.open(fallbackHref, '_blank', 'noopener,noreferrer');
+      button.disabled = false;
+      button.textContent = 'agir daqui';
+    });
 }
 
 /** Short pt-BR descriptor per faction (LORE voice: curto e concreto; Nativos são mestres de ofício, não guerreiros). */
@@ -78,6 +100,14 @@ function nativeCard(world: World, native: Native): HTMLElement {
   talk.rel = 'noopener noreferrer';
   talk.title = `Abrir a issue /conversar ${native.id}`;
   card.appendChild(talk);
+
+  if (isLoggedIn()) {
+    const act = el('button', 'nativo-act', 'agir daqui');
+    act.type = 'button';
+    act.title = `Enviar /conversar ${native.id} direto pela API`;
+    act.addEventListener('click', () => actOnConversar(act, talk.href, native.id));
+    card.appendChild(act);
+  }
 
   return card;
 }
