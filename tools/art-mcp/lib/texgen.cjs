@@ -101,8 +101,13 @@ function generateTexture(params) {
 /** Presets tuned for O Coração's mood (Resurrect 64). Iterate via overrides. */
 const PRESETS = {
   ruina_pedra: {
-    ramp: [PAL.black, PAL.plumDark, PAL.plumMid, PAL.greyPurple, PAL.paleBlueGrey],
-    baseFreq: 5, octaves: 4, contrast: 1.3, dither: 0.6, cracks: 0.5,
+    // Retuned to survive distance in-engine (review of PR #47): the old
+    // low-contrast ramp read as flat mush past a few tiles. A 6-step ramp
+    // (capped at paleBlueGrey — no blown highlights that tile as "clouds"),
+    // higher contrast and heavier cracks give mid-scale weathered structure
+    // that still reads small. Verified via preview_scene, seams clean.
+    ramp: [PAL.black, PAL.plumDark, PAL.plumMid, PAL.mauve, PAL.greyPurple, PAL.paleBlueGrey],
+    baseFreq: 6, octaves: 3, contrast: 1.7, dither: 0.4, cracks: 0.8,
     notes: 'pedra de ruína, tons de ameixa/cinza do vazio',
   },
   tijolo_rubro: {
