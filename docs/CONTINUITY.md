@@ -17,10 +17,16 @@
 5. ~~Pôr a v1 no ar~~ ✅ — Pages ativado, tick verificado, jogador entrou. **v1 LANÇADA.**
 6. **Correção durante o teste ao vivo:** o site lia o mundo de uma cópia congelada no build; commits do tick (bot `github-actions`) não disparam o Pages (anti-recursão do GitHub), então a janela nunca atualizava. Corrigido (commit 224dc6c): o cliente agora busca `world/heart.json` AO VIVO do raw (CORS `*`, cache 300s) com timeout de 4s + fallback local. Site agora reflete cada batida sem redeploy.
 
-## Achados a resolver (follow-ups)
-- **D-19 saltou tickCount para 24 na 1ª batida real** (worldTime 1440 = 24h): a auto-correção compensou muitas batidas perdidas desde o genesis de uma vez. Decidir: o relógio do mundo deve "começar agora" ou catch-up? Ver issue de follow-up.
-- #12 (refinos de arte: margem d'água, xadrez de campina) e #13 (endurecer validador: bounds-check de eventos) — conferir se T6/T8 já cobriram #13.
-- Limpeza de branches redundantes (t3/t4/v1-avatar já mescladas) — proxy instável travou os deletes; tentar de novo.
+## Pendências — RESOLVIDAS (2026-07-15)
+- ✅ **#13 · Endurecer validador** — PR #20 mesclado. Bounds-check de eventos, cross-check de login, teste anti-drift schema↔constantes, NITs (serialize, regex de login). 90→102 testes. Corrigiu de quebra um teste de mapgen já quebrado no main.
+- ✅ **#12 · Refinos de arte** — PR #21 mesclado. Xadrez de campina eliminado (tons reafinados + campina_3) e margem d'água (`margem_agua_4dir` + `drawMeadowRim`). Antes/depois em `site/qa/`. Descoberta: os scripts de arte `.js` nunca rodavam (raiz é `type:module`) → renomeados pra `.cjs`.
+- ✅ **#16 · D-19 tickCount** — fechado. O cap `MAX_CATCHUP_TICKS=24` já existia; mantida Opção A (relógio = tempo real desde genesis, com cap). Opção B fora (mundo já tem jogador/histórico).
+- ✅ **Comandos** — os 4 verificados no mundo real: `/entrar` (#15), `/mover` (#17), `/dizer` (#18, mensagem no mural), `/coletar` (#19, caminho "sem recurso" gracioso).
+- ⚠️ **Limpeza de branches mescladas** — BLOQUEADA: `git push --delete` retorna 403 (token da integração não deleta branches, mesma classe de não-criar-repo). Cosmético; o Tiago deleta em 1 clique em *Branches* no GitHub. Branches órfãs: claude/v1-t1-t2-engine, claude/v1-t3-tick, claude/v1-t4-site, claude/v1-t7-art, colaborador2/v1-avatar.
+
+### Tech-debt menor (não-bloqueante, anotado)
+- `ACTIONS_PER_TICK` duplicado em `types.ts` e `commands.ts` (mesmo valor; risco de drift) — flag do code-review do #13.
+- Margem d'água: costas bem retas repetem o mesmo relevo a cada 16px (só em zoom próximo) — ressalva do art-reviewer do #12.
 
 ## Decisão adiada — visual dos avatares (Registro vs Eco)
 - No ar: **O Registro** (D-22) — avatar oficial sólido, local (intenção) fantasma.
@@ -29,8 +35,10 @@
 - Como aplicar o Eco depois: no `site/src/renderer.ts`, mover o `globalAlpha` do bloco 4 (jogador local) para o bloco 3 (jogadores oficiais). Inversão de ~1 linha. Quando o login (D-13) existir, refinar pra só o *próprio* eco ficar pálido — outros jogadores são reais, ficam sólidos.
 
 ## Próximo
-- Testar comandos restantes: `/coletar`, `/dizer` (`/entrar` e `/mover` já verificados no mundo real — issues #15 e #17).
-- Retomar a **v2** (branch `colaborador2/v2`, congelada): combate, economia, NPCs, Crônica — revisar com calma.
+- Tudo da v1 está resolvido e no ar. **Nada pendente de código na v1.**
+- Decisão adiada do Tiago: **Registro vs Eco** (ver seção acima) — retomar quando ele quiser.
+- Grande próximo passo: retomar a **v2** (branch `colaborador2/v2`, congelada): combate, economia, NPCs, Crônica — revisar com calma antes de mesclar.
+- Cosmético: pedir ao Tiago pra deletar as branches órfãs (o token não deleta).
 
 ### Acordo de trabalho (definido pelo Tiago)
 Tiago = **ideador** (visão, rumo, escopo). Claude = **coder** (integridade do código, decisões técnicas, merges). Não trazer implementação/merge para aprovação do Tiago; parar só em decisões de produto. Registrado aqui para todas as sessões futuras.
