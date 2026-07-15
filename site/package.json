@@ -14,11 +14,18 @@
     "build": "vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",
-    "qa": "node qa/screenshot.mjs"
+    "qa": "node qa/screenshot.mjs",
+    "dev:gl": "node scripts/copy-data.mjs && vite --config gl.vite.config.ts",
+    "build:gl": "node scripts/copy-data.mjs && vite build --config gl.vite.config.ts",
+    "typecheck:gl": "tsc --noEmit -p gl/tsconfig.json",
+    "bench:gl": "node gl/qa/bench-and-screens.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.56.0",
     "typescript": "^7.0.2",
     "vite": "^8.0.0"
+  },
+  "dependencies": {
+    "pixi.js": "8.19.0"
   }
 }

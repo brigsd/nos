@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#100c15" />
+    <link rel="icon" href="data:," />
+    <meta
+      name="description"
+      content="R3 - protótipo de comparação: renderer canvas 2D atual vs. janela WebGL (PixiJS v8) sobre o mesmo world/heart.json."
+    />
+    <title>R3 · canvas vs. WebGL · NÓS</title>
+  </head>
+  <body>
+    <div id="app">
+      <div class="stage">
+        <canvas id="canvas-2d" width="1280" height="800"></canvas>
+        <canvas id="canvas-pixi" width="1280" height="800"></canvas>
+      </div>
+
+      <div id="hud">
+        <div class="hud-row">
+          <strong>R3</strong> — canvas 2D vs. PixiJS (WebGL)
+        </div>
+        <div class="hud-row hud-controls">
+          <label>Renderer
+            <select id="ctl-renderer">
+              <option value="canvas">Canvas 2D</option>
+              <option value="pixi">PixiJS (WebGL)</option>
+            </select>
+          </label>
+          <label>Cena
+            <select id="ctl-mode">
+              <option value="world">Mundo (O Coração)</option>
+              <option value="stress">Estresse de sprites</option>
+            </select>
+          </label>
+          <label id="ctl-stress-count-wrap">Sprites <span id="ctl-stress-count-label">1000</span>
+            <select id="ctl-stress-count">
+              <option value="1000">1.000</option>
+              <option value="5000">5.000</option>
+              <option value="10000">10.000</option>
+            </select>
+          </label>
+          <label>Hora do dia
+            <select id="ctl-time">
+              <option value="live">Ao vivo (worldTime)</option>
+              <option value="day">Dia (meio-dia)</option>
+              <option value="night">Noite (meia-noite)</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="ctl-crt" /> CRT/scanline (só PixiJS)</label>
+        </div>
+        <div class="hud-row hud-stats" id="hud-stats">carregando…</div>
+      </div>
+
+      <div id="status" class="status" role="status" hidden></div>
+    </div>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

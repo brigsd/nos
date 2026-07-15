@@ -1,0 +1,84 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #100c15;
+  color: #fbf5ef;
+  font-family: 'Courier New', Courier, monospace;
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  width: 1280px;
+  height: 800px;
+}
+
+.stage {
+  position: relative;
+  width: 1280px;
+  height: 800px;
+}
+
+.stage canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 800px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.stage canvas.hidden {
+  display: none;
+}
+
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(16, 12, 21, 0.82);
+  border-bottom: 2px solid #2e222f;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: auto;
+}
+
+.hud-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.hud-controls label {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.hud-stats {
+  font-weight: bold;
+  color: #fbff86;
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #100c15;
+}
+
+/* `.status { display: flex }` above has the same origin+specificity as the
+   UA stylesheet's `[hidden] { display: none }`, and author rules win that
+   tie regardless of source order - so the loading/error overlay would stay
+   painted over everything even once JS sets `hidden`. Same fix as the live
+   site's site/src/style.css. */
+.status[hidden] {
+  display: none;
+}

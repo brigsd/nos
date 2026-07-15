@@ -1,0 +1,280 @@
+{
+  "generatedAt": "2026-07-15T14:03:54.422Z",
+  "loadTimeMs": 498,
+  "baselineHeapBytes": 9455332,
+  "note": "Chromium headless sem GPU real (SwiftShader software WebGL) - números absolutos são um piso conservador; comparação relativa canvas vs. pixi e a curva 1k->10k continuam válidas. Ver docs/R3_COMPARATIVO_RENDER.md.",
+  "stress": [
+    {
+      "renderer": "canvas",
+      "count": 1000,
+      "fps": 60.9390706698353,
+      "avgFrameMs": 16.40983606557529,
+      "p95FrameMs": 16.800000000000182,
+      "fpsSamples": [
+        60.7,
+        61,
+        61,
+        61,
+        60.9,
+        60.9
+      ],
+      "jsHeapUsedBytes": 8516496
+    },
+    {
+      "renderer": "canvas",
+      "count": 5000,
+      "fps": 33.813233292772225,
+      "avgFrameMs": 29.574242424243852,
+      "p95FrameMs": 50.100000000000364,
+      "fpsSamples": [
+        33.9,
+        32.7,
+        36.1,
+        33.8,
+        32.5,
+        33.8
+      ],
+      "jsHeapUsedBytes": 8972940
+    },
+    {
+      "renderer": "canvas",
+      "count": 10000,
+      "fps": 20.47795365840961,
+      "avgFrameMs": 48.83407894737064,
+      "p95FrameMs": 66.79999999999927,
+      "fpsSamples": [
+        20.8,
+        20.6,
+        20.8,
+        20.1,
+        20.2,
+        20.4
+      ],
+      "jsHeapUsedBytes": 10594280
+    },
+    {
+      "renderer": "pixi",
+      "count": 1000,
+      "fps": 58.861046850455494,
+      "avgFrameMs": 16.99084151055684,
+      "p95FrameMs": 33.39999999999782,
+      "fpsSamples": [
+        60,
+        58.3,
+        56.8,
+        60.9,
+        59.4,
+        54.8
+      ],
+      "jsHeapUsedBytes": 13397328
+    },
+    {
+      "renderer": "pixi",
+      "count": 5000,
+      "fps": 27.277794254422307,
+      "avgFrameMs": 36.66274928775453,
+      "p95FrameMs": 50.10000000000582,
+      "fpsSamples": [
+        26.7,
+        28.1,
+        27.5,
+        27,
+        30,
+        25.5
+      ],
+      "jsHeapUsedBytes": 10430908
+    },
+    {
+      "renderer": "pixi",
+      "count": 10000,
+      "fps": 16.179430606944734,
+      "avgFrameMs": 61.80687500000296,
+      "p95FrameMs": 116.79999999999563,
+      "fpsSamples": [
+        16.8,
+        16.2,
+        14.4,
+        17.7,
+        16.2,
+        15.7
+      ],
+      "jsHeapUsedBytes": 11717092
+    }
+  ],
+  "screenshots": [
+    "canvas-day.png",
+    "canvas-night.png",
+    "pixi-day.png",
+    "pixi-night.png",
+    "pixi-night-crt.png"
+  ],
+  "consoleErrors": [],
+  "world": [
+    {
+      "renderer": "canvas",
+      "time": "day",
+      "crt": false,
+      "fps": 17.65729157864195,
+      "avgFrameMs": 56.63529411765258,
+      "p95FrameMs": 100.09999999999854,
+      "fpsSamples": [
+        18.3,
+        17.3,
+        19,
+        17.6,
+        16.2,
+        17.7
+      ],
+      "jsHeapUsedBytes": 11498852
+    },
+    {
+      "renderer": "canvas",
+      "time": "night",
+      "crt": false,
+      "fps": 18.108263534211666,
+      "avgFrameMs": 55.223529411767444,
+      "p95FrameMs": 116.79999999999563,
+      "fpsSamples": [
+        18.2,
+        18.1,
+        18.3,
+        18.1,
+        16.4,
+        17.1
+      ],
+      "jsHeapUsedBytes": 11516876
+    },
+    {
+      "renderer": "pixi",
+      "time": "day",
+      "crt": false,
+      "fps": 9.901894768026043,
+      "avgFrameMs": 101.01111111112631,
+      "p95FrameMs": 200,
+      "fpsSamples": [
+        6.9,
+        10.1,
+        9.8,
+        9.6,
+        10.6,
+        10
+      ],
+      "jsHeapUsedBytes": 13779696
+    },
+    {
+      "renderer": "pixi",
+      "time": "night",
+      "crt": false,
+      "fps": 10.680379670314293,
+      "avgFrameMs": 93.86000000000496,
+      "p95FrameMs": 150,
+      "fpsSamples": [
+        11.2,
+        9.7,
+        10.2,
+        8.7,
+        11.3,
+        11.7
+      ],
+      "jsHeapUsedBytes": 13920276
+    },
+    {
+      "renderer": "pixi",
+      "time": "night",
+      "crt": true,
+      "fps": 9.120865028862102,
+      "avgFrameMs": 109.64097222224004,
+      "p95FrameMs": 166.6999999999971,
+      "fpsSamples": [
+        8.5,
+        9.1,
+        9.2,
+        7.7,
+        9.3,
+        9.2
+      ],
+      "jsHeapUsedBytes": 14103732
+    }
+  ],
+  "bundle": {
+    "items": [
+      {
+        "file": "index-CGn_LEKM.js",
+        "raw": 270123,
+        "gzip": 77344
+      },
+      {
+        "file": "Geometry-BT4_Anyd.js",
+        "raw": 63146,
+        "gzip": 20693
+      },
+      {
+        "file": "GraphicsContext-e18LmSf0.js",
+        "raw": 61130,
+        "gzip": 20258
+      },
+      {
+        "file": "RenderTargetSystem-DNQWcHjV.js",
+        "raw": 51755,
+        "gzip": 14393
+      },
+      {
+        "file": "browserAll-B5gl_0h_.js",
+        "raw": 42635,
+        "gzip": 11045
+      },
+      {
+        "file": "Filter-DQRvsn3n.js",
+        "raw": 38763,
+        "gzip": 10928
+      },
+      {
+        "file": "getPo2TextureFromSource-Bf2-Yu5V.js",
+        "raw": 24193,
+        "gzip": 8307
+      },
+      {
+        "file": "GCManagedHash-DWo9rJ94.js",
+        "raw": 19358,
+        "gzip": 6260
+      },
+      {
+        "file": "init-CzTzTxrP.js",
+        "raw": 15318,
+        "gzip": 4753
+      },
+      {
+        "file": "canvasUtils-hY55CfUt.js",
+        "raw": 6020,
+        "gzip": 2015
+      },
+      {
+        "file": "Cache-DuLSTiLe.js",
+        "raw": 1098,
+        "gzip": 554
+      },
+      {
+        "file": "CanvasPool-5ZBneYhJ.js",
+        "raw": 756,
+        "gzip": 419
+      },
+      {
+        "file": "index-D2RrtyVI.css",
+        "raw": 804,
+        "gzip": 414
+      },
+      {
+        "file": "getTextureBatchBindGroup-BbL4Bqcj.js",
+        "raw": 342,
+        "gzip": 267
+      },
+      {
+        "file": "webworkerAll-BjB6FhWR.js",
+        "raw": 73,
+        "gzip": 84
+      }
+    ],
+    "totalRaw": 595514,
+    "totalGzip": 177734
+  }
+}
