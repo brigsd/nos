@@ -16,7 +16,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv, { type ErrorObject } from 'ajv';
-import type { World } from './types';
+import type { Position, World } from './types';
+import { isInBounds } from './types';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const schemaPath = path.join(moduleDir, 'schema', 'world.schema.json');
@@ -38,6 +39,16 @@ function formatAjvErrors(errors: ErrorObject[] | null | undefined): string[] {
   return errors.map((e) => `${e.instancePath || '/'} ${e.message ?? 'invalid'}`.trim());
 }
 
+/**
+ * Checks `position` against the map bounds of `world`. Returns a
+ * human-readable error prefixed with `label` (e.g. `players["octocat"].position`
+ * or `events[3].to`), or `null` when the position is in bounds.
+ */
+function boundsError(label: string, position: Position, world: World): string | null {
+  if (isInBounds(position.x, position.y, world.width, world.height)) return null;
+  return `${label} (${position.x}, ${position.y}) is out of bounds`;
+}
+
 /** Cross-field invariants the JSON Schema alone cannot express. */
 function semanticErrors(world: World): string[] {
   const errors: string[] = [];
@@ -53,17 +64,34 @@ function semanticErrors(world: World): string[] {
     if (player.login !== login) {
       errors.push(`players["${login}"].login ("${player.login}") does not match its map key`);
     }
-    if (
-      player.position.x < 0 ||
-      player.position.x >= world.width ||
-      player.position.y < 0 ||
-      player.position.y >= world.height
-    ) {
-      errors.push(
-        `players["${login}"].position (${player.position.x}, ${player.position.y}) is out of bounds`,
-      );
-    }
+    const playerPositionError = boundsError(`players["${login}"].position`, player.position, world);
+    if (playerPositionError) errors.push(playerPositionError);
   }
+
+  world.events.forEach((event, index) => {
+    const label = `events[${index}] (${event.type})`;
+
+    // Every event type except core_pulse carries the acting player's login;
+    // it must still be a living player, the same way a comment/command from
+    // a departed player would be. Catches events left dangling by a bug
+    // upstream (e.g. a player removed without pruning their event history).
+    if ('login' in event && !(event.login in world.players)) {
+      errors.push(`${label}.login ("${event.login}") does not exist in players`);
+    }
+
+    // Position fields are only defined on these two event types (see
+    // engine/types.ts); the schema already guarantees x/y are non-negative
+    // integers, but only this layer knows the map's actual width/height.
+    if (event.type === 'player_moved') {
+      const fromError = boundsError(`${label}.from`, event.from, world);
+      if (fromError) errors.push(fromError);
+      const toError = boundsError(`${label}.to`, event.to, world);
+      if (toError) errors.push(toError);
+    } else if (event.type === 'resource_collected') {
+      const positionError = boundsError(`${label}.position`, event.position, world);
+      if (positionError) errors.push(positionError);
+    }
+  });
 
   return errors;
 }

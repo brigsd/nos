@@ -13,14 +13,33 @@
 
 import type { World } from './types';
 
+/**
+ * Dedicated sentinel swapped in for `tiles` while stringifying the rest of
+ * the world, then swapped back out for the real (compactly-rendered) tiles
+ * block below. This stands in for a real tiles array/value, so the only
+ * place it can ever appear in `skeleton` is the value we substitute it for
+ * - unlike matching on the incidental `"tiles": []` text JSON.stringify
+ * happens to produce for an *empty* array, which would silently stop
+ * matching if the skeleton were ever built any other way.
+ */
+const TILES_PLACEHOLDER = '__NOS_SERIALIZE_TILES_PLACEHOLDER__';
+
 export function serializeWorld(world: World): string {
-  const skeleton = JSON.stringify({ ...world, tiles: [] }, null, 2);
+  const skeleton = JSON.stringify({ ...world, tiles: TILES_PLACEHOLDER }, null, 2);
 
   const tilesBlock =
     world.tiles.length === 0
       ? '[]'
       : `[\n${world.tiles.map((tile) => `    ${JSON.stringify(tile)}`).join(',\n')}\n  ]`;
 
-  const withTiles = skeleton.replace('"tiles": []', `"tiles": ${tilesBlock}`);
+  const quotedPlaceholder = JSON.stringify(TILES_PLACEHOLDER);
+  if (!skeleton.includes(quotedPlaceholder)) {
+    // Unreachable in practice - the placeholder is unique and is always
+    // serialized as the `tiles` value above. Fail loudly instead of
+    // silently writing a corrupt skeleton to world/*.json.
+    throw new Error('serializeWorld: tiles placeholder not found in skeleton');
+  }
+
+  const withTiles = skeleton.replace(quotedPlaceholder, tilesBlock);
   return `${withTiles}\n`;
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { assertValidWorld, validateWorld } from './validate';
+import { assertValidWorld, validateWorld, worldSchema } from './validate';
+import { MAX_ENERGY, STARTING_ENERGY } from './types';
 import type { World } from './types';
 
 function validWorld(): World {
@@ -64,6 +65,19 @@ describe('validateWorld - accepts valid state', () => {
     world.events = [];
     expect(validateWorld(world).valid).toBe(true);
   });
+
+  it('accepts a GitHub login with multiple non-consecutive hyphens', () => {
+    // Regression guard for the tightened Login regex: real GitHub logins
+    // like "foo-bar-baz" must keep validating even though "foo--bar" must not.
+    // Events are cleared so this only exercises the Login pattern itself,
+    // not the (separately-tested) events-vs-players login cross-check.
+    const world = validWorld();
+    const player = world.players['octocat']!;
+    delete world.players['octocat'];
+    world.players['foo-bar-baz'] = { ...player, login: 'foo-bar-baz' };
+    world.events = [];
+    expect(validateWorld(world).valid).toBe(true);
+  });
 });
 
 describe('validateWorld - rejects invalid state', () => {
@@ -113,6 +127,24 @@ describe('validateWorld - rejects invalid state', () => {
     const player = world.players['octocat']!;
     delete world.players['octocat'];
     world.players['-bad-login'] = { ...player, login: '-bad-login' };
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects a malformed GitHub login (consecutive hyphens)', () => {
+    // GitHub logins never contain "--" - confirm the schema regex actually
+    // enforces that instead of just single-hyphen-somewhere-in-the-middle.
+    const world = structuredClone(validWorld());
+    const player = world.players['octocat']!;
+    delete world.players['octocat'];
+    world.players['a--b'] = { ...player, login: 'a--b' };
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects a malformed GitHub login (trailing hyphen)', () => {
+    const world = structuredClone(validWorld());
+    const player = world.players['octocat']!;
+    delete world.players['octocat'];
+    world.players['bad-login-'] = { ...player, login: 'bad-login-' };
     expect(validateWorld(world).valid).toBe(false);
   });
 
@@ -174,6 +206,85 @@ describe('validateWorld - rejects invalid state', () => {
     (world['events'] as unknown[]).push({ type: 'player_said', tick: 4, worldTime: 240, login: 'octocat' });
     expect(validateWorld(world).valid).toBe(false);
   });
+
+  it('rejects a player_moved event whose "to" position is out of the map bounds', () => {
+    // The exact repro from issue #13: this passed validation before events
+    // were bounds-checked at all.
+    const world = structuredClone(validWorld());
+    world.events.push({
+      type: 'player_moved',
+      tick: 4,
+      worldTime: 240,
+      login: 'octocat',
+      from: { x: 0, y: 0 },
+      to: { x: 999999, y: 999999 },
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/events\[\d+\] \(player_moved\).*\.to.*out of bounds/);
+  });
+
+  it('rejects a player_moved event whose "from" position is out of the map bounds', () => {
+    const world = structuredClone(validWorld());
+    world.events.push({
+      type: 'player_moved',
+      tick: 4,
+      worldTime: 240,
+      login: 'octocat',
+      from: { x: 999999, y: 999999 },
+      to: { x: 0, y: 0 },
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/events\[\d+\] \(player_moved\).*\.from.*out of bounds/);
+  });
+
+  it('rejects a resource_collected event whose position is out of the map bounds', () => {
+    const world = structuredClone(validWorld());
+    world.events.push({
+      type: 'resource_collected',
+      tick: 4,
+      worldTime: 240,
+      login: 'octocat',
+      resource: 'wood',
+      quantity: 1,
+      position: { x: 999999, y: 999999 },
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/events\[\d+\] \(resource_collected\).*\.position.*out of bounds/);
+  });
+
+  it('accepts a core_pulse event with an out-of-range tick but does not touch position/login checks', () => {
+    // core_pulse has neither a position nor a login - sanity check that the
+    // new per-event checks do not misfire on the one event type that has
+    // neither field.
+    const world = structuredClone(validWorld());
+    world.events.push({ type: 'core_pulse', tick: 4, worldTime: 240 });
+    expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('rejects a player_joined event referencing a login absent from players', () => {
+    const world = structuredClone(validWorld());
+    world.events.push({ type: 'player_joined', tick: 4, worldTime: 240, login: 'ghost' });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/events\[\d+\] \(player_joined\).*\.login \("ghost"\) does not exist in players/);
+  });
+
+  it('rejects a player_said event referencing a login absent from players', () => {
+    const world = structuredClone(validWorld());
+    world.events.push({
+      type: 'player_said',
+      tick: 4,
+      worldTime: 240,
+      login: 'ghost',
+      message: 'Quem sou eu?',
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/does not exist in players/);
+  });
 });
 
 describe('assertValidWorld', () => {
@@ -185,5 +296,34 @@ describe('assertValidWorld', () => {
     const world = invalidatableClone();
     delete world['events'];
     expect(() => assertValidWorld(world)).toThrow(/Invalid world state/);
+  });
+});
+
+describe('worldSchema vs. types.ts constants (anti-drift)', () => {
+  // engine/types.ts is the documented source of truth (see its file header)
+  // and engine/schema/world.schema.json is hand-maintained to mirror it -
+  // nothing regenerates one from the other. If a bound like MAX_ENERGY ever
+  // changes in one place and not the other, these tests fail loudly instead
+  // of quietly letting the two disagree until a real player is wrongly
+  // rejected (or wrongly accepted).
+  const schema = worldSchema as {
+    definitions: { Player: { properties: { energy: { minimum: number; maximum: number } } } };
+  };
+  const energySchema = schema.definitions.Player.properties.energy;
+
+  it('keeps the schema Player.energy.maximum equal to MAX_ENERGY', () => {
+    expect(energySchema.maximum).toBe(MAX_ENERGY);
+  });
+
+  it('keeps the schema Player.energy.minimum at zero', () => {
+    expect(energySchema.minimum).toBe(0);
+  });
+
+  it('keeps STARTING_ENERGY inside the schema-allowed energy range', () => {
+    // A freshly-created player (commands.ts "entrar") is given
+    // STARTING_ENERGY outright; if that ever exceeded the schema's cap, the
+    // very first tick a player joins would produce an invalid world.
+    expect(STARTING_ENERGY).toBeGreaterThanOrEqual(energySchema.minimum);
+    expect(STARTING_ENERGY).toBeLessThanOrEqual(energySchema.maximum);
   });
 });
