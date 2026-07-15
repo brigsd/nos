@@ -12,6 +12,7 @@ import type { Camera } from './camera';
 import { hashTile } from './hash';
 import type { Sprites, SpriteSheet } from './sprites';
 import type { LocalPlayer } from './player';
+import type { PeerGhost } from './p2p';
 
 /** Water alternates frames roughly once a second (GDD: gentle shimmer, not a strobe). */
 const WATER_FRAME_MS = 1000;
@@ -43,6 +44,18 @@ export interface RenderContext {
    * main.ts's getPortalMarker()).
    */
   portalMarker?: { x: number; y: number } | null;
+  /**
+   * Other players' live P2P positions (R7, D-25c) - the "camada Intenção"
+   * made literal: each entry is where a WebRTC-connected peer's avatar
+   * ACTUALLY is right now, cosmetic and ephemeral, never world state. Empty/
+   * absent while P2P is off, still negotiating, or (main.ts) the local
+   * player is visiting another world through a portal - every position in
+   * here is O Coração-relative, so it would be meaningless drawn over a
+   * different map. Rendered as an extra translucent ghost ON TOP OF the
+   * peer's own solid Registro entry (block 3 below), never replacing it -
+   * see block "3.5" for why no name tag is drawn a second time.
+   */
+  p2pGhosts?: ReadonlyMap<string, PeerGhost>;
 }
 
 /** Deterministic meadow variant so tile choice never depends on draw order/frame - and never forms a checkerboard. */
@@ -390,6 +403,35 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
       if (!isLocalEcho) drawPlayerName(ctx, `@${player.login}`, px0, py0, px1, false);
       ctx.globalAlpha = prevAlpha;
       if (saidThisTick.has(player.login) && !isLocalEcho) drawSpeechMark(ctx, px0, py0, px1);
+    }
+  }
+
+  // 3.5. Draw P2P "Intenção" ghosts (R7, D-25c): a WebRTC-connected peer's
+  // LIVE position, drawn on top of their already-drawn solid Registro above
+  // (block 3) - same translucency as the local echo (LOCAL_GHOST_ALPHA): an
+  // Intenção is an Intenção whoever it belongs to (docs/LORE.md). No name
+  // tag here on purpose - the solid Registro entry for the same login
+  // (block 3) already carries one; a second label this close would just be
+  // clutter, mirroring how block 3 itself skips the name for isLocalEcho.
+  // A cheap directional cue (the protocol's optional `face`): mirror the
+  // sprite horizontally when facing left, reusing the flip already built
+  // for the water rim (drawSpriteFrame's flipX) rather than adding new art
+  // - there is no directional sprite sheet for the avatar yet.
+  if (rc.p2pGhosts) {
+    for (const ghost of rc.p2pGhosts.values()) {
+      const gx = ghost.x;
+      const gy = ghost.y;
+      if (gx < tileMinX - 1 || gx > tileMaxX + 1 || gy < tileMinY - 1 || gy > tileMaxY + 1) continue;
+
+      const gx0 = camera.worldToScreenX(gx * TILE_SIZE_PX);
+      const gx1 = camera.worldToScreenX((gx + 1) * TILE_SIZE_PX);
+      const gy0 = camera.worldToScreenY(gy * TILE_SIZE_PX);
+      const gy1 = camera.worldToScreenY((gy + 1) * TILE_SIZE_PX);
+
+      const prevAlpha = ctx.globalAlpha;
+      ctx.globalAlpha = LOCAL_GHOST_ALPHA;
+      drawSpriteFrame(ctx, sprites.no_avatar, 0, gx0, gy0, gx1, gy1, ghost.face === 'left');
+      ctx.globalAlpha = prevAlpha;
     }
   }
 

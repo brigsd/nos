@@ -1043,6 +1043,65 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Tempo real (P2P) (R7, D-25c): opt-in WebRTC, a camada Intenção entre jogadores --- */
+
+.hud-p2p {
+  align-self: flex-start;
+  max-width: min(80vw, 320px);
+  pointer-events: auto;
+  background: var(--nos-panel);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 14px;
+  padding: 8px 14px 10px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.p2p-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--nos-text-dim);
+}
+
+.p2p-toggle-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--nos-text);
+  cursor: pointer;
+}
+
+.p2p-toggle {
+  accent-color: var(--nos-accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.p2p-toggle:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.p2p-status {
+  margin: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--nos-accent);
+}
+
+.p2p-error {
+  margin: 0;
+  font-size: 11px;
+  color: var(--nos-pulse);
+}
+
 /* --- "pulso ao vivo" (R5, D-24, Fluidez B): indicador honesto de frescor + camada ativa --- */
 
 .live-indicator {
