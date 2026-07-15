@@ -22,8 +22,14 @@
 - #12 (refinos de arte: margem d'água, xadrez de campina) e #13 (endurecer validador: bounds-check de eventos) — conferir se T6/T8 já cobriram #13.
 - Limpeza de branches redundantes (t3/t4/v1-avatar já mescladas) — proxy instável travou os deletes; tentar de novo.
 
+## Decisão adiada — visual dos avatares (Registro vs Eco)
+- No ar: **O Registro** (D-22) — avatar oficial sólido, local (intenção) fantasma.
+- O Tiago achou contraintuitivo *quem ele controla* ficar transparente. Prototipei o inverso, **O Eco** (você sólido, oficial pálido que te segue) — é a **recomendação** quando ele quiser retomar.
+- Pedido do Tiago: "deixa assim por hora" → mantido O Registro, sem publicar o Eco.
+- Como aplicar o Eco depois: no `site/src/renderer.ts`, mover o `globalAlpha` do bloco 4 (jogador local) para o bloco 3 (jogadores oficiais). Inversão de ~1 linha. Quando o login (D-13) existir, refinar pra só o *próprio* eco ficar pálido — outros jogadores são reais, ficam sólidos.
+
 ## Próximo
-- Testar comandos restantes: `/mover`, `/coletar`, `/dizer`.
+- Testar comandos restantes: `/coletar`, `/dizer` (`/entrar` e `/mover` já verificados no mundo real — issues #15 e #17).
 - Retomar a **v2** (branch `colaborador2/v2`, congelada): combate, economia, NPCs, Crônica — revisar com calma.
 
 ### Acordo de trabalho (definido pelo Tiago)
