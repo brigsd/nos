@@ -13,7 +13,12 @@ O primeiro mundo se chama **O Coração**. Ele pulsa. Mesmo agora.
 
 ## Status
 
-🌱 Em fundação — acompanhe o progresso em [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+<!-- stats-start -->
+### Status do Mundo
+
+- 💓 **Batidas (Ticks):** `0`
+- 👥 **Jogadores Ativos:** `0`
+<!-- stats-end -->
 
 ## Como jogar
 

@@ -360,6 +360,65 @@ function genNucleoFrame(w, h, { coreR, glowR, warm }) {
 }
 
 // ---------------------------------------------------------------------
+// no_avatar (16x16 player character, hooded traveler)
+// ---------------------------------------------------------------------
+
+function genNoAvatar(w, h) {
+  const g = makeGrid(w, h);
+  const outline = [
+    [5, 2], [6, 2], [7, 2], [8, 2], [9, 2], [10, 2],
+    [4, 3], [11, 3],
+    [3, 4], [12, 4],
+    [2, 5], [13, 5],
+    [2, 6], [13, 6],
+    [2, 7], [13, 7],
+    [3, 8], [12, 8],
+    [3, 9], [12, 9],
+    [2, 10], [13, 10],
+    [2, 11], [13, 11],
+    [2, 12], [13, 12],
+    [3, 13], [12, 13],
+    [4, 14], [5, 14], [6, 14], [7, 14], [8, 14], [9, 14], [10, 14], [11, 14]
+  ];
+  for (const [x, y] of outline) {
+    set(g, x, y, PAL.black);
+  }
+  for (let y = 3; y <= 7; y++) {
+    for (let x = 3; x <= 12; x++) {
+      if (get(g, x, y) !== -1) continue;
+      if (x < 6) set(g, x, y, PAL.lightViolet);
+      else if (x < 10) set(g, x, y, PAL.violet);
+      else set(g, x, y, PAL.purple);
+    }
+  }
+  for (let y = 8; y <= 13; y++) {
+    for (let x = 3; x <= 12; x++) {
+      if (get(g, x, y) !== -1) continue;
+      if (x < 6) set(g, x, y, PAL.lightViolet);
+      else if (x < 9) set(g, x, y, PAL.violet);
+      else set(g, x, y, PAL.purple);
+    }
+  }
+  const face = [
+    [5, 5], [6, 5], [7, 5], [8, 5],
+    [5, 6], [6, 6], [7, 6], [8, 6],
+    [5, 7], [6, 7], [7, 7], [8, 7]
+  ];
+  for (const [x, y] of face) {
+    set(g, x, y, PAL.paleYellow);
+  }
+  set(g, 5, 6, PAL.white);
+  set(g, 6, 6, PAL.lightGold);
+  set(g, 8, 6, PAL.lightGold);
+  set(g, 11, 8, PAL.darkOliveBrown);
+  set(g, 12, 8, PAL.tan);
+  set(g, 12, 9, PAL.darkOliveBrown);
+  set(g, 5, 13, PAL.darkIndigo);
+  set(g, 9, 13, PAL.darkIndigo);
+  return g;
+}
+
+// ---------------------------------------------------------------------
 // Write everything out
 // ---------------------------------------------------------------------
 
@@ -409,6 +468,16 @@ function run() {
     ],
   });
   console.log('authored nucleo_pulse_4frames.json');
+
+  writeSpriteSrc(path.join(SRC_DIR, 'no_avatar.json'), {
+    name: 'no_avatar',
+    kind: 'object',
+    width: 16,
+    height: 16,
+    notes: 'The player avatar: a small hooded traveler.',
+    frames: [{ pixels: genNoAvatar(16, 16) }],
+  });
+  console.log('authored no_avatar.json');
 }
 
 if (require.main === module) {

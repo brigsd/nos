@@ -1,0 +1,69 @@
+name: World Tick
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Hourly beat (D-11, GDD)
+  issues:
+    types: [opened] # Trigger immediately on new player command (D-11)
+  workflow_dispatch: # Allow manual trigger
+
+concurrency:
+  group: world-tick
+  cancel-in-progress: false # Queue up concurrent ticks to process in batch
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  tick:
+    # Only run on issues if they have the 'comando' label
+    if: github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'comando')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Get all history
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch pending command issues
+        run: |
+          gh issue list --label "comando" --state open --json number,title,body,author,createdAt > pending_commands.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run world tick
+        run: npm run tick
+
+      - name: Commit and push world updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if world state or README was modified
+          if [ -n "$(git status --porcelain world/heart.json README.md)" ]; then
+            git add world/heart.json README.md
+            
+            # Extract tick count for the commit message
+            TICK_NUM=$(node -e "console.log(require('./world/heart.json').meta.tickCount)")
+            git commit -m "tick: batida #$TICK_NUM"
+            git push
+          else
+            echo "No world state or README changes to commit."
+          fi
+
+      - name: Respond to and close command issues
+        if: always()
+        run: npm run respond-issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

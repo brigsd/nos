@@ -1,0 +1,13 @@
+name: "Comando: /entrar"
+description: "Entrar no mundo d'O Coração"
+title: "Comando: /entrar"
+labels: ["comando"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Bem-vindo a NÓS!
+        
+        Clique em **Submit new issue** abaixo para criar seu avatar.
+        
+        Seu avatar será criado no próximo tick em (30, 30) com 100 de energia.

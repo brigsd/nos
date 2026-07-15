@@ -1,0 +1,188 @@
+import { describe, expect, it } from 'vitest';
+import type { World, Player } from './types';
+import { parseMoverCoords, parseDizerMessage, parseRawIssues, processCommands } from './commands';
+
+function mockWorld(): World {
+  return {
+    meta: { name: 'O Coração', seed: 'seed-1', tickCount: 5, worldTime: 300 },
+    width: 64,
+    height: 64,
+    tiles: Array.from({ length: 64 * 64 }, (_, i) => {
+      // Create some resources for test
+      if (i === 30 * 64 + 30) return { biome: 'meadow', resource: 'wood' };
+      if (i === 31 * 64 + 30) return { biome: 'water' };
+      return { biome: 'meadow' };
+    }),
+    players: {},
+    events: [],
+  };
+}
+
+describe('parseMoverCoords', () => {
+  it('parses structured markdown body', () => {
+    const body = `### Coordenada X\n\n12\n\n### Coordenada Y\n\n34`;
+    expect(parseMoverCoords(body)).toEqual({ x: 12, y: 34 });
+  });
+
+  it('parses raw text fallback', () => {
+    const body = `ir para 10 -25`;
+    expect(parseMoverCoords(body)).toEqual({ x: 10, y: -25 });
+  });
+
+  it('returns null on invalid body', () => {
+    expect(parseMoverCoords('hello world')).toBeNull();
+  });
+});
+
+describe('parseDizerMessage', () => {
+  it('parses structured markdown body', () => {
+    const body = `### Mensagem\n\nOlá, mundo!`;
+    expect(parseDizerMessage(body)).toBe('Olá, mundo!');
+  });
+
+  it('parses raw body fallback', () => {
+    const body = `  Olá, pessoal!  `;
+    expect(parseDizerMessage(body)).toBe('Olá, pessoal!');
+  });
+});
+
+describe('parseRawIssues', () => {
+  it('correctly maps issues to commands', () => {
+    const issues = [
+      {
+        number: 10,
+        title: 'Comando: /entrar',
+        body: '',
+        author: { login: 'tester1' },
+        createdAt: '2026-07-14T20:00:00Z',
+      },
+      {
+        number: 11,
+        title: 'Comando: /mover',
+        body: '### Coordenada X\n\n30\n\n### Coordenada Y\n\n30',
+        user: { login: 'tester1' },
+        created_at: '2026-07-14T20:01:00Z',
+      },
+    ];
+
+    const parsed = parseRawIssues(issues);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]).toEqual({
+      id: 10,
+      login: 'tester1',
+      type: 'entrar',
+      params: null,
+      createdAt: '2026-07-14T20:00:00Z',
+    });
+    expect(parsed[1]).toEqual({
+      id: 11,
+      login: 'tester1',
+      type: 'mover',
+      params: { x: 30, y: 30 },
+      createdAt: '2026-07-14T20:01:00Z',
+    });
+  });
+});
+
+describe('processCommands execution pipeline', () => {
+  it('processes /entrar command successfully and rejects duplicates', () => {
+    const world = mockWorld();
+    const commands = [
+      { id: 1, login: 'alice', type: 'entrar' as const, params: null, createdAt: '2026-07-14T20:00:00Z' },
+      { id: 2, login: 'alice', type: 'entrar' as const, params: null, createdAt: '2026-07-14T20:01:00Z' },
+    ];
+
+    const res = processCommands(world, commands, 6, 360);
+    expect(Object.keys(res.world.players)).toContain('alice');
+    expect(res.world.players['alice']?.position).toEqual({ x: 30, y: 30 });
+    expect(res.results).toHaveLength(2);
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.results[1]?.success).toBe(false); // Duplicate entrant rejected
+  });
+
+  it('rejects commands for non-existent players', () => {
+    const world = mockWorld();
+    const commands = [
+      { id: 1, login: 'alice', type: 'mover' as const, params: { x: 30, y: 30 }, createdAt: '2026-07-14T20:00:00Z' },
+    ];
+    const res = processCommands(world, commands, 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+  });
+
+  it('validates movement restrictions (adjacent, water bounds, energy)', () => {
+    const world = mockWorld();
+    // Pre-insert player alice at (30,30)
+    world.players['alice'] = { login: 'alice', position: { x: 30, y: 30 }, inventory: {}, energy: 10 };
+
+    const commands = [
+      // 1. Valid move to (29,30)
+      { id: 1, login: 'alice', type: 'mover' as const, params: { x: 29, y: 30 }, createdAt: '2026-07-14T20:00:00Z' },
+      // 2. Invalid move to water (30,31)
+      { id: 2, login: 'alice', type: 'mover' as const, params: { x: 30, y: 31 }, createdAt: '2026-07-14T20:01:00Z' },
+      // 3. Invalid too far move to (40,40)
+      { id: 3, login: 'alice', type: 'mover' as const, params: { x: 40, y: 40 }, createdAt: '2026-07-14T20:02:00Z' },
+    ];
+
+    const res = processCommands(world, commands, 6, 360);
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.results[1]?.success).toBe(false);
+    expect(res.results[2]?.success).toBe(false);
+    expect(res.world.players['alice']?.position).toEqual({ x: 29, y: 30 });
+    expect(res.world.players['alice']?.energy).toBe(9); // 10 - 1 cost
+  });
+
+  it('restricts actions per player to 3 per tick', () => {
+    const world = mockWorld();
+    world.players['alice'] = { login: 'alice', position: { x: 30, y: 30 }, inventory: {}, energy: 50 };
+
+    const commands = [
+      { id: 1, login: 'alice', type: 'mover' as const, params: { x: 29, y: 30 }, createdAt: '2026-07-14T20:00:00Z' },
+      { id: 2, login: 'alice', type: 'mover' as const, params: { x: 30, y: 30 }, createdAt: '2026-07-14T20:01:00Z' },
+      { id: 3, login: 'alice', type: 'mover' as const, params: { x: 29, y: 30 }, createdAt: '2026-07-14T20:02:00Z' },
+      { id: 4, login: 'alice', type: 'mover' as const, params: { x: 30, y: 30 }, createdAt: '2026-07-14T20:03:00Z' },
+    ];
+
+    const res = processCommands(world, commands, 6, 360);
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.results[1]?.success).toBe(true);
+    expect(res.results[2]?.success).toBe(true);
+    expect(res.results[3]?.success).toBe(false); // 4th action rejected
+  });
+
+  it('runs resource collection successfully', () => {
+    const world = mockWorld();
+    // Wood resource is on (30,30) in mockWorld
+    world.players['alice'] = { login: 'alice', position: { x: 30, y: 30 }, inventory: {}, energy: 10 };
+
+    const commands = [
+      { id: 1, login: 'alice', type: 'coletar' as const, params: null, createdAt: '2026-07-14T20:00:00Z' },
+    ];
+
+    const res = processCommands(world, commands, 6, 360);
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.world.players['alice']?.inventory.wood).toBe(1);
+    expect(res.world.players['alice']?.energy).toBe(5); // 10 - 5 cost
+    // Tile should be depleted of resource
+    expect(res.world.tiles[30 * 64 + 30]?.resource).toBeUndefined();
+  });
+
+  it('supports message broadcasting via /dizer', () => {
+    const world = mockWorld();
+    world.players['alice'] = { login: 'alice', position: { x: 30, y: 30 }, inventory: {}, energy: 10 };
+
+    const commands = [
+      { id: 1, login: 'alice', type: 'dizer' as const, params: 'Olá!', createdAt: '2026-07-14T20:00:00Z' },
+    ];
+
+    const res = processCommands(world, commands, 6, 360);
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.world.events).toHaveLength(1);
+    expect(res.world.events[0]).toEqual({
+      type: 'player_said',
+      tick: 6,
+      worldTime: 360,
+      login: 'alice',
+      message: 'Olá!',
+    });
+  });
+});
