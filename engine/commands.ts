@@ -10,11 +10,12 @@ import type { World, Player, Position, WorldEvent, ResourceType } from './types'
 import { STARTING_ENERGY, STARTING_PULSO, MAX_ENERGY, ACTIONS_PER_TICK, getOwn, getTile, tileIndex } from './types';
 import { executeTrade, TRADE_ENERGY_COST, TRADE_RANGE_TILES } from './economy';
 import { conversationReply, PLAYER_PROXIMITY_TILES } from './behavior';
+import { attemptSynthesis, FABRICATION_RANGE_TILES, inMachinePhrase, itemLabel, SYNTHESIS_RECIPES } from './fabrication';
 import { Rng } from './rng';
 
 export { ACTIONS_PER_TICK };
 
-export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer' | 'trocar' | 'conversar';
+export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer' | 'trocar' | 'conversar' | 'sintetizar';
 
 export interface Command {
   id: number; // issue number
@@ -91,6 +92,24 @@ export function parseConversarTarget(body: string): string | null {
   return null;
 }
 
+/**
+ * Parser for the /sintetizar recipe id from an issue-form markdown body
+ * ("### Receita" heading), with a plain-text "sintetizar <receita>"
+ * fallback. Normalized to lowercase; the handler re-validates via getOwn
+ * regardless - parsing is convenience, never the security gate.
+ */
+export function parseSintetizarRecipe(body: string): string | null {
+  const match = body.match(/(?:### )?Receita\s*[\r\n]+\s*([A-Za-z0-9_\-]+)/i);
+  if (match?.[1]) {
+    return match[1].trim().toLowerCase();
+  }
+  const words = body.trim().split(/\s+/);
+  if (words.length >= 2 && words[0]?.toLowerCase().replace(/^\//, '') === 'sintetizar' && words[1]) {
+    return words[1].toLowerCase();
+  }
+  return null;
+}
+
 /** Parser for message text from markdown body */
 export function parseDizerMessage(body: string): string {
   const match = body.match(/(?:Mensagem|### Mensagem)\s*[\r\n]+([\s\S]+)/i);
@@ -131,6 +150,9 @@ export function parseRawIssues(rawIssues: any[]): Command[] {
     } else if (title.toLowerCase().startsWith('comando: /conversar') || title.toLowerCase().includes('/conversar')) {
       type = 'conversar';
       params = parseConversarTarget(body);
+    } else if (title.toLowerCase().startsWith('comando: /sintetizar') || title.toLowerCase().includes('/sintetizar')) {
+      type = 'sintetizar';
+      params = parseSintetizarRecipe(body);
     }
 
     if (type) {
@@ -600,6 +622,121 @@ export function applyCommand(
         login: cmd.login,
         success: true,
         message: `${native.name} responde: "${reply}"`,
+      },
+    };
+  }
+
+  if (cmd.type === 'sintetizar') {
+    const recipeId = cmd.params;
+    if (typeof recipeId !== 'string' || recipeId.length === 0) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: 'Falha: Diga qual receita você quer sintetizar (ex.: lanterna, peca_basica, carrinho_de_maos).',
+        },
+      };
+    }
+
+    // getOwn (issue #28): recipeId is player-supplied. A plain
+    // SYNTHESIS_RECIPES[recipeId] would resolve "__proto__"/"constructor" to
+    // an inherited built-in instead of "not found" - the exact class of the
+    // v2 lockup bug, kept dead here by construction.
+    const recipe = getOwn(SYNTHESIS_RECIPES, recipeId);
+    if (!recipe) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: `Falha: Nenhuma receita chamada "${recipeId}" é conhecida pelas oficinas.`,
+        },
+      };
+    }
+
+    // getOwn again: recipe.machine is our own trusted data (not directly
+    // player-controlled), but the lookup habit is the rule regardless
+    // (same reasoning applies everywhere a string indexes a dictionary).
+    const machine = getOwn(world.machines, recipe.machine);
+    if (!machine) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: `Falha: A oficina ainda não foi erguida n'O Coração - tente de novo após a próxima batida.`,
+        },
+      };
+    }
+
+    const dx = Math.abs(player.position.x - machine.position.x);
+    const dy = Math.abs(player.position.y - machine.position.y);
+    if (dx > FABRICATION_RANGE_TILES || dy > FABRICATION_RANGE_TILES) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message:
+            `Falha: ${machine.name} está longe demais (alcance de ${FABRICATION_RANGE_TILES} tiles). ` +
+            `Você em (${player.position.x}, ${player.position.y}), ${machine.name} em (${machine.position.x}, ${machine.position.y}).`,
+        },
+      };
+    }
+
+    if (player.energy < recipe.energyCost) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: `Falha: Energia insuficiente para sintetizar (necessita de ${recipe.energyCost}, você tem ${player.energy}).`,
+        },
+      };
+    }
+
+    const outcome = attemptSynthesis(player, recipeId);
+    if (!outcome.success) {
+      return {
+        world,
+        result: { id: cmd.id, login: cmd.login, success: false, message: `Falha: ${outcome.message}` },
+      };
+    }
+
+    const updatedPlayer: Player = {
+      ...outcome.player,
+      energy: player.energy - recipe.energyCost,
+    };
+
+    const synthesizedEvent: WorldEvent = {
+      type: 'item_synthesized',
+      tick: currentTick,
+      worldTime: currentWorldTime,
+      login: cmd.login,
+      machineId: recipe.machine,
+      recipeId,
+      output: outcome.output,
+    };
+
+    return {
+      world: {
+        ...world,
+        players: { ...world.players, [cmd.login]: updatedPlayer },
+        events: [...world.events, synthesizedEvent],
+      },
+      result: {
+        id: cmd.id,
+        login: cmd.login,
+        success: true,
+        message:
+          `Sintetizado! Você recebeu ${outcome.output.quantity} ${itemLabel(outcome.output.itemId)} ${inMachinePhrase(recipe.machine)}. ` +
+          `Energia restante: ${updatedPlayer.energy}.`,
       },
     };
   }

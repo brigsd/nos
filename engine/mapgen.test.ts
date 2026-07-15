@@ -10,9 +10,21 @@ import {
   generateHeartWorld,
   HEART_WORLD_NAME,
   HEART_WORLD_SEED,
+  seedFactoryMachines,
   seedInitialNatives,
 } from './mapgen';
-import { tileIndex, WORLD_HEIGHT, WORLD_WIDTH, type Biome, type Native, type Tile, type World } from './types';
+import {
+  MACHINE_IDS,
+  tileIndex,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+  type Biome,
+  type Machine,
+  type Native,
+  type Tile,
+  type World,
+} from './types';
+import { MACHINES } from './fabrication';
 import { advanceWorld, HEART_GENESIS_UNIX_SECONDS, TICK_INTERVAL_SECONDS } from './tick';
 import { assertValidWorld, validateWorld } from './validate';
 
@@ -512,5 +524,157 @@ describe('seedInitialNatives - retrofitting the live world/heart.json (issue #22
       const tile = seeded.tiles[tileIndex(native.position.x, native.position.y, seeded.width)]!;
       expect(tile.biome).not.toBe('water');
     }
+  });
+});
+
+describe('seedFactoryMachines - A Fábrica (v2.5, D-23/D-25a) machine placement', () => {
+  it('is a no-op on a fresh generateHeartWorld() world - it does not seed machines by itself (only scripts/tick.ts does)', () => {
+    const world = generateHeartWorld(HEART_WORLD_SEED);
+    expect(world.machines).toBeUndefined();
+  });
+
+  it('places exactly the 4 oficinas, each keyed by its own id, on the clearing around o Núcleo (never on water)', () => {
+    const world = seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED));
+    expect(Object.keys(world.machines ?? {}).sort()).toEqual(['bancada', 'cozinha', 'estaleiro', 'forja']);
+
+    for (const id of MACHINE_IDS) {
+      const machine = world.machines![id]!;
+      expect(machine.id).toBe(id);
+      expect(machine.name).toBe(MACHINES[id].name);
+      const tile = world.tiles[tileIndex(machine.position.x, machine.position.y, world.width)]!;
+      expect(tile.biome).not.toBe('water');
+      expect(tile.biome).not.toBe('core');
+    }
+  });
+
+  it('places every oficina near o Núcleo (within the padded clearing), never on the Core tiles themselves, never on the player spawn tile', () => {
+    const world = seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED));
+    for (const machine of Object.values(world.machines!) as Machine[]) {
+      const dx = Math.abs(machine.position.x - CORE_ORIGIN.x);
+      const dy = Math.abs(machine.position.y - CORE_ORIGIN.y);
+      // Comfortably within a "near the Core" radius (well short of the map edge).
+      expect(dx).toBeLessThanOrEqual(6);
+      expect(dy).toBeLessThanOrEqual(6);
+
+      const onCore =
+        machine.position.x >= CORE_ORIGIN.x &&
+        machine.position.x < CORE_ORIGIN.x + CORE_SIZE &&
+        machine.position.y >= CORE_ORIGIN.y &&
+        machine.position.y < CORE_ORIGIN.y + CORE_SIZE;
+      expect(onCore).toBe(false);
+
+      expect(machine.position).not.toEqual({ x: 30, y: 30 }); // player /entrar spawn
+    }
+  });
+
+  it('is deterministic: repeated seeding of a fresh genesis world always places the same 4 machines on the same tiles', () => {
+    const a = seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED));
+    const b = seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED));
+    expect(a.machines).toEqual(b.machines);
+  });
+
+  it('positions do not depend on the seed (static, near a fixed Core geometry - unlike os Nativos, no tile scan is involved)', () => {
+    const heart = seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED));
+    const other = seedFactoryMachines(generateHeartWorld('outro-mundo'));
+    expect(heart.machines).toEqual(other.machines);
+  });
+
+  it('the resulting world passes schema + semantic validation', () => {
+    const world = seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED));
+    expect(validateWorld(world)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('is idempotent: seeding an already-seeded world is a no-op', () => {
+    const world = seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED));
+    const seededAgain = seedFactoryMachines(world);
+    expect(seededAgain).toEqual(world);
+    expect(seededAgain.machines).toBe(world.machines); // same reference - no new object allocated
+  });
+
+  it('is additive: seeding a machines-less world only adds the machines field, nothing else', () => {
+    const width = 10;
+    const height = 10;
+    const tiles: Tile[] = Array.from({ length: width * height }, () => ({ biome: 'meadow' as const }));
+
+    const bare: World = {
+      meta: { name: 'Bare', seed: 'bare-seed', tickCount: 12, worldTime: 720 },
+      width,
+      height,
+      tiles,
+      players: { alice: { login: 'alice', position: { x: 1, y: 1 }, inventory: { wood: 2 }, energy: 90 } },
+      events: [{ type: 'player_joined', tick: 1, worldTime: 60, login: 'alice' }],
+      natives: { gota: { id: 'gota', name: 'Gota', position: { x: 0, y: 0 }, behaviorTree: 'wanderer', behaviorState: '{}', inventory: {}, hp: 100, faction: 'wanderer' } },
+    };
+
+    const seeded = seedFactoryMachines(bare);
+
+    expect(seeded.meta).toEqual(bare.meta);
+    expect(seeded.width).toBe(bare.width);
+    expect(seeded.height).toBe(bare.height);
+    expect(seeded.tiles).toEqual(bare.tiles);
+    expect(seeded.players).toEqual(bare.players);
+    expect(seeded.events).toEqual(bare.events);
+    expect(seeded.natives).toEqual(bare.natives);
+    expect(Object.keys(seeded.machines!).sort()).toEqual(['bancada', 'cozinha', 'estaleiro', 'forja']);
+  });
+});
+
+describe('seedFactoryMachines - retrofitting the live world/heart.json', () => {
+  // Same shape as the Nativos migration check above: load the REAL,
+  // currently-committed world/heart.json, run it through exactly the flow
+  // scripts/tick.ts uses (validate -> seed if needed -> advanceWorld ->
+  // validate), and confirm the migration is safe. world/heart.json itself is
+  // never written by this test - only the real tick, post-merge, performs
+  // the live retrofit.
+  const onDiskRaw: unknown = JSON.parse(readFileSync(heartJsonPath, 'utf-8'));
+  assertValidWorld(onDiskRaw);
+  const onDisk = onDiskRaw;
+  const preMigration: World = { ...onDisk, machines: undefined };
+
+  it('sanity: the live world has real playtime to protect and does not have machines yet', () => {
+    expect(onDisk.meta.tickCount).toBeGreaterThan(0);
+    expect(Object.keys(onDisk.players)).toContain('brigsd');
+    expect(onDisk.machines).toBeUndefined();
+  });
+
+  it('(a) seeding alone adds exactly the 4 oficinas, deterministically', () => {
+    const seeded = seedFactoryMachines(preMigration);
+    expect(Object.keys(seeded.machines ?? {}).sort()).toEqual(['bancada', 'cozinha', 'estaleiro', 'forja']);
+    const fresh = seedFactoryMachines(generateHeartWorld(onDisk.meta.seed));
+    expect(seeded.machines).toEqual(fresh.machines);
+  });
+
+  it('(b) seeding alone preserves players.brigsd, tickCount, natives and every pre-existing event byte-for-byte', () => {
+    const seeded = seedFactoryMachines(preMigration);
+    expect(seeded.meta.tickCount).toBe(onDisk.meta.tickCount);
+    expect(seeded.players).toEqual(onDisk.players);
+    expect(seeded.natives).toEqual(onDisk.natives);
+    expect(seeded.events).toEqual(onDisk.events);
+    expect(seeded.tiles).toEqual(onDisk.tiles);
+  });
+
+  it('(c) the seeded world passes the hardened validator', () => {
+    const seeded = seedFactoryMachines(preMigration);
+    expect(validateWorld(seeded)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('seeding is idempotent when applied to the live world twice', () => {
+    const once = seedFactoryMachines(preMigration);
+    const twice = seedFactoryMachines(once);
+    expect(twice).toEqual(once);
+  });
+
+  it('the full tick flow (seed + advanceWorld, as scripts/tick.ts runs it) preserves brigsd/tickCount/events and stays valid', () => {
+    const seeded = seedFactoryMachines(preMigration);
+    assertValidWorld(seeded);
+
+    const now = HEART_GENESIS_UNIX_SECONDS + (onDisk.meta.tickCount + 1) * TICK_INTERVAL_SECONDS;
+    const { world: advanced } = advanceWorld(seeded, now, []);
+
+    expect(Object.keys(advanced.machines ?? {}).sort()).toEqual(['bancada', 'cozinha', 'estaleiro', 'forja']);
+    expect(advanced.meta.tickCount).toBe(onDisk.meta.tickCount + 1);
+    expect(advanced.players['brigsd']).toEqual(onDisk.players['brigsd']);
+    expect(advanced.events.slice(0, onDisk.events.length)).toEqual(onDisk.events);
+    expect(validateWorld(advanced)).toEqual({ valid: true, errors: [] });
   });
 });

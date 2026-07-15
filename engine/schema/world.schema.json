@@ -29,6 +29,12 @@
       "type": "object",
       "description": "NPCs (os Nativos) inhabiting the world, indexed by id (v2).",
       "additionalProperties": { "$ref": "#/definitions/Native" }
+    },
+    "machines": {
+      "type": "object",
+      "description": "A Fábrica's 4 oficinas-sintetizador (v2.5, D-23/D-25a), indexed by id.",
+      "propertyNames": { "$ref": "#/definitions/MachineId" },
+      "additionalProperties": { "$ref": "#/definitions/Machine" }
     }
   },
   "definitions": {
@@ -39,6 +45,25 @@
     "ResourceType": {
       "type": "string",
       "enum": ["wood", "stone", "pulse_fragment"]
+    },
+    "MachineId": {
+      "type": "string",
+      "enum": ["forja", "cozinha", "bancada", "estaleiro"]
+    },
+    "ItemId": {
+      "description": "Every craftable item id (engine/fabrication.ts's ITEM_CATALOG) - hand-mirrored here, pinned by an anti-drift test.",
+      "type": "string",
+      "enum": [
+        "luvas_de_forja",
+        "armadura_de_pulso",
+        "racao_de_viagem",
+        "elixir_de_pulso",
+        "peca_basica",
+        "lanterna",
+        "kit_de_ferramentas",
+        "carrinho_de_maos",
+        "bicicleta_do_nucleo"
+      ]
     },
     "Login": {
       "description": "GitHub login shape: 1-39 chars, alphanumeric segments joined by single hyphens - no leading/trailing hyphen and no consecutive hyphens (GitHub itself forbids both).",
@@ -104,6 +129,12 @@
           "description": "Pulso (₱) balance - v2 economy. Optional: absent means zero (players written before the economy existed).",
           "type": "integer",
           "minimum": 0
+        },
+        "items": {
+          "description": "Crafted items (A Fábrica, v2.5) indexed by item id, quantities. Optional: absent means no crafted items (players written before A Fábrica existed).",
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/ItemId" },
+          "additionalProperties": { "type": "integer", "minimum": 0 }
         }
       }
     },
@@ -127,7 +158,8 @@
         { "$ref": "#/definitions/CorePulseEvent" },
         { "$ref": "#/definitions/NativeSpokeEvent" },
         { "$ref": "#/definitions/TradeCompletedEvent" },
-        { "$ref": "#/definitions/NativeRepliedEvent" }
+        { "$ref": "#/definitions/NativeRepliedEvent" },
+        { "$ref": "#/definitions/ItemSynthesizedEvent" }
       ]
     },
     "PlayerJoinedEvent": {
@@ -209,6 +241,17 @@
         "faction": { "$ref": "#/definitions/NativeFaction" }
       }
     },
+    "Machine": {
+      "description": "One of A Fábrica's 4 oficinas-sintetizador (v2.5, D-23/D-25a).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "position"],
+      "properties": {
+        "id": { "$ref": "#/definitions/MachineId" },
+        "name": { "type": "string", "minLength": 1 },
+        "position": { "$ref": "#/definitions/Position" }
+      }
+    },
     "NativeSpokeEvent": {
       "type": "object",
       "additionalProperties": false,
@@ -251,6 +294,29 @@
         "nativeId": { "type": "string", "minLength": 1 },
         "login": { "$ref": "#/definitions/Login" },
         "message": { "type": "string", "minLength": 1, "maxLength": 280 }
+      }
+    },
+    "ItemSynthesizedEvent": {
+      "description": "A player synthesizing an item at an oficina (A Fábrica, v2.5, D-23/D-25a's /sintetizar).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime", "login", "machineId", "recipeId", "output"],
+      "properties": {
+        "type": { "const": "item_synthesized" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 },
+        "login": { "$ref": "#/definitions/Login" },
+        "machineId": { "$ref": "#/definitions/MachineId" },
+        "recipeId": { "type": "string", "minLength": 1 },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["itemId", "quantity"],
+          "properties": {
+            "itemId": { "$ref": "#/definitions/ItemId" },
+            "quantity": { "type": "integer", "minimum": 1 }
+          }
+        }
       }
     }
   }

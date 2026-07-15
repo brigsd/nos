@@ -1,15 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Native, World, Player } from './types';
+import type { Machine, Native, World, Player } from './types';
 import {
   parseMoverCoords,
   parseDizerMessage,
   parseTrocarParams,
   parseConversarTarget,
+  parseSintetizarRecipe,
   parseRawIssues,
   processCommands,
   applyCommand,
 } from './commands';
 import { CONVERSATION_REPLIES, PLAYER_PROXIMITY_TILES } from './behavior';
+import { FABRICATION_RANGE_TILES } from './fabrication';
 
 function mockWorld(): World {
   return {
@@ -611,5 +613,202 @@ describe('parseConversarTarget', () => {
     ]);
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toMatchObject({ type: 'conversar', params: 'gota' });
+  });
+});
+
+describe('/sintetizar - A Fábrica (v2.5, D-23/D-25a)', () => {
+  function bancada(overrides: Partial<Machine> = {}): Machine {
+    return { id: 'bancada', name: 'Bancada', position: { x: 30, y: 30 }, ...overrides };
+  }
+
+  function fabricationWorld(): World {
+    const world = mockWorld();
+    world.players['alice'] = {
+      login: 'alice',
+      position: { x: 30, y: 30 },
+      inventory: { stone: 2, pulse_fragment: 1 },
+      energy: 50,
+      pulso: 0,
+    };
+    world.machines = { bancada: bancada() };
+    return world;
+  }
+
+  function sintetizar(id: number, params: unknown) {
+    return {
+      id,
+      login: 'alice',
+      type: 'sintetizar' as const,
+      params: params as any,
+      createdAt: '2026-07-14T20:00:00Z',
+    };
+  }
+
+  it('synthesizes a lanterna at the Bancada: inputs consumed, item added, energy spent, event recorded', () => {
+    const world = fabricationWorld();
+    const res = processCommands(world, [sintetizar(1, 'lanterna')], 6, 360);
+
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.results[0]?.message).toContain('Sintetizado!');
+    expect(res.results[0]?.message).toContain('Lanterna');
+    expect(res.results[0]?.message).toContain('na Bancada');
+
+    const alice = res.world.players['alice']!;
+    expect(alice.inventory).toEqual({ stone: 1 }); // pulse_fragment fully consumed, 1 stone left over
+    expect(alice.items).toEqual({ lanterna: 1 });
+    expect(alice.energy).toBe(45); // lanterna energyCost = 5
+
+    expect(res.world.events).toHaveLength(1);
+    expect(res.world.events[0]).toEqual({
+      type: 'item_synthesized',
+      tick: 6,
+      worldTime: 360,
+      login: 'alice',
+      machineId: 'bancada',
+      recipeId: 'lanterna',
+      output: { itemId: 'lanterna', quantity: 1 },
+    });
+  });
+
+  it('is deterministic: the same world and command always settle identically', () => {
+    const cmd = sintetizar(1, 'lanterna');
+    const first = processCommands(fabricationWorld(), [cmd], 6, 360);
+    const second = processCommands(fabricationWorld(), [cmd], 6, 360);
+    expect(second.world).toEqual(first.world);
+    expect(second.results).toEqual(first.results);
+  });
+
+  it('rejects an unknown recipe, leaving the world untouched', () => {
+    const world = fabricationWorld();
+    const res = processCommands(world, [sintetizar(1, 'espada_lendaria')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Nenhuma receita chamada "espada_lendaria"');
+    expect(res.world.players['alice']?.energy).toBe(50); // nothing spent
+    expect(res.world.events).toHaveLength(0);
+  });
+
+  it.each(['__proto__', 'constructor', 'toString'])(
+    'treats hostile recipe id %s as "not found" (getOwn) without throwing or freezing the batch',
+    (hostileKey) => {
+      const world = fabricationWorld();
+      const res = processCommands(
+        world,
+        [
+          sintetizar(1, hostileKey),
+          // A healthy command right after proves the batch keeps flowing.
+          { id: 2, login: 'alice', type: 'dizer' as const, params: 'sigo aqui', createdAt: '2026-07-14T20:01:00Z' },
+        ],
+        6,
+        360,
+      );
+      expect(res.results[0]?.success).toBe(false);
+      expect(res.results[0]?.message).toContain('Nenhuma receita chamada');
+      expect(res.results[1]?.success).toBe(true);
+    },
+  );
+
+  it('rejects when the required machine has not been seeded into the world yet', () => {
+    const world = fabricationWorld();
+    world.machines = {};
+    const res = processCommands(world, [sintetizar(1, 'lanterna')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('oficina ainda não foi erguida');
+  });
+
+  it('rejects synthesizing beyond the fabrication radius', () => {
+    const world = fabricationWorld();
+    world.players['alice']!.position = { x: 30 + FABRICATION_RANGE_TILES + 1, y: 30 };
+    const res = processCommands(world, [sintetizar(1, 'lanterna')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Bancada está longe demais');
+    expect(res.world.events).toHaveLength(0);
+  });
+
+  it('allows synthesizing exactly at the edge of the radius', () => {
+    const world = fabricationWorld();
+    world.players['alice']!.position = { x: 30 + FABRICATION_RANGE_TILES, y: 30 };
+    const res = processCommands(world, [sintetizar(1, 'lanterna')], 6, 360);
+    expect(res.results[0]?.success).toBe(true);
+  });
+
+  it('rejects the synthesis when energy is short, before anything moves', () => {
+    const world = fabricationWorld();
+    world.players['alice']!.energy = 2; // lanterna costs 5
+    const res = processCommands(world, [sintetizar(1, 'lanterna')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Energia insuficiente');
+    expect(res.world.players['alice']?.inventory).toEqual({ stone: 2, pulse_fragment: 1 }); // untouched
+  });
+
+  it('surfaces the missing-materials reason, naming what is missing, when the player cannot pay', () => {
+    const world = fabricationWorld();
+    world.players['alice']!.inventory = { stone: 1 };
+    const res = processCommands(world, [sintetizar(1, 'lanterna')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Faltam materiais');
+    expect(res.results[0]?.message).toContain('fragmento de pulso');
+  });
+
+  it('rejects malformed params without throwing', () => {
+    const world = fabricationWorld();
+    const res = processCommands(world, [sintetizar(1, null)], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Diga qual receita');
+  });
+
+  it('requires /entrar first, like every other action', () => {
+    const world = mockWorld();
+    world.machines = { bancada: bancada() };
+    const res = processCommands(world, [sintetizar(1, 'lanterna')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('/entrar');
+  });
+
+  it('proves the production chain end to end: peça básica (Bancada) feeds carrinho de mãos (Estaleiro)', () => {
+    const world = fabricationWorld();
+    world.players['alice']!.inventory = { wood: 6, stone: 6 };
+    world.machines = {
+      bancada: bancada(),
+      estaleiro: { id: 'estaleiro', name: 'Estaleiro', position: { x: 30, y: 30 } },
+    };
+
+    const afterPecas = processCommands(world, [sintetizar(1, 'peca_basica')], 6, 360);
+    expect(afterPecas.results[0]?.success).toBe(true);
+    expect(afterPecas.world.players['alice']?.items).toEqual({ peca_basica: 3 });
+
+    const afterCarrinho = processCommands(afterPecas.world, [sintetizar(2, 'carrinho_de_maos')], 7, 420);
+    expect(afterCarrinho.results[0]?.success).toBe(true);
+    expect(afterCarrinho.results[0]?.message).toContain('Carrinho de Mãos');
+    expect(afterCarrinho.world.players['alice']?.items).toEqual({ peca_basica: 1, carrinho_de_maos: 1 });
+  });
+});
+
+describe('parseSintetizarRecipe', () => {
+  it('parses the issue-form markdown body', () => {
+    expect(parseSintetizarRecipe('### Receita\n\nLanterna')).toBe('lanterna');
+  });
+
+  it('parses the free-text fallback "/sintetizar lanterna"', () => {
+    expect(parseSintetizarRecipe('/sintetizar lanterna')).toBe('lanterna');
+    expect(parseSintetizarRecipe('sintetizar peca_basica')).toBe('peca_basica');
+  });
+
+  it('returns null when no recipe is present', () => {
+    expect(parseSintetizarRecipe('')).toBeNull();
+    expect(parseSintetizarRecipe('bom dia')).toBeNull();
+  });
+
+  it('is mapped from issues by parseRawIssues', () => {
+    const parsed = parseRawIssues([
+      {
+        number: 51,
+        title: 'Comando: /sintetizar',
+        body: '### Receita\n\nlanterna',
+        author: { login: 'tester1' },
+        createdAt: '2026-07-14T20:00:00Z',
+      },
+    ]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ type: 'sintetizar', params: 'lanterna' });
   });
 });

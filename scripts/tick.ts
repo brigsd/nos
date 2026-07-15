@@ -20,7 +20,7 @@ import { serializeWorld } from '../engine/serialize';
 import { assertValidWorld } from '../engine/validate';
 import { parseRawIssues } from '../engine/commands';
 import type { Command } from '../engine/commands';
-import { seedInitialNatives } from '../engine/mapgen';
+import { seedInitialNatives, seedFactoryMachines } from '../engine/mapgen';
 import type { World } from '../engine/types';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -58,6 +58,17 @@ function main(): void {
     assertValidWorld(world); // gate the seeded state exactly like any tick output
   }
 
+  // Same one-time, additive, idempotent retrofit for A Fábrica's 4 oficinas
+  // (D-23/D-25a): world.machines is absent on every world saved before this
+  // slice (including the live world/heart.json). seedFactoryMachines() is
+  // itself a no-op once world.machines is populated - never hand-edit
+  // world/heart.json to add this instead.
+  const wasFactorySeeded = !world.machines;
+  if (wasFactorySeeded) {
+    world = seedFactoryMachines(world);
+    assertValidWorld(world); // gate the seeded state exactly like any tick output
+  }
+
   let commands: Command[] = [];
   if (existsSync(pendingCommandsPath)) {
     try {
@@ -88,6 +99,15 @@ function main(): void {
     console.log(`Wrote ${commandResults.length} command result(s) to command_results.json`);
   }
 
+  // What got (re)seeded this run, for the log lines below - either, both, or
+  // neither, independently (a world can be missing os Nativos, A Fábrica,
+  // both, or neither, at any point in the migration).
+  const seededParts = [
+    ...(wasSeeded ? ['Nativos (gota, raiz, cinza)'] : []),
+    ...(wasFactorySeeded ? ['A Fábrica (forja, cozinha, bancada, estaleiro)'] : []),
+  ];
+  const seededSuffix = seededParts.length > 0 ? ` (${seededParts.join(' + ')} seeded this run)` : '';
+
   const processed = result.meta.tickCount - tickCountBefore;
   if (processed === 0) {
     // No new beat was due, but commands (if any) were still applied at the
@@ -96,10 +116,9 @@ function main(): void {
     const applied = commandResults.length;
     console.log(
       applied > 0
-        ? `No new beat due - tick #${tickCountBefore} stands, but processed ${applied} between-beats command(s).` +
-            (wasSeeded ? ' (Nativos seeded this run)' : '')
-        : wasSeeded
-          ? `Nativos semeados (gota, raiz, cinza) - tick #${tickCountBefore} stands, no new beat due yet.`
+        ? `No new beat due - tick #${tickCountBefore} stands, but processed ${applied} between-beats command(s).${seededSuffix}`
+        : seededParts.length > 0
+          ? `${seededParts.join(' + ')} semeado(s) - tick #${tickCountBefore} stands, no new beat due yet.`
           : `No beat due yet - tick #${tickCountBefore} stands, world unchanged.`,
     );
     return;
@@ -109,7 +128,7 @@ function main(): void {
   console.log(
     `Tick #${result.meta.tickCount}: processed ${processed} beat(s)` +
       (compensated > 0 ? ` (${compensated} compensated per D-19)` : '') +
-      (wasSeeded ? ' (Nativos seeded this run)' : '') +
+      seededSuffix +
       ` - world time now ${result.meta.worldTime} min.`,
   );
 }

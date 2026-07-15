@@ -3,8 +3,9 @@
  *
  * Renders "O Mural" — the HUD panel listing the world's most recent public
  * happenings: `/dizer` messages (`player_said`), settled trades
- * (`trade_completed`, v2 economy) and Nativos answering players
- * (`native_replied`, v2 light interaction). This is a plain DOM overlay, not
+ * (`trade_completed`, v2 economy), Nativos answering players
+ * (`native_replied`, v2 light interaction), and items synthesized at A
+ * Fábrica (`item_synthesized`, v2.5). This is a plain DOM overlay, not
  * canvas: it reads `world.events` (already fetched once by src/world.ts,
  * same as the rest of the HUD) and writes list items. Deliberately kept out
  * of src/renderer.ts so it can't collide with the map-drawing work
@@ -16,17 +17,30 @@
  * be parsed as markup/script by a viewer's browser, no matter what a player
  * types.
  */
-import type { NativeRepliedEvent, PlayerSaidEvent, TradeCompletedEvent, World, WorldEvent } from '../../engine/types';
+import type {
+  ItemSynthesizedEvent,
+  NativeRepliedEvent,
+  PlayerSaidEvent,
+  TradeCompletedEvent,
+  World,
+  WorldEvent,
+} from '../../engine/types';
 import { getOwn } from '../../engine/types';
 import { describeSide } from '../../engine/economy';
+import { inMachinePhrase, itemLabel } from '../../engine/fabrication';
 
 /** How many of the most recent entries the Mural shows at once. */
 const MAX_ENTRIES = 8;
 
-type MuralEvent = PlayerSaidEvent | TradeCompletedEvent | NativeRepliedEvent;
+type MuralEvent = PlayerSaidEvent | TradeCompletedEvent | NativeRepliedEvent | ItemSynthesizedEvent;
 
 function isMuralEvent(event: WorldEvent): event is MuralEvent {
-  return event.type === 'player_said' || event.type === 'trade_completed' || event.type === 'native_replied';
+  return (
+    event.type === 'player_said' ||
+    event.type === 'trade_completed' ||
+    event.type === 'native_replied' ||
+    event.type === 'item_synthesized'
+  );
 }
 
 /** "agora" on the current beat, "há N pulsos" otherwise — Pulso/batida is the world's unit of time (docs/LORE.md). */
@@ -47,6 +61,14 @@ function tradeSummary(event: TradeCompletedEvent, world: World): string {
   const gave = describeSide({ items: event.given, pulso: event.pulsoDelta < 0 ? -event.pulsoDelta : 0 });
   const got = describeSide({ items: event.received, pulso: event.pulsoDelta > 0 ? event.pulsoDelta : 0 });
   return `deu ${gave} e levou ${got} — negócio com ${nativeName}`;
+}
+
+/**
+ * pt-BR one-line summary of a synthesis at A Fábrica, e.g.
+ * "sintetizou 1 lanterna na Bancada".
+ */
+function synthesisSummary(event: ItemSynthesizedEvent): string {
+  return `sintetizou ${event.output.quantity} ${itemLabel(event.output.itemId)} ${inMachinePhrase(event.machineId)}`;
 }
 
 /**
@@ -92,7 +114,7 @@ export function renderMural(listEl: HTMLOListElement, world: World): void {
       message.textContent = tradeSummary(event, world);
       message.classList.add('hud-mural-trade');
       line.append(author, document.createTextNode(' '), message);
-    } else {
+    } else if (event.type === 'native_replied') {
       // A Native answering someone: "Gota → @alice: ..." (getOwn - the
       // nativeId inside a validated event is safe, but the habit is the rule).
       const nativeName = getOwn(world.natives ?? {}, event.nativeId)?.name ?? event.nativeId;
@@ -103,6 +125,12 @@ export function renderMural(listEl: HTMLOListElement, world: World): void {
       addressee.className = 'hud-mural-to';
       addressee.textContent = `→ @${event.login}`;
       line.append(author, document.createTextNode(' '), addressee, document.createTextNode(' '), message);
+    } else {
+      // A Fábrica synthesis: "@alice sintetizou 1 lanterna na Bancada".
+      author.textContent = `@${event.login}`;
+      message.textContent = synthesisSummary(event);
+      message.classList.add('hud-mural-synthesis');
+      line.append(author, document.createTextNode(' '), message);
     }
 
     const when = document.createElement('span');

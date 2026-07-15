@@ -98,11 +98,33 @@ export interface Player {
    * (read it through `getPulso`, never `player.pulso` directly).
    */
   pulso?: number;
+  /**
+   * Crafted items (A Fábrica, v2.5 - engine/fabrication.ts), indexed by item
+   * id from `ITEM_CATALOG`; missing key means zero, same convention as
+   * `Inventory`. Deliberately a field of its own rather than folded into
+   * `inventory`: `inventory` stays exactly the fixed wood/stone/pulse_fragment
+   * shape the schema has always enforced (`Inventory`'s `additionalProperties:
+   * false`), so this change cannot loosen that existing contract or touch any
+   * of its current callers. Optional for backward compatibility with players
+   * written before A Fábrica existed; an absent field means "no crafted items"
+   * (read it through `getItemQty`, never `player.items` directly).
+   */
+  items?: Record<string, number>;
 }
 
 /** A player's Pulso (₱) balance, treating the pre-economy `undefined` as zero. */
 export function getPulso(player: Pick<Player, 'pulso'>): number {
   return player.pulso ?? 0;
+}
+
+/**
+ * A player's held quantity of crafted item `itemId` (engine/fabrication.ts),
+ * treating both an absent `items` field (pre-Fábrica player) and an absent
+ * key within it as zero - the same "missing means zero" convention as
+ * `getPulso`/`Inventory`.
+ */
+export function getItemQty(player: Pick<Player, 'items'>, itemId: string): number {
+  return getOwn(player.items, itemId) ?? 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +156,34 @@ export interface Native {
 }
 
 // ---------------------------------------------------------------------------
+// A Fábrica (v2.5, D-23/D-25a) - the 4 synthesizer machines that turn
+// resources/items into crafted items. Only the world-placement shape lives
+// here (mirrors how `Native` sits in types.ts while its behavior lives in
+// behavior.ts/natives.ts); the item catalog and recipes are engine data, not
+// world state, so they live in engine/fabrication.ts instead - the same
+// split as `TradeRecipe`/`TRADE_RECIPES` living in engine/economy.ts rather
+// than here.
+// ---------------------------------------------------------------------------
+
+/**
+ * The 4 machines-sintetizador (D-25a), one per item destino: Forja (equipa),
+ * Cozinha (consome), Bancada (usa/liga), Estaleiro (pilota - assembled from
+ * peças made at the other 3). Exactly 4, forever, by design (D-25a) - a new
+ * "destino" would be a product decision, not an engine one.
+ */
+export type MachineId = 'forja' | 'cozinha' | 'bancada' | 'estaleiro';
+
+export const MACHINE_IDS: readonly MachineId[] = ['forja', 'cozinha', 'bancada', 'estaleiro'];
+
+export interface Machine {
+  /** Unique identifier (one of MACHINE_IDS). Doubles as its key in World.machines. */
+  id: MachineId;
+  /** Display name shown to players (e.g. "Forja"). */
+  name: string;
+  position: Position;
+}
+
+// ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
 
@@ -145,7 +195,8 @@ export type WorldEventType =
   | 'core_pulse'
   | 'native_spoke'
   | 'trade_completed'
-  | 'native_replied';
+  | 'native_replied'
+  | 'item_synthesized';
 
 interface WorldEventBase {
   type: WorldEventType;
@@ -215,6 +266,21 @@ export interface NativeRepliedEvent extends WorldEventBase {
   message: string;
 }
 
+/**
+ * A player synthesizing an item at a machine (A Fábrica, v2.5,
+ * engine/fabrication.ts's `/sintetizar`). `recipeId` is the key into
+ * `SYNTHESIS_RECIPES`; `output` mirrors the recipe's own output shape so the
+ * event is self-describing without a second lookup (same reasoning as
+ * TradeCompletedEvent carrying `given`/`received` inline).
+ */
+export interface ItemSynthesizedEvent extends WorldEventBase {
+  type: 'item_synthesized';
+  login: string;
+  machineId: MachineId;
+  recipeId: string;
+  output: { itemId: string; quantity: number };
+}
+
 export type WorldEvent =
   | PlayerJoinedEvent
   | PlayerMovedEvent
@@ -223,7 +289,8 @@ export type WorldEvent =
   | CorePulseEvent
   | NativeSpokeEvent
   | TradeCompletedEvent
-  | NativeRepliedEvent;
+  | NativeRepliedEvent
+  | ItemSynthesizedEvent;
 
 // ---------------------------------------------------------------------------
 // World
@@ -251,6 +318,8 @@ export interface World {
   events: WorldEvent[];
   /** NPCs (os Nativos) inhabiting the world, indexed by id (v2, optional for backward compatibility with pre-Nativos worlds). */
   natives?: Record<string, Native>;
+  /** A Fábrica's 4 oficinas, indexed by id (v2.5, optional for backward compatibility with pre-Fábrica worlds - see engine/mapgen.ts's seedFactoryMachines). */
+  machines?: Record<string, Machine>;
 }
 
 // ---------------------------------------------------------------------------

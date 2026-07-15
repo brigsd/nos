@@ -17,12 +17,16 @@ import {
   WORLD_HEIGHT,
   isInBounds,
   tileIndex,
+  MACHINE_IDS,
   type Tile,
   type World,
   type Native,
+  type Machine,
+  type MachineId,
   type Position,
   type Biome,
 } from './types';
+import { MACHINES } from './fabrication';
 
 /** The one and only seed for O Coração - the world is one, per the GDD. */
 export const HEART_WORLD_SEED = 'commit-primordial';
@@ -460,4 +464,62 @@ export function seedInitialNatives(world: World): World {
   };
 
   return { ...world, natives };
+}
+
+// ---------------------------------------------------------------------------
+// A Fábrica (v2.5, D-23/D-25a) - machine seeding. Kept here (rather than
+// engine/fabrication.ts, which owns the catalog data and the synthesis
+// logic) for the same reason seedInitialNatives is here: this is
+// world-generation/placement logic, deciding *where in the map* the 4
+// oficinas sit - the same job carveRiver/scatterForest/placeRuins/
+// seedInitialNatives already do for everything else.
+// ---------------------------------------------------------------------------
+
+/**
+ * The 4 oficinas sit at the corners of o Núcleo's clearing (the same
+ * padded, always-meadow keepout box carveRiver/scatterForest/placeRuins
+ * already steer around - see coreClearingBox()) - close enough to read as
+ * "o Coração's industrial ring", never on the Core itself, and never on the
+ * player spawn tile (30, 30). Derived from CORE_ORIGIN/CORE_SIZE/
+ * CORE_CLEARING_PADDING rather than hardcoded, so a future change to any of
+ * those automatically keeps the oficinas on the clearing's edge instead of
+ * silently drifting into the river/forest/ruins.
+ */
+function factoryMachinePositions(): Record<MachineId, Position> {
+  const box = coreClearingBox();
+  return {
+    forja: { x: box.x0, y: box.y0 },
+    cozinha: { x: box.x1, y: box.y0 },
+    bancada: { x: box.x0, y: box.y1 },
+    estaleiro: { x: box.x1, y: box.y1 },
+  };
+}
+
+/**
+ * Seeds the 4 oficinas-sintetizador - forja, cozinha, bancada, estaleiro
+ * (D-25a) - into `world` if it doesn't have any yet. Pure and idempotent,
+ * additive-only, exactly like seedInitialNatives above: calling it on a
+ * world that already has `machines` returns that world unchanged, so
+ * `if (!world.machines) world = seedFactoryMachines(world)`
+ * (scripts/tick.ts) is always safe to run on every tick, forever, without
+ * ever duplicating or resetting a machine. Positions are static (derived
+ * only from the fixed Core geometry, no RNG, no world.tiles scan needed
+ * unlike os Nativos) - a brand-new genesis world and a live world
+ * retrofitted later always place the same 4 machines on the same tiles.
+ * NEVER hand-edit world/heart.json to add machines - this function, run by
+ * the tick, is the only sanctioned way (mirrors the Nativos migration,
+ * docs/CONTINUITY.md).
+ */
+export function seedFactoryMachines(world: World): World {
+  if (world.machines && Object.keys(world.machines).length > 0) {
+    return world;
+  }
+
+  const positions = factoryMachinePositions();
+  const machines: Record<string, Machine> = {};
+  for (const id of MACHINE_IDS) {
+    machines[id] = { id, name: MACHINES[id].name, position: positions[id] };
+  }
+
+  return { ...world, machines };
 }

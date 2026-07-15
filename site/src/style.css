@@ -245,6 +245,11 @@ body {
   font-style: italic;
 }
 
+.hud-mural-synthesis {
+  color: #cfff5e; /* leaf-light from Resurrect 64: A Fábrica's voice, matches .hud-mural-native's tone */
+  font-style: italic;
+}
+
 /* --- Meu Nó (v2 economia): o Registro do jogador — ₱, energia, mochila --- */
 
 .hud-meuno {
