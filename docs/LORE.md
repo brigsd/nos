@@ -30,6 +30,12 @@ Ninguém sabe quem fez o Commit Primordial. Descobrir isso talvez seja a primeir
 | Ramos | mundos paralelos (branches/mundos da v3) |
 | Portais | links entre mundos |
 | Reversão | rollback de estado (evento raro e traumático) |
+| O Registro | a posição/estado oficial de um Nó — o que o Pulso gravou na Crônica |
+| A Intenção | o vulto translúcido de um Nó a caminho, ainda não gravado; some ao virar Registro |
+
+## O Registro e a Intenção
+
+Um Nó existe duas vezes. Há o seu **Registro** — sólido, verdadeiro, o lugar onde a Crônica jurou que você está. E há a sua **Intenção** — um vulto pálido que se adianta, tateando aonde você quer chegar. A Intenção não é real: é vontade ainda não escrita. A cada batida do Pulso, a Intenção que se firmou vira Registro, e o vulto alcança o corpo. Dizem os Nativos que quem fica muito tempo com a Intenção longe do Registro anda "à frente de si mesmo" — e que o mundo, cedo ou tarde, sempre cobra o encontro.
 
 ## Regras narrativas
 

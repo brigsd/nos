@@ -21,6 +21,8 @@ const CORE_FRAME_MS = 350;
 const BG_COLOR = '#100c15';
 /** Share of meadow tiles that bloom with flowers. */
 const FLOWER_CHANCE = 0.1;
+/** Opacity of the local avatar — "intenção", not yet written by the Pulse (D-22, "O Registro"). */
+const LOCAL_GHOST_ALPHA = 0.4;
 
 export interface RenderContext {
   ctx: CanvasRenderingContext2D;
@@ -189,7 +191,10 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     }
   }
 
-  // 4. Draw local player (optimistic and smooth)
+  // 4. Draw local player as "intenção" — a translucent ghost (D-22, "O Registro").
+  // The world state (drawn solid above) is what is real; the local avatar is only
+  // intention until the Pulse writes it into the Crônica. So it renders faded,
+  // moving ahead of its official self until the next tick makes it real.
   const lpx = localPlayer.visualX;
   const lpy = localPlayer.visualY;
 
@@ -200,7 +205,10 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     const py0 = camera.worldToScreenY(lpy * TILE_SIZE_PX);
     const py1 = camera.worldToScreenY((lpy + 1) * TILE_SIZE_PX);
 
+    const prevAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = LOCAL_GHOST_ALPHA;
     drawSpriteFrame(ctx, sprites.no_avatar, 0, px0, py0, px1, py1);
     drawPlayerName(ctx, localPlayer.username, px0, py0, px1, true);
+    ctx.globalAlpha = prevAlpha;
   }
 }
