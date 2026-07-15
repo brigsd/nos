@@ -38,6 +38,11 @@
 - [x] R6 · Portais fase 1 (PR #44, D-27): `worlds/registry.json` (protocolo) + O Salão de Portais no HUD + O Átrio (2º mundo, estático, 32×32) + travessia real sem sair do site (fetch/valida/troca o mundo em tela, câmera, banner "de visita", pausa/retoma o pulso ao vivo) + marco do portal no mapa. Visitar é só-leitura por design nesta fase — check-in/check-out (D-21) e agir em mundo remoto ficam para quando a federação de repositórios de verdade chegar (`docs/PORTALS_PROTOCOL.md`, v3 abaixo)
 - [x] R7 · Fluidez A (PR #45, mesclado): WebRTC P2P, a camada Intenção (D-25c/D-28) — sinalização por comentários de issue, STUN público como única exceção, opt-in com copy honesta sobre IP em issue pública, anti-spam com backoff, vulto translúcido interpolado no renderer
 
+## Pós-v2.5 — trilhos em andamento (D-24)
+- [x] W1 · Cirurgia da interface `Renderer` (D-26): `FrameScene`/`Renderer`/`createCanvasRenderer` em renderer.ts, seleção por flag `nos_renderer` com fallback permanente pra Canvas2D, stub lazy `renderer-webgl.ts` (feita pelo coder principal, direto no main — neutra em comportamento, QA visual + fallback provados)
+- [ ] W2 · Porte da cena Pixi (branch de evidência `claude/r3-webgl-comparativo`) para `renderer-webgl.ts` (Sonnet) + review Opus + validação do Tiago em dispositivo real
+- [ ] C1 · Urbanização d'O Coração (arquiteto Fable, branch `claude/cidade-coracao`): CITY_PLAN, seedCityLayout, tiles/sprites novos, ≥3 rodadas de auto-auditoria — review meu + sign-off estético do Tiago
+
 ## v3 — O metaverso
 - [ ] Portais e segundo mundo
 - [ ] Kit de criação de mundos + pipeline de PR comunitário (validação automática)

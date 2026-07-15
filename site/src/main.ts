@@ -9,7 +9,7 @@ import type { Position, World } from '../../engine/types';
 import { TILE_SIZE_PX } from '../../engine/types';
 import { Camera } from './camera';
 import { attachPointerControls } from './input';
-import { drawFrame } from './renderer';
+import { createCanvasRenderer, type Renderer } from './renderer';
 import { renderMural } from './mural';
 import { renderAuth } from './auth-ui';
 import { getSavedLogin, renderMeuNo } from './meu-no';
@@ -89,6 +89,29 @@ function isNearPortalMarker(x: number, y: number): boolean {
   );
 }
 
+/**
+ * D-26 — which "janela" (window) draws the world. Canvas2D is the default
+ * and the PERMANENT fallback; 'webgl' is opt-in via localStorage and
+ * lazy-loaded (dynamic import) so nobody downloads Pixi without asking.
+ * ANY failure on the opt-in path — module missing, load error, WebGL
+ * unavailable, port not landed yet — falls back to Canvas2D silently
+ * (plus a console.warn), never to a broken page.
+ */
+const RENDERER_FLAG_KEY = 'nos_renderer';
+
+async function selectRenderer(canvas: HTMLCanvasElement): Promise<Renderer | null> {
+  if (localStorage.getItem(RENDERER_FLAG_KEY) === 'webgl') {
+    try {
+      const mod = await import('./renderer-webgl');
+      const webgl = mod.createWebGLRenderer(canvas);
+      if (webgl) return webgl;
+    } catch (err) {
+      console.warn('Falha ao carregar a janela WebGL — usando a janela Canvas2D (D-26).', err);
+    }
+  }
+  return createCanvasRenderer(canvas);
+}
+
 async function main(): Promise<void> {
   const canvas = requireEl<HTMLCanvasElement>('map');
   const statusEl = requireEl<HTMLDivElement>('status');
@@ -110,12 +133,14 @@ async function main(): Promise<void> {
   const liveDotEl = requireEl<HTMLElement>('hud-live-dot');
   const liveLabelEl = requireEl<HTMLElement>('hud-live-label');
 
-  const maybeCtx = canvas.getContext('2d');
-  if (!maybeCtx) {
+  const maybeRenderer = await selectRenderer(canvas);
+  if (!maybeRenderer) {
     showStatus(statusEl, 'Este navegador não suporta canvas 2D — não é possível mostrar O Coração aqui.');
     return;
   }
-  const ctx: CanvasRenderingContext2D = maybeCtx;
+  // Rebound non-null `const` — same idiom as p2p-signaling.ts's token:
+  // narrowing doesn't cross into the closures below (resize/frame).
+  const renderer: Renderer = maybeRenderer;
 
   showStatus(statusEl, 'Carregando O Coração…');
 
@@ -283,15 +308,12 @@ async function main(): Promise<void> {
   syncLocalIdentity();
 
   const camera = new Camera(world.width * TILE_SIZE_PX, world.height * TILE_SIZE_PX);
-  let dpr = Math.min(window.devicePixelRatio || 1, 3);
 
   function resize(): void {
-    dpr = Math.min(window.devicePixelRatio || 1, 3);
-    const cssW = canvas.clientWidth;
-    const cssH = canvas.clientHeight;
-    canvas.width = Math.max(1, Math.round(cssW * dpr));
-    canvas.height = Math.max(1, Math.round(cssH * dpr));
-    camera.setViewport(cssW, cssH);
+    // The window (D-26) owns its drawing surface (backing store, dpr);
+    // the Camera only ever cares about the CSS-pixel viewport.
+    const { width, height } = renderer.resize();
+    camera.setViewport(width, height);
   }
 
   window.addEventListener('resize', resize);
@@ -576,13 +598,11 @@ async function main(): Promise<void> {
       p2pController?.reportPosition(localPlayer.visualX, localPlayer.visualY, localFace);
     }
 
-    drawFrame(
+    renderer.render(
       {
-        ctx,
         world,
         sprites,
         camera,
-        dpr,
         localPlayer,
         portalMarker: getPortalMarker(),
         p2pGhosts: visitingWorldId === null ? p2pGhosts : undefined,
