@@ -90,10 +90,17 @@ function main(): void {
 
   const processed = result.meta.tickCount - tickCountBefore;
   if (processed === 0) {
+    // No new beat was due, but commands (if any) were still applied at the
+    // current tick (issue #27 fix): the world may well have changed, so don't
+    // claim it didn't. The commit step decides what actually needs pushing.
+    const applied = commandResults.length;
     console.log(
-      wasSeeded
-        ? `Nativos semeados (gota, raiz, cinza) - tick #${tickCountBefore} stands, no new beat due yet.`
-        : `No beat due yet - tick #${tickCountBefore} stands, world unchanged.`,
+      applied > 0
+        ? `No new beat due - tick #${tickCountBefore} stands, but processed ${applied} between-beats command(s).` +
+            (wasSeeded ? ' (Nativos seeded this run)' : '')
+        : wasSeeded
+          ? `Nativos semeados (gota, raiz, cinza) - tick #${tickCountBefore} stands, no new beat due yet.`
+          : `No beat due yet - tick #${tickCountBefore} stands, world unchanged.`,
     );
     return;
   }

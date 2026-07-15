@@ -143,10 +143,18 @@ export interface AdvanceWorldResult {
 }
 
 /**
- * Advances `world` to `nowUnixSeconds`, processing player commands on the first beat
- * and processing every beat that's due (capped at MAX_CATCHUP_TICKS per call).
+ * Advances `world` to `nowUnixSeconds`, processing player commands and every
+ * beat that's due (capped at MAX_CATCHUP_TICKS per call).
  *
- * When no beat is due yet, returns the input world and empty command results.
+ * Player commands are ALWAYS processed when present, even when no new beat is
+ * due yet. The `issues.opened` trigger (D-11) fires the moment a player opens a
+ * command issue, which is almost never exactly on an hourly beat boundary - so
+ * if commands were only applied alongside a due beat, a command submitted
+ * between two beats would be silently dropped: its issue would never get a
+ * result and never close, hanging open forever (this is exactly what stranded
+ * issue #27). When no beat is due, commands are applied at the current tick (no
+ * time passes, no core_pulse) and the caller commits the resulting world +
+ * closes the issues; the next real beat proceeds normally from there.
  */
 export function advanceWorld(
   world: World,
@@ -155,8 +163,16 @@ export function advanceWorld(
 ): AdvanceWorldResult {
   const ticksToProcess = Math.min(ticksDue(world.meta.tickCount, nowUnixSeconds), MAX_CATCHUP_TICKS);
 
+  // No beat is due. With no commands either, the world is genuinely caught up -
+  // return the same reference (callers rely on this no-op identity). With
+  // commands, still apply them now, tagged at the current tick, so a
+  // between-beats command is never lost.
   if (ticksToProcess === 0) {
-    return { world, commandResults: [] };
+    if (commands.length === 0) {
+      return { world, commandResults: [] };
+    }
+    const processed = processCommands(world, commands, world.meta.tickCount, world.meta.worldTime);
+    return { world: processed.world, commandResults: processed.results };
   }
 
   let next = world;

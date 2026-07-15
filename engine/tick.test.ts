@@ -340,3 +340,75 @@ describe('advanceWorld - Nativos failure isolation (issue #28)', () => {
     }
   });
 });
+
+describe('advanceWorld - commands are processed even when no beat is due (issue #27)', () => {
+  // A five-tile meadow world already caught up to `tickCount`, so a command
+  // arriving "now" sees zero beats due - the exact between-beats situation the
+  // issues.opened trigger produces in production.
+  function caughtUpWorld(tickCount: number): World {
+    return {
+      meta: { name: 'Test', seed: 'seed', tickCount, worldTime: tickCount * WORLD_MINUTES_PER_TICK },
+      width: 5,
+      height: 5,
+      tiles: Array.from({ length: 25 }, () => ({ biome: 'meadow' as const })),
+      players: { alice: { login: 'alice', position: { x: 2, y: 2 }, inventory: {}, energy: 100 } },
+      events: [],
+    };
+  }
+
+  it('applies a /dizer submitted between beats and returns its result', () => {
+    const world = caughtUpWorld(33);
+    const now = nowForDueTicks(33, 0); // exactly caught up: zero beats due
+    const commands = [
+      { id: 27, login: 'alice', type: 'dizer' as const, params: 'olá mundo', createdAt: '2026-07-15T09:47:14Z' },
+    ];
+
+    const { world: result, commandResults } = advanceWorld(world, now, commands);
+
+    expect(commandResults).toHaveLength(1);
+    expect(commandResults[0]?.success).toBe(true);
+    // The command lands in the world log so it can be shown + committed...
+    const said = result.events.filter((e) => e.type === 'player_said');
+    expect(said).toHaveLength(1);
+    // ...tagged at the current tick, with NO beat/core_pulse and no time passing.
+    expect(result.meta.tickCount).toBe(33);
+    expect(result.meta.worldTime).toBe(world.meta.worldTime);
+    expect(result.events.some((e) => e.type === 'core_pulse')).toBe(false);
+  });
+
+  it('a between-beats /entrar creates the player without advancing the clock', () => {
+    const world: World = {
+      meta: { name: 'Test', seed: 'seed', tickCount: 33, worldTime: 33 * WORLD_MINUTES_PER_TICK },
+      width: 64,
+      height: 64,
+      tiles: Array.from({ length: 64 * 64 }, () => ({ biome: 'meadow' as const })),
+      players: {},
+      events: [],
+    };
+    const commands = [
+      { id: 40, login: 'bob', type: 'entrar' as const, params: null, createdAt: '2026-07-15T10:00:00Z' },
+    ];
+
+    const { world: result, commandResults } = advanceWorld(world, nowForDueTicks(33, 0), commands);
+
+    expect(commandResults[0]?.success).toBe(true);
+    expect(result.players['bob']).toBeDefined();
+    expect(result.meta.tickCount).toBe(33);
+  });
+
+  it('the no-op identity still holds when there are no commands and no beat', () => {
+    const world = caughtUpWorld(33);
+    const { world: result, commandResults } = advanceWorld(world, nowForDueTicks(33, 0));
+    expect(result).toBe(world); // same reference - unchanged
+    expect(commandResults).toEqual([]);
+  });
+
+  it('validator still accepts a between-beats command result', () => {
+    const world = caughtUpWorld(33);
+    const commands = [
+      { id: 27, login: 'alice', type: 'dizer' as const, params: 'oi', createdAt: '2026-07-15T09:47:14Z' },
+    ];
+    const { world: result } = advanceWorld(world, nowForDueTicks(33, 0), commands);
+    expect(validateWorld(result).valid).toBe(true);
+  });
+});
