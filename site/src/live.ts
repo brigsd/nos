@@ -66,7 +66,6 @@
  * persistently offline Camada C would keep resetting to "agora" every failed
  * cycle instead of honestly climbing to "há 2min", "há 5min", etc.
  *
-
  * Determinism note: this is site code, not engine code. The `Date.now()`
  * calls below are wall-clock bookkeeping for a client-side polling timer
  * (freshness display, backoff windows) — the same category as main.ts's
@@ -308,10 +307,18 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
     if (res.status === 403) {
       const retryAfterHeader = res.headers.get('retry-after');
       if (retryAfterHeader) {
+        // Retry-After is GitHub explicitly telling us how long to stay away
+        // - honoured as given, no MAX_BACKOFF_MS ceiling here (capping an
+        // explicit server directive would defeat the point of it).
         emitStatus('b');
         return Math.max(intervals.backoff, Number(retryAfterHeader) * 1000);
       }
       if (res.headers.get('x-ratelimit-remaining') === '0') {
+        // Unlike Retry-After above, this wait is OUR OWN arithmetic on a raw
+        // reset timestamp - MAX_BACKOFF_MS is a defensive ceiling against
+        // that math going wrong (clock skew, a stale/misread header), not a
+        // second-guess of GitHub. Re-checking a bit early is harmless (a 403
+        // while already rate-limited doesn't cost more quota).
         const resetAtMs = Number(res.headers.get('x-ratelimit-reset') ?? '0') * 1000;
         emitStatus('b');
         return Math.min(Math.max(resetAtMs - Date.now(), intervals.backoff), MAX_BACKOFF_MS);
