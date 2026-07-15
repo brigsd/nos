@@ -49,21 +49,50 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           # Check if world state or README was modified
-          if [ -n "$(git status --porcelain world/heart.json README.md)" ]; then
-            git add world/heart.json README.md
-            
-            # Extract tick count for the commit message
-            TICK_NUM=$(node -e "console.log(require('./world/heart.json').meta.tickCount)")
-            git commit -m "tick: batida #$TICK_NUM"
-            git push
-          else
+          if [ -z "$(git status --porcelain world/heart.json README.md)" ]; then
             echo "No world state or README changes to commit."
+            exit 0
           fi
 
+          git add world/heart.json README.md
+          # Extract tick count for the commit message
+          TICK_NUM=$(node -e "console.log(require('./world/heart.json').meta.tickCount)")
+          git commit -m "tick: batida #$TICK_NUM"
+
+          # Push with rebase + retry. The tick's own runs are serialized by the
+          # `world-tick` concurrency group, but UNRELATED pushes (PR merges, doc
+          # commits) land on main at any time and would otherwise reject this
+          # push (non-fast-forward). A rejected push used to silently drop the
+          # beat/command - and the paired issue would still be closed below,
+          # losing a player's action for good. Rebase onto latest main (the tick
+          # only edits world/heart.json + README, which unrelated pushes don't
+          # touch, so this stays conflict-free in practice) and retry.
+          pushed=""
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              echo "Pushed on attempt $attempt."
+              pushed="yes"
+              break
+            fi
+            echo "Push rejected (attempt $attempt) - rebasing on latest origin/main and retrying..."
+            if ! git pull --rebase origin main; then
+              git rebase --abort 2>/dev/null || true
+              echo "::error::Rebase conflict while catching up to origin/main; leaving issues open for the next tick." >&2
+              exit 1
+            fi
+          done
+          if [ -z "$pushed" ]; then
+            echo "::error::Tick push still failing after 5 rebase+retry attempts; not closing any issue this run." >&2
+            exit 1
+          fi
+
+      # Only close/answer command issues when the world update above actually
+      # succeeded (default `if: success()`). If the push failed, the issues stay
+      # open and get reprocessed on the next tick - a command must never be
+      # marked done when its world change wasn't durably pushed (issue #27).
       - name: Respond to and close command issues
-        if: always()
         run: npm run respond-issues
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
