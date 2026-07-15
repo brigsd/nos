@@ -4309,5 +4309,52 @@
       "tick": 33,
       "worldTime": 1980
     }
-  ]
+  ],
+  "natives": {
+    "gota": {
+      "id": "gota",
+      "name": "Gota",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "behaviorTree": "wanderer",
+      "behaviorState": "{}",
+      "inventory": {
+        "pulse_fragment": 5
+      },
+      "hp": 100,
+      "faction": "wanderer"
+    },
+    "raiz": {
+      "id": "raiz",
+      "name": "Raiz",
+      "position": {
+        "x": 43,
+        "y": 6
+      },
+      "behaviorTree": "merchant",
+      "behaviorState": "{}",
+      "inventory": {
+        "wood": 10
+      },
+      "hp": 100,
+      "faction": "merchant"
+    },
+    "cinza": {
+      "id": "cinza",
+      "name": "Cinza",
+      "position": {
+        "x": 25,
+        "y": 8
+      },
+      "behaviorTree": "guardian",
+      "behaviorState": "{}",
+      "inventory": {
+        "stone": 10
+      },
+      "hp": 120,
+      "faction": "guardian"
+    }
+  }
 }
