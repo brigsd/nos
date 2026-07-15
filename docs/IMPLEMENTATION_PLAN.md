@@ -33,7 +33,7 @@
 - [x] R1 · O Eco no renderer (D-25b: jogador sólido, Registro fantasma)
 - [x] R2 · Login GitHub (D-13) — PAT-based hoje (device flow travado por CORS, código pronto atrás de flag; ver docs/CONTINUITY.md)
 - [x] R3 · Comparativo (D-26: PixiJS opt-in, canvas padrão) canvas vs. PixiJS + janela WebGL (mira: luz Eastward/Octopath; contrato de mundo intocado)
-- [x] R4 · Motor de fabricação (PR #39; falta painel Oficinas na tela): 4 máquinas-sintetizador (D-25a), receitas JSON, comando /sintetizar, oficinas no mapa — minijogos plugam depois (design do ideador)
+- [x] R4 · Motor de fabricação (PR #39, mesclado) + painel Oficinas na tela (PR #42, aguardando review): 4 máquinas-sintetizador (D-25a), receitas JSON, comando /sintetizar, oficinas no mapa e no HUD — minijogos plugam depois (design do ideador)
 - [ ] R5 · Fluidez B: polling autenticado 1–3s (ETag/304) — presença + chat-speed
 - [ ] R6 · Portais: protocolo + hall + 2º mundo de teste (travessia entre repos na mesma janela)
 - [ ] R7 · Fluidez A: WebRTC P2P (camada Intenção; STUN público, opt-in com aviso de IP — D-25c)
