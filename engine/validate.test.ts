@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { assertValidWorld, validateWorld, worldSchema } from './validate';
 import { MAX_ENERGY, NATIVE_MESSAGE_MAX_LENGTH, STARTING_ENERGY, STARTING_PULSO } from './types';
-import type { Native, World } from './types';
+import type { Machine, Native, World } from './types';
+import { ITEM_CATALOG, MACHINES } from './fabrication';
 
 function gota(overrides: Partial<Native> = {}): Native {
   return {
@@ -15,6 +16,10 @@ function gota(overrides: Partial<Native> = {}): Native {
     faction: 'wanderer',
     ...overrides,
   };
+}
+
+function bancada(overrides: Partial<Machine> = {}): Machine {
+  return { id: 'bancada', name: 'Bancada', position: { x: 1, y: 1 }, ...overrides };
 }
 
 function validWorld(): World {
@@ -163,6 +168,49 @@ describe('validateWorld - accepts valid state', () => {
       nativeId: 'gota',
       login: 'octocat',
       message: 'Hm.',
+    });
+    const result = validateWorld(world);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a world with no machines field at all (pre-Fábrica backward compatibility)', () => {
+    const world = validWorld();
+    expect(world.machines).toBeUndefined();
+    expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('accepts the 4 well-formed oficinas and a player with crafted items', () => {
+    const world = validWorld();
+    world.machines = {
+      forja: { id: 'forja', name: 'Forja', position: { x: 0, y: 0 } },
+      cozinha: { id: 'cozinha', name: 'Cozinha', position: { x: 1, y: 0 } },
+      bancada: bancada({ position: { x: 0, y: 1 } }),
+      estaleiro: { id: 'estaleiro', name: 'Estaleiro', position: { x: 1, y: 1 } },
+    };
+    world.players['octocat']!.items = { lanterna: 1, peca_basica: 3 };
+    const result = validateWorld(world);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts an empty machines object', () => {
+    const world = validWorld();
+    world.machines = {};
+    expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('accepts a well-formed item_synthesized event referencing a living machine and player', () => {
+    const world = validWorld();
+    world.machines = { bancada: bancada() };
+    world.events.push({
+      type: 'item_synthesized',
+      tick: 3,
+      worldTime: 180,
+      login: 'octocat',
+      machineId: 'bancada',
+      recipeId: 'lanterna',
+      output: { itemId: 'lanterna', quantity: 1 },
     });
     const result = validateWorld(world);
     expect(result.errors).toEqual([]);
@@ -536,6 +584,125 @@ describe('validateWorld - rejects invalid state', () => {
     });
     expect(validateWorld(world).valid).toBe(false);
   });
+
+  it('rejects a Machine positioned outside the map bounds', () => {
+    const world = structuredClone(validWorld());
+    world.machines = { bancada: bancada({ position: { x: 999999, y: 999999 } }) };
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/machines\["bancada"\]\.position.*out of bounds/);
+  });
+
+  it('rejects a Machine whose id does not match its map key', () => {
+    const world = structuredClone(validWorld());
+    world.machines = { bancada: bancada({ id: 'forja' }) };
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/machines\["bancada"\]\.id \("forja"\) does not match its map key/);
+  });
+
+  it('rejects an unknown MachineId', () => {
+    const world = structuredClone(validWorld());
+    // @ts-expect-error - deliberately invalid for the test
+    world.machines = { fabricaFantasma: bancada({ id: 'fabricaFantasma' }) };
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects a Machine missing a required field', () => {
+    const world = invalidatableClone();
+    const badMachine: Record<string, unknown> = { ...bancada() };
+    delete badMachine['name'];
+    world['machines'] = { bancada: badMachine };
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects a player.items entry keyed by an unknown item id', () => {
+    const world = invalidatableClone();
+    (world['players'] as Record<string, Record<string, unknown>>)['octocat']!['items'] = { espada_lendaria: 1 };
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects an item_synthesized event whose machineId is absent from machines', () => {
+    const world = structuredClone(validWorld());
+    world.machines = { bancada: bancada() };
+    world.events.push({
+      type: 'item_synthesized',
+      tick: 4,
+      worldTime: 240,
+      login: 'octocat',
+      machineId: 'estaleiro',
+      recipeId: 'carrinho_de_maos',
+      output: { itemId: 'carrinho_de_maos', quantity: 1 },
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(
+      /events\[\d+\] \(item_synthesized\)\.machineId \("estaleiro"\) does not exist in machines/,
+    );
+  });
+
+  it('rejects an item_synthesized event when the world has no machines at all', () => {
+    const world = structuredClone(validWorld());
+    world.events.push({
+      type: 'item_synthesized',
+      tick: 4,
+      worldTime: 240,
+      login: 'octocat',
+      machineId: 'bancada',
+      recipeId: 'lanterna',
+      output: { itemId: 'lanterna', quantity: 1 },
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/does not exist in machines/);
+  });
+
+  it('rejects an item_synthesized event whose login is not a living player', () => {
+    const world = structuredClone(validWorld());
+    world.machines = { bancada: bancada() };
+    world.events.push({
+      type: 'item_synthesized',
+      tick: 4,
+      worldTime: 240,
+      login: 'ghost',
+      machineId: 'bancada',
+      recipeId: 'lanterna',
+      output: { itemId: 'lanterna', quantity: 1 },
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/does not exist in players/);
+  });
+
+  it('rejects an item_synthesized event with an unknown output itemId', () => {
+    const world = structuredClone(validWorld());
+    world.machines = { bancada: bancada() };
+    world.events.push({
+      type: 'item_synthesized',
+      tick: 4,
+      worldTime: 240,
+      login: 'octocat',
+      machineId: 'bancada',
+      output: { itemId: 'espada_lendaria', quantity: 1 },
+      recipeId: 'espada_lendaria',
+    });
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects an item_synthesized event with a non-positive output quantity', () => {
+    const world = structuredClone(validWorld());
+    world.machines = { bancada: bancada() };
+    world.events.push({
+      type: 'item_synthesized',
+      tick: 4,
+      worldTime: 240,
+      login: 'octocat',
+      machineId: 'bancada',
+      recipeId: 'lanterna',
+      output: { itemId: 'lanterna', quantity: 0 },
+    });
+    expect(validateWorld(world).valid).toBe(false);
+  });
 });
 
 describe('assertValidWorld', () => {
@@ -612,5 +779,16 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
     const repliedMessageSchema = schema.definitions.NativeRepliedEvent.properties.message;
     expect(repliedMessageSchema.maxLength).toBe(NATIVE_MESSAGE_MAX_LENGTH);
     expect(repliedMessageSchema.minLength).toBe(1);
+  });
+
+  it('keeps the schema MachineId enum equal to MACHINES catalog keys (A Fábrica, v2.5)', () => {
+    const machineIdSchema = (worldSchema as { definitions: { MachineId: { enum: string[] } } }).definitions
+      .MachineId;
+    expect(machineIdSchema.enum.slice().sort()).toEqual(Object.keys(MACHINES).sort());
+  });
+
+  it('keeps the schema ItemId enum equal to ITEM_CATALOG keys (A Fábrica, v2.5) - hand-mirrored, pinned here', () => {
+    const itemIdSchema = (worldSchema as { definitions: { ItemId: { enum: string[] } } }).definitions.ItemId;
+    expect(itemIdSchema.enum.slice().sort()).toEqual(Object.keys(ITEM_CATALOG).sort());
   });
 });

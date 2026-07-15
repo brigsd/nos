@@ -1,0 +1,36 @@
+name: "Comando: /sintetizar"
+description: "Fabricar um item numa oficina d'A Fábrica"
+title: "Comando: /sintetizar"
+labels: ["comando"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### A Fábrica
+
+        O Coração é A Fábrica: um hub pacífico de fabricação, sem combate. Você precisa
+        estar a até **3 tiles** da oficina certa, com os materiais na mochila e energia
+        suficiente. A síntese é instantânea. Receitas do dia:
+
+        | Oficina | Receita | Materiais | Você recebe | Energia |
+        |---|---|---|---|---|
+        | Forja | `luvas_de_forja` | 2 pedra + 1 madeira | 1 Luvas de Forja | 5 |
+        | Forja | `armadura_de_pulso` | 4 pedra + 1 fragmento de pulso | 1 Armadura de Pulso | 12 |
+        | Cozinha | `racao_de_viagem` | 3 madeira | 2 Ração de Viagem | 4 |
+        | Cozinha | `elixir_de_pulso` | 1 fragmento de pulso + 1 pedra | 1 Elixir de Pulso | 8 |
+        | Bancada | `peca_basica` | 2 madeira + 2 pedra | 3 Peça Básica | 6 |
+        | Bancada | `lanterna` | 1 pedra + 1 fragmento de pulso | 1 Lanterna | 5 |
+        | Bancada | `kit_de_ferramentas` | 4 madeira + 2 pedra | 1 Kit de Ferramentas | 9 |
+        | Estaleiro | `carrinho_de_maos` | 2 Peça Básica + 2 madeira | 1 Carrinho de Mãos | 15 |
+        | Estaleiro | `bicicleta_do_nucleo` | 3 Peça Básica + 2 pedra + 1 fragmento de pulso | 1 Bicicleta do Núcleo | 20 |
+
+        A Peça Básica (Bancada) é o elo entre oficinas: fabrique-a primeiro para depois
+        montar os veículos no Estaleiro.
+  - type: input
+    id: receita
+    attributes:
+      label: "Receita"
+      description: "O id da receita, exatamente como na tabela acima"
+      placeholder: "lanterna"
+    validations:
+      required: true

@@ -99,6 +99,16 @@ function semanticErrors(world: World): string[] {
     if (nativePositionError) errors.push(nativePositionError);
   }
 
+  // A Fábrica's oficinas (v2.5, optional): same id-matches-its-map-key and
+  // in-bounds checks as Nativos/players above.
+  for (const [id, machine] of Object.entries(world.machines ?? {})) {
+    if (machine.id !== id) {
+      errors.push(`machines["${id}"].id ("${machine.id}") does not match its map key`);
+    }
+    const machinePositionError = boundsError(`machines["${id}"].position`, machine.position, world);
+    if (machinePositionError) errors.push(machinePositionError);
+  }
+
   world.events.forEach((event, index) => {
     const label = `events[${index}] (${event.type})`;
 
@@ -114,6 +124,11 @@ function semanticErrors(world: World): string[] {
     // references a Native instead of a Player (native_spoke).
     if ('nativeId' in event && !(event.nativeId in (world.natives ?? {}))) {
       errors.push(`${label}.nativeId ("${event.nativeId}") does not exist in natives`);
+    }
+
+    // Same idea again, for item_synthesized's machineId (A Fábrica, v2.5).
+    if ('machineId' in event && !(event.machineId in (world.machines ?? {}))) {
+      errors.push(`${label}.machineId ("${event.machineId}") does not exist in machines`);
     }
 
     // Generic position-bounds pass (see EVENT_POSITION_FIELDS above): the
