@@ -272,10 +272,37 @@ describe('generateHeartWorld - resources follow their biome', () => {
 });
 
 describe('the committed world/heart.json', () => {
-  it('matches what the generator produces right now (regenerate with `npm run genworld` if this fails)', () => {
+  it('keeps the genesis layout the generator produces right now (regenerate with `npm run genworld` for a brand-new world only)', () => {
+    // O Coração has been live and ticking for real since tick #1 (see
+    // docs/CONTINUITY.md): world/heart.json now carries real playtime -
+    // meta.tickCount/worldTime, players and events all advance every beat,
+    // and a tile's resource legitimately disappears the moment a player
+    // collects it (engine/commands.ts, "coletar"). So it can never again
+    // equal a byte-for-byte fresh genesis generation, and asserting full
+    // equality here (as this test used to) would fail forever after tick 1
+    // for reasons that have nothing to do with mapgen actually drifting.
+    //
+    // What must still never silently drift is the genesis layout itself:
+    // name, seed, dimensions, and the biome generateHeartWorld(seed) placed
+    // on every tile (nothing in the tick/command pipeline ever changes a
+    // tile's biome). Resources are checked too, but only in the one
+    // direction gameplay is allowed to move them - present in the fresh
+    // generation, then possibly collected away on disk. A resource that
+    // exists on disk but not in the fresh generation, or that changed type,
+    // still fails this test.
     const onDisk = JSON.parse(readFileSync(heartJsonPath, 'utf-8')) as World;
     const fresh = generateHeartWorld(HEART_WORLD_SEED);
-    expect(onDisk).toEqual(fresh);
+
+    expect(onDisk.meta.name).toBe(fresh.meta.name);
+    expect(onDisk.meta.seed).toBe(fresh.meta.seed);
+    expect(onDisk.width).toBe(fresh.width);
+    expect(onDisk.height).toBe(fresh.height);
+    expect(onDisk.tiles.map((tile) => tile.biome)).toEqual(fresh.tiles.map((tile) => tile.biome));
+
+    onDisk.tiles.forEach((tile, index) => {
+      if (tile.resource === undefined) return;
+      expect(tile.resource).toBe(fresh.tiles[index]!.resource);
+    });
   });
 
   it('validates against the schema', () => {
