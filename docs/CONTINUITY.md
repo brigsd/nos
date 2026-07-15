@@ -66,6 +66,14 @@ Análise: sem exploração ativa hoje, mas a arquitetura podia travar o mundo pr
 - **Margem d'água sem repetição (PR #34):** `drawMeadowRim` escolhe entre 2 variantes de relevo + flip horizontal por hash de tile (mesmo padrão do `meadowSprite`, determinístico). Nova sprite `margem_agua_4dir_b` pela pipeline `.cjs`; antes/depois em `site/qa/`. Débito do art-review do #12 quitado.
 - **`/dizer` visível — O Mural (PR #32):** o comando gerava `player_said` mas NADA renderizava. Agora: balão de fala sobre o jogador no mapa (espelha o padrão dos Nativos) + HUD DOM "O Mural" com as últimas 8 falas (`@login` + texto + "há N pulsos"). XSS-safe (`textContent`). Descoberta: o `/dizer` sempre persistiu (havia um `player_said` no tick 26); só faltava a tela.
 
+## v2 — fatia 💰 Economia até a tela (2026-07-15, branch `claude/v2-economia`, em PR)
+Re-implementação limpa sobre a main (a v2 congelada foi só referência de design; seus bugs não vieram junto):
+- **Motor:** `Player.pulso` (opcional, retrocompatível — ausente = ₱0, ler via `getPulso`), `engine/economy.ts` (tabela `TRADE_RECIPES` de compra/venda/escambo + `executeTrade` puro e total), comando `/trocar nativo troca` (alcance = raio de saudação dos Nativos, 3 tiles; 1 de energia), evento `trade_completed` (given/received/pulsoDelta). Itens são conservados (mudam de mochila); a perna ₱ é emitida/queimada pelo tick (banco central, GDD). Spread compra>venda é o dreno de ₱.
+- **Segurança:** TODO lookup por string do jogador via `getOwn` — `/trocar __proto__` (nativo OU troca hostil) morre como "não existe", testado. Verificado e2e com o tick canônico.
+- **Schema/validador:** `Player.pulso` (inteiro ≥0) + `TradeCompletedEvent`; cross-checks genéricos de login/nativeId já cobrem o evento novo; testes anti-drift (STARTING_PULSO, receitas só com recursos conhecidos, alcance = PLAYER_PROXIMITY_TILES).
+- **Tela:** HUD "Meu Nó" (informa seu login 1x — localStorage `nos_login`, NÃO é autenticação, só escolhe qual entrada pública exibir → ₱ + energia + mochila do Registro), painel "Comércio" (bancas dos Nativos com estoque + só as trocas que o Nativo pode honrar, cada uma um link de issue `/trocar` pré-preenchida) e Mural agora também narra trocas ("@login deu 1 madeira e levou ₱5 — negócio com Raiz"). Tudo `textContent` (XSS-safe).
+- **Fork de produto a confirmar com o Tiago:** números de preço (v2 de referência: madeira/pedra ₱10 compra / ₱5 venda; fragmento ₱25/₱20; escambo 1 fragmento ↔ 3 recursos) e ₱ inicial = 0 (só se ganha vendendo).
+
 ## Nota de segurança — proteção de branch (dúvida do Tiago, 2026-07-15)
 Só quem tem acesso de escrita (Tiago + token da integração) empurra na `main`; desconhecido não force-pusha. Recomendado ao Tiago: ligar SÓ "block force-push + deletion" (inofensivo). NÃO exigir PR/status-checks na main — **o tick (bot) commita direto na main a cada batida**; exigir PR quebraria o coração do jogo. Decisão final é do Tiago.
 
