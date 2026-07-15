@@ -100,6 +100,7 @@ async function main(): Promise<void> {
   const nativosBodyEl = requireEl<HTMLDivElement>('hud-nativos-body');
   const oficinasBodyEl = requireEl<HTMLDivElement>('hud-oficinas-body');
   const portaisBodyEl = requireEl<HTMLDivElement>('hud-portais-body');
+  const portaisDetailsEl = requireEl<HTMLDetailsElement>('hud-portais');
   const visitingEl = requireEl<HTMLElement>('hud-visiting');
   const liveEl = requireEl<HTMLElement>('hud-live');
   const liveDotEl = requireEl<HTMLElement>('hud-live-dot');
@@ -336,9 +337,8 @@ async function main(): Promise<void> {
   }
 
   function openPortaisPanel(): void {
-    const details = document.getElementById('hud-portais');
-    if (details instanceof HTMLDetailsElement) details.open = true;
-    details?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    portaisDetailsEl.open = true;
+    portaisDetailsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function refreshPortaisUI(): void {
