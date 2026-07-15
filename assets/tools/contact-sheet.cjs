@@ -7,19 +7,21 @@
  * weight / cross-sprite cohesion).
  *
  * Legend (cell number -> sprite / frame):
- *   1 campina_1        4 floresta          7 ruina                10 nucleo_pulse f2 (peak)
- *   2 campina_2        5 agua f0           8 caminho_terra        11 nucleo_pulse f3 (receding)
- *   3 campina_flores   6 agua f1           9 nucleo_pulse f0 (dim) 12 nucleo_pulse f1 (growing)
+ *   1 campina_1        6 agua f1                     11 nucleo_pulse f3 (receding) 16 margem_agua N
+ *   2 campina_2        7 ruina                        12 nucleo_pulse f1 (growing)  17 margem_agua E
+ *   3 campina_3        8 caminho_terra                13 margem_agua S
+ *   4 campina_flores   9 nucleo_pulse f0 (dim)        14 margem_agua W
+ *   5 agua f0         10 nucleo_pulse f2 (peak)       15 (spare)
  *
- * Usage: node assets/tools/contact-sheet.js
+ * Usage: node assets/tools/contact-sheet.cjs
  */
 
 const path = require('path');
-const { loadPalette, matrixToCanvas, scaleNearest, createCanvas, fill, compositeOver, setPixel, savePNG } = require('./lib/canvas');
-const { loadSpriteSrc } = require('./lib/spritesrc');
-const { drawText } = require('./lib/font3x5');
-const { PAL } = require('./lib/palette-names');
-const { ASSETS, SRC_DIR, PREVIEW_SCALE } = require('./render');
+const { loadPalette, matrixToCanvas, scaleNearest, createCanvas, fill, compositeOver, setPixel, savePNG } = require('./lib/canvas.cjs');
+const { loadSpriteSrc } = require('./lib/spritesrc.cjs');
+const { drawText } = require('./lib/font3x5.cjs');
+const { PAL } = require('./lib/palette-names.cjs');
+const { ASSETS, SRC_DIR, PREVIEW_SCALE } = require('./render.cjs');
 
 const OUT_PATH = path.join(ASSETS, 'sprites', 'contact_sheet_8x.png');
 
@@ -32,8 +34,8 @@ function buildEntries(palette) {
   return [
     { label: '1', canvas: loadFrameCanvas('campina_1', 0, palette) },
     { label: '2', canvas: loadFrameCanvas('campina_2', 0, palette) },
-    { label: '3', canvas: loadFrameCanvas('campina_flores', 0, palette) },
-    { label: '4', canvas: loadFrameCanvas('floresta', 0, palette) },
+    { label: '3', canvas: loadFrameCanvas('campina_3', 0, palette) },
+    { label: '4', canvas: loadFrameCanvas('campina_flores', 0, palette) },
     { label: '5', canvas: loadFrameCanvas('agua_ondula_2frames', 0, palette) },
     { label: '6', canvas: loadFrameCanvas('agua_ondula_2frames', 1, palette) },
     { label: '7', canvas: loadFrameCanvas('ruina', 0, palette) },
@@ -42,6 +44,10 @@ function buildEntries(palette) {
     { label: '10', canvas: loadFrameCanvas('nucleo_pulse_4frames', 2, palette) },
     { label: '11', canvas: loadFrameCanvas('nucleo_pulse_4frames', 3, palette) },
     { label: '12', canvas: loadFrameCanvas('nucleo_pulse_4frames', 1, palette) },
+    { label: '13', canvas: loadFrameCanvas('margem_agua_4dir', 0, palette) },
+    { label: '14', canvas: loadFrameCanvas('margem_agua_4dir', 1, palette) },
+    { label: '16', canvas: loadFrameCanvas('margem_agua_4dir', 2, palette) },
+    { label: '17', canvas: loadFrameCanvas('margem_agua_4dir', 3, palette) },
   ];
 }
 
@@ -50,7 +56,7 @@ function build() {
   const entries = buildEntries(palette);
 
   const cols = 4;
-  const rows = 3;
+  const rows = 4;
   const cellArt = 32 * PREVIEW_SCALE; // biggest sprite (nucleo, 32x32) at 8x
   const labelH = 20;
   const cell = cellArt + labelH;

@@ -5,7 +5,7 @@
  * pixel-index matrices for every T7 sprite and writes them as the "source
  * of truth" JSON files under assets/sprites/src/.
  *
- * This is deliberately separate from render.js: render.js only ever reads
+ * This is deliberately separate from render.cjs: render.cjs only ever reads
  * static JSON matrices and turns them into PNGs. This script is how those
  * matrices get *drawn* — via small geometric rules (circles, gradients,
  * ordered dithering) instead of typing 256+ numbers by hand per tile.
@@ -14,14 +14,14 @@
  * JSON files (see git history / PR notes), not by re-running this script
  * blindly.
  *
- * Usage: node assets/tools/author-sprites.js
+ * Usage: node assets/tools/author-sprites.cjs
  */
 
 const path = require('path');
-const { PAL } = require('./lib/palette-names');
-const { ditherBand, lightT, bayerThreshold } = require('./lib/dither');
-const { makeGrid, set, get } = require('./lib/grid');
-const { writeSpriteSrc } = require('./lib/spritesrc');
+const { PAL } = require('./lib/palette-names.cjs');
+const { ditherBand, lightT, bayerThreshold } = require('./lib/dither.cjs');
+const { makeGrid, set, get } = require('./lib/grid.cjs');
+const { writeSpriteSrc } = require('./lib/spritesrc.cjs');
 
 const SRC_DIR = path.join(__dirname, '..', 'sprites', 'src');
 
@@ -62,8 +62,23 @@ function neighbors4(x, y) {
 }
 
 // ---------------------------------------------------------------------
-// campina_1 / campina_2 (grassland base, 2 variations)
+// campina_1 / campina_2 / campina_3 (grassland base, 3 subtle variations)
 // ---------------------------------------------------------------------
+//
+// Issue #12 art-reviewer finding: campina_1 and campina_2 used to sit on
+// DIFFERENT dominant gradient tones (moss vs sage - a full step apart on
+// the ramp, ~46/255 luma). paintGroundGradient's AMPLITUDE=0.4 compression
+// means the MIDDLE tone of the 3-tone array covers ~80% of the tile, so
+// that one-step difference was really "80% of tile A is moss" next to
+// "80% of tile B is sage" - two visibly different color blocks. Spread
+// across the map by hashTile(), that read as a checkerboard/mosaic
+// instead of one meadow with texture.
+//
+// Fix: all three variants below share the SAME dominant middle tone
+// (moss). They differ only in the minority shadow/highlight tones (still
+// drawn from the immediately-adjacent steps of the same green ramp) and
+// in tuft color/placement - "textura, não bloco de cor diferente", per
+// the issue.
 
 function genCampina1(w, h) {
   const g = makeGrid(w, h);
@@ -82,14 +97,33 @@ function genCampina1(w, h) {
 
 function genCampina2(w, h) {
   const g = makeGrid(w, h);
-  // Same family, shifted lighter/warmer so it reads as a natural
-  // neighboring patch of the same meadow rather than a different material.
-  paintGroundGradient(g, w, h, [PAL.moss, PAL.sage, PAL.paleSage]);
+  // Same dominant tone as campina_1 (moss); only the highlight speck tone
+  // shifts a half-step lighter (paleSage instead of sage), plus its own
+  // tuft palette/placement - close enough to read as the same meadow.
+  paintGroundGradient(g, w, h, [PAL.darkGreenGrey, PAL.moss, PAL.paleSage]);
   const tufts = [
     [4, 4], [10, 3], [1, 8], [8, 7], [13, 4], [6, 12], [11, 13], [3, 14],
   ];
   for (const [x, y] of tufts) {
     set(g, x, y, PAL.paleYellowGreen);
+    set(g, x, y + 1, PAL.forestGreen);
+  }
+  return g;
+}
+
+function genCampina3(w, h) {
+  const g = makeGrid(w, h);
+  // Third subtle variant (issue #12, optional callout): still dominant
+  // moss, with a slightly wider dark/light spread (nearBlackTeal to
+  // paleSage) and its own tuft placement, so the hash's 3-way pick never
+  // settles into an obvious 2-tile repeat without ever reintroducing a
+  // checkerboard-strength color jump.
+  paintGroundGradient(g, w, h, [PAL.nearBlackTeal, PAL.moss, PAL.paleSage]);
+  const tufts = [
+    [6, 2], [1, 5], [14, 4], [9, 9], [4, 12], [12, 14], [2, 14], [15, 8],
+  ];
+  for (const [x, y] of tufts) {
+    set(g, x, y, PAL.lightGreen);
     set(g, x, y + 1, PAL.forestGreen);
   }
   return g;
@@ -282,6 +316,79 @@ function genAguaFrame(w, h, shift) {
 }
 
 // ---------------------------------------------------------------------
+// margem_agua_4dir (issue #12: soften the grass->water hard cut)
+// ---------------------------------------------------------------------
+//
+// A sandy/wet rim the client draws OVER a campina tile wherever that tile
+// borders a water tile (site/src/renderer.ts). Deliberately not full
+// autotiling (16 variants for every neighbor combination) - just one
+// edge, hand-authored for "water is to the south", plus its three
+// 90-degree rotations so the same strip works on any side a tile touches
+// water. Corners (two adjacent sides touching water) fall out for free:
+// the renderer draws one rotated copy per touching side and they overlap.
+//
+// Frame order: 0=S, 1=W, 2=N, 3=E (water-side). Mostly transparent (-1)
+// so the campina tile underneath still carries almost the whole tile;
+// only ~1/3 of the height (from the touching edge inward) gets sand.
+
+/** Rotate a square palette-index grid 90 degrees clockwise. */
+function rotateGridCW(g, size) {
+  const out = makeGrid(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      set(out, size - 1 - y, x, get(g, x, y));
+    }
+  }
+  return out;
+}
+
+/** Hand-authored edge: sand band grows in from the SOUTH (bottom) side. */
+function genMargemAguaSouth(w, h) {
+  const g = makeGrid(w, h);
+  // Per-column start row of the sand band: one gentle rise + one gentle
+  // dip, never more than 1px step between neighbouring columns. Art-
+  // reviewer round 1 finding: an every-column up/down wave plus a full
+  // dithered gradient inside such a short band both read as sharp
+  // sawtooth "teeth" instead of a shoreline. Flat colour zones (below)
+  // fixed the second half of that; this slower wave fixes the first.
+  const edgeY = [10, 10, 10, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 10, 10, 10];
+  // A few dry-sand shadow flecks and waterline foam dashes - sparse
+  // hand placement, same spirit as caminho_terra's pebbles/sunFlecks.
+  const pebbles = new Set(['3,11', '9,12', '13,13']);
+  const foamX = new Set([2, 7, 11]);
+
+  for (let x = 0; x < w; x++) {
+    const start = edgeY[x];
+    for (let y = start; y < h; y++) {
+      if (y === start) {
+        // Feather row: grass crumbling into sand, not a hard edge.
+        if (bayerThreshold(x, y) < 0.45) set(g, x, y, PAL.tan);
+        continue;
+      }
+      // Flat zones instead of a dithered gradient: dw = rows from the
+      // waterline (0 = touches water). A dry sand strip (tan) that grows
+      // with the band, then a constant-width damp/wet strip right at the
+      // edge - reads as clean shore, not noise.
+      const dw = h - 1 - y;
+      if (dw === 0) set(g, x, y, PAL.darkTeal);
+      else if (dw <= 2) set(g, x, y, PAL.darkOliveBrown);
+      else set(g, x, y, PAL.tan);
+      if (pebbles.has(`${x},${y}`)) set(g, x, y, PAL.darkOliveBrown);
+    }
+    if (foamX.has(x)) set(g, x, h - 1, PAL.paleMint);
+  }
+  return g;
+}
+
+function genMargemAgua4Dir(w, h) {
+  const south = genMargemAguaSouth(w, h);
+  const west = rotateGridCW(south, w);
+  const north = rotateGridCW(west, w);
+  const east = rotateGridCW(north, w);
+  return [south, west, north, east];
+}
+
+// ---------------------------------------------------------------------
 // nucleo_pulse_4frames (32x32, the heart of the world)
 // ---------------------------------------------------------------------
 
@@ -437,6 +544,7 @@ function writeTile(name, gridFn) {
 function run() {
   writeTile('campina_1', genCampina1);
   writeTile('campina_2', genCampina2);
+  writeTile('campina_3', genCampina3);
   writeTile('campina_flores', genCampinaFlores);
   writeTile('floresta', genFloresta);
   writeTile('ruina', genRuina);
@@ -451,6 +559,22 @@ function run() {
     frames: [{ pixels: genAguaFrame(16, 16, 0) }, { pixels: genAguaFrame(16, 16, 3) }],
   });
   console.log('authored agua_ondula_2frames.json');
+
+  {
+    const [south, west, north, east] = genMargemAgua4Dir(16, 16);
+    writeSpriteSrc(path.join(SRC_DIR, 'margem_agua_4dir.json'), {
+      name: 'margem_agua_4dir',
+      kind: 'tile',
+      width: 16,
+      height: 16,
+      notes:
+        'Sandy/wet rim the client layers over a campina tile wherever it borders water (issue #12). ' +
+        'Not an animation: 4 static orientation frames, water-side S,W,N,E - each a 90deg clockwise ' +
+        'rotation of the hand-authored "south" edge (see rotateGridCW).',
+      frames: [{ pixels: south }, { pixels: west }, { pixels: north }, { pixels: east }],
+    });
+    console.log('authored margem_agua_4dir.json');
+  }
 
   writeSpriteSrc(path.join(SRC_DIR, 'nucleo_pulse_4frames.json'), {
     name: 'nucleo_pulse_4frames',
