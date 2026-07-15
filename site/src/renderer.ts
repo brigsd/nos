@@ -48,6 +48,18 @@ function meadowSprite(sprites: Sprites, x: number, y: number): SpriteSheet {
   }
 }
 
+/** Maps a Native's id to its sprite. Natives are seeded from a fixed roster (gota/raiz/cinza). */
+function nativeSprite(sprites: Sprites, id: string): SpriteSheet {
+  switch (id) {
+    case 'raiz':
+      return sprites.nativoRaiz;
+    case 'cinza':
+      return sprites.nativoCinza;
+    default:
+      return sprites.nativoGota;
+  }
+}
+
 /**
  * Sandy/wet rim for the grass->water border (issue #12: the meeting used to
  * be a hard cut). Each entry is a neighbour offset paired with the
@@ -142,6 +154,21 @@ function drawPlayerName(
   ctx.restore();
 }
 
+/** A tiny pixel speech bubble above a Native that spoke this beat (issue #23). Fixed screen size, like the name tags. */
+function drawSpeechMark(ctx: CanvasRenderingContext2D, px0: number, py0: number, px1: number): void {
+  const cx = Math.round((px0 + px1) / 2);
+  const top = py0 - 15;
+  ctx.save();
+  ctx.fillStyle = '#fbf5ef'; // near-white (Resurrect 64)
+  ctx.fillRect(cx - 5, top, 10, 6); // bubble body
+  ctx.fillRect(cx - 2, top + 6, 3, 2); // tail
+  ctx.fillStyle = '#2e222f'; // dark dots (Resurrect 64)
+  ctx.fillRect(cx - 3, top + 2, 1, 2);
+  ctx.fillRect(cx, top + 2, 1, 2);
+  ctx.fillRect(cx + 3, top + 2, 1, 2);
+  ctx.restore();
+}
+
 export function drawFrame(rc: RenderContext, nowMs: number): void {
   const { ctx, world, sprites, camera, dpr, localPlayer } = rc;
   const { width: cssW, height: cssH } = camera.viewport;
@@ -216,6 +243,29 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     const ny0 = camera.worldToScreenY(coreMinY * TILE_SIZE_PX);
     const ny1 = camera.worldToScreenY((coreMaxY + 1) * TILE_SIZE_PX);
     drawSpriteFrame(ctx, sprites.nucleo, frame, nx0, ny0, nx1, ny1);
+  }
+
+  // 2.5. Draw Nativos (NPCs — official world state, so solid like other players).
+  // A Native that spoke on the current beat gets a small speech bubble (issue #23).
+  const spokeThisTick = new Set(
+    world.events
+      .filter((e): e is Extract<typeof e, { type: 'native_spoke' }> => e.type === 'native_spoke')
+      .filter((e) => e.tick === world.meta.tickCount)
+      .map((e) => e.nativeId),
+  );
+  for (const native of Object.values(world.natives ?? {})) {
+    const nx = native.position.x;
+    const ny = native.position.y;
+    if (nx < tileMinX || nx > tileMaxX || ny < tileMinY || ny > tileMaxY) continue;
+
+    const nx0 = camera.worldToScreenX(nx * TILE_SIZE_PX);
+    const nx1 = camera.worldToScreenX((nx + 1) * TILE_SIZE_PX);
+    const ny0 = camera.worldToScreenY(ny * TILE_SIZE_PX);
+    const ny1 = camera.worldToScreenY((ny + 1) * TILE_SIZE_PX);
+
+    drawSpriteFrame(ctx, nativeSprite(sprites, native.id), 0, nx0, ny0, nx1, ny1);
+    drawPlayerName(ctx, native.name, nx0, ny0, nx1, false);
+    if (spokeThisTick.has(native.id)) drawSpeechMark(ctx, nx0, ny0, nx1);
   }
 
   // 3. Draw other players (official world state)
