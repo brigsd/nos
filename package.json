@@ -15,6 +15,7 @@
     "mapascii": "tsx engine/scripts/mapascii.ts",
     "tick": "tsx scripts/tick.ts",
     "validate-world": "tsx engine/scripts/validate-world.ts",
+    "validate-worlds": "tsx scripts/validate-worlds.ts",
     "lint:sprites": "node assets/tools/lint-sprites.js",
     "respond-issues": "tsx scripts/respond-issues.ts"
   },
