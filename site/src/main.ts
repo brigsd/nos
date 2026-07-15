@@ -7,6 +7,7 @@
 import './style.css';
 import type { Position, World } from '../../engine/types';
 import { TILE_SIZE_PX } from '../../engine/types';
+import { SALAO_PORTAL_TILE } from '../../engine/mapgen';
 import { Camera } from './camera';
 import { attachPointerControls } from './input';
 import { createCanvasRenderer, type Renderer } from './renderer';
@@ -76,8 +77,13 @@ const HOME_PORTAL_ID = 'coracao';
  * defeating the "click/tap the tile" affordance for anyone who hasn't
  * zoomed in yet. The east edge has no such conflict. See
  * docs/PORTALS_PROTOCOL.md / the PR description for the full check.
+ *
+ * Since the city migration (R7, docs/CITY_PLAN.md) the tile itself is owned
+ * by the engine as SALAO_PORTAL_TILE - O Salão de Portais' arch row frames
+ * exactly this spot - so the marker and its architecture can never drift
+ * apart. This alias keeps the local name every call site below already uses.
  */
-const PORTAL_MARKER_POSITION: Position = { x: 57, y: 34 };
+const PORTAL_MARKER_POSITION: Position = SALAO_PORTAL_TILE;
 
 /** Chebyshev "within 1 tile" (same 8-neighbour adjacency engine/behavior.ts's PLAYER_PROXIMITY_TILES uses) that auto-opens the Portais panel while standing next to the marker. */
 const PORTAL_PROXIMITY_TILES = 1;

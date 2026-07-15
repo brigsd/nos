@@ -20,7 +20,7 @@ import { serializeWorld } from '../engine/serialize';
 import { assertValidWorld } from '../engine/validate';
 import { parseRawIssues } from '../engine/commands';
 import type { Command } from '../engine/commands';
-import { seedInitialNatives, seedFactoryMachines } from '../engine/mapgen';
+import { seedInitialNatives, seedFactoryMachines, seedCityLayout } from '../engine/mapgen';
 import type { World } from '../engine/types';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -69,6 +69,20 @@ function main(): void {
     assertValidWorld(world); // gate the seeded state exactly like any tick output
   }
 
+  // Same one-time, additive, idempotent retrofit for the city layout (R7,
+  // docs/CITY_PLAN.md): plaza flooring + pylons + Largo do Mural + Avenida
+  // do Pulso + Salão de Portais, and the 4 oficinas moved from the clearing
+  // corners to their cardinal gates. All the guarding lives inside
+  // seedCityLayout itself (all-or-nothing: only fires when no tile carries
+  // deco yet AND the machines still sit at their original corners) - never
+  // hand-edit world/heart.json to add this instead.
+  const beforeCity = world;
+  world = seedCityLayout(world);
+  const wasCityLaid = world !== beforeCity;
+  if (wasCityLaid) {
+    assertValidWorld(world); // gate the seeded state exactly like any tick output
+  }
+
   let commands: Command[] = [];
   if (existsSync(pendingCommandsPath)) {
     try {
@@ -105,6 +119,7 @@ function main(): void {
   const seededParts = [
     ...(wasSeeded ? ['Nativos (gota, raiz, cinza)'] : []),
     ...(wasFactorySeeded ? ['A Fábrica (forja, cozinha, bancada, estaleiro)'] : []),
+    ...(wasCityLaid ? ['A Cidade (praça, largo, avenida, salão - docs/CITY_PLAN.md)'] : []),
   ];
   const seededSuffix = seededParts.length > 0 ? ` (${seededParts.join(' + ')} seeded this run)` : '';
 

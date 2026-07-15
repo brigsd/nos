@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { assertValidWorld, validateWorld, worldSchema } from './validate';
-import { MAX_ENERGY, NATIVE_MESSAGE_MAX_LENGTH, STARTING_ENERGY, STARTING_PULSO } from './types';
+import {
+  MAX_ENERGY,
+  NATIVE_MESSAGE_MAX_LENGTH,
+  STARTING_ENERGY,
+  STARTING_PULSO,
+  TILE_DECOS,
+  TILE_DECO_OBJECTS,
+} from './types';
 import type { Machine, Native, World } from './types';
 import { ITEM_CATALOG, MACHINES } from './fabrication';
 
@@ -790,5 +797,51 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
   it('keeps the schema ItemId enum equal to ITEM_CATALOG keys (A Fábrica, v2.5) - hand-mirrored, pinned here', () => {
     const itemIdSchema = (worldSchema as { definitions: { ItemId: { enum: string[] } } }).definitions.ItemId;
     expect(itemIdSchema.enum.slice().sort()).toEqual(Object.keys(ITEM_CATALOG).sort());
+  });
+
+  it('keeps the schema TileDeco enum equal to TILE_DECOS (A Cidade, R7) - hand-mirrored, pinned here', () => {
+    const tileDecoSchema = (worldSchema as { definitions: { TileDeco: { enum: string[] } } }).definitions.TileDeco;
+    expect(tileDecoSchema.enum.slice().sort()).toEqual(TILE_DECOS.slice().sort());
+  });
+
+  it('keeps TILE_DECO_OBJECTS a strict subset of TILE_DECOS (every standing-object kind is a legal deco)', () => {
+    for (const deco of TILE_DECO_OBJECTS) expect(TILE_DECOS).toContain(deco);
+    expect(TILE_DECO_OBJECTS.length).toBeLessThan(TILE_DECOS.length);
+  });
+});
+
+describe('Tile.deco (A Cidade, R7 - purely visual decoration layer)', () => {
+  it('accepts every TileDeco kind on a meadow tile', () => {
+    for (const deco of TILE_DECOS) {
+      const world = validWorld();
+      world.tiles[0] = { biome: 'meadow', deco };
+      const result = validateWorld(world);
+      expect(result.errors).toEqual([]);
+      expect(result.valid).toBe(true);
+    }
+  });
+
+  it('accepts deco alongside a resource (a fragment lying on the pavement is legal)', () => {
+    const world = validWorld();
+    world.tiles[1] = { biome: 'forest', resource: 'wood', deco: 'trail' };
+    expect(validateWorld(world).valid).toBe(true);
+  });
+
+  it('rejects deco on water (o rio continua protagonista - CITY_PLAN)', () => {
+    const world = validWorld();
+    world.tiles[0] = { biome: 'water', deco: 'plaza' } as World['tiles'][number];
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects deco on the Núcleo itself (core tiles stay untouched - CITY_PLAN)', () => {
+    const world = validWorld();
+    world.tiles[3] = { biome: 'core', deco: 'pylon' } as World['tiles'][number];
+    expect(validateWorld(world).valid).toBe(false);
+  });
+
+  it('rejects an unknown deco kind', () => {
+    const world = invalidatableClone();
+    (world['tiles'] as Array<Record<string, unknown>>)[0] = { biome: 'meadow', deco: 'neon_sign' };
+    expect(validateWorld(world).valid).toBe(false);
   });
 });

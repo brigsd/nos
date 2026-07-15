@@ -7,7 +7,7 @@
  */
 
 import type { World, Player, Position, WorldEvent, ResourceType } from './types';
-import { STARTING_ENERGY, STARTING_PULSO, MAX_ENERGY, ACTIONS_PER_TICK, getOwn, getTile, tileIndex } from './types';
+import { STARTING_ENERGY, STARTING_PULSO, MAX_ENERGY, ACTIONS_PER_TICK, PLAYER_SPAWN, getOwn, getTile, tileIndex } from './types';
 import { executeTrade, TRADE_ENERGY_COST, TRADE_RANGE_TILES } from './economy';
 import { conversationReply, PLAYER_PROXIMITY_TILES } from './behavior';
 import { attemptSynthesis, FABRICATION_RANGE_TILES, inMachinePhrase, itemLabel, SYNTHESIS_RECIPES } from './fabrication';
@@ -211,7 +211,7 @@ export function applyCommand(
       };
     }
 
-    const spawnPos: Position = { x: 30, y: 30 };
+    const spawnPos: Position = { ...PLAYER_SPAWN };
     const newPlayer: Player = {
       login: cmd.login,
       position: spawnPos,

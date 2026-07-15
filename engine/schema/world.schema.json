@@ -50,6 +50,11 @@
       "type": "string",
       "enum": ["forja", "cozinha", "bancada", "estaleiro"]
     },
+    "TileDeco": {
+      "description": "Purely visual city decoration on a tile (R7 city migration, docs/CITY_PLAN.md) - mirrors engine/types.ts's TileDeco, pinned by an anti-drift test.",
+      "type": "string",
+      "enum": ["plaza", "pavement", "trail", "pylon", "arch", "arch_dormant", "mural_stone"]
+    },
     "ItemId": {
       "description": "Every craftable item id (engine/fabrication.ts's ITEM_CATALOG) - hand-mirrored here, pinned by an anti-drift test.",
       "type": "string",
@@ -78,9 +83,15 @@
       "required": ["biome"],
       "properties": {
         "biome": { "$ref": "#/definitions/Biome" },
-        "resource": { "$ref": "#/definitions/ResourceType" }
+        "resource": { "$ref": "#/definitions/ResourceType" },
+        "deco": { "$ref": "#/definitions/TileDeco" }
       },
       "allOf": [
+        {
+          "description": "City decoration never sits on water or on the Núcleo itself (CITY_PLAN: 'o rio continua protagonista', 'O Núcleo intocável').",
+          "if": { "properties": { "deco": true }, "required": ["deco"] },
+          "then": { "properties": { "biome": { "enum": ["meadow", "forest", "ruins"] } } }
+        },
         {
           "description": "Wood only grows in forest tiles.",
           "if": { "properties": { "resource": { "const": "wood" } }, "required": ["resource"] },

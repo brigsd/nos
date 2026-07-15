@@ -4,17 +4,23 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  cityDecoPlan,
+  cityMachinePositions,
   CORE_ORIGIN,
   CORE_SIZE,
   FOREST_TARGET_RATIO,
   generateHeartWorld,
   HEART_WORLD_NAME,
   HEART_WORLD_SEED,
+  SALAO_PORTAL_TILE,
+  seedCityLayout,
   seedFactoryMachines,
   seedInitialNatives,
 } from './mapgen';
 import {
   MACHINE_IDS,
+  PLAYER_SPAWN,
+  TILE_DECO_OBJECTS,
   tileIndex,
   WORLD_HEIGHT,
   WORLD_WIDTH,
@@ -680,5 +686,321 @@ describe('seedFactoryMachines - retrofitting the live world/heart.json', () => {
     expect(advanced.players['brigsd']).toEqual(onDisk.players['brigsd']);
     expect(advanced.events.slice(0, onDisk.events.length)).toEqual(onDisk.events);
     expect(validateWorld(advanced)).toEqual({ valid: true, errors: [] });
+  });
+});
+
+describe('seedCityLayout - A Cidade (R7, docs/CITY_PLAN.md) shape and determinism', () => {
+  /** The full genesis chain a brand-new world goes through in scripts/tick.ts. */
+  function freshCity(): World {
+    return seedCityLayout(seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED)));
+  }
+
+  it('does nothing on a fresh generateHeartWorld() world (no machines yet - only the tick chain lays the city)', () => {
+    const world = generateHeartWorld(HEART_WORLD_SEED);
+    const after = seedCityLayout(world);
+    expect(after).toBe(world); // same reference - untouched
+  });
+
+  it('moves the 4 oficinas from the clearing corners to their cardinal gates (pinwheel around o Núcleo)', () => {
+    const world = freshCity();
+    const positions = cityMachinePositions();
+    for (const id of MACHINE_IDS) {
+      expect(world.machines![id]!.position).toEqual(positions[id]);
+      expect(world.machines![id]!.name).toBe(MACHINES[id].name); // name/id survive the move
+      expect(world.machines![id]!.id).toBe(id);
+    }
+    // The 4 city positions are 4 distinct tiles, none of them the spawn, none on the Core.
+    const keys = new Set(Object.values(positions).map((p) => `${p.x},${p.y}`));
+    expect(keys.size).toBe(4);
+    for (const p of Object.values(positions)) {
+      expect(p).not.toEqual(PLAYER_SPAWN);
+      const onCore =
+        p.x >= CORE_ORIGIN.x && p.x < CORE_ORIGIN.x + CORE_SIZE && p.y >= CORE_ORIGIN.y && p.y < CORE_ORIGIN.y + CORE_SIZE;
+      expect(onCore).toBe(false);
+      const tile = world.tiles[tileIndex(p.x, p.y, world.width)]!;
+      expect(tile.biome).toBe('meadow'); // machines stand on the (always-meadow) clearing
+    }
+  });
+
+  it('paints every planned deco tile - the whole plan lands on meadow on the real map', () => {
+    const world = freshCity();
+    // Every plan coordinate is meadow on O Coração's real layout (the plan
+    // was designed against it - see docs/CITY_PLAN.md). If mapgen or the
+    // plan ever drift so that a planned tile lands on water/forest/ruins,
+    // this fails loudly instead of silently leaving holes in the city.
+    const base = generateHeartWorld(HEART_WORLD_SEED);
+    for (const { x, y, deco } of cityDecoPlan()) {
+      const baseTile = base.tiles[tileIndex(x, y, base.width)]!;
+      expect(`${x},${y}:${baseTile.biome}`).toBe(`${x},${y}:meadow`);
+      const tile = world.tiles[tileIndex(x, y, world.width)]!;
+      expect(tile.deco).toBeDefined();
+      // Later plan entries win (mural stone over court floor, arches over
+      // esplanade) - so the tile's final deco is the LAST plan entry for it.
+      void deco;
+    }
+  });
+
+  it('never decorates water, the Core, or any out-of-plan tile; never touches biomes or resources', () => {
+    const base = seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED));
+    const world = seedCityLayout(base);
+    const planned = new Set(cityDecoPlan().map(({ x, y }) => tileIndex(x, y, world.width)));
+    world.tiles.forEach((tile, idx) => {
+      expect(tile.biome).toBe(base.tiles[idx]!.biome);
+      expect(tile.resource).toBe(base.tiles[idx]!.resource);
+      if (tile.deco !== undefined) {
+        expect(planned.has(idx)).toBe(true);
+        expect(tile.biome).toBe('meadow');
+      } else {
+        expect(planned.has(idx)).toBe(false);
+      }
+    });
+  });
+
+  it('keeps the spawn tile free of standing objects and clear of machines', () => {
+    const world = freshCity();
+    const spawnTile = world.tiles[tileIndex(PLAYER_SPAWN.x, PLAYER_SPAWN.y, world.width)]!;
+    // Ground deco (the plaza floor) is fine underfoot; an object would sit ON the player.
+    expect(spawnTile.deco).toBeDefined();
+    expect(TILE_DECO_OBJECTS).not.toContain(spawnTile.deco!);
+    for (const machine of Object.values(world.machines!) as Machine[]) {
+      expect(machine.position).not.toEqual(PLAYER_SPAWN);
+    }
+  });
+
+  it('frames the living portal: esplanade under SALAO_PORTAL_TILE, arch row on its meridian, dormant seeds south', () => {
+    const world = freshCity();
+    const { x, y } = SALAO_PORTAL_TILE;
+    const at = (tx: number, ty: number): Tile => world.tiles[tileIndex(tx, ty, world.width)]!;
+    expect(at(x, y).deco).toBe('plaza'); // the portal marker (client-side) stands on the hall floor
+    expect(at(x, y - 2).deco).toBe('arch');
+    expect(at(x, y + 2).deco).toBe('arch');
+    expect(at(x, y + 4).deco).toBe('arch_dormant');
+    expect(at(x, y + 6).deco).toBe('arch_dormant');
+  });
+
+  it('raises the 4 plaza pylons exactly on the legacy machine corner spots', () => {
+    const world = freshCity();
+    const legacyCorners = [
+      { x: 29, y: 29 },
+      { x: 36, y: 29 },
+      { x: 29, y: 36 },
+      { x: 36, y: 36 },
+    ];
+    for (const c of legacyCorners) {
+      expect(world.tiles[tileIndex(c.x, c.y, world.width)]!.deco).toBe('pylon');
+    }
+  });
+
+  it('is deterministic: repeated runs produce deep-equal cities', () => {
+    expect(freshCity()).toEqual(freshCity());
+  });
+
+  it('is idempotent: laying the city twice is a no-op (same reference)', () => {
+    const world = freshCity();
+    const again = seedCityLayout(world);
+    expect(again).toBe(world);
+  });
+
+  it('the resulting world passes schema + semantic validation', () => {
+    expect(validateWorld(freshCity())).toEqual({ valid: true, errors: [] });
+  });
+
+  it('is total on tiny worlds: out-of-bounds plan tiles are skipped, nothing throws', () => {
+    const width = 10;
+    const height = 10;
+    const tiles: Tile[] = Array.from({ length: width * height }, () => ({ biome: 'meadow' as const }));
+    const bare: World = {
+      meta: { name: 'Tiny', seed: 'tiny-seed', tickCount: 0, worldTime: 0 },
+      width,
+      height,
+      tiles,
+      players: {},
+      events: [],
+      machines: Object.fromEntries(
+        MACHINE_IDS.map((id) => [id, { id, name: MACHINES[id].name, position: { x: 1, y: 1 } }]),
+      ),
+    };
+    // Machines are NOT at the legacy corners here, so the guard refuses -
+    // and, crucially, nothing explodes evaluating the out-of-bounds plan.
+    expect(() => seedCityLayout(bare)).not.toThrow();
+    expect(seedCityLayout(bare)).toBe(bare);
+  });
+});
+
+describe('seedCityLayout - the double guard (never clobber future states)', () => {
+  function eligibleWorld(): World {
+    return seedFactoryMachines(generateHeartWorld(HEART_WORLD_SEED));
+  }
+
+  it('refuses when machines are absent', () => {
+    const world = generateHeartWorld(HEART_WORLD_SEED);
+    expect(seedCityLayout(world)).toBe(world);
+  });
+
+  it('refuses when ANY machine has left its original corner (a future state moved it)', () => {
+    for (const id of MACHINE_IDS) {
+      const world = eligibleWorld();
+      const moved: World = {
+        ...world,
+        machines: {
+          ...world.machines!,
+          [id]: { ...world.machines![id]!, position: { x: 10, y: 10 } },
+        },
+      };
+      expect(seedCityLayout(moved)).toBe(moved);
+    }
+  });
+
+  it('refuses when any tile already carries deco (the city was laid once, forever)', () => {
+    const world = eligibleWorld();
+    const laid = seedCityLayout(world);
+    expect(laid).not.toBe(world);
+    // Even if some future state moved the machines BACK to the legacy
+    // corners, the deco guard alone keeps the migration from re-firing.
+    const machinesBack: World = { ...laid, machines: world.machines! };
+    expect(seedCityLayout(machinesBack)).toBe(machinesBack);
+  });
+
+  it('all-or-nothing: a refused world has neither moved machines nor any deco', () => {
+    const world = generateHeartWorld(HEART_WORLD_SEED); // no machines
+    const after = seedCityLayout(world);
+    expect(after.tiles.every((t) => t.deco === undefined)).toBe(true);
+    expect(after.machines).toBeUndefined();
+  });
+});
+
+describe('seedCityLayout - retrofitting the live world/heart.json', () => {
+  // Same shape as the Nativos/A Fábrica migration checks above: load the
+  // REAL, currently-committed world/heart.json, run it through exactly the
+  // flow scripts/tick.ts uses (validate -> seed if needed -> advanceWorld ->
+  // validate), and confirm the migration is safe. world/heart.json itself is
+  // never written by this test - only the real tick, post-merge, performs
+  // the live retrofit. Because the live file's state changes the moment that
+  // real tick runs, everything below tests a SYNTHETIC pre-migration world
+  // (same real playtime, deco stripped, machines pinned back to the legacy
+  // corners), like the other two suites learned to.
+  const onDiskRaw: unknown = JSON.parse(readFileSync(heartJsonPath, 'utf-8'));
+  assertValidWorld(onDiskRaw);
+  const onDisk = onDiskRaw;
+
+  // Synthetic pre-migration state: the live playtime with deco stripped and
+  // the machines pinned back to their legacy clearing corners (the exact
+  // positions seedFactoryMachines has always produced - hardcoded here on
+  // purpose, as a pin: the guard in seedCityLayout compares against these,
+  // so if they ever silently changed, this suite must scream).
+  const preMigration: World = {
+    ...onDisk,
+    tiles: onDisk.tiles.map((tile) => {
+      if (tile.deco === undefined) return tile;
+      const { deco: _deco, ...rest } = tile;
+      return rest;
+    }),
+    machines: Object.fromEntries(
+      MACHINE_IDS.map((id) => [
+        id,
+        {
+          id,
+          name: MACHINES[id].name,
+          position: {
+            forja: { x: 29, y: 29 },
+            cozinha: { x: 36, y: 29 },
+            bancada: { x: 29, y: 36 },
+            estaleiro: { x: 36, y: 36 },
+          }[id]!,
+        },
+      ]),
+    ),
+  };
+
+  it('sanity: the live world is in exactly one legitimate state (pre-city XOR post-city), never half-migrated', () => {
+    const hasDeco = onDisk.tiles.some((t) => t.deco !== undefined);
+    const positions = cityMachinePositions();
+    const machinesAtCity = MACHINE_IDS.every(
+      (id) =>
+        onDisk.machines?.[id]?.position.x === positions[id].x &&
+        onDisk.machines?.[id]?.position.y === positions[id].y,
+    );
+    const machinesAtLegacy = MACHINE_IDS.every(
+      (id) =>
+        onDisk.machines?.[id]?.position.x === preMigration.machines![id]!.position.x &&
+        onDisk.machines?.[id]?.position.y === preMigration.machines![id]!.position.y,
+    );
+    // pre: no deco + legacy corners. post: deco + city gates. Anything else is drift.
+    expect(hasDeco ? machinesAtCity : machinesAtLegacy).toBe(true);
+    expect(onDisk.meta.tickCount).toBeGreaterThan(0);
+    expect(Object.keys(onDisk.players)).toContain('brigsd');
+  });
+
+  it('(a) seeding alone moves the 4 machines to the city gates and paints deco, deterministically equal to a fresh genesis city', () => {
+    const seeded = seedCityLayout(preMigration);
+    expect(seeded).not.toBe(preMigration);
+    const fresh = seedCityLayout(seedFactoryMachines(generateHeartWorld(onDisk.meta.seed)));
+    expect(seeded.machines).toEqual(fresh.machines);
+    // Same deco on the same tiles as genesis (live tiles may lack a
+    // collected resource here and there, but deco placement matches 1:1).
+    expect(seeded.tiles.map((t) => t.deco ?? null)).toEqual(fresh.tiles.map((t) => t.deco ?? null));
+  });
+
+  it('(b) seeding alone preserves players.brigsd, tickCount, natives and every pre-existing event byte-for-byte; only deco is added to tiles', () => {
+    const seeded = seedCityLayout(preMigration);
+    expect(seeded.meta).toEqual(onDisk.meta);
+    expect(seeded.players).toEqual(onDisk.players);
+    expect(seeded.players['brigsd']).toEqual(onDisk.players['brigsd']);
+    expect(seeded.natives).toEqual(onDisk.natives);
+    expect(seeded.events).toEqual(onDisk.events);
+    seeded.tiles.forEach((tile, idx) => {
+      expect(tile.biome).toBe(preMigration.tiles[idx]!.biome);
+      expect(tile.resource).toBe(preMigration.tiles[idx]!.resource);
+    });
+  });
+
+  it('(c) the seeded world passes the hardened validator', () => {
+    expect(validateWorld(seedCityLayout(preMigration))).toEqual({ valid: true, errors: [] });
+  });
+
+  it('seeding is idempotent when applied to the live world twice', () => {
+    const once = seedCityLayout(preMigration);
+    const twice = seedCityLayout(once);
+    expect(twice).toBe(once);
+  });
+
+  it('no machine ends up on water, on the Core, or on the player spawn', () => {
+    const seeded = seedCityLayout(preMigration);
+    for (const machine of Object.values(seeded.machines!) as Machine[]) {
+      const tile = seeded.tiles[tileIndex(machine.position.x, machine.position.y, seeded.width)]!;
+      expect(tile.biome).not.toBe('water');
+      expect(tile.biome).not.toBe('core');
+      expect(machine.position).not.toEqual(PLAYER_SPAWN);
+    }
+  });
+
+  it('the full tick flow (seed + advanceWorld, as scripts/tick.ts runs it) preserves brigsd/tickCount/events and stays valid', () => {
+    const seeded = seedCityLayout(preMigration);
+    assertValidWorld(seeded);
+
+    const now = HEART_GENESIS_UNIX_SECONDS + (onDisk.meta.tickCount + 1) * TICK_INTERVAL_SECONDS;
+    const { world: advanced } = advanceWorld(seeded, now, []);
+
+    const positions = cityMachinePositions();
+    for (const id of MACHINE_IDS) {
+      expect(advanced.machines![id]!.position).toEqual(positions[id]);
+    }
+    expect(advanced.meta.tickCount).toBe(onDisk.meta.tickCount + 1);
+    expect(advanced.players['brigsd']).toEqual(onDisk.players['brigsd']);
+    expect(advanced.events.slice(0, onDisk.events.length)).toEqual(onDisk.events);
+    expect(validateWorld(advanced)).toEqual({ valid: true, errors: [] });
+
+    console.log(
+      [
+        '',
+        '=== Migração da cidade (R7, docs/CITY_PLAN.md) ===',
+        `Antes:  tick #${onDisk.meta.tickCount}, máquinas nos cantos, ${preMigration.tiles.filter((t) => t.deco).length} tiles com deco`,
+        `Depois: tick #${advanced.meta.tickCount}, máquinas nos portões cardeais, ${advanced.tiles.filter((t) => t.deco).length} tiles com deco`,
+        `brigsd preservado: ${JSON.stringify(advanced.players['brigsd']) === JSON.stringify(onDisk.players['brigsd'])}`,
+        `Validador endurecido: ${validateWorld(advanced).valid ? 'PASSOU' : 'FALHOU'}`,
+        '===================================================',
+        '',
+      ].join('\n'),
+    );
   });
 });

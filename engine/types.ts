@@ -68,10 +68,43 @@ export const RESOURCE_LABELS_PTBR: Record<ResourceType, string> = {
 // Tile
 // ---------------------------------------------------------------------------
 
+/**
+ * Purely visual city decoration layered on a tile (the R7 city migration,
+ * docs/CITY_PLAN.md). Ground kinds (plaza/pavement/trail) repaint the floor;
+ * object kinds (pylon/arch/arch_dormant/mural_stone) stand on it. The engine
+ * itself never reads this field for rules - movement, collection, energy and
+ * every command behave exactly the same with or without it (walkability is
+ * untouched by design, CITY_PLAN "tudo caminhável e seguro"). Optional for
+ * backward compatibility with tiles written before the city existed.
+ */
+export type TileDeco =
+  | 'plaza'
+  | 'pavement'
+  | 'trail'
+  | 'pylon'
+  | 'arch'
+  | 'arch_dormant'
+  | 'mural_stone';
+
+export const TILE_DECOS: readonly TileDeco[] = [
+  'plaza',
+  'pavement',
+  'trail',
+  'pylon',
+  'arch',
+  'arch_dormant',
+  'mural_stone',
+];
+
+/** The TileDeco kinds that are standing objects (drawn on a flagstone base by the client), as opposed to ground repaints. */
+export const TILE_DECO_OBJECTS: readonly TileDeco[] = ['pylon', 'arch', 'arch_dormant', 'mural_stone'];
+
 export interface Tile {
   biome: Biome;
   /** Collectible resource sitting on this tile, if any. */
   resource?: ResourceType;
+  /** City decoration on this tile, if any (visual only - see TileDeco). */
+  deco?: TileDeco;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +115,14 @@ export interface Position {
   x: number;
   y: number;
 }
+
+/**
+ * Tile where /entrar places a brand-new avatar (see engine/commands.ts).
+ * Single source shared with the city layout (engine/mapgen.ts's
+ * seedCityLayout keeps this tile free of standing objects - CITY_PLAN
+ * "spawn livre") so the two can never drift apart.
+ */
+export const PLAYER_SPAWN: Position = { x: 30, y: 30 };
 
 /** Resource stockpile by type; a missing key means zero units. */
 export type Inventory = Partial<Record<ResourceType, number>>;

@@ -18,7 +18,9 @@ import {
   isInBounds,
   tileIndex,
   MACHINE_IDS,
+  PLAYER_SPAWN,
   type Tile,
+  type TileDeco,
   type World,
   type Native,
   type Machine,
@@ -403,7 +405,7 @@ function findWalkableTileForBiome(
   // Unreachable for O Coração's real biome mix (meadow/forest/ruins all
   // exist by construction) - fail safe to the player spawn tile instead of
   // throwing and blocking the whole tick.
-  return { x: 30, y: 30 };
+  return { ...PLAYER_SPAWN };
 }
 
 /**
@@ -522,4 +524,202 @@ export function seedFactoryMachines(world: World): World {
   }
 
   return { ...world, machines };
+}
+
+// ---------------------------------------------------------------------------
+// A Cidade (R7, docs/CITY_PLAN.md) - city layout migration. Kept here for
+// the same reason seedInitialNatives/seedFactoryMachines are: this is
+// world-placement logic, deciding *where in the map* the city's districts
+// sit. Everything below is deterministic - no RNG, no Date.now(); the plan
+// is a pure function of the fixed Core geometry plus the two anchor tiles
+// (PLAYER_SPAWN, SALAO_PORTAL_TILE).
+// ---------------------------------------------------------------------------
+
+/**
+ * Tile of O Coração's living portal - the anchor of O Salão de Portais.
+ * Historically this lived only in site/src/main.ts (PORTAL_MARKER_POSITION,
+ * R6 fase 1: east border, always visible/clickable at the default zoom);
+ * the city migration frames the same tile with the Salão's arch row, so the
+ * client now imports it from here - one constant, structurally impossible
+ * for the marker and its architecture to drift apart.
+ */
+export const SALAO_PORTAL_TILE: Position = { x: 57, y: 34 };
+
+/**
+ * The city's machine placement: the 4 oficinas move from the clearing's
+ * corners to its cardinal mid-edges, in a pinwheel (C4 rotational symmetry
+ * around o Núcleo - deliberately NOT mirror symmetry, CITY_PLAN "simetria
+ * quebrada de propósito"). Each cardinal is a gate: the east avenue arrives
+ * at the Cozinha, the south road leaves from the Estaleiro, the Forja fronts
+ * the river to the north, the Bancada watches the west path. Derived from
+ * coreClearingBox() rather than hardcoded, same reasoning as
+ * factoryMachinePositions().
+ */
+export function cityMachinePositions(): Record<MachineId, Position> {
+  const box = coreClearingBox();
+  const midW = Math.floor((box.x0 + box.x1) / 2);
+  const midE = midW + 1;
+  const midN = Math.floor((box.y0 + box.y1) / 2);
+  const midS = midN + 1;
+  return {
+    forja: { x: midE, y: box.y0 }, // north gate - riverfront (têmpera)
+    cozinha: { x: box.x1, y: midS }, // east gate - mouth of the avenue
+    estaleiro: { x: midW, y: box.y1 }, // south gate - head of the south road
+    bancada: { x: box.x0, y: midN }, // west gate - toward o Largo do Mural
+  };
+}
+
+/** One planned decoration: paint `deco` on tile (x, y). */
+export interface CityPlanTile {
+  x: number;
+  y: number;
+  deco: TileDeco;
+}
+
+/**
+ * The full city decoration plan (docs/CITY_PLAN.md, "Zoneamento") as a flat
+ * list of tile paints, later entries winning over earlier ones. Pure
+ * function of the fixed geometry constants - no world input, no RNG - so
+ * genesis worlds and live retrofits always agree tile-for-tile. Exported
+ * for the anti-drift tests (e.g. "every planned tile is meadow on the real
+ * map", "the spawn tile never carries a standing object").
+ */
+export function cityDecoPlan(): CityPlanTile[] {
+  const plan: CityPlanTile[] = [];
+  const box = coreClearingBox();
+  const spawn = PLAYER_SPAWN;
+  const portal = SALAO_PORTAL_TILE;
+
+  // --- A Praça das Oficinas: flagstone floor over the whole clearing except
+  // the Núcleo's own 2x2; light pylons on the 4 corners - exactly the tiles
+  // the machines are vacating (factoryMachinePositions), so "where the
+  // oficinas first stood, the city raised lights".
+  const corners = Object.values(factoryMachinePositions());
+  const isCorner = (x: number, y: number): boolean => corners.some((c) => c.x === x && c.y === y);
+  for (let y = box.y0; y <= box.y1; y++) {
+    for (let x = box.x0; x <= box.x1; x++) {
+      const onCore =
+        x >= CORE_ORIGIN.x && x < CORE_ORIGIN.x + CORE_SIZE && y >= CORE_ORIGIN.y && y < CORE_ORIGIN.y + CORE_SIZE;
+      if (onCore) continue;
+      plan.push({ x, y, deco: isCorner(x, y) ? 'pylon' : 'plaza' });
+    }
+  }
+
+  // --- O Largo do Mural: a small flagstone court west of the plaza, on the
+  // spawn's own row, holding the mural stone; a short paved path connects it
+  // to the plaza's west edge - the first thing a brand-new Nó can follow.
+  const muralX = box.x0 - 5;
+  for (let y = spawn.y - 1; y <= spawn.y + 1; y++) {
+    for (let x = muralX - 1; x <= muralX + 1; x++) {
+      plan.push({ x, y, deco: 'plaza' });
+    }
+  }
+  plan.push({ x: muralX, y: spawn.y, deco: 'mural_stone' });
+  for (let x = muralX + 2; x < box.x0; x++) {
+    plan.push({ x, y: spawn.y, deco: 'pavement' });
+  }
+
+  // --- A Avenida do Pulso: a 2-wide paved axis from the plaza's east gate
+  // to the Salão's esplanade, on the portal's row and the row above it.
+  const esplanadeX0 = portal.x - 2;
+  const aveX0 = box.x1 + 1;
+  const aveX1 = esplanadeX0 - 1;
+  for (let x = aveX0; x <= aveX1; x++) {
+    plan.push({ x, y: portal.y - 1, deco: 'pavement' });
+    plan.push({ x, y: portal.y, deco: 'pavement' });
+  }
+  // Twin pylons flanking the avenue's midpoint (os Marcos Gêmeos) - the one
+  // vertical accent on the long axis, right where the old ruins sit to the
+  // south (CITY_PLAN: the avenue acknowledges the archaeology it crosses).
+  const aveMidX = Math.floor((aveX0 + aveX1) / 2);
+  plan.push({ x: aveMidX, y: portal.y - 2, deco: 'pylon' });
+  plan.push({ x: aveMidX, y: portal.y + 1, deco: 'pylon' });
+
+  // --- O Salão de Portais: a flagstone esplanade around the living portal,
+  // with the arch row on the portal's own meridian: two awake arches
+  // flanking it, then dormant arch seeds marching south - visible room for
+  // every future federated world (D-17: one more world, one more arch).
+  const esplanadeX1 = portal.x + 2;
+  for (let y = portal.y - 2; y <= portal.y + 6; y++) {
+    for (let x = esplanadeX0; x <= esplanadeX1; x++) {
+      plan.push({ x, y, deco: 'plaza' });
+    }
+  }
+  plan.push({ x: portal.x, y: portal.y - 2, deco: 'arch' });
+  plan.push({ x: portal.x, y: portal.y + 2, deco: 'arch' });
+  plan.push({ x: portal.x, y: portal.y + 4, deco: 'arch_dormant' });
+  plan.push({ x: portal.x, y: portal.y + 6, deco: 'arch_dormant' });
+
+  // --- A Estrada do Sul: leaves the Estaleiro gate paved, then decays into
+  // a dirt trail and dies at the southern forest's edge - the city ends in
+  // an open road through the free periphery (T14's future building ground).
+  // The last trail tile (box.y1 + 7 = y 43) is the final meadow tile before
+  // the forest wall at (32, 44) - pinned by the "whole plan lands on meadow"
+  // test in mapgen.test.ts.
+  const southX = Math.floor((box.x0 + box.x1) / 2);
+  plan.push({ x: southX, y: box.y1 + 1, deco: 'pavement' });
+  plan.push({ x: southX, y: box.y1 + 2, deco: 'pavement' });
+  for (let y = box.y1 + 3; y <= box.y1 + 7; y++) {
+    plan.push({ x: southX, y, deco: 'trail' });
+  }
+
+  return plan;
+}
+
+/**
+ * Lays the city of O Coração (docs/CITY_PLAN.md) into `world`: moves the 4
+ * oficinas from the clearing corners to their cardinal gates
+ * (cityMachinePositions) and paints the decoration plan (cityDecoPlan) onto
+ * the tiles. Pure, deterministic, additive and idempotent, in the
+ * seedInitialNatives/seedFactoryMachines family - but deliberately
+ * ALL-OR-NOTHING, with a double guard:
+ *
+ *   (a) if ANY tile already carries a `deco`, the city has been laid -
+ *       return `world` unchanged (the migration ran once, forever);
+ *   (b) if the machines are missing or ANY of the 4 is not exactly at its
+ *       original clearing-corner spot (factoryMachinePositions), some other
+ *       state already rearranged them - return `world` unchanged rather
+ *       than clobber a future the migration knows nothing about.
+ *
+ * After one successful run, (a) is permanently false, so the move can never
+ * fire twice; and because the move and the paint happen together, the world
+ * can never end up half-city (pylons on top of machines, or moved machines
+ * with no plaza). Painting itself is total and safe on any world: out-of-
+ * bounds plan tiles are skipped (tiny test worlds) and only 'meadow' tiles
+ * are ever painted - never water (o rio continua protagonista), never the
+ * Core, never forest/ruins. NEVER hand-edit world/heart.json to add this -
+ * this function, run by the tick, is the only sanctioned way (same rule as
+ * os Nativos and A Fábrica above).
+ */
+export function seedCityLayout(world: World): World {
+  if (world.tiles.some((tile) => tile.deco !== undefined)) {
+    return world;
+  }
+
+  const machines = world.machines;
+  if (!machines) return world;
+  const legacy = factoryMachinePositions();
+  for (const id of MACHINE_IDS) {
+    const machine = machines[id];
+    if (!machine || machine.position.x !== legacy[id].x || machine.position.y !== legacy[id].y) {
+      return world;
+    }
+  }
+
+  const cityPositions = cityMachinePositions();
+  const nextMachines: Record<string, Machine> = {};
+  for (const id of MACHINE_IDS) {
+    nextMachines[id] = { ...machines[id]!, position: { ...cityPositions[id] } };
+  }
+
+  const nextTiles = [...world.tiles];
+  for (const { x, y, deco } of cityDecoPlan()) {
+    if (!isInBounds(x, y, world.width, world.height)) continue;
+    const idx = tileIndex(x, y, world.width);
+    const tile = nextTiles[idx]!;
+    if (tile.biome !== 'meadow') continue;
+    nextTiles[idx] = { ...tile, deco };
+  }
+
+  return { ...world, tiles: nextTiles, machines: nextMachines };
 }
