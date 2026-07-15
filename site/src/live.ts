@@ -367,22 +367,42 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
       if (retryAfterHeader) {
         // Retry-After is GitHub explicitly telling us how long to stay away
         // - honoured as given, no MAX_BACKOFF_MS ceiling here (capping an
-        // explicit server directive would defeat the point of it).
+        // explicit server directive would defeat the point of it). BUT:
+        // RFC 7231 allows delta-SECONDS or an HTTP-DATE, and Number() of the
+        // date form is NaN - which, unguarded, became Math.max(backoff, NaN)
+        // = NaN, and setTimeout(fn, NaN) fires IMMEDIATELY: same 403, same
+        // NaN, an unbounded hot loop (review finding on PR #43, measured at
+        // ~121 req/500ms driving this very module). A non-numeric value now
+        // degrades to our own backoff cadence - self-correcting (the header
+        // is re-read on the next poll) and free (a 403 while rate-limited
+        // costs no extra quota).
+        const retryAfterSeconds = Number(retryAfterHeader);
         emitStatus('b');
-        return Math.max(intervals.backoff, Number(retryAfterHeader) * 1000);
+        return Number.isFinite(retryAfterSeconds)
+          ? Math.max(intervals.backoff, retryAfterSeconds * 1000)
+          : intervals.backoff;
       }
       if (res.headers.get('x-ratelimit-remaining') === '0') {
         // Unlike Retry-After above, this wait is OUR OWN arithmetic on a raw
         // reset timestamp - MAX_BACKOFF_MS is a defensive ceiling against
         // that math going wrong (clock skew, a stale/misread header), not a
         // second-guess of GitHub. Re-checking a bit early is harmless (a 403
-        // while already rate-limited doesn't cost more quota).
-        const resetAtMs = Number(res.headers.get('x-ratelimit-reset') ?? '0') * 1000;
+        // while already rate-limited doesn't cost more quota). Same NaN
+        // guard as Retry-After above: a garbage reset header must degrade to
+        // the backoff cadence, never reach setTimeout as NaN (review finding
+        // on PR #43).
+        const resetEpochSeconds = Number(res.headers.get('x-ratelimit-reset') ?? '0');
+        const resetAtMs = Number.isFinite(resetEpochSeconds) ? resetEpochSeconds * 1000 : 0;
         emitStatus('b');
         return Math.min(Math.max(resetAtMs - Date.now(), intervals.backoff), MAX_BACKOFF_MS);
       }
       // Unexplained 403 on a public repo/path (not a rate limit) — treat like
-      // an auth failure rather than hammering it every 3s.
+      // an auth failure rather than hammering it every 3s. Note (review on
+      // PR #43): GitHub's SECONDARY rate limit can also 403 with no
+      // rate-limit headers at all; that case lands here too and downgrades
+      // this session to Camada C. That is the safe direction - it stops
+      // hitting the API entirely while the page keeps updating via the CDN;
+      // logout/login (or a reload) restores Camada B.
       console.warn('GitHub recusou a consulta ao mundo ao vivo (HTTP 403 sem sinal de limite) — Camada B desativada para este token.');
       badToken = token;
       return pollTierC();
@@ -407,10 +427,16 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
 
   function scheduleNext(delayMs: number): void {
     if (stopped) return;
+    // Last line of defense (review finding on PR #43, defense-in-depth with
+    // the header guards in pollTierB): no computed delay may ever collapse
+    // the loop into a hot spin. setTimeout coerces NaN/negative to 0ms =
+    // immediate re-fire; if a bug upstream ever produces one again, fall
+    // back to the normal cadence instead.
+    const safeDelayMs = Number.isFinite(delayMs) && delayMs > 0 ? delayMs : intervals.normal;
     clearTimeout(timer);
     timer = setTimeout(() => {
       void runCycle();
-    }, delayMs);
+    }, safeDelayMs);
   }
 
   async function runCycle(): Promise<void> {
@@ -453,6 +479,13 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
       }
     } else if (status.paused) {
       clearTimeout(timer);
+      // Tell the HUD we're live again BEFORE the resumed poll round-trips -
+      // otherwise "em pausa" could linger on screen for up to POLL_TIMEOUT_MS
+      // while the first resumed request is still in flight (review
+      // suggestion on PR #43). runCycle's own unpause line stays as belt-
+      // and-braces for any other path that reaches it while paused.
+      status.paused = false;
+      onStatus({ ...status });
       void runCycle(); // resume immediately, don't wait out a stale timer
     }
   }

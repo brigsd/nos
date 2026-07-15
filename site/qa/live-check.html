@@ -208,6 +208,70 @@
         localStorage.removeItem('nos_token');
       }
 
+      // --- Scenario 3b (PR #43 review MUST FIX, regression): 403 with a
+      // DATE-form Retry-After (RFC 7231-legal; Number() of it is NaN). Before
+      // the fix: Math.max(backoff, NaN) = NaN → setTimeout(fn, NaN) fires
+      // immediately → same 403 → unbounded hot loop (~121 req/500ms measured
+      // by the reviewer driving this very module; the rate-limit 403 path
+      // never sets badToken, so it stays on Camada B and hammers). Now the
+      // NaN must degrade to the backoff cadence: at most 2 requests in this
+      // 500ms window (one at ~10ms, the next only at ~410ms). ---
+      async function testDateFormRetryAfter() {
+        log('\n--- 403 com Retry-After em forma de data não vira hot loop ---');
+        localStorage.setItem('nos_token', 'tok-ra-date');
+        let calls = 0;
+        const fetchFn = async () => {
+          calls++;
+          return new Response(JSON.stringify({ message: 'rate limited' }), {
+            status: 403,
+            headers: { 'retry-after': 'Wed, 21 Oct 2026 07:28:00 GMT' },
+          });
+        };
+        const handle = startLivePolling({
+          initialWorld: makeWorld(5),
+          onWorld: () => {},
+          onStatus: () => {},
+          fetchFn,
+          intervals: { initial: 10, normal: 60, backoff: 400, anon: 400 },
+        });
+        await sleep(500);
+        handle.stop();
+        assert(calls >= 1, 'a primeira consulta aconteceu');
+        assert(calls <= 2, `sem hot loop: no máximo 2 consultas em 500ms com recuo de 400ms (veio ${calls})`);
+        assert(rejectionCount === 0, 'nenhuma promise rejection não-tratada');
+        localStorage.removeItem('nos_token');
+      }
+
+      // --- Scenario 3c (same NaN family, the other header): 403 +
+      // x-ratelimit-remaining:0 with a GARBAGE x-ratelimit-reset. Same
+      // failure mode via our own reset-time arithmetic (NaN*1000 - now →
+      // NaN → setTimeout(NaN)); must degrade to the backoff cadence too. ---
+      async function testGarbageRateLimitReset() {
+        log('\n--- 403 com x-ratelimit-reset ilegível não vira hot loop ---');
+        localStorage.setItem('nos_token', 'tok-reset-garbage');
+        let calls = 0;
+        const fetchFn = async () => {
+          calls++;
+          return new Response(JSON.stringify({ message: 'rate limited' }), {
+            status: 403,
+            headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': 'not-a-number' },
+          });
+        };
+        const handle = startLivePolling({
+          initialWorld: makeWorld(5),
+          onWorld: () => {},
+          onStatus: () => {},
+          fetchFn,
+          intervals: { initial: 10, normal: 60, backoff: 400, anon: 400 },
+        });
+        await sleep(500);
+        handle.stop();
+        assert(calls >= 1, 'a primeira consulta aconteceu');
+        assert(calls <= 2, `sem hot loop: no máximo 2 consultas em 500ms com recuo de 400ms (veio ${calls})`);
+        assert(rejectionCount === 0, 'nenhuma promise rejection não-tratada');
+        localStorage.removeItem('nos_token');
+      }
+
       // --- Scenario 4: a body that doesn't look like a World (minimal shape check)
       // is logged and skipped, never reaches onWorld, never throws. ---
       async function testShapeValidation() {
@@ -442,6 +506,8 @@
         await testEtag304();
         await testAuthDowngrade();
         await testRateLimitBackoff();
+        await testDateFormRetryAfter();
+        await testGarbageRateLimitReset();
         await testShapeValidation();
         await testCorruptEntityBody();
         await testOnWorldThrowIsolated();
