@@ -11,9 +11,14 @@
  * DOM-overlay module in the mural.ts mold: pure function of `world` plus a
  * tiny bit of local state (the remembered login). All text lands via
  * `textContent` - a login string is player-typed input.
+ *
+ * R4 (D-23): also shows crafted `items` (A Fábrica, engine/fabrication.ts)
+ * alongside the raw-resource `inventory` - same "missing means zero, read it
+ * through the getter" habit as Pulso/energia, via getItemQty.
  */
 import type { World } from '../../engine/types';
-import { getOwn, getPulso, RESOURCE_LABELS_PTBR, RESOURCE_TYPES } from '../../engine/types';
+import { getItemQty, getOwn, getPulso, RESOURCE_LABELS_PTBR, RESOURCE_TYPES } from '../../engine/types';
+import { ITEM_CATALOG, itemLabel } from '../../engine/fabrication';
 
 /** localStorage key for "which GitHub login is mine". Deliberately NOT nos_username (that one names the local ghost). */
 const LOGIN_STORAGE_KEY = 'nos_login';
@@ -69,8 +74,15 @@ function statLine(label: string, value: string): HTMLElement {
 /**
  * Renders the panel into `rootEl`. Call again with a fresh `world` to
  * refresh. Re-renders itself in place when the player saves/clears a login.
+ *
+ * `onLoginChange` (R4): optional hook fired right after a save/clear, so a
+ * sibling panel whose content also depends on the saved login (oficinas.ts's
+ * per-recipe materials preview) can refresh itself too - same "notify on
+ * change" shape as main.ts's own renderAuth(authEl, refreshAuthenticatedPanels).
+ * Threaded through every recursive self-call so it keeps working after the
+ * first save/clear, not just once.
  */
-export function renderMeuNo(rootEl: HTMLElement, world: World): void {
+export function renderMeuNo(rootEl: HTMLElement, world: World, onLoginChange?: () => void): void {
   rootEl.replaceChildren();
   rootEl.appendChild(el('h2', 'hud-mural-title', 'Meu Nó'));
 
@@ -98,7 +110,8 @@ export function renderMeuNo(rootEl: HTMLElement, world: World): void {
         return;
       }
       saveLogin(value);
-      renderMeuNo(rootEl, world);
+      renderMeuNo(rootEl, world, onLoginChange);
+      onLoginChange?.();
     });
     input.addEventListener('input', () => input.setCustomValidity(''));
     rootEl.append(hint, form);
@@ -111,7 +124,8 @@ export function renderMeuNo(rootEl: HTMLElement, world: World): void {
   forget.type = 'button';
   forget.addEventListener('click', () => {
     clearLogin();
-    renderMeuNo(rootEl, world);
+    renderMeuNo(rootEl, world, onLoginChange);
+    onLoginChange?.();
   });
   who.append(document.createTextNode(' '), forget);
   rootEl.appendChild(who);
@@ -136,4 +150,13 @@ export function renderMeuNo(rootEl: HTMLElement, world: World): void {
     (resource) => `${player.inventory[resource]} ${RESOURCE_LABELS_PTBR[resource]}`,
   );
   rootEl.appendChild(statLine('Mochila', items.length > 0 ? items.join(' · ') : 'vazia'));
+
+  // A Fábrica (R4): itens fabricados, na ordem fixa do ITEM_CATALOG (mesmo
+  // papel que RESOURCE_TYPES cumpre acima para a mochila) em vez da ordem de
+  // inserção de player.items, que varia por jogador conforme o que cada um
+  // sintetizou primeiro.
+  const crafted = Object.keys(ITEM_CATALOG)
+    .filter((itemId) => getItemQty(player, itemId) > 0)
+    .map((itemId) => `${getItemQty(player, itemId)} ${itemLabel(itemId)}`);
+  rootEl.appendChild(statLine('Fabricados', crafted.length > 0 ? crafted.join(' · ') : 'nenhum'));
 }

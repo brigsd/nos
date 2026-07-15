@@ -278,6 +278,27 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     drawSpriteFrame(ctx, sprites.nucleo, frame, nx0, ny0, nx1, ny1);
   }
 
+  // 2.1. Draw Oficinas (A Fábrica's 4 máquinas-sintetizador, R4, D-23/D-25a).
+  // Static world dressing, drawn right after the Core and before any
+  // Nativo/player (block 2.5+) so a body standing on the same tile always
+  // reads in front of the machine, never behind it. One generic sprite read
+  // 4x, each labeled by name via the same drawPlayerName used for Nativos
+  // (D-25a: style comes from the recipe/material, never a duplicated
+  // machine — see assets/CREDITS.md).
+  for (const machine of Object.values(world.machines ?? {})) {
+    const mx = machine.position.x;
+    const my = machine.position.y;
+    if (mx < tileMinX || mx > tileMaxX || my < tileMinY || my > tileMaxY) continue;
+
+    const mx0 = camera.worldToScreenX(mx * TILE_SIZE_PX);
+    const mx1 = camera.worldToScreenX((mx + 1) * TILE_SIZE_PX);
+    const my0 = camera.worldToScreenY(my * TILE_SIZE_PX);
+    const my1 = camera.worldToScreenY((my + 1) * TILE_SIZE_PX);
+
+    drawSpriteFrame(ctx, sprites.oficina, 0, mx0, my0, mx1, my1);
+    drawPlayerName(ctx, machine.name, mx0, my0, mx1, false);
+  }
+
   // 2.5. Draw Nativos (NPCs — official world state, so solid like other players).
   // A Native that spoke on the current beat — autonomously (native_spoke) or
   // answering a player's /conversar (native_replied, v2) — gets a small

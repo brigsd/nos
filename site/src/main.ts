@@ -14,6 +14,7 @@ import { renderAuth } from './auth-ui';
 import { renderMeuNo } from './meu-no';
 import { renderComercio } from './trade';
 import { renderNativos } from './nativos';
+import { renderOficinas } from './oficinas';
 import { loadSprites, type Sprites } from './sprites';
 import { loadWorld } from './world';
 import { LocalPlayer } from './player';
@@ -50,6 +51,7 @@ async function main(): Promise<void> {
   const meuNoEl = requireEl<HTMLElement>('hud-meuno');
   const comercioBodyEl = requireEl<HTMLDivElement>('hud-comercio-body');
   const nativosBodyEl = requireEl<HTMLDivElement>('hud-nativos-body');
+  const oficinasBodyEl = requireEl<HTMLDivElement>('hud-oficinas-body');
 
   const maybeCtx = canvas.getContext('2d');
   if (!maybeCtx) {
@@ -79,12 +81,20 @@ async function main(): Promise<void> {
   renderMural(muralListEl, world);
 
   // Auth-dependent panels (Meu Nó's auto-fill from the authenticated login,
-  // Comércio/Nativos' "agir daqui" buttons) - re-rendered together whenever
-  // login state changes (R2, D-13).
+  // Comércio/Nativos' "agir daqui" buttons, Oficinas' materials preview) -
+  // re-rendered together whenever login state changes (R2, D-13). Meu Nó
+  // also gets its own onLoginChange hook (R4): typing/forgetting a login
+  // there doesn't touch the auth token, so it wouldn't otherwise reach this
+  // function - only Oficinas' per-recipe preview actually depends on that
+  // pick, so that's the only sibling it re-renders.
+  function refreshOficinas(): void {
+    renderOficinas(oficinasBodyEl, world);
+  }
   function refreshAuthenticatedPanels(): void {
-    renderMeuNo(meuNoEl, world);
+    renderMeuNo(meuNoEl, world, refreshOficinas);
     renderComercio(comercioBodyEl, world);
     renderNativos(nativosBodyEl, world);
+    refreshOficinas();
   }
   renderAuth(authEl, refreshAuthenticatedPanels);
   refreshAuthenticatedPanels();

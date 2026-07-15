@@ -60,10 +60,12 @@ export interface Sprites {
   nativoGota: SpriteSheet;
   nativoRaiz: SpriteSheet;
   nativoCinza: SpriteSheet;
+  /** A Fábrica's 4 máquinas-sintetizador (R4, D-23/D-25a) - one generic console read 4x, per-machine name drawn alongside it (see renderer.ts). */
+  oficina: SpriteSheet;
 }
 
 export async function loadSprites(): Promise<Sprites> {
-  const [campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, margemAguaB, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza] =
+  const [campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, margemAguaB, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza, oficina] =
     await Promise.all([
       loadSheet('campina_1.png', 16, 16, 1),
       loadSheet('campina_2.png', 16, 16, 1),
@@ -79,6 +81,7 @@ export async function loadSprites(): Promise<Sprites> {
       loadSheet('nativo_gota.png', 16, 16, 1),
       loadSheet('nativo_raiz.png', 16, 16, 1),
       loadSheet('nativo_cinza.png', 16, 16, 1),
+      loadSheet('oficina.png', 16, 16, 1),
     ]);
-  return { campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, margemAguaB, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza };
+  return { campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, margemAguaB, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza, oficina };
 }
