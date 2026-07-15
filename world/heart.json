@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 25,
-    "worldTime": 1500
+    "tickCount": 26,
+    "worldTime": 1560
   },
   "width": 64,
   "height": 64,
@@ -4261,6 +4261,18 @@
       "type": "core_pulse",
       "tick": 25,
       "worldTime": 1500
+    },
+    {
+      "type": "player_said",
+      "tick": 26,
+      "worldTime": 1560,
+      "login": "brigsd",
+      "message": "O primeiro Nó chegou ao Coração. Que a Crônica registre: aqui, nós começamos."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 26,
+      "worldTime": 1560
     }
   ]
 }
