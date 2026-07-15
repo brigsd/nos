@@ -7,11 +7,12 @@
  * Pure presentation - no game rules live here.
  */
 import type { World } from '../../engine/types';
-import { getTile, TILE_SIZE_PX } from '../../engine/types';
+import { getNativeMaxHp, getTile, TILE_SIZE_PX } from '../../engine/types';
 import type { Camera } from './camera';
 import { hashTile } from './hash';
 import type { Sprites, SpriteSheet } from './sprites';
 import type { LocalPlayer } from './player';
+import type { CombatReplay } from './combat-replay';
 
 /** Water alternates frames roughly once a second (GDD: gentle shimmer, not a strobe). */
 const WATER_FRAME_MS = 1000;
@@ -32,6 +33,8 @@ export interface RenderContext {
   /** devicePixelRatio at the time the canvas backing store was sized. */
   dpr: number;
   localPlayer: LocalPlayer;
+  /** The fight being replayed on this world, if any (v2 combat, D-05). */
+  combatReplay?: CombatReplay | null;
 }
 
 /** Deterministic meadow variant so tile choice never depends on draw order/frame - and never forms a checkerboard. */
@@ -296,9 +299,21 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     const ny0 = camera.worldToScreenY(ny * TILE_SIZE_PX);
     const ny1 = camera.worldToScreenY((ny + 1) * TILE_SIZE_PX);
 
+    // A fainted Native (hp 0, v2 combat) is still here - just barely: it
+    // renders as a fading presence while regen pulls it back, beat by beat.
+    const fainted = native.hp <= 0;
+    const prevNativeAlpha = ctx.globalAlpha;
+    if (fainted) ctx.globalAlpha = 0.35;
     drawSpriteFrame(ctx, nativeSprite(sprites, native.id), 0, nx0, ny0, nx1, ny1);
     drawPlayerName(ctx, native.name, nx0, ny0, nx1, false);
-    if (spokeThisTick.has(native.id)) drawSpeechMark(ctx, nx0, ny0, nx1);
+    ctx.globalAlpha = prevNativeAlpha;
+    if (!fainted && spokeThisTick.has(native.id)) drawSpeechMark(ctx, nx0, ny0, nx1);
+
+    // Hurt Natives carry a thin HP bar until regen closes the wound.
+    const nativeMaxHp = getNativeMaxHp(native);
+    if (native.hp < nativeMaxHp) {
+      drawHpBar(ctx, nx0, nx1, ny1, native.hp / nativeMaxHp);
+    }
   }
 
   // 3. Draw other players (official world state)
@@ -354,4 +369,21 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     // you just published reads clearly, not faded like unwritten intention.
     if (saidThisTick.has(localPlayer.username)) drawSpeechMark(ctx, px0, py0, px1);
   }
+
+  // 5. Combat replay effects (v2, D-05): the tick already resolved the fight;
+  // this only projects the recorded blows on top of the finished frame.
+  rc.combatReplay?.drawFx(ctx, camera, nowMs);
+}
+
+/** Thin HP bar just under a hurt combatant's tile (v2 combat). */
+function drawHpBar(ctx: CanvasRenderingContext2D, sx0: number, sx1: number, sy1: number, ratio: number): void {
+  const width = sx1 - sx0;
+  if (width <= 0) return;
+  const clamped = Math.max(0, Math.min(1, ratio));
+  ctx.save();
+  ctx.fillStyle = '#2e222f'; // trough (Resurrect 64 black)
+  ctx.fillRect(sx0 + 1, sy1 - 3, width - 2, 2);
+  ctx.fillStyle = clamped > 0.5 ? '#91db69' : clamped > 0.2 ? '#fbb954' : '#e83b3b'; // green/amber/red
+  ctx.fillRect(sx0 + 1, sy1 - 3, Math.round((width - 2) * clamped), 2);
+  ctx.restore();
 }

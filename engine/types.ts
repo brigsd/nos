@@ -75,6 +75,17 @@ export type ResourceType = 'wood' | 'stone' | 'pulse_fragment';
 
 export const RESOURCE_TYPES: readonly ResourceType[] = ['wood', 'stone', 'pulse_fragment'];
 
+/**
+ * Player-facing pt-BR names for each resource (docs/LORE.md lexicon). Single
+ * source for both the engine's command feedback and the site HUD, so the two
+ * can never call the same item by different names.
+ */
+export const RESOURCE_LABELS_PTBR: Record<ResourceType, string> = {
+  wood: 'madeira',
+  stone: 'pedra',
+  pulse_fragment: 'fragmento de pulso',
+};
+
 // ---------------------------------------------------------------------------
 // Tile
 // ---------------------------------------------------------------------------

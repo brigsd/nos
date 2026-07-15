@@ -34,6 +34,12 @@ Sensação instantânea no cliente (andar, olhar, abrir painéis); consequência
 | `/coletar` | coleta recurso do tile atual |
 | `/dizer texto` | mensagem no mural do mundo |
 
+## Comandos v2 (via issue/comentário)
+
+| Comando | Efeito |
+|---|---|
+| `/atacar alvo` | combate por turnos contra um Nativo adjacente (10 de energia); o tick resolve, o cliente replay |
+
 ## Combate (v2) — autoritativo por turnos
 
 Estilo JRPG: jogador submete intenções (`/atacar goblin ruinas`), o tick rola a batalha com os dados oficiais (stats + RNG com seed do tick), o cliente exibe o resultado como replay animado. À prova de trapaça por construção. PvP assíncrono (ataca-se o estado, não a pessoa), estilo Clash of Clans.

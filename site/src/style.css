@@ -271,3 +271,97 @@ body {
 .status[hidden] {
   display: none;
 }
+
+/* --- Combate (v2, D-05): o replay da luta que o Pulso já decidiu --- */
+
+.hud-mural-combat {
+  color: #fbb954; /* amber (Resurrect 64): a Crônica marcando sangue */
+}
+
+.hud-combate {
+  align-self: flex-start;
+  max-width: min(80vw, 320px);
+  pointer-events: auto;
+  background: var(--nos-panel);
+  border: 1px solid rgba(232, 59, 59, 0.35);
+  border-radius: 14px;
+  padding: 8px 14px 10px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.hud-combate[hidden] {
+  display: none;
+}
+
+.hud-combate-summary {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: #e83b3b;
+  cursor: pointer;
+}
+
+.hud-combate[open] .hud-combate-summary {
+  margin-bottom: 6px;
+}
+
+#hud-combate-title {
+  color: var(--nos-text);
+  letter-spacing: 0.04em;
+}
+
+.combate-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 30vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.combate-line {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--nos-text-dim);
+  animation: combate-line-in 0.25s ease-out;
+}
+
+.combate-hit {
+  color: var(--nos-text);
+}
+
+.combate-outcome {
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(232, 59, 59, 0.25);
+  font-weight: 600;
+}
+
+.combate-victory {
+  color: #91db69; /* leaf green */
+}
+
+.combate-defeat {
+  color: #e83b3b;
+}
+
+.combate-standoff {
+  color: #fbb954;
+}
+
+@keyframes combate-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

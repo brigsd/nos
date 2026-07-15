@@ -36,10 +36,15 @@
             <div class="hud-brand" aria-hidden="true">NÓS</div>
           </div>
 
-          <section class="hud-mural" id="hud-mural" aria-label="Mural do mundo — últimas falas">
+          <section class="hud-mural" id="hud-mural" aria-label="Mural do mundo — últimas falas e combates">
             <h2 class="hud-mural-title">Mural</h2>
             <ol class="hud-mural-list" id="hud-mural-list"></ol>
           </section>
+
+          <details class="hud-combate" id="hud-combate" hidden>
+            <summary class="hud-combate-summary">Combate · <span id="hud-combate-title"></span></summary>
+            <ol class="combate-log" id="hud-combate-log"></ol>
+          </details>
         </div>
 
         <p class="hud-hint">Arraste para explorar · roda ou pinça para aproximar</p>

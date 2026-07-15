@@ -14,13 +14,24 @@
  * be parsed as markup/script by a viewer's browser, no matter what a player
  * types.
  */
-import type { PlayerSaidEvent, World, WorldEvent } from '../../engine/types';
+import type { CombatResolvedEvent, PlayerSaidEvent, World, WorldEvent } from '../../engine/types';
+import { getOwn } from '../../engine/types';
 
-/** How many of the most recent messages the Mural shows at once. */
+/** How many of the most recent entries the Mural shows at once. */
 const MAX_ENTRIES = 8;
 
-function isPlayerSaid(event: WorldEvent): event is PlayerSaidEvent {
-  return event.type === 'player_said';
+type MuralEvent = PlayerSaidEvent | CombatResolvedEvent;
+
+function isMuralEvent(event: WorldEvent): event is MuralEvent {
+  return event.type === 'player_said' || event.type === 'combat_resolved';
+}
+
+/** pt-BR one-liner the Mural keeps of a fight. */
+function combatSummary(event: CombatResolvedEvent, world: World): string {
+  const nativeName = getOwn(world.natives ?? {}, event.nativeId)?.name ?? event.nativeId;
+  if (event.outcome === 'victory') return `enfrentou ${nativeName} e venceu (+${event.xpGained} XP)`;
+  if (event.outcome === 'defeat') return `enfrentou ${nativeName} e caiu`;
+  return `mediu forças com ${nativeName} — ninguém cedeu`;
 }
 
 /** "agora" on the current beat, "há N pulsos" otherwise — Pulso/batida is the world's unit of time (docs/LORE.md). */
@@ -37,7 +48,7 @@ function pulseAgo(eventTick: number, currentTick: number): string {
  * world should replace what's on screen.
  */
 export function renderMural(listEl: HTMLOListElement, world: World): void {
-  const messages = world.events.filter(isPlayerSaid).slice(-MAX_ENTRIES).reverse();
+  const messages = world.events.filter(isMuralEvent).slice(-MAX_ENTRIES).reverse();
 
   listEl.replaceChildren();
 
@@ -60,10 +71,12 @@ export function renderMural(listEl: HTMLOListElement, world: World): void {
     author.className = 'hud-mural-author';
     author.textContent = `@${event.login}`;
 
-    // Untrusted player text: textContent only, never innerHTML.
+    // Untrusted player text (and engine-built summaries alike): textContent
+    // only, never innerHTML.
     const message = document.createElement('span');
     message.className = 'hud-mural-message';
-    message.textContent = event.message;
+    message.textContent = event.type === 'player_said' ? event.message : combatSummary(event, world);
+    if (event.type === 'combat_resolved') message.classList.add('hud-mural-combat');
 
     line.append(author, document.createTextNode(' '), message);
 
