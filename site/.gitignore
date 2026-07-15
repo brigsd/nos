@@ -2,6 +2,10 @@ node_modules/
 dist/
 dist-gl/
 
+# Throwaway build dir used by gl/qa/bundle-pixi-isolated.mjs - created and
+# removed within the same run, listed here only as a safety net.
+.scratch-bundle-check/
+
 # Regenerated on every dev/build by scripts/copy-data.mjs from the repo's
 # canonical world/ and assets/sprites/ - never the source of truth, never
 # committed.

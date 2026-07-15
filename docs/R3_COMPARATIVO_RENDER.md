@@ -28,8 +28,8 @@ tempo real, sem recarregar a página:
 Arquivos principais: `site/gl/main.ts` (orquestração), `site/gl/canvas-world.ts` +
 `site/gl/canvas-stress.ts` (lado Canvas2D), `site/gl/pixi-world.ts` + `site/gl/pixi-stress.ts` +
 `site/gl/pixi-filters.ts` (lado PixiJS), `site/gl/daynight.ts` (curva dia/noite compartilhada pelos dois
-lados — nenhum dos dois ganha uma curva mais fácil), `site/gl/qa/bench-and-screens.mjs` (medição +
-screenshots).
+lados — nenhum dos dois ganha uma curva mais fácil), `site/gl/qa/bench-and-screens.mjs` (FPS/memória/
+screenshots) + `site/gl/qa/bundle-pixi-isolated.mjs` (peso isolado do PixiJS tree-shaken).
 
 ## Metodologia (leia antes dos números)
 
@@ -64,9 +64,9 @@ screenshots).
 
 | Sprites | Canvas 2D — fps (méd./p95 ms) | PixiJS (`ParticleContainer`) — fps (méd./p95 ms) |
 |---:|---|---|
-| 1.000  | **60,9** fps (16,4 / 16,8 ms) | 58,9 fps (17,0 / 33,4 ms) |
-| 5.000  | **33,8** fps (29,6 / 50,1 ms) | 27,3 fps (36,7 / 50,1 ms) |
-| 10.000 | **20,5** fps (48,8 / 66,8 ms) | 16,2 fps (61,8 / 116,8 ms) |
+| 1.000  | **60,7** fps (16,5 / 33,2 ms) | 60,8 fps (16,4 / 16,8 ms) |
+| 5.000  | **45,6** fps (21,9 / 33,4 ms) | 31,1 fps (32,2 / 50,0 ms) |
+| 10.000 | **24,7** fps (40,5 / 66,7 ms) | 18,8 fps (53,2 / 83,3 ms) |
 
 Neste sandbox (software-GL), o Canvas 2D venceu em throughput bruto de sprites em todas as contagens — o
 oposto do que a literatura/benchmarks do próprio PixiJS mostram em GPU real. Ver a ressalva de metodologia:
@@ -77,11 +77,11 @@ upload custa mais do que o simples `drawImage` do Canvas2D — que os navegadore
 
 | Cena | fps (méd./p95 ms) |
 |---|---|
-| Canvas · dia | **17,7** fps (56,6 / 100,1 ms) |
-| Canvas · noite | **18,1** fps (55,2 / 116,8 ms) |
-| PixiJS · dia | 9,9 fps (101,0 / 200,0 ms) |
-| PixiJS · noite | 10,7 fps (93,9 / 150,0 ms) |
-| PixiJS · noite + CRT | 9,1 fps (109,6 / 166,7 ms) |
+| Canvas · dia | **20,0** fps (50,1 / 83,4 ms) |
+| Canvas · noite | **21,2** fps (47,2 / 100,0 ms) |
+| PixiJS · dia | 11,0 fps (90,7 / 133,3 ms) |
+| PixiJS · noite | 11,5 fps (86,6 / 133,4 ms) |
+| PixiJS · noite + CRT | 9,8 fps (102,1 / 150,0 ms) |
 
 Mesma leitura: neste ambiente, a pilha de filtros do Pixi (blur do bloom + shader de água + CRT opcional)
 custa caro sob raster por software (cada filtro é um *render-to-texture* extra). O mapa real d'O Coração tem
@@ -93,35 +93,50 @@ batching costuma compensar.
 | Momento | Canvas 2D | PixiJS |
 |---|---|---|
 | Baseline (recém-carregado) | 9,5 MB | 9,5 MB |
-| Estresse 1.000 | 8,5 MB | 13,4 MB |
-| Estresse 5.000 | 9,0 MB | 10,4 MB |
-| Estresse 10.000 | 10,6 MB | 11,7 MB |
-| Mundo real · dia | 11,5 MB | 13,8 MB |
-| Mundo real · noite | 11,5 MB | 13,9 MB |
+| Estresse 1.000 | 9,1 MB | 10,6 MB |
+| Estresse 5.000 | 11,2 MB | 10,3 MB |
+| Estresse 10.000 | 16,3 MB | 11,5 MB |
+| Mundo real · dia | 11,5 MB | 13,6 MB |
+| Mundo real · noite | 11,5 MB | 14,2 MB |
 
 PixiJS carrega ~2–4 MB a mais de estruturas internas (texturas GPU-side, buffers de partícula, cache de
 shader) mesmo em cenas pequenas — custo esperado de qualquer motor WebGL. Nenhum dos dois mostrou sinal de
-vazamento crescente entre 1k→10k (a variação é ruído de GC, não uma curva monotônica clara).
+vazamento crescente entre 1k→10k (a variação é ruído de GC, não uma curva monotônica clara; no Canvas2D a
+alta em 10k reflete o array de 10 mil objetos `StressSprite` em si, não um vazamento).
+
+> Números regenerados em 2026-07-15 após o merge de `origin/main` (R2 login GitHub + batidas #38/#39) para
+> dentro deste branch — rodar `node gl/qa/bench-and-screens.mjs` de novo produz variação de ruído de
+> ±10–15% (natural neste sandbox sem GPU, ver metodologia), não uma mudança de leitura qualitativa: Canvas2D
+> segue à frente em throughput bruto neste ambiente em toda a bateria, por uma margem parecida.
 
 ### Carregamento e bundle
 
 | Métrica | Valor |
 |---|---|
-| Tempo até interativo (`window.glProto.ready`), servidor estático local | **498 ms** (uma medição; inclui fetch do `world/heart.json`, decode de todos os PNGs dos dois renderers, init do `Application`/contexto WebGL) |
-| `site/gl/` build de produção completo (os dois renderers + todos os efeitos, `npm run build:gl`) | 595,5 kB bruto / **177,7 kB gzip** (~15 chunks — o próprio Pixi separa sua árvore de extensões) |
-| PixiJS v8 isolado — só as exportações que este protótipo importa (`Application`, `Assets`, `BlurFilter`, `Container`, `Filter`, `GlProgram`, `Graphics`, `Particle`, `ParticleContainer`, `Rectangle`, `Sprite`, `Text`, `TextStyle`, `Texture`), build single-file minificado | 751,8 kB bruto / **190,1 kB gzip** |
-| Equivalente Canvas2D isolado (mesma superfície funcional, sem PixiJS), build single-file minificado | 11,9 kB bruto / **4,15 kB gzip** |
-| **"Taxa" do PixiJS** (delta) | **~186 kB gzip** |
-| Para contexto: bundle do site ao vivo hoje (`site/src`, `npm run build` em `site/`) | 21,9 kB bruto / **8,06 kB gzip** |
+| Tempo até interativo (`window.glProto.ready`), servidor estático local | **828 ms** (uma medição; inclui fetch do `world/heart.json`, decode de todos os PNGs dos dois renderers, init do `Application`/contexto WebGL) |
+| `site/gl/` build de produção completo (os dois renderers + todos os efeitos + os *hooks* de automação, `npm run build:gl`) | 595,5 kB bruto / **177,7 kB gzip** (15 chunks — o próprio Pixi separa sua árvore de extensões) |
+| PixiJS v8 isolado — só as exportações que este protótipo importa (`Application`, `Assets`, `BlurFilter`, `Container`, `Filter`, `GlProgram`, `Graphics`, `Particle`, `ParticleContainer`, `Rectangle`, `Sprite`, `Text`, `TextStyle`, `Texture`), *tree-shaken*, build de biblioteca ES module minificado (`gl/qa/bundle-pixi-isolated.mjs`) | 304,2 kB bruto / **75,8 kB gzip** |
+| Canvas2D — não precisa de biblioteca nenhuma: é API nativa do navegador | **0 kB**, sempre (o que `site/gl/canvas-world.ts` etc. pesam é código de aplicação normal, não uma dependência) |
+| Para contexto: bundle JS do site ao vivo hoje (`site/src`, `npm run build` em `site/`, já com R2/login GitHub mesclado) | 29,5 kB bruto / **10,4 kB gzip** |
 
-Adotar PixiJS por inteiro multiplicaria o JS do site por ~20–25×. É um custo real para um projeto cuja tese
-(D-03) é ficar magro e 100% GitHub — mas é um download **único e cacheável** (o navegador baixa uma vez, não
-por batida/sessão), e pode ser adiado via `import()` dinâmico só quando a janela WebGL é de fato escolhida
-(ver plano de migração).
+Duas leituras de "taxa do PixiJS", conforme o cenário:
+- **Se o protótipo inteiro fosse publicado como está** (os dois renderers, carregados juntos, sem *code-split*):
+  177,7 kB gzip − 10,4 kB gzip do site atual ≈ **+167 kB gzip**, ~17× o peso de hoje. Este NÃO é o cenário
+  recomendado (ver plano de migração) — está aqui só como o piso "sem nenhuma otimização".
+- **Cenário realista do plano de migração** (`import()` dinâmico, só a árvore do Pixi carrega, só quando o
+  jogador liga a janela WebGL): **~76 kB gzip**, medido isolando exatamente os símbolos usados (tabela acima)
+  num build de biblioteca ES module — o mesmo formato de chunk que uma `import()` dinâmica gera de verdade
+  num build Vite, ao contrário de um teste IIFE avulso (a primeira tentativa deste teste, descartada, media
+  ~58 kB gzip em IIFE — o formato ES preserva mais estrutura de módulo e é o número que corresponde ao que
+  o navegador de fato baixaria).
+
+Um download de ~76 kB gzip é real, mas é **único e cacheável** (o navegador baixa uma vez, não por
+batida/sessão) e **opt-in** (quem nunca liga a janela WebGL nunca paga nada) — bem diferente de multiplicar
+o peso do site inteiro por 17× para todo mundo.
 
 ## Screenshots
 
-Lado a lado, mesma cena (`world/heart.json` ao vivo, batida #37), 1280×800, em
+Lado a lado, mesma cena (`world/heart.json` ao vivo, batida #39), 1280×800, em
 [`site/qa/r3/`](../site/qa/r3/):
 
 | | Dia | Noite |
@@ -149,7 +164,7 @@ O que dá pra ver comparando:
 ### Canvas 2D (atual)
 
 **Prós**
-- Já está em produção, testado, zero dependência nova, bundle mínimo (8 kB gzip hoje).
+- Já está em produção, testado, zero dependência nova, bundle mínimo (10,4 kB gzip de JS hoje).
 - Mais rápido *neste ambiente de teste* em toda a bateria (mas leia a ressalva — GPU real provavelmente
   inverte isso em cenas com muitos sprites).
 - API simples, qualquer contribuidor lê `drawImage`/`fillRect` sem curva de aprendizado.
@@ -178,7 +193,8 @@ O que dá pra ver comparando:
   ferramenta nova/frágil.
 
 **Contras**
-- ~186 kB gzip a mais no bundle (medido, ver tabela) — um baque real para um site que hoje pesa 8 kB gzip.
+- ~76 kB gzip a mais no bundle no cenário realista de `import()` dinâmico (medido, ver tabela) — um baque
+  real para um site que hoje pesa 10,4 kB gzip, mesmo sendo *opt-in* e cacheável.
 - Mais lento *neste sandbox de teste* em toda a bateria — precisa de validação em dispositivo real antes de
   virar a recomendação padrão (ver "O que isto não prova").
 - Mais uma dependência externa (ainda que popular e madura) — contra a filosofia "o mais enxuto possível"
@@ -212,9 +228,9 @@ Por quê:
   como *pass* de custo fixo) só é praticável com shaders — ou seja, só com WebGL. Ambiente e luz pontual o
   Canvas2D já resolve razoavelmente; é exatamente a parte que os screenshots mostram como **mais parecida**
   entre os dois.
-- O custo de bundle (~186 kB gzip) é real mas administrável: é *um* download cacheável, não um custo por
-  batida/tick, e pode ser adiado via `import()` dinâmico (ver plano abaixo) — quem nunca liga a janela WebGL
-  nunca paga o custo.
+- O custo de bundle (~76 kB gzip no cenário realista de `import()` dinâmico, ver tabela) é real mas
+  administrável: é *um* download cacheável, não um custo por batida/tick, e só é pago por quem liga a janela
+  WebGL (ver plano abaixo) — quem nunca liga nunca baixa nada a mais.
 - Manter o Canvas2D como padrão evita apostar a experiência de TODOS os jogadores (incluindo celulares mais
   fracos/mais antigos) numa mudança cuja vantagem de performance não pôde ser confirmada neste ambiente.
 
@@ -244,11 +260,18 @@ o R3 pediu para proteger. Passos, cada um shippable e revertível sozinho:
 
 ```bash
 cd site
-npm install                       # instala pixi.js (pinned 8.19.0) além das deps existentes
-npm run build:gl                  # build de produção do protótipo em site/dist-gl/
-node gl/qa/bench-and-screens.mjs  # roda a bateria de FPS + memória + screenshots, escreve site/qa/r3/
+npm install                            # instala pixi.js (pinned 8.19.0) além das deps existentes
+npm run build:gl                       # build de produção do protótipo em site/dist-gl/
+node gl/qa/bench-and-screens.mjs       # bateria de FPS + memória + screenshots, escreve site/qa/r3/
+node gl/qa/bundle-pixi-isolated.mjs    # mede o peso isolado do PixiJS tree-shaken (linha da tabela acima)
 ```
 
-Requer Chromium em `/opt/pw-browsers/chromium` (o mesmo usado por `site/qa/screenshot.mjs`). O script não
-faz nenhuma chamada de rede externa — serve `site/dist-gl/` localmente e só lê a cópia local de
-`world/heart.json`.
+Requer Chromium em `/opt/pw-browsers/chromium` (o mesmo usado por `site/qa/screenshot.mjs`). Nenhum dos dois
+scripts faz chamada de rede externa — `bench-and-screens.mjs` serve `site/dist-gl/` localmente e só lê a
+cópia local de `world/heart.json`; `bundle-pixi-isolated.mjs` só invoca a API de build do Vite já instalado
+localmente.
+
+Os números acima (FPS, memória, bundle) foram regenerados em 2026-07-15, já com o branch atualizado a partir
+de `origin/main` (ver histórico de commits) — rodar de novo neste ou em outro ambiente vai variar (sobretudo
+os números absolutos de FPS, por causa do sandbox sem GPU — ver metodologia), mas a comparação relativa
+Canvas2D vs. PixiJS deve se manter na mesma direção enquanto rodar em CPU/software-GL.

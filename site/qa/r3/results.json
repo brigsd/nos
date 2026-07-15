@@ -1,104 +1,104 @@
 {
-  "generatedAt": "2026-07-15T14:03:54.422Z",
-  "loadTimeMs": 498,
-  "baselineHeapBytes": 9455332,
+  "generatedAt": "2026-07-15T16:40:03.363Z",
+  "loadTimeMs": 828,
+  "baselineHeapBytes": 9500568,
   "note": "Chromium headless sem GPU real (SwiftShader software WebGL) - números absolutos são um piso conservador; comparação relativa canvas vs. pixi e a curva 1k->10k continuam válidas. Ver docs/R3_COMPARATIVO_RENDER.md.",
   "stress": [
     {
       "renderer": "canvas",
       "count": 1000,
-      "fps": 60.9390706698353,
-      "avgFrameMs": 16.40983606557529,
-      "p95FrameMs": 16.800000000000182,
+      "fps": 60.67664041692116,
+      "avgFrameMs": 16.480833333332946,
+      "p95FrameMs": 33.19999999999982,
       "fpsSamples": [
-        60.7,
+        60.8,
+        60.5,
+        60.8,
         61,
-        61,
-        61,
-        60.9,
-        60.9
+        60.6,
+        55.4
       ],
-      "jsHeapUsedBytes": 8516496
+      "jsHeapUsedBytes": 9085360
     },
     {
       "renderer": "canvas",
       "count": 5000,
-      "fps": 33.813233292772225,
-      "avgFrameMs": 29.574242424243852,
-      "p95FrameMs": 50.100000000000364,
+      "fps": 45.6317074106135,
+      "avgFrameMs": 21.915711462449952,
+      "p95FrameMs": 33.399999999999636,
       "fpsSamples": [
-        33.9,
-        32.7,
-        36.1,
-        33.8,
-        32.5,
-        33.8
+        44.3,
+        48.2,
+        46,
+        45.3,
+        47.1,
+        43.9
       ],
-      "jsHeapUsedBytes": 8972940
+      "jsHeapUsedBytes": 11156420
     },
     {
       "renderer": "canvas",
       "count": 10000,
-      "fps": 20.47795365840961,
-      "avgFrameMs": 48.83407894737064,
-      "p95FrameMs": 66.79999999999927,
+      "fps": 24.710465640155967,
+      "avgFrameMs": 40.46874999999977,
+      "p95FrameMs": 66.70000000000073,
       "fpsSamples": [
-        20.8,
-        20.6,
-        20.8,
-        20.1,
-        20.2,
-        20.4
+        24.7,
+        25.3,
+        24.7,
+        24.7,
+        22.1,
+        22.4
       ],
-      "jsHeapUsedBytes": 10594280
+      "jsHeapUsedBytes": 16263052
     },
     {
       "renderer": "pixi",
       "count": 1000,
-      "fps": 58.861046850455494,
-      "avgFrameMs": 16.99084151055684,
-      "p95FrameMs": 33.39999999999782,
+      "fps": 60.838238170645525,
+      "avgFrameMs": 16.437033898304687,
+      "p95FrameMs": 16.799999999999272,
       "fpsSamples": [
-        60,
-        58.3,
-        56.8,
+        58.9,
         60.9,
-        59.4,
-        54.8
+        60.9,
+        60.8,
+        60.1,
+        61
       ],
-      "jsHeapUsedBytes": 13397328
+      "jsHeapUsedBytes": 10612248
     },
     {
       "renderer": "pixi",
       "count": 5000,
-      "fps": 27.277794254422307,
-      "avgFrameMs": 36.66274928775453,
-      "p95FrameMs": 50.10000000000582,
+      "fps": 31.072840421163022,
+      "avgFrameMs": 32.18403225806357,
+      "p95FrameMs": 50,
       "fpsSamples": [
-        26.7,
-        28.1,
-        27.5,
-        27,
-        30,
-        25.5
+        30.1,
+        29.2,
+        30.9,
+        31.3,
+        33.9,
+        35.3
       ],
-      "jsHeapUsedBytes": 10430908
+      "jsHeapUsedBytes": 10279292
     },
     {
       "renderer": "pixi",
       "count": 10000,
-      "fps": 16.179430606944734,
-      "avgFrameMs": 61.80687500000296,
-      "p95FrameMs": 116.79999999999563,
+      "fps": 18.815124683806783,
+      "avgFrameMs": 53.151633986928445,
+      "p95FrameMs": 83.30000000000291,
       "fpsSamples": [
-        16.8,
-        16.2,
-        14.4,
-        17.7,
-        16.2,
-        15.7
+        18.7,
+        19.1,
+        21.2,
+        19,
+        18.6,
+        18.6
       ],
-      "jsHeapUsedBytes": 11717092
+      "jsHeapUsedBytes": 11530456
     }
   ],
   "screenshots": [
@@ -114,86 +114,86 @@
       "renderer": "canvas",
       "time": "day",
       "crt": false,
-      "fps": 17.65729157864195,
-      "avgFrameMs": 56.63529411765258,
-      "p95FrameMs": 100.09999999999854,
+      "fps": 19.971667874559326,
+      "avgFrameMs": 50.08736842105134,
+      "p95FrameMs": 83.40000000000146,
       "fpsSamples": [
-        18.3,
-        17.3,
-        19,
-        17.6,
-        16.2,
-        17.7
+        20.3,
+        18.4,
+        17.8,
+        20.7,
+        20.7,
+        19.6
       ],
-      "jsHeapUsedBytes": 11498852
+      "jsHeapUsedBytes": 11482908
     },
     {
       "renderer": "canvas",
       "time": "night",
       "crt": false,
-      "fps": 18.108263534211666,
-      "avgFrameMs": 55.223529411767444,
-      "p95FrameMs": 116.79999999999563,
+      "fps": 21.174111249997893,
+      "avgFrameMs": 47.227499999999694,
+      "p95FrameMs": 100,
       "fpsSamples": [
-        18.2,
-        18.1,
-        18.3,
-        18.1,
-        16.4,
-        17.1
+        22.5,
+        21.2,
+        21.2,
+        20.1,
+        20.8,
+        21.2
       ],
-      "jsHeapUsedBytes": 11516876
+      "jsHeapUsedBytes": 11479628
     },
     {
       "renderer": "pixi",
       "time": "day",
       "crt": false,
-      "fps": 9.901894768026043,
-      "avgFrameMs": 101.01111111112631,
-      "p95FrameMs": 200,
+      "fps": 11.028422571060155,
+      "avgFrameMs": 90.67499999999637,
+      "p95FrameMs": 133.3000000000029,
       "fpsSamples": [
-        6.9,
+        11,
+        11.7,
         10.1,
-        9.8,
-        9.6,
-        10.6,
-        10
+        12.3,
+        10.5,
+        11
       ],
-      "jsHeapUsedBytes": 13779696
+      "jsHeapUsedBytes": 13626340
     },
     {
       "renderer": "pixi",
       "time": "night",
       "crt": false,
-      "fps": 10.680379670314293,
-      "avgFrameMs": 93.86000000000496,
-      "p95FrameMs": 150,
+      "fps": 11.540715484404318,
+      "avgFrameMs": 86.64999999999552,
+      "p95FrameMs": 133.40000000000873,
       "fpsSamples": [
-        11.2,
-        9.7,
-        10.2,
-        8.7,
-        11.3,
-        11.7
+        10.8,
+        11.5,
+        11.7,
+        10.8,
+        11.6,
+        11.6
       ],
-      "jsHeapUsedBytes": 13920276
+      "jsHeapUsedBytes": 14211320
     },
     {
       "renderer": "pixi",
       "time": "night",
       "crt": true,
-      "fps": 9.120865028862102,
-      "avgFrameMs": 109.64097222224004,
-      "p95FrameMs": 166.6999999999971,
+      "fps": 9.794967376758905,
+      "avgFrameMs": 102.09444444444347,
+      "p95FrameMs": 150,
       "fpsSamples": [
-        8.5,
-        9.1,
-        9.2,
-        7.7,
-        9.3,
-        9.2
+        10.3,
+        9.8,
+        9.5,
+        9.4,
+        9.9,
+        9.8
       ],
-      "jsHeapUsedBytes": 14103732
+      "jsHeapUsedBytes": 14411940
     }
   ],
   "bundle": {
