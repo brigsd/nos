@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 39,
-    "worldTime": 2340
+    "tickCount": 41,
+    "worldTime": 2460
   },
   "width": 64,
   "height": 64,
@@ -4345,6 +4345,16 @@
       "type": "core_pulse",
       "tick": 39,
       "worldTime": 2340
+    },
+    {
+      "type": "core_pulse",
+      "tick": 40,
+      "worldTime": 2400
+    },
+    {
+      "type": "core_pulse",
+      "tick": 41,
+      "worldTime": 2460
     }
   ],
   "natives": {
@@ -4352,7 +4362,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 4,
+        "x": 2,
         "y": 0
       },
       "behaviorTree": "wanderer",
@@ -4392,6 +4402,40 @@
       },
       "hp": 120,
       "faction": "guardian"
+    }
+  },
+  "machines": {
+    "forja": {
+      "id": "forja",
+      "name": "Forja",
+      "position": {
+        "x": 29,
+        "y": 29
+      }
+    },
+    "cozinha": {
+      "id": "cozinha",
+      "name": "Cozinha",
+      "position": {
+        "x": 36,
+        "y": 29
+      }
+    },
+    "bancada": {
+      "id": "bancada",
+      "name": "Bancada",
+      "position": {
+        "x": 29,
+        "y": 36
+      }
+    },
+    "estaleiro": {
+      "id": "estaleiro",
+      "name": "Estaleiro",
+      "position": {
+        "x": 36,
+        "y": 36
+      }
     }
   }
 }
