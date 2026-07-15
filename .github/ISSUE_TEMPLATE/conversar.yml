@@ -11,7 +11,7 @@ body:
         Chegue a até **3 tiles** de um Nativo e puxe conversa. Não custa energia.
         A resposta vem na próxima batida — aqui na issue e no Mural do mundo.
 
-        Nativos d'O Coração: `gota` (anda pela campina), `raiz` (mercadora da floresta) e `cinza` (guardiã das ruínas).
+        Nativos d'O Coração: `gota` (colhe e mistura o que o rio larga), `raiz` (mercadora da floresta) e `cinza` (mestra da pedra, nas ruínas).
   - type: input
     id: nativo
     attributes:

@@ -82,25 +82,30 @@ export const DIALOGUES: Record<string, string[]> = {
 // and spoke to it. Same rules: pt-BR, LORE voice, no LLM in runtime (D-09).
 // ---------------------------------------------------------------------------
 
-/** Reply pools keyed by Native id, so each of the three keeps their own voice. */
+/**
+ * Reply pools keyed by Native id, so each of the three keeps their own
+ * voice. Direção do ideador (2026-07-15): O Coração é um mundo pacífico e
+ * será "A Fábrica" do metaverso - os Nativos falam como MESTRES DE OFÍCIO
+ * (misturas, madeira, pedra), nunca como figuras de combate.
+ */
 export const CONVERSATION_REPLIES: Record<string, string[]> = {
   gota: [
     'Você fala como quem chegou faz pouco. Todos chegam.',
     'O rio muda de ideia a cada batida. Eu só acompanho.',
     'Se procura o começo, procure o Commit Primordial. Ninguém achou ainda.',
-    'Eu já fui mais longe. O mapa acabou antes de mim.',
+    'Junto o que o rio larga. Bem misturado, vira tinta, remédio, fogo.',
     'Anda comigo um pouco. O Coração é menor a dois.',
   ],
   raiz: [
     'Conversa é de graça. O resto tem preço.',
     'Trago madeira da floresta funda. Fragmentos abrem meu melhor estoque.',
-    'Os Nós sempre querem falar do mundo. Eu prefiro falar de troca.',
+    'Madeira boa não é a mais dura. É a que aceita virar outra coisa.',
     'A floresta dá, a floresta toma. Eu só faço a ponte.',
   ],
   cinza: [
     'As ruínas não gostam de pergunta. Eu respondo por elas.',
-    'Vigio o que restou. Alguém precisa.',
-    'Não desça onde a pedra escurece. O Detached Head não conversa.',
+    'Trabalho o que restou. Alguém precisa dar forma de novo.',
+    'A pedra lembra o fogo que a moldou. Eu só apresento os dois de novo.',
     'Você grava tudo, eu sei. As pedras também.',
   ],
 };

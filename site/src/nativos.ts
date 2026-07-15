@@ -20,11 +20,11 @@ function conversarIssueUrl(nativeId: string): string {
   return `${ISSUE_BASE_URL}?${params.toString()}`;
 }
 
-/** Short pt-BR descriptor per faction (LORE voice: curto e concreto). */
+/** Short pt-BR descriptor per faction (LORE voice: curto e concreto; Nativos são mestres de ofício, não guerreiros). */
 const FACTION_DESCRIPTIONS: Record<Native['faction'], string> = {
-  wanderer: 'anda por onde o rio deixa',
+  wanderer: 'colhe e mistura o que o rio larga',
   merchant: 'negocia o que a floresta dá',
-  guardian: 'vigia o que restou das ruínas',
+  guardian: 'dá forma ao que restou das ruínas',
 };
 
 function isNativeReplied(event: WorldEvent): event is NativeRepliedEvent {
