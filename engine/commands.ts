@@ -7,7 +7,9 @@
  */
 
 import type { World, Player, Position, WorldEvent, ResourceType } from './types';
-import { STARTING_ENERGY, MAX_ENERGY, getOwn, getTile, tileIndex } from './types';
+import { STARTING_ENERGY, MAX_ENERGY, ACTIONS_PER_TICK, getOwn, getTile, tileIndex } from './types';
+
+export { ACTIONS_PER_TICK };
 
 export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer';
 
@@ -31,7 +33,6 @@ export interface ProcessedCommandsResult {
   results: CommandResult[];
 }
 
-export const ACTIONS_PER_TICK = 3;
 export const MOVE_ENERGY_COST = 1;
 export const COLLECT_ENERGY_COST = 5;
 
