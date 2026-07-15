@@ -631,10 +631,14 @@ describe('seedFactoryMachines - retrofitting the live world/heart.json', () => {
   const onDisk = onDiskRaw;
   const preMigration: World = { ...onDisk, machines: undefined };
 
-  it('sanity: the live world has real playtime to protect and does not have machines yet', () => {
+  it('sanity: the live world has real playtime to protect and the migration already happened', () => {
     expect(onDisk.meta.tickCount).toBeGreaterThan(0);
     expect(Object.keys(onDisk.players)).toContain('brigsd');
-    expect(onDisk.machines).toBeUndefined();
+    // The real tick seeded the oficinas into the live world right after PR #39
+    // merged (same lifecycle as the Nativos migration, issue #30) - from here
+    // on this suite checks the migration against a synthetic preMigration
+    // world, while the on-disk world is expected to already carry them.
+    expect(Object.keys(onDisk.machines ?? {}).sort()).toEqual(['bancada', 'cozinha', 'estaleiro', 'forja']);
   });
 
   it('(a) seeding alone adds exactly the 4 oficinas, deterministically', () => {
