@@ -316,9 +316,11 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
       .map((e) => e.login),
   );
   for (const [login, player] of Object.entries(world.players)) {
-    // If the official player is the local player, we skip rendering it here
-    // because we render the local player smoothly at its visual position.
-    if (login === localPlayer.username) continue;
+    // "O Eco" (D-25b, flips D-22): other players render solid (they are real,
+    // Registro is all we know of them). The local player's OWN official entry
+    // renders as the pale echo trailing behind — you are solid where you feel
+    // you are (block 4), and your Registro follows until the Pulse catches up.
+    const isLocalEcho = login === localPlayer.username;
 
     const px = player.position.x;
     const py = player.position.y;
@@ -330,16 +332,18 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
       const py0 = camera.worldToScreenY(py * TILE_SIZE_PX);
       const py1 = camera.worldToScreenY((py + 1) * TILE_SIZE_PX);
 
+      const prevAlpha = ctx.globalAlpha;
+      if (isLocalEcho) ctx.globalAlpha = LOCAL_GHOST_ALPHA;
       drawSpriteFrame(ctx, sprites.no_avatar, 0, px0, py0, px1, py1);
-      drawPlayerName(ctx, `@${player.login}`, px0, py0, px1, false);
-      if (saidThisTick.has(player.login)) drawSpeechMark(ctx, px0, py0, px1);
+      if (!isLocalEcho) drawPlayerName(ctx, `@${player.login}`, px0, py0, px1, false);
+      ctx.globalAlpha = prevAlpha;
+      if (saidThisTick.has(player.login) && !isLocalEcho) drawSpeechMark(ctx, px0, py0, px1);
     }
   }
 
-  // 4. Draw local player as "intenção" — a translucent ghost (D-22, "O Registro").
-  // The world state (drawn solid above) is what is real; the local avatar is only
-  // intention until the Pulse writes it into the Crônica. So it renders faded,
-  // moving ahead of its official self until the next tick makes it real.
+  // 4. Draw local player SOLID at its visual position ("O Eco", D-25b): you
+  // are where you feel you are; the pale echo above is your Registro — the
+  // last position the Pulse wrote into the Crônica — catching up to you.
   const lpx = localPlayer.visualX;
   const lpy = localPlayer.visualY;
 
@@ -350,13 +354,8 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
     const py0 = camera.worldToScreenY(lpy * TILE_SIZE_PX);
     const py1 = camera.worldToScreenY((lpy + 1) * TILE_SIZE_PX);
 
-    const prevAlpha = ctx.globalAlpha;
-    ctx.globalAlpha = LOCAL_GHOST_ALPHA;
     drawSpriteFrame(ctx, sprites.no_avatar, 0, px0, py0, px1, py1);
     drawPlayerName(ctx, localPlayer.username, px0, py0, px1, true);
-    ctx.globalAlpha = prevAlpha;
-    // Speech mark drawn at full alpha (unlike the ghost body/name) so a message
-    // you just published reads clearly, not faded like unwritten intention.
     if (saidThisTick.has(localPlayer.username)) drawSpeechMark(ctx, px0, py0, px1);
   }
 }
