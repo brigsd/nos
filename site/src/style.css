@@ -728,11 +728,166 @@ body {
   background: rgba(168, 132, 243, 0.22);
 }
 
+/* --- Portais (R6, D-17 fase 1): O Salão de Portais — travessia entre mundos --- */
+
+.hud-portais {
+  align-self: flex-start;
+  max-width: min(80vw, 320px);
+  pointer-events: auto;
+  background: var(--nos-panel);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 14px;
+  padding: 8px 14px 10px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.hud-portais-summary {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: var(--nos-text-dim);
+  cursor: pointer;
+}
+
+.hud-portais[open] .hud-portais-summary {
+  margin-bottom: 6px;
+}
+
+.portal-hint {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--nos-text-dim);
+}
+
+.portal-empty {
+  margin: 0;
+  font-size: 11px;
+  color: var(--nos-text-dim);
+}
+
+.portal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 34vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.portal-card {
+  border-top: 1px solid rgba(168, 132, 243, 0.16);
+  padding-top: 6px;
+}
+
+.portal-card:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.portal-header {
+  margin: 0;
+  font-size: 12px;
+  color: var(--nos-text);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.portal-status {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--nos-panel-border);
+}
+
+.portal-status-aberto {
+  color: #91db69; /* leaf do Resurrect 64 - mesmo "pronto" de .oficina-status-ok */
+}
+
+.portal-status-em-breve {
+  color: var(--nos-text-dim);
+}
+
+.portal-desc {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--nos-text-dim);
+}
+
+.portal-error {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--nos-pulse);
+}
+
+/* --- Banner "você está de visita" (R6, D-17): persistente, ao topo do HUD, enquanto o Registro não está n'O Coração --- */
+
+.hud-visiting {
+  align-self: flex-start;
+  max-width: min(80vw, 320px);
+  pointer-events: auto;
+  background: var(--nos-panel);
+  border: 1px solid rgba(77, 155, 230, 0.45);
+  border-left: 3px solid #4d9be6; /* skyBlue do Resurrect 64 - mesma família fria do sprite do portal */
+  border-radius: 14px;
+  padding: 8px 14px 10px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hud-visiting[hidden] {
+  display: none;
+}
+
+.visiting-line {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--nos-text);
+}
+
+.visiting-name {
+  color: var(--nos-accent);
+}
+
+.visiting-voltar {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--nos-bg);
+  background: #4d9be6;
+  border: 1px solid #4d9be6;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.visiting-voltar:hover {
+  filter: brightness(1.12);
+}
+
 /* --- "agir daqui" (R2, D-13): Comércio/Nativos/Oficinas agindo via API quando logado --- */
 
 .trade-offer-act,
 .nativo-act,
-.oficina-recipe-act {
+.oficina-recipe-act,
+.portal-act {
   display: inline-block;
   font: inherit;
   font-size: 11px;
@@ -746,13 +901,15 @@ body {
 
 .trade-offer-act:hover,
 .nativo-act:hover,
-.oficina-recipe-act:hover {
+.oficina-recipe-act:hover,
+.portal-act:hover {
   filter: brightness(1.12);
 }
 
 .trade-offer-act:disabled,
 .nativo-act:disabled,
-.oficina-recipe-act:disabled {
+.oficina-recipe-act:disabled,
+.portal-act:disabled {
   opacity: 0.6;
   cursor: default;
   filter: none;
@@ -761,6 +918,14 @@ body {
 .nativo-act,
 .oficina-recipe-act {
   margin-left: 6px;
+}
+
+/* .portal-act overrides the shared inline-pill layout above: it never sits
+   next to a link (a portal crossing isn't a "link + button" pair like the
+   other three), so it reads better as its own block with room above it. */
+.portal-act {
+  display: block;
+  margin-top: 6px;
 }
 
 /* --- Entrar com GitHub (R2, D-13/D-25d): login sem sair do site --- */

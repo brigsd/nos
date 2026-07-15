@@ -16,6 +16,13 @@
  * instead of opening the link - same command, same tick, one fewer tab. If
  * the API call fails for any reason (no scope, offline, ...) it falls back
  * to opening the very link that was already there.
+ *
+ * R6 (D-17): `readOnly` (main.ts, true while visiting another world through
+ * a portal) suppresses both the issue link and the "agir daqui" button -
+ * every command here always targets O Coração (brigsd/nos) regardless of
+ * which world's Nativos are on screen, so offering it while looking at a
+ * visited world would be confusing at best. The stock/offer text itself
+ * stays visible - visiting is read-only, not blind.
  */
 import type { Native, World } from '../../engine/types';
 import { RESOURCE_LABELS_PTBR, RESOURCE_TYPES } from '../../engine/types';
@@ -61,7 +68,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function stallFor(native: Native): HTMLElement {
+function stallFor(native: Native, readOnly: boolean): HTMLElement {
   const stall = el('li', 'trade-stall');
 
   const header = el('p', 'trade-stall-name');
@@ -79,6 +86,16 @@ function stallFor(native: Native): HTMLElement {
   for (const [tradeType, recipe] of Object.entries(TRADE_RECIPES)) {
     if (!canFulfill(native, recipe)) continue; // only offers the Nativo can honor right now
     const offer = el('li', 'trade-offer');
+
+    if (readOnly) {
+      // Informational only - visiting is read-only (R6, D-17): no link, no
+      // "agir daqui", just the same descriptive text the link would have
+      // carried, as plain text.
+      offer.appendChild(el('span', 'trade-offer-link', describeRecipe(recipe)));
+      offers.appendChild(offer);
+      continue;
+    }
+
     const link = el('a', 'trade-offer-link', describeRecipe(recipe));
     link.href = tradeIssueUrl(native.id, tradeType);
     link.target = '_blank';
@@ -102,9 +119,10 @@ function stallFor(native: Native): HTMLElement {
 
 /**
  * Renders the trade panel into `rootEl` (a <details> body). Pure function
- * of `world` - call again when a fresh world arrives.
+ * of `world` - call again when a fresh world arrives. `readOnly` (R6, D-17):
+ * true while visiting another world through a portal - see stallFor's doc.
  */
-export function renderComercio(rootEl: HTMLElement, world: World): void {
+export function renderComercio(rootEl: HTMLElement, world: World, readOnly = false): void {
   rootEl.replaceChildren();
 
   const natives = Object.values(world.natives ?? {});
@@ -117,13 +135,15 @@ export function renderComercio(rootEl: HTMLElement, world: World): void {
     el(
       'p',
       'meuno-hint',
-      `Chegue a até ${TRADE_RANGE_TILES} tiles de um Nativo e escolha uma troca — cada uma custa 1 de energia e é selada na próxima batida.`,
+      readOnly
+        ? 'Você está de visita — dá pra ver o que cada Nativo carrega, mas negociar só funciona n\'O Coração.'
+        : `Chegue a até ${TRADE_RANGE_TILES} tiles de um Nativo e escolha uma troca — cada uma custa 1 de energia e é selada na próxima batida.`,
     ),
   );
 
   const stalls = el('ul', 'trade-stalls');
   for (const native of natives.sort((a, b) => a.id.localeCompare(b.id))) {
-    stalls.appendChild(stallFor(native));
+    stalls.appendChild(stallFor(native, readOnly));
   }
   rootEl.appendChild(stalls);
 }

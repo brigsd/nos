@@ -23,6 +23,13 @@
  * textContent, never innerHTML. Machine names/descriptions/recipe text are
  * all our own trusted engine data, not player input, but the habit is the
  * rule regardless.
+ *
+ * R6 (D-17): `readOnly` (main.ts, true while visiting another world through
+ * a portal) hides the "abrir /sintetizar" link and "agir daqui" button -
+ * MACHINE_IDS is a fixed engine list, not read off `world.machines`, so
+ * without this a visited world with no oficinas of its own would still show
+ * fully clickable synthesis actions that quietly target O Coração's tick
+ * instead. The recipe text and materials preview stay visible either way.
  */
 import type { MachineId, Player, ResourceType, World } from '../../engine/types';
 import { getItemQty, getOwn, MACHINE_IDS, RESOURCE_LABELS_PTBR, RESOURCE_TYPES } from '../../engine/types';
@@ -114,7 +121,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function recipeItem(recipeId: string, recipe: SynthesisRecipe, player: Player | undefined): HTMLElement {
+function recipeItem(recipeId: string, recipe: SynthesisRecipe, player: Player | undefined, readOnly: boolean): HTMLElement {
   const item = el('li', 'oficina-recipe');
   item.appendChild(el('p', 'oficina-recipe-desc', describeSynthesis(recipe)));
 
@@ -124,6 +131,8 @@ function recipeItem(recipeId: string, recipe: SynthesisRecipe, player: Player | 
       el('p', `oficina-recipe-status ${status.ok ? 'oficina-status-ok' : 'oficina-status-missing'}`, status.text),
     );
   }
+
+  if (readOnly) return item; // R6/D-17: informational only while visiting - see module doc.
 
   const link = el('a', 'oficina-recipe-link', 'abrir /sintetizar');
   link.href = sintetizarIssueUrl(recipeId);
@@ -143,7 +152,7 @@ function recipeItem(recipeId: string, recipe: SynthesisRecipe, player: Player | 
   return item;
 }
 
-function machineCard(world: World, machineId: MachineId, player: Player | undefined): HTMLElement {
+function machineCard(world: World, machineId: MachineId, player: Player | undefined, readOnly: boolean): HTMLElement {
   const catalog = MACHINES[machineId];
   const card = el('li', 'oficina-machine');
 
@@ -162,7 +171,7 @@ function machineCard(world: World, machineId: MachineId, player: Player | undefi
   const recipes = el('ul', 'oficina-recipes');
   for (const [recipeId, recipe] of Object.entries(SYNTHESIS_RECIPES)) {
     if (recipe.machine !== machineId) continue;
-    recipes.appendChild(recipeItem(recipeId, recipe, player));
+    recipes.appendChild(recipeItem(recipeId, recipe, player, readOnly));
   }
   card.appendChild(recipes);
 
@@ -172,16 +181,19 @@ function machineCard(world: World, machineId: MachineId, player: Player | undefi
 /**
  * Renders the panel into `rootEl` (a <details> body). Pure function of
  * `world` plus the saved login (meu-no.ts's localStorage pick) - call again
- * whenever either changes.
+ * whenever either changes. `readOnly` (R6, D-17): true while visiting
+ * another world through a portal - see recipeItem's doc.
  */
-export function renderOficinas(rootEl: HTMLElement, world: World): void {
+export function renderOficinas(rootEl: HTMLElement, world: World, readOnly = false): void {
   rootEl.replaceChildren();
 
   rootEl.appendChild(
     el(
       'p',
       'oficina-hint',
-      `Chegue a até ${FABRICATION_RANGE_TILES} tiles da oficina certa com os materiais na mochila — a síntese é instantânea e é selada na próxima batida.`,
+      readOnly
+        ? 'Você está de visita — dá pra ver as receitas, mas sintetizar só funciona n\'O Coração.'
+        : `Chegue a até ${FABRICATION_RANGE_TILES} tiles da oficina certa com os materiais na mochila — a síntese é instantânea e é selada na próxima batida.`,
     ),
   );
 
@@ -195,7 +207,7 @@ export function renderOficinas(rootEl: HTMLElement, world: World): void {
 
   const list = el('ul', 'oficina-list');
   for (const machineId of MACHINE_IDS) {
-    list.appendChild(machineCard(world, machineId, player));
+    list.appendChild(machineCard(world, machineId, player, readOnly));
   }
   rootEl.appendChild(list);
 }

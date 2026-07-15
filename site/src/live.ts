@@ -185,8 +185,14 @@ function isEntityDict(dict: unknown, requireInventory: boolean): boolean {
  * misses is contained by the try/catch around `onWorld` in
  * consumeWorldResponse and the try/finally in runCycle, so the polling loop
  * survives regardless.
+ *
+ * Exported (R6, D-17): site/src/portals.ts reuses this exact check before
+ * trusting a world fetched through a portal — a visited world deserves
+ * exactly the same "won't crash the renderer" guarantee as O Coração's own
+ * live poll, and the task is explicit that this must be shared, not
+ * re-implemented a second time.
  */
-function isPlausibleWorld(value: unknown): value is World {
+export function isPlausibleWorld(value: unknown): value is World {
   if (typeof value !== 'object' || value === null) return false;
   const w = value as { [key: string]: unknown };
   if (typeof w.width !== 'number' || typeof w.height !== 'number') return false;

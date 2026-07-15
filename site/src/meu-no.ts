@@ -15,6 +15,13 @@
  * R4 (D-23): also shows crafted `items` (A Fábrica, engine/fabrication.ts)
  * alongside the raw-resource `inventory` - same "missing means zero, read it
  * through the getter" habit as Pulso/energia, via getItemQty.
+ *
+ * R6 (D-17): `readOnly` (main.ts, true while visiting another world through
+ * a portal) hides the "Abrir /entrar" CTA - /entrar always registers you in
+ * O Coração, so offering it while a visited world's map is on screen would
+ * be misleading. The saved-login form/"não sou eu" stay enabled regardless
+ * - choosing which public entry to display is local, harmless state, not a
+ * command against any world.
  */
 import type { World } from '../../engine/types';
 import { getItemQty, getOwn, getPulso, RESOURCE_LABELS_PTBR, RESOURCE_TYPES } from '../../engine/types';
@@ -82,7 +89,7 @@ function statLine(label: string, value: string): HTMLElement {
  * Threaded through every recursive self-call so it keeps working after the
  * first save/clear, not just once.
  */
-export function renderMeuNo(rootEl: HTMLElement, world: World, onLoginChange?: () => void): void {
+export function renderMeuNo(rootEl: HTMLElement, world: World, onLoginChange?: () => void, readOnly = false): void {
   rootEl.replaceChildren();
   rootEl.appendChild(el('h2', 'hud-mural-title', 'Meu Nó'));
 
@@ -110,7 +117,7 @@ export function renderMeuNo(rootEl: HTMLElement, world: World, onLoginChange?: (
         return;
       }
       saveLogin(value);
-      renderMeuNo(rootEl, world, onLoginChange);
+      renderMeuNo(rootEl, world, onLoginChange, readOnly);
       onLoginChange?.();
     });
     input.addEventListener('input', () => input.setCustomValidity(''));
@@ -124,7 +131,7 @@ export function renderMeuNo(rootEl: HTMLElement, world: World, onLoginChange?: (
   forget.type = 'button';
   forget.addEventListener('click', () => {
     clearLogin();
-    renderMeuNo(rootEl, world, onLoginChange);
+    renderMeuNo(rootEl, world, onLoginChange, readOnly);
     onLoginChange?.();
   });
   who.append(document.createTextNode(' '), forget);
@@ -134,7 +141,19 @@ export function renderMeuNo(rootEl: HTMLElement, world: World, onLoginChange?: (
   // hostile "__proto__" must read as "not in the world", never as a built-in.
   const player = getOwn(world.players, login);
   if (!player) {
-    const missing = el('p', 'meuno-hint', 'Esse Nó ainda não foi escrito na Crônica.');
+    const missing = el(
+      'p',
+      'meuno-hint',
+      readOnly
+        ? "Esse Nó não existe aqui — normal, você está de visita. Volte ao Coração pra ver (ou criar) o seu."
+        : 'Esse Nó ainda não foi escrito na Crônica.',
+    );
+    if (readOnly) {
+      // R6/D-17: /entrar always targets O Coração - offering it while a
+      // visited world is on screen would be misleading (see module doc).
+      rootEl.appendChild(missing);
+      return;
+    }
     const enter = el('a', 'meuno-cta', 'Abrir /entrar');
     enter.href = 'https://github.com/brigsd/nos/issues/new?template=entrar.yml';
     enter.target = '_blank';

@@ -62,26 +62,62 @@ export interface Sprites {
   nativoCinza: SpriteSheet;
   /** A Fábrica's 4 máquinas-sintetizador (R4, D-23/D-25a) - one generic console read 4x, per-machine name drawn alongside it (see renderer.ts). */
   oficina: SpriteSheet;
+  /** O Salão de Portais' map marker (R6, D-17) - drawn once, at a fixed spot in O Coração only. 2-frame slow hum (see renderer.ts's PORTAL_FRAME_MS). */
+  portal: SpriteSheet;
 }
 
 export async function loadSprites(): Promise<Sprites> {
-  const [campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, margemAguaB, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza, oficina] =
-    await Promise.all([
-      loadSheet('campina_1.png', 16, 16, 1),
-      loadSheet('campina_2.png', 16, 16, 1),
-      loadSheet('campina_3.png', 16, 16, 1),
-      loadSheet('campina_flores.png', 16, 16, 1),
-      loadSheet('floresta.png', 16, 16, 1),
-      loadSheet('ruina.png', 16, 16, 1),
-      loadSheet('agua_ondula_2frames.png', 16, 16, 2),
-      loadSheet('margem_agua_4dir.png', 16, 16, 4),
-      loadSheet('margem_agua_4dir_b.png', 16, 16, 4),
-      loadSheet('nucleo_pulse_4frames.png', 32, 32, 4),
-      loadSheet('no_avatar.png', 16, 16, 1),
-      loadSheet('nativo_gota.png', 16, 16, 1),
-      loadSheet('nativo_raiz.png', 16, 16, 1),
-      loadSheet('nativo_cinza.png', 16, 16, 1),
-      loadSheet('oficina.png', 16, 16, 1),
-    ]);
-  return { campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, margemAguaB, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza, oficina };
+  const [
+    campina1,
+    campina2,
+    campina3,
+    campinaFlores,
+    floresta,
+    ruina,
+    agua,
+    margemAgua,
+    margemAguaB,
+    nucleo,
+    no_avatar,
+    nativoGota,
+    nativoRaiz,
+    nativoCinza,
+    oficina,
+    portal,
+  ] = await Promise.all([
+    loadSheet('campina_1.png', 16, 16, 1),
+    loadSheet('campina_2.png', 16, 16, 1),
+    loadSheet('campina_3.png', 16, 16, 1),
+    loadSheet('campina_flores.png', 16, 16, 1),
+    loadSheet('floresta.png', 16, 16, 1),
+    loadSheet('ruina.png', 16, 16, 1),
+    loadSheet('agua_ondula_2frames.png', 16, 16, 2),
+    loadSheet('margem_agua_4dir.png', 16, 16, 4),
+    loadSheet('margem_agua_4dir_b.png', 16, 16, 4),
+    loadSheet('nucleo_pulse_4frames.png', 32, 32, 4),
+    loadSheet('no_avatar.png', 16, 16, 1),
+    loadSheet('nativo_gota.png', 16, 16, 1),
+    loadSheet('nativo_raiz.png', 16, 16, 1),
+    loadSheet('nativo_cinza.png', 16, 16, 1),
+    loadSheet('oficina.png', 16, 16, 1),
+    loadSheet('portal_2frames.png', 16, 16, 2),
+  ]);
+  return {
+    campina1,
+    campina2,
+    campina3,
+    campinaFlores,
+    floresta,
+    ruina,
+    agua,
+    margemAgua,
+    margemAguaB,
+    nucleo,
+    no_avatar,
+    nativoGota,
+    nativoRaiz,
+    nativoCinza,
+    oficina,
+    portal,
+  };
 }
