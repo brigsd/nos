@@ -143,24 +143,63 @@ export interface LiveHandle {
   refreshNow(): void;
 }
 
+/** Whether `value` carries a `position: {x: number, y: number}` — the one field renderer.ts dereferences unguarded for every player/native/machine it draws. */
+function hasNumericPosition(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const pos = (value as { position?: unknown }).position;
+  if (typeof pos !== 'object' || pos === null) return false;
+  return typeof (pos as { x?: unknown }).x === 'number' && typeof (pos as { y?: unknown }).y === 'number';
+}
+
+/**
+ * Whether `dict` is an object whose every value the client could draw/read
+ * without throwing: a numeric position always, plus an `inventory` object
+ * when `requireInventory` (players/natives — meu-no.ts and trade.ts index
+ * into `.inventory[resource]` unguarded). Both fields are REQUIRED by the
+ * real schema on all three entity types (engine/types.ts: Player, Native,
+ * Machine), so this is a strict subset of what a legitimate tick commit
+ * always satisfies — it can reject corrupt bodies, never real worlds.
+ */
+function isEntityDict(dict: unknown, requireInventory: boolean): boolean {
+  if (typeof dict !== 'object' || dict === null) return false;
+  for (const entity of Object.values(dict)) {
+    if (!hasNumericPosition(entity)) return false;
+    if (requireInventory) {
+      const inv = (entity as { inventory?: unknown }).inventory;
+      if (typeof inv !== 'object' || inv === null) return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Structural sanity check on whatever `fetch` handed back, before it's
  * trusted as a `World` — the full ajv schema in engine/validate.ts is
  * Node-only (reads schema/*.json off disk) and deliberately not pulled into
- * the client bundle for this; this is intentionally the *minimal* shape
- * check the task asks for, just enough to reject a truncated/garbled body
- * (or a JSON error payload that slipped through with a 200) before it
- * reaches the renderer.
+ * the client bundle for this. Beyond the top-level fields, it also checks
+ * the per-entity dereferences the renderer/HUD actually perform (position on
+ * everything drawable, inventory on players/natives): a plausible-but-corrupt
+ * body — e.g. a Native without `position` — used to pass the shallow check
+ * and only blow up later, INSIDE the render callback (review finding on
+ * PR #43). Still deliberately not full schema validation: whatever this
+ * misses is contained by the try/catch around `onWorld` in
+ * consumeWorldResponse and the try/finally in runCycle, so the polling loop
+ * survives regardless.
  */
 function isPlausibleWorld(value: unknown): value is World {
   if (typeof value !== 'object' || value === null) return false;
   const w = value as { [key: string]: unknown };
   if (typeof w.width !== 'number' || typeof w.height !== 'number') return false;
   if (!Array.isArray(w.tiles)) return false;
-  if (typeof w.players !== 'object' || w.players === null) return false;
   if (!Array.isArray(w.events)) return false;
   if (typeof w.meta !== 'object' || w.meta === null) return false;
-  return typeof (w.meta as { [key: string]: unknown }).tickCount === 'number';
+  if (typeof (w.meta as { [key: string]: unknown }).tickCount !== 'number') return false;
+  // Entity dicts: `players` is required; `natives`/`machines` are optional
+  // (pre-v2/pre-v2.5 worlds) but must be sound when present.
+  if (!isEntityDict(w.players, true)) return false;
+  if (w.natives !== undefined && !isEntityDict(w.natives, true)) return false;
+  if (w.machines !== undefined && !isEntityDict(w.machines, false)) return false;
+  return true;
 }
 
 async function fetchWithTimeout(
@@ -197,7 +236,16 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let etag: string | null = null;
-  /** The token that just got a 401/unexplained-403 — Camada B stays off until a DIFFERENT token shows up (login with a new one, or a plain logout). */
+  /**
+   * The token that just got a 401/unexplained-403 — Camada B stays off until
+   * a DIFFERENT token shows up (login with a new one, or a plain logout).
+   * Deliberately sticky for the session even though an unexplained 403 COULD
+   * have been transient (a proxy hiccup, say) — review NIT on PR #43,
+   * premise documented here by choice: the cost of being wrong is one
+   * session on Camada C (still updating, just slower), while the cost of
+   * retrying a genuinely forbidden call is hammering api.github.com every
+   * 3s for as long as the tab lives. Logout/login or a page reload resets it.
+   */
   let badToken: string | null = null;
   let rateLimited = false;
   let lastSignature = JSON.stringify(initialWorld);
@@ -246,7 +294,17 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
     lastSignature = signature;
     status.lastChangedAt = Date.now();
     status.tickCount = parsed.meta.tickCount;
-    onWorld(parsed);
+    try {
+      onWorld(parsed);
+    } catch (err) {
+      // A bug in the render callback must never kill the polling loop
+      // (review finding on PR #43). The signature/status updates above stay
+      // in place on purpose: main.ts swaps its `world` reference BEFORE any
+      // panel render, so the page is on this world even if painting part of
+      // it threw — and re-firing the identical body next cycle would just
+      // re-throw identically (deterministic render code), spamming the log.
+      console.warn('Falha ao aplicar o mundo novo na tela — o polling continua:', err);
+    }
   }
 
   function applyRateLimitHeaders(res: Response): void {
@@ -366,9 +424,23 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
     }
     if (status.paused) status.paused = false;
 
-    const token = getToken();
-    const delayMs = token !== null && token !== badToken ? await pollTierB(token) : await pollTierC();
-    scheduleNext(delayMs);
+    // Belt and braces (review finding on PR #43): NOTHING may kill the loop
+    // by skipping scheduleNext — runCycle is fired as `void runCycle()`, so
+    // an uncaught throw here would both orphan the loop forever AND surface
+    // as an unhandled promise rejection. pollTierB/pollTierC already handle
+    // their own errors and the onWorld callback is isolated inside
+    // consumeWorldResponse, so anything landing in this catch is an
+    // unexpected bug: log it, fall back to the backoff cadence (never a hot
+    // loop), keep beating.
+    let delayMs = intervals.backoff;
+    try {
+      const token = getToken();
+      delayMs = token !== null && token !== badToken ? await pollTierB(token) : await pollTierC();
+    } catch (err) {
+      console.warn('Ciclo do mundo ao vivo falhou de forma inesperada — mantendo o loop vivo:', err);
+    } finally {
+      scheduleNext(delayMs);
+    }
   }
 
   function handleVisibilityChange(): void {

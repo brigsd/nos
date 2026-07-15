@@ -53,6 +53,17 @@
         }
       }
 
+      // Global net for the whole harness run: startLivePolling's cycles run as
+      // `void runCycle()`, so a throw escaping live.ts's own error handling
+      // would surface HERE as an unhandled promise rejection (and, before the
+      // PR #43 review fix, also silently kill the loop). Scenarios 4b/4c
+      // assert this stays at zero; any scenario tripping it also fails loudly.
+      let rejectionCount = 0;
+      window.addEventListener('unhandledrejection', (ev) => {
+        rejectionCount++;
+        log(`UNHANDLED REJECTION: ${ev.reason}`);
+      });
+
       function sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
       }
@@ -221,6 +232,72 @@
         assert(worlds.length === 0, 'corpo sem o formato mínimo de World nunca dispara onWorld');
       }
 
+      // --- Scenario 4b (PR #43 review MUST FIX, regression): a corrupt-but-
+      // PLAUSIBLE body — valid top-level shape, but a Native missing
+      // `position`. Before the fix this passed the shallow check, reached
+      // onWorld, threw inside a renderer (nativos.ts reads native.position.x
+      // unguarded), and the escaped throw skipped scheduleNext — polling loop
+      // DEAD plus an unhandled rejection, re-dying on every restart while the
+      // CDN served that body. Now the entity-level check rejects it BEFORE
+      // onWorld, and the loop must keep beating cycle after cycle. ---
+      async function testCorruptEntityBody() {
+        log('\n--- corpo plausível-mas-corrompido (Nativo sem position) não mata o loop ---');
+        let calls = 0;
+        const worlds = [];
+        const fetchFn = async () => {
+          calls++;
+          const corrupt = makeWorld(9);
+          // The exact hole from the review: entity present, position absent.
+          corrupt.natives = { gota: { id: 'gota', name: 'Gota', inventory: {} } };
+          return new Response(JSON.stringify(corrupt), { status: 200 });
+        };
+        const handle = startLivePolling({
+          initialWorld: makeWorld(5),
+          onWorld: (w) => worlds.push(w),
+          onStatus: () => {},
+          fetchFn,
+          intervals: { initial: 10, normal: 80, backoff: 80, anon: 80 },
+        });
+        assert(
+          await waitUntil(() => calls >= 3, 2000),
+          'o loop continua batendo ciclo após ciclo (scheduleNext sempre roda)',
+        );
+        assert(worlds.length === 0, 'onWorld NUNCA recebe o corpo corrompido (rejeitado pela checagem de entidades)');
+        assert(rejectionCount === 0, 'nenhuma promise rejection não-tratada');
+        handle.stop();
+      }
+
+      // --- Scenario 4c (PR #43 review MUST FIX, the other layer): the onWorld
+      // callback itself throws, on a world the shape check can't fault (a
+      // renderer bug, or corruption deeper than the entity checks look). The
+      // isolation inside consumeWorldResponse must contain it: loop alive, no
+      // unhandled rejection — and the SAME body must not re-fire the callback
+      // (signature already recorded; main.ts swaps its world reference before
+      // painting, so re-firing would just re-throw identically every cycle). ---
+      async function testOnWorldThrowIsolated() {
+        log('\n--- callback onWorld lançando exceção não mata o loop ---');
+        let calls = 0;
+        let onWorldCalls = 0;
+        const fetchFn = async () => {
+          calls++;
+          return new Response(JSON.stringify(makeWorld(7)), { status: 200 }); // genuinely new vs the seeded tick 5
+        };
+        const handle = startLivePolling({
+          initialWorld: makeWorld(5),
+          onWorld: () => {
+            onWorldCalls++;
+            throw new Error('bug de renderização (simulado)');
+          },
+          onStatus: () => {},
+          fetchFn,
+          intervals: { initial: 10, normal: 80, backoff: 80, anon: 80 },
+        });
+        assert(await waitUntil(() => calls >= 3, 2000), 'o loop continua batendo depois do throw do callback');
+        assert(onWorldCalls === 1, 'o mesmo corpo não re-dispara o callback (assinatura já registrada)');
+        assert(rejectionCount === 0, 'nenhuma promise rejection não-tratada');
+        handle.stop();
+      }
+
       // --- Scenario 5: visibility pause/resume — no fetch while hidden, immediate
       // fetch (not a stale timer) the moment it becomes visible again. ---
       async function testVisibilityPause() {
@@ -366,6 +443,8 @@
         await testAuthDowngrade();
         await testRateLimitBackoff();
         await testShapeValidation();
+        await testCorruptEntityBody();
+        await testOnWorldThrowIsolated();
         await testVisibilityPause();
         await testFailedPollDoesNotFakeFreshness();
         await testRefreshNow();

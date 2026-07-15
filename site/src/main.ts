@@ -214,6 +214,16 @@ async function main(): Promise<void> {
     // (D-12/D-22/D-25b) - reassigning `world` above already makes THEIR OWN
     // Registro entry in world.players (the pale echo, block 3 of renderer.ts)
     // catch up to wherever the Pulse last wrote them, exactly like today.
+    //
+    // Also deliberately NOT re-derived here (review NIT on PR #43, premise
+    // documented by choice): worldNameEl (meta.name) and the Camera's world
+    // bounds (width/height), both set once at startup. For a given world
+    // they are immutable by design - O Coração is a fixed 64x64 map
+    // (WORLD_WIDTH/HEIGHT, engine/types.ts) and the tick never renames or
+    // resizes it. If a future migration ever DID resize the world, this is
+    // the spot that would need to rebuild the Camera (and re-run resize())
+    // - until then, rebuilding per refresh would only fight the player's
+    // pan/zoom for nothing.
   }
 
   liveHandle = startLivePolling({
