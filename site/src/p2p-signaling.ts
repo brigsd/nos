@@ -81,7 +81,7 @@ export interface SignalingChannel {
   pausePolling(): void;
   /** Re-arms polling — e.g. a connected peer dropped and a replacement must be found. */
   resumePolling(): void;
-  /** Final teardown: stops polling and best-effort edits this session's own comments to "(encerrado)" (keeps the issue tidy, per the task spec). Never rejects — a failed edit is not worth blocking the rest of P2P teardown over. */
+  /** Final teardown: stops polling and best-effort DELETEs this session's own comments (a PATCH would leave the IP readable in GitHub's public edit history — see close()). Never rejects — a failed delete is not worth blocking the rest of P2P teardown over. */
   close(): Promise<void>;
 }
 
@@ -281,20 +281,22 @@ export const openGitHubSignaling: OpenSignaling = async (login: string): Promise
     async close(): Promise<void> {
       stopped = true;
       clearTimeout(timer);
-      // Best-effort tidy-up (spec: "optionally edit own comments to
-      // '(encerrado)'"). Replacing the whole body (not appending) also means
-      // the fenced ```json block disappears, so any peer still polling this
-      // issue naturally stops parsing it as a message — no separate
-      // "cancel" message kind needed. Deliberately swallows every failure
-      // (offline, token revoked mid-session, comment already edited by a
-      // race): teardown must never throw and block the rest of P2P shutdown
-      // over a cosmetic issue-hygiene step.
+      // Best-effort tidy-up — DELETE, not a PATCH to "(encerrado)": GitHub
+      // keeps a comment's edit history publicly readable (the "edited"
+      // dropdown), so an edit would leave the SDP — and with it the
+      // player's public IP — visible forever, silently breaking the
+      // consent copy's promise that turning the mode off removes it
+      // (D-25c). Deleting our own comment is allowed to the author, erases
+      // body AND history, and any peer still polling simply stops seeing
+      // the message — no separate "cancel" message kind needed.
+      // Deliberately swallows every failure (offline, token revoked
+      // mid-session, comment already gone): teardown must never throw and
+      // block the rest of P2P shutdown over an issue-hygiene step.
       await Promise.allSettled(
         ownCommentIds.map((id) =>
           fetch(`${COMMENTS_URL_BASE}/${id}`, {
-            method: 'PATCH',
-            headers: authHeaders(token, { 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ body: '(encerrado)' }),
+            method: 'DELETE',
+            headers: authHeaders(token),
           }),
         ),
       );
