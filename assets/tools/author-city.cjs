@@ -106,6 +106,9 @@ function genLajePraca(w, h, variant) {
   // Irregular slab layout, no joint on the tile border (adjacent tiles merge
   // into organic ancient paving, the campina-variant reasoning). Variant b
   // re-cuts every slab so the hash mix never settles into an A-B rhythm.
+  // Site self-audit round 3 (R3-8): the smallest 3-4px slabs read as grey
+  // noise at whole-map zoom - both maps had their tiniest slab merged into
+  // a neighbour (fewer joints far away, same crazy paving up close).
   const rowsA = [
     'aaaaabbbbbbccccc',
     'aaaaabbbbbbccccc',
@@ -121,8 +124,8 @@ function genLajePraca(w, h, variant) {
     'kkhhhjjjjiiiiggg',
     'kkkkkjjjjiiillll',
     'kkkkkjjjjjilllll',
-    'kkkkmmmjjjllllll',
-    'kkkkmmmmjjllllll',
+    'kkkkkjjjjjllllll',
+    'kkkkkjjjjjllllll',
   ];
   const rowsB = [
     'nnnnoooooopppppp',
@@ -139,8 +142,8 @@ function genLajePraca(w, h, variant) {
     'xxuuwwwwwvvvyyyy',
     'xxxxwwwwwvvvyyyy',
     'xxxxxwwwwvyyyyyy',
-    'xxxxxzwwyyyyyyyy',
-    'xxxzzzzwyyyyyyyy',
+    'xxxxxwwwwyyyyyyy',
+    'xxxxwwwwyyyyyyyy',
   ];
   // Plaza floor: one half-step LIGHTER than the avenue (greyPurple twice in
   // the ramp) - scene round 2 (R2-3): the public room reads pale, the road
@@ -161,14 +164,16 @@ function genLajePraca(w, h, variant) {
   const glints = variant === 'a' ? [[1, 1], [11, 6]] : [[6, 1], [1, 10]];
   for (const [x, y] of glints) set(g, x, y, PAL.paleBlueGrey);
 
-  // Variant a: one sunken slab corner showing packed earth (bottom-right,
-  // away from the light) - the plaza's age in a single quiet detail.
+  // Variant a: a chipped slab corner showing packed earth (bottom-right,
+  // away from the light) - the plaza's age in a single quiet detail. Site
+  // self-audit round 3 finding (R3-15): the first take was a 5px hole, and
+  // at ~50% tile frequency the repeated notch became an obvious motif at
+  // close zoom - now a 3px chip that reads as wear, not as a pattern.
   if (variant === 'a') {
-    const hole = [
-      [14, 14], [15, 14], [13, 15], [14, 15], [15, 15],
+    const chip = [
+      [15, 14], [14, 15], [15, 15],
     ];
-    for (const [x, y] of hole) set(g, x, y, PAL.darkOliveBrown);
-    set(g, 15, 14, PAL.tan); // lit grain inside the earth
+    for (const [x, y] of chip) set(g, x, y, PAL.darkOliveBrown);
   }
   return g;
 }

@@ -48,7 +48,7 @@ Coordenadas exatas (tiles, origem no canto NW do mapa 64×64):
 | **O Cais da Forja** | (32–33,28) | Não construído: o rio encosta na borda norte da praça por conta própria. A Forja fica de frente para a água (têmpera!). Espaço negativo deliberado. |
 | **O Largo do Mural** | pátio (23,29)–(25,31) | Piso de lajes + **pedra do mural** (`mural_stone`) em (24,30), com os riscos coloridos das vozes dos Nós. Caminho pavimentado (26–28,30) liga o Largo à praça — começa exatamente na linha do spawn (30,30). |
 | **A Avenida do Pulso** | (37–54, 33–34) | Pavimento (`pavement`) 2 tiles de largura ligando a praça ao Salão; nós de luz violeta espalhados pelas lajes (hash determinístico). **Par de pilares** em (45,32)+(45,35) marca a meia-distância — e o desvio das ruínas antigas (45–48,36–38), que a avenida respeita e contorna. |
-| **O Salão de Portais** | esplanada (55–59, 32–40) | Piso de lajes; **fileira de arcos no meridiano x=57**: arco desperto (57,32), **PORTAL VIVO (57,34)** — o marco client-side de sempre, agora com moldura urbana —, arco desperto (57,36), **arcos-semente adormecidos** (57,38) e (57,40). Cada mundo federado futuro = um arco a mais acordando, descendo para o sul. |
+| **O Salão de Portais** | esplanada (55–59, 32–37) | Piso de lajes; **fileira de arcos no meridiano x=57**: arco desperto (57,32), **PORTAL VIVO (57,34)** — o marco client-side de sempre, agora com moldura urbana —, arco desperto (57,36), **arcos-semente adormecidos** (57,38) e (57,40) **sobre grama nua, além da borda do piso** (rodada 2 do self-audit: o chão chega quando o mundo chegar — o salão é visivelmente inacabado de propósito). Cada mundo federado futuro = um arco a mais acordando, descendo para o sul. |
 | **A Estrada do Sul** | (32, 37–44) | Pavimento por 2 tiles (37–38), depois **trilha de terra** (`trail`, 39–44) que morre na orla da floresta do sul. A cidade termina em estrada aberta — convite. |
 | **Periferia Livre** | campina S/SW (≈26–44, 37–44) e W além do Largo | Deliberadamente vazia: é o chão reservado para construção de jogadores (T14). A Estrada do Sul corre no meio dela — lotes à beira da estrada. |
 
@@ -58,7 +58,7 @@ Coordenadas exatas (tiles, origem no canto NW do mapa 64×64):
 - **Os pilares herdam os cantos.** Onde as máquinas ficavam (29,29)/(36,29)/(29,36)/(36,36), sobem pilares de pedra com veia de luz pulsando **na mesma cadência do Núcleo** (mesmo relógio de animação). Lore de graça: "onde as oficinas pousaram primeiro, a cidade ergueu luzes".
 - **Uma avenida, não uma teia.** Um único eixo monumental (W→E: Mural → Praça → Salão) é legível de qualquer zoom; três estradas em cruz virariam ruído. O eixo conta a história do jogo na ordem certa: *fale (mural) → fabrique (praça) → parta (portais)*.
 - **O rio permanece protagonista.** Nenhuma deco sobre água, nenhuma ponte nesta fase: o rio corta a leitura da cidade ao norte e a foz emoldura o Salão. A única concessão é temática — a Forja na margem.
-- **Salão com espaço visível para crescer.** A fileira de arcos tem 2 despertos + o portal vivo + 2 adormecidos, e a esplanada continua ao sul deles: dá para VER onde os próximos mundos vão ancorar (D-17: cada repositório = um planeta = um arco).
+- **Salão com espaço visível para crescer.** A fileira de arcos tem 2 despertos + o portal vivo + 2 adormecidos — e o piso PARA depois do último arco desperto: os arcos-semente esperam sobre a grama, sem chão. Dá para VER onde os próximos mundos vão ancorar (D-17: cada repositório = um planeta = um arco) e dá para ver que o salão ainda não terminou de ser construído.
 - **Espaço negativo é zona.** O cais, a periferia e a campina entre o Largo e a floresta oeste ficam vazios de propósito — cidade que respira, e chão para o futuro.
 
 ## Voz de lore por distrito (para `descriptionPtBR`, Crônica e falas futuras)
@@ -76,6 +76,15 @@ Coordenadas exatas (tiles, origem no canto NW do mapa 64×64):
 - **Migração:** `seedCityLayout(world)` em `engine/mapgen.ts` — determinística (zero RNG/Date), aditiva, idempotente, **tudo-ou-nada**: só roda se (a) nenhum tile tem `deco` ainda E (b) as 4 máquinas estão exatamente nos cantos originais da clareira. Depois de rodar uma vez, (a) fica falso para sempre; se qualquer estado futuro mover uma máquina, (b) a protege — a migração nunca briga com o futuro. Ligada em `scripts/tick.ts` no mesmo padrão de `seedInitialNatives`/`seedFactoryMachines`. `world/heart.json` **nunca** é editado à mão.
 - **Âncora do Salão:** a posição do portal (57,34) passa a ser exportada pelo motor (`SALAO_PORTAL_TILE`) e o cliente (`site/src/main.ts`) importa de lá — o marco client-side e a moldura de arcos da migração ficam estruturalmente coerentes, sem constante duplicada.
 - **Render:** decos de chão (plaza/pavement/trail) desenham sobre o bioma; decos-objeto (pylon/arch/arch_dormant/mural_stone) desenham lajes por baixo + o objeto — sempre ANTES de oficinas/Nativos/jogadores, então nada tapa uma entidade.
+
+## Self-audit (render → crítica → refinar, 4 rodadas)
+
+Iteração registrada em `site/qa/city/` (`round1-*` → `round2-*` → `round3-*` → `final-*`). Resumo do que foi rejeitado dos próprios rascunhos:
+
+1. **Rodada 1 (sprites isolados, 8×):** arco desperto tinha ombros QUADRADOS — brigava com o oval do marco vivo do portal na mesma fileira → lintel virou arco escalonado (R1-1). Arco-semente tinha uma fileira de base contínua que fundia tocos e pedras caídas numa parede ilegível → base quebrada, tocos nas mesmas colunas do arco desperto (R1-2).
+2. **Rodada 2 (cena composta, `city-mock.cjs`):** o piso da praça lia como PAREDE DE TIJOLOS (juntas horizontais de largura total quase alinhavam de tile em tile) → *crazy paving* por mapa de regiões (R2-2); praça e avenida borravam num cinza só → praça meio-passo mais clara (R2-3); o vão do arco desperto perdia os motes contra a laje → véu índigo pontilhado (R2-9); a esplanada 5×9 era um retângulo cinza monolítico no zoom de mapa → piso encolhido para 5×6, sementes sobre grama (R2-11/R2-15).
+3. **Rodada 3 (site real, vite preview + Chromium):** o buraco de terra da laje variante A repetia como MOTIVO a ~50% dos tiles no zoom próximo → lasca de 3px (R3-15); as lajes mínimas (3–4px) viravam ruído no zoom de mapa inteiro → fundidas nas vizinhas (R3-8); o alvo de zoom do QA de celular caía sobre o HUD e o shot não zoomava (R3-16).
+4. **Rodada 4 (final):** aprovada — 3 zooms de desktop + 390×844 (o ideador joga no celular). Limitação conhecida e pré-existente registrada: no celular, o HUD empilhado cobre a maior parte do mapa no zoom padrão (os painéis são translúcidos e a cidade lê através deles); redesenho do HUD móvel é assunto de outra frente, não desta.
 
 ## Plano de crescimento
 
