@@ -389,6 +389,55 @@ function genMargemAgua4Dir(w, h) {
 }
 
 // ---------------------------------------------------------------------
+// margem_agua_4dir_b (art-reviewer follow-up, PR #12: the single hand-
+// authored edge above repeats bit-for-bit every 16px along a straight
+// coastline - obvious at close zoom. Fix lives mostly in the renderer
+// (site/src/renderer.ts, drawMeadowRim: per-tile hash picks this variant
+// vs the original, plus an independent per-tile horizontal flip), but two
+// near-identical edges hashed between each other would still look like an
+// obvious A/B tile-swap. This is a second hand-authored edge: same
+// technique and tone palette as genMargemAguaSouth (still reads as the
+// same shoreline), different wave phase/amplitude and fleck placement, so
+// the two variants don't line up with each other either.
+// ---------------------------------------------------------------------
+
+/** Second hand-authored edge: same technique as genMargemAguaSouth, different wave/flecks. */
+function genMargemAguaSouthB(w, h) {
+  const g = makeGrid(w, h);
+  // Different phase and a touch wider swing than genMargemAguaSouth's
+  // wave, still capped at a 1px step between neighbouring columns (same
+  // art-reviewer rule: bigger steps read as sawtooth "teeth").
+  const edgeY = [10, 9, 9, 9, 10, 10, 10, 11, 11, 11, 10, 10, 9, 9, 10, 10];
+  const pebbles = new Set(['1,10', '6,11', '12,12']);
+  const foamX = new Set([4, 9, 14]);
+
+  for (let x = 0; x < w; x++) {
+    const start = edgeY[x];
+    for (let y = start; y < h; y++) {
+      if (y === start) {
+        if (bayerThreshold(x, y) < 0.45) set(g, x, y, PAL.tan);
+        continue;
+      }
+      const dw = h - 1 - y;
+      if (dw === 0) set(g, x, y, PAL.darkTeal);
+      else if (dw <= 2) set(g, x, y, PAL.darkOliveBrown);
+      else set(g, x, y, PAL.tan);
+      if (pebbles.has(`${x},${y}`)) set(g, x, y, PAL.darkOliveBrown);
+    }
+    if (foamX.has(x)) set(g, x, h - 1, PAL.paleMint);
+  }
+  return g;
+}
+
+function genMargemAgua4DirB(w, h) {
+  const south = genMargemAguaSouthB(w, h);
+  const west = rotateGridCW(south, w);
+  const north = rotateGridCW(west, w);
+  const east = rotateGridCW(north, w);
+  return [south, west, north, east];
+}
+
+// ---------------------------------------------------------------------
 // nucleo_pulse_4frames (32x32, the heart of the world)
 // ---------------------------------------------------------------------
 
@@ -574,6 +623,24 @@ function run() {
       frames: [{ pixels: south }, { pixels: west }, { pixels: north }, { pixels: east }],
     });
     console.log('authored margem_agua_4dir.json');
+  }
+
+  {
+    const [south, west, north, east] = genMargemAgua4DirB(16, 16);
+    writeSpriteSrc(path.join(SRC_DIR, 'margem_agua_4dir_b.json'), {
+      name: 'margem_agua_4dir_b',
+      kind: 'tile',
+      width: 16,
+      height: 16,
+      notes:
+        'Second sandy/wet rim variant, same technique/palette as margem_agua_4dir but a different ' +
+        'wave phase and fleck placement (art-reviewer follow-up, PR #12: a straight coastline repeated ' +
+        'the exact same relief every 16px). The renderer (drawMeadowRim in site/src/renderer.ts) picks ' +
+        'between this and margem_agua_4dir per-tile via a positional hash, plus an independent per-tile ' +
+        'horizontal flip, so long coasts stop reading as an obviously tiled identical rim.',
+      frames: [{ pixels: south }, { pixels: west }, { pixels: north }, { pixels: east }],
+    });
+    console.log('authored margem_agua_4dir_b.json');
   }
 
   writeSpriteSrc(path.join(SRC_DIR, 'nucleo_pulse_4frames.json'), {
