@@ -27,13 +27,18 @@ const FLOWER_CHANCE = 0.1;
 /** Opacity of the local avatar — "intenção", not yet written by the Pulse (D-22, "O Registro"). */
 const LOCAL_GHOST_ALPHA = 0.4;
 
-export interface RenderContext {
-  ctx: CanvasRenderingContext2D;
+/**
+ * D-26 — the renderer seam. Everything a "janela" (window) needs to draw
+ * one frame, with NO drawing-technology types in it (no ctx, no dpr): the
+ * same scene feeds the default Canvas2D window (createCanvasRenderer,
+ * below) and, when the player opts in, the lazy WebGL window
+ * (renderer-webgl.ts). Windows are disposable by architecture; the world
+ * contract stays untouched.
+ */
+export interface FrameScene {
   world: World;
   sprites: Sprites;
   camera: Camera;
-  /** devicePixelRatio at the time the canvas backing store was sized. */
-  dpr: number;
   localPlayer: LocalPlayer;
   /**
    * Fixed map position of O Coração's portal marker (R6, D-17) - data-driven
@@ -56,6 +61,64 @@ export interface RenderContext {
    * see block "3.5" for why no name tag is drawn a second time.
    */
   p2pGhosts?: ReadonlyMap<string, PeerGhost>;
+}
+
+/** What the Canvas2D draw path actually consumes: the scene plus this window's own drawing handles. Internal to this module and its tests — other code talks to `Renderer`. */
+export interface RenderContext extends FrameScene {
+  ctx: CanvasRenderingContext2D;
+  /** devicePixelRatio at the time the canvas backing store was sized. */
+  dpr: number;
+}
+
+/**
+ * A "janela" (D-26): one way of putting a FrameScene on screen. Canvas2D
+ * is the default and the PERMANENT fallback; WebGL/PixiJS is an opt-in
+ * upgrade loaded only on demand. The interface is deliberately tiny —
+ * anything a specific technology needs (contexts, textures, scene graphs)
+ * lives behind it, so swapping windows can never leak into game code.
+ */
+export interface Renderer {
+  /** Which implementation this is — for logging/diagnostics only, never for behavior branches. */
+  readonly kind: 'canvas2d' | 'webgl';
+  /** Re-fits the drawing surface to the canvas' CSS size (call on window/viewport resize). Returns the CSS-pixel viewport so the caller keeps the Camera in sync. */
+  resize(): { width: number; height: number };
+  /** Draws one frame. Safe to call every animation frame. */
+  render(scene: FrameScene, nowMs: number): void;
+  /** Releases everything this window owns. The Renderer must not be used afterwards. */
+  destroy(): void;
+}
+
+/**
+ * The default window: Canvas2D (D-26). Owns the 2D context and the
+ * devicePixelRatio-aware backing-store sizing that used to live in
+ * main.ts. Returns null when the browser can't give us a 2D context at
+ * all (main.ts turns that into a friendly error message).
+ */
+export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer | null {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  let dpr = Math.min(window.devicePixelRatio || 1, 3);
+  return {
+    kind: 'canvas2d',
+    resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      canvas.width = Math.max(1, Math.round(width * dpr));
+      canvas.height = Math.max(1, Math.round(height * dpr));
+      return { width, height };
+    },
+    render(scene, nowMs) {
+      drawFrame({ ...scene, ctx, dpr }, nowMs);
+    },
+    destroy() {
+      // Nothing retained beyond the context itself. The canvas element
+      // stays with the page — note for the WebGL window: a canvas that has
+      // produced a 2D context can never produce a WebGL one, so an
+      // upgraded window must bring its OWN element instead of reusing this
+      // canvas after destroy().
+    },
+  };
 }
 
 /** Deterministic meadow variant so tile choice never depends on draw order/frame - and never forms a checkerboard. */
