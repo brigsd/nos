@@ -99,7 +99,12 @@
         "login": { "$ref": "#/definitions/Login" },
         "position": { "$ref": "#/definitions/Position" },
         "inventory": { "$ref": "#/definitions/Inventory" },
-        "energy": { "type": "integer", "minimum": 0, "maximum": 100 }
+        "energy": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "pulso": {
+          "description": "Pulso (₱) balance - v2 economy. Optional: absent means zero (players written before the economy existed).",
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "WorldMeta": {
@@ -120,7 +125,8 @@
         { "$ref": "#/definitions/ResourceCollectedEvent" },
         { "$ref": "#/definitions/PlayerSaidEvent" },
         { "$ref": "#/definitions/CorePulseEvent" },
-        { "$ref": "#/definitions/NativeSpokeEvent" }
+        { "$ref": "#/definitions/NativeSpokeEvent" },
+        { "$ref": "#/definitions/TradeCompletedEvent" }
       ]
     },
     "PlayerJoinedEvent": {
@@ -212,6 +218,24 @@
         "worldTime": { "type": "integer", "minimum": 0 },
         "nativeId": { "type": "string", "minLength": 1 },
         "message": { "type": "string", "minLength": 1, "maxLength": 280 }
+      }
+    },
+    "TradeCompletedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tick", "worldTime", "login", "nativeId", "given", "received", "pulsoDelta"],
+      "properties": {
+        "type": { "const": "trade_completed" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "worldTime": { "type": "integer", "minimum": 0 },
+        "login": { "$ref": "#/definitions/Login" },
+        "nativeId": { "type": "string", "minLength": 1 },
+        "given": { "$ref": "#/definitions/Inventory" },
+        "received": { "$ref": "#/definitions/Inventory" },
+        "pulsoDelta": {
+          "description": "Net change in the player's ₱ balance: positive = earned, negative = paid, 0 = pure barter.",
+          "type": "integer"
+        }
       }
     }
   }

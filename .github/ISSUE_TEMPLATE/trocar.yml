@@ -1,0 +1,43 @@
+name: "Comando: /trocar"
+description: "Negociar com um Nativo (economia do Pulso ₱)"
+title: "Comando: /trocar"
+labels: ["comando"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Negociar com um Nativo
+
+        Você precisa estar a até **3 tiles** do Nativo. Cada troca custa **1 de energia**.
+        Os Nativos aceitam Pulso (₱) e escambo. Preços do dia:
+
+        | Troca | Você dá | Você recebe |
+        |---|---|---|
+        | `comprar_madeira` | ₱10 | 1 madeira |
+        | `vender_madeira` | 1 madeira | ₱5 |
+        | `comprar_pedra` | ₱10 | 1 pedra |
+        | `vender_pedra` | 1 pedra | ₱5 |
+        | `comprar_fragmento` | ₱25 | 1 fragmento de pulso |
+        | `vender_fragmento` | 1 fragmento de pulso | ₱20 |
+        | `fragmento_por_madeira` | 1 fragmento de pulso | 3 madeira |
+        | `madeira_por_fragmento` | 3 madeira | 1 fragmento de pulso |
+        | `fragmento_por_pedra` | 1 fragmento de pulso | 3 pedra |
+        | `pedra_por_fragmento` | 3 pedra | 1 fragmento de pulso |
+
+        Nativos d'O Coração: `gota`, `raiz` (mercadora) e `cinza`.
+  - type: input
+    id: nativo
+    attributes:
+      label: "Nativo"
+      description: "O id do Nativo com quem negociar (ex.: raiz)"
+      placeholder: "raiz"
+    validations:
+      required: true
+  - type: input
+    id: troca
+    attributes:
+      label: "Troca"
+      description: "O nome da troca, exatamente como na tabela acima"
+      placeholder: "vender_madeira"
+    validations:
+      required: true

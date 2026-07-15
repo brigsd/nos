@@ -33,6 +33,14 @@ export const STARTING_ENERGY = 100;
 /** Max actions a single player may submit per tick (fairness limit, GDD). */
 export const ACTIONS_PER_TICK = 3;
 
+/**
+ * Pulso (₱) a player starts with. Zero on purpose: the only mint is trading
+ * with os Nativos (engine/economy.ts), so /entrar never creates currency out
+ * of thin air - the tick stays the whole economy's "banco central" (GDD
+ * "Economia (v2)"). Nunca conversível em dinheiro real (D-20).
+ */
+export const STARTING_PULSO = 0;
+
 // ---------------------------------------------------------------------------
 // Biomes and resources
 // ---------------------------------------------------------------------------
@@ -44,6 +52,17 @@ export const BIOMES: readonly Biome[] = ['meadow', 'forest', 'water', 'ruins', '
 export type ResourceType = 'wood' | 'stone' | 'pulse_fragment';
 
 export const RESOURCE_TYPES: readonly ResourceType[] = ['wood', 'stone', 'pulse_fragment'];
+
+/**
+ * Player-facing pt-BR names for each resource (docs/LORE.md lexicon). Single
+ * source for both the engine's command feedback and the site HUD, so the two
+ * can never call the same item by different names.
+ */
+export const RESOURCE_LABELS_PTBR: Record<ResourceType, string> = {
+  wood: 'madeira',
+  stone: 'pedra',
+  pulse_fragment: 'fragmento de pulso',
+};
 
 // ---------------------------------------------------------------------------
 // Tile
@@ -73,6 +92,17 @@ export interface Player {
   position: Position;
   inventory: Inventory;
   energy: number;
+  /**
+   * Pulso (₱) balance - v2 economy. Optional for backward compatibility with
+   * players written before the economy existed; an absent field means zero
+   * (read it through `getPulso`, never `player.pulso` directly).
+   */
+  pulso?: number;
+}
+
+/** A player's Pulso (₱) balance, treating the pre-economy `undefined` as zero. */
+export function getPulso(player: Pick<Player, 'pulso'>): number {
+  return player.pulso ?? 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +143,8 @@ export type WorldEventType =
   | 'resource_collected'
   | 'player_said'
   | 'core_pulse'
-  | 'native_spoke';
+  | 'native_spoke'
+  | 'trade_completed';
 
 interface WorldEventBase {
   type: WorldEventType;
@@ -159,13 +190,26 @@ export interface NativeSpokeEvent extends WorldEventBase {
   message: string;
 }
 
+export interface TradeCompletedEvent extends WorldEventBase {
+  type: 'trade_completed';
+  login: string;
+  nativeId: string;
+  /** Items the player handed over (may be empty when paying in ₱ only). */
+  given: Inventory;
+  /** Items the player received (may be empty when selling for ₱ only). */
+  received: Inventory;
+  /** Net change in the player's ₱ balance: positive = earned, negative = paid, 0 = pure barter. */
+  pulsoDelta: number;
+}
+
 export type WorldEvent =
   | PlayerJoinedEvent
   | PlayerMovedEvent
   | ResourceCollectedEvent
   | PlayerSaidEvent
   | CorePulseEvent
-  | NativeSpokeEvent;
+  | NativeSpokeEvent
+  | TradeCompletedEvent;
 
 // ---------------------------------------------------------------------------
 // World

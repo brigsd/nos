@@ -7,11 +7,12 @@
  */
 
 import type { World, Player, Position, WorldEvent, ResourceType } from './types';
-import { STARTING_ENERGY, MAX_ENERGY, ACTIONS_PER_TICK, getOwn, getTile, tileIndex } from './types';
+import { STARTING_ENERGY, STARTING_PULSO, MAX_ENERGY, ACTIONS_PER_TICK, getOwn, getTile, tileIndex } from './types';
+import { executeTrade, TRADE_ENERGY_COST, TRADE_RANGE_TILES } from './economy';
 
 export { ACTIONS_PER_TICK };
 
-export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer';
+export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer' | 'trocar';
 
 export interface Command {
   id: number; // issue number
@@ -50,6 +51,26 @@ export function parseMoverCoords(body: string): { x: number; y: number } | null 
   return null;
 }
 
+/**
+ * Parser for /trocar params from an issue-form markdown body ("### Nativo" /
+ * "### Troca" headings), with a plain-text "trocar <nativo> <troca>"
+ * fallback. Values are normalized to lowercase; anything beyond a simple
+ * id-ish token fails to parse here (the handler re-validates both strings
+ * via getOwn regardless - parsing is convenience, never the security gate).
+ */
+export function parseTrocarParams(body: string): { nativeId: string; tradeType: string } | null {
+  const nativeMatch = body.match(/(?:### )?Nativo\s*[\r\n]+\s*([A-Za-z0-9_\-]+)/i);
+  const tradeMatch = body.match(/(?:### )?Troca\s*[\r\n]+\s*([A-Za-z0-9_\-]+)/i);
+  if (nativeMatch?.[1] && tradeMatch?.[1]) {
+    return { nativeId: nativeMatch[1].trim().toLowerCase(), tradeType: tradeMatch[1].trim().toLowerCase() };
+  }
+  const words = body.trim().split(/\s+/);
+  if (words.length >= 3 && words[0]?.toLowerCase().replace(/^\//, '') === 'trocar' && words[1] && words[2]) {
+    return { nativeId: words[1].toLowerCase(), tradeType: words[2].toLowerCase() };
+  }
+  return null;
+}
+
 /** Parser for message text from markdown body */
 export function parseDizerMessage(body: string): string {
   const match = body.match(/(?:Mensagem|### Mensagem)\s*[\r\n]+([\s\S]+)/i);
@@ -84,6 +105,9 @@ export function parseRawIssues(rawIssues: any[]): Command[] {
     } else if (title.toLowerCase().startsWith('comando: /dizer') || title.toLowerCase().includes('/dizer')) {
       type = 'dizer';
       params = parseDizerMessage(body);
+    } else if (title.toLowerCase().startsWith('comando: /trocar') || title.toLowerCase().includes('/trocar')) {
+      type = 'trocar';
+      params = parseTrocarParams(body);
     }
 
     if (type) {
@@ -148,6 +172,7 @@ export function applyCommand(
       position: spawnPos,
       inventory: {},
       energy: STARTING_ENERGY,
+      pulso: STARTING_PULSO,
     };
 
     const joinEvent: WorldEvent = {
@@ -375,6 +400,108 @@ export function applyCommand(
         login: cmd.login,
         success: true,
         message: 'Fala publicada no mural do mundo.',
+      },
+    };
+  }
+
+  if (cmd.type === 'trocar') {
+    const params = cmd.params as { nativeId?: unknown; tradeType?: unknown } | null;
+    if (!params || typeof params.nativeId !== 'string' || typeof params.tradeType !== 'string') {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: 'Falha: Parâmetros da troca ausentes ou inválidos (preencha Nativo e Troca).',
+        },
+      };
+    }
+    const { nativeId, tradeType } = params;
+
+    // getOwn (issue #28): nativeId is player-supplied. A plain
+    // world.natives[nativeId] would resolve "__proto__"/"constructor" to an
+    // inherited built-in instead of "not found" - this is the exact v2
+    // `/trocar __proto__` lockup bug, kept dead here by construction.
+    const native = getOwn(world.natives, nativeId);
+    if (!native) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: `Falha: Nenhum Nativo chamado "${nativeId}" habita O Coração.`,
+        },
+      };
+    }
+
+    if (player.energy < TRADE_ENERGY_COST) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message: `Falha: Energia insuficiente para trocar (necessita de ${TRADE_ENERGY_COST}, você tem ${player.energy}).`,
+        },
+      };
+    }
+
+    // Same "near" radius the Nativos use to greet a player (behavior.ts) -
+    // if they offer, the offer is valid.
+    const dx = Math.abs(player.position.x - native.position.x);
+    const dy = Math.abs(player.position.y - native.position.y);
+    if (dx > TRADE_RANGE_TILES || dy > TRADE_RANGE_TILES) {
+      return {
+        world,
+        result: {
+          id: cmd.id,
+          login: cmd.login,
+          success: false,
+          message:
+            `Falha: ${native.name} está longe demais para negociar (alcance de ${TRADE_RANGE_TILES} tiles). ` +
+            `Você em (${player.position.x}, ${player.position.y}), ${native.name} em (${native.position.x}, ${native.position.y}).`,
+        },
+      };
+    }
+
+    const outcome = executeTrade(player, native, tradeType);
+    if (!outcome.success) {
+      return {
+        world,
+        result: { id: cmd.id, login: cmd.login, success: false, message: `Falha: ${outcome.message}` },
+      };
+    }
+
+    const updatedPlayer: Player = {
+      ...outcome.player,
+      energy: player.energy - TRADE_ENERGY_COST,
+    };
+
+    const tradeEvent: WorldEvent = {
+      type: 'trade_completed',
+      tick: currentTick,
+      worldTime: currentWorldTime,
+      login: cmd.login,
+      nativeId,
+      given: outcome.given,
+      received: outcome.received,
+      pulsoDelta: outcome.pulsoDelta,
+    };
+
+    return {
+      world: {
+        ...world,
+        players: { ...world.players, [cmd.login]: updatedPlayer },
+        natives: { ...world.natives, [nativeId]: outcome.native },
+        events: [...world.events, tradeEvent],
+      },
+      result: {
+        id: cmd.id,
+        login: cmd.login,
+        success: true,
+        message: `${outcome.message} Energia restante: ${updatedPlayer.energy}.`,
       },
     };
   }
