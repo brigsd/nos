@@ -113,6 +113,22 @@ describe('validateWorld - accepts valid state', () => {
     world.natives = {};
     expect(validateWorld(world).valid).toBe(true);
   });
+
+  it('accepts a well-formed native_replied event referencing a living native and player', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'native_replied',
+      tick: 3,
+      worldTime: 180,
+      nativeId: 'gota',
+      login: 'octocat',
+      message: 'Hm.',
+    });
+    const result = validateWorld(world);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
 });
 
 describe('validateWorld - rejects invalid state', () => {
@@ -387,6 +403,52 @@ describe('validateWorld - rejects invalid state', () => {
     world.natives = { gota: gota({ hp: -1 }) };
     expect(validateWorld(world).valid).toBe(false);
   });
+
+  it('rejects a native_replied event whose login is not a living player', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'native_replied',
+      tick: 3,
+      worldTime: 180,
+      nativeId: 'gota',
+      login: 'fantasma',
+      message: 'Hm.',
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join('\n')).toContain('does not exist in players');
+  });
+
+  it('rejects a native_replied event whose nativeId is not a living native', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'native_replied',
+      tick: 3,
+      worldTime: 180,
+      nativeId: 'raiz',
+      login: 'octocat',
+      message: 'Hm.',
+    });
+    const result = validateWorld(world);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join('\n')).toContain('does not exist in natives');
+  });
+
+  it('rejects a native_replied message beyond the 280-char cap', () => {
+    const world = validWorld();
+    world.natives = { gota: gota() };
+    world.events.push({
+      type: 'native_replied',
+      tick: 3,
+      worldTime: 180,
+      nativeId: 'gota',
+      login: 'octocat',
+      message: 'x'.repeat(281),
+    });
+    expect(validateWorld(world).valid).toBe(false);
+  });
 });
 
 describe('assertValidWorld', () => {
@@ -412,6 +474,7 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
     definitions: {
       Player: { properties: { energy: { minimum: number; maximum: number } } };
       NativeSpokeEvent: { properties: { message: { minLength: number; maxLength: number } } };
+      NativeRepliedEvent: { properties: { message: { minLength: number; maxLength: number } } };
     };
   };
   const energySchema = schema.definitions.Player.properties.energy;
@@ -442,5 +505,13 @@ describe('worldSchema vs. types.ts constants (anti-drift)', () => {
 
   it('keeps the schema NativeSpokeEvent.message.minLength at 1 (no empty falas)', () => {
     expect(nativeMessageSchema.minLength).toBe(1);
+  });
+
+  it('keeps the schema NativeRepliedEvent.message caps in step with NATIVE_MESSAGE_MAX_LENGTH', () => {
+    // engine/behavior.ts's conversationReply truncates to NATIVE_MESSAGE_MAX_LENGTH,
+    // exactly like the autonomous falas - the two event types must never drift apart.
+    const repliedMessageSchema = schema.definitions.NativeRepliedEvent.properties.message;
+    expect(repliedMessageSchema.maxLength).toBe(NATIVE_MESSAGE_MAX_LENGTH);
+    expect(repliedMessageSchema.minLength).toBe(1);
   });
 });

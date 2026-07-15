@@ -66,6 +66,13 @@ Análise: sem exploração ativa hoje, mas a arquitetura podia travar o mundo pr
 - **Margem d'água sem repetição (PR #34):** `drawMeadowRim` escolhe entre 2 variantes de relevo + flip horizontal por hash de tile (mesmo padrão do `meadowSprite`, determinístico). Nova sprite `margem_agua_4dir_b` pela pipeline `.cjs`; antes/depois em `site/qa/`. Débito do art-review do #12 quitado.
 - **`/dizer` visível — O Mural (PR #32):** o comando gerava `player_said` mas NADA renderizava. Agora: balão de fala sobre o jogador no mapa (espelha o padrão dos Nativos) + HUD DOM "O Mural" com as últimas 8 falas (`@login` + texto + "há N pulsos"). XSS-safe (`textContent`). Descoberta: o `/dizer` sempre persistiu (havia um `player_said` no tick 26); só faltava a tela.
 
+## v2 — fatia 💬 Interação leve com os Nativos até a tela (2026-07-15, branch `claude/v2-nativos-interacao`, em PR)
+- **Motor:** comando `/conversar nativo` (0 de energia, alcance = `PLAYER_PROXIMITY_TILES`): o Nativo responde com fala roteirizada da sua própria voz (`CONVERSATION_REPLIES` em behavior.ts, LORE voice, D-09 sem LLM), escolhida por RNG semeada por evento (`seed + "-conversa-" + nº da issue`, mesma família do beatOnce) — mesmo mundo + mesma issue ⇒ mesma resposta. Mercadora com mochila cheia do jogador solta a deixa da troca. Evento novo `native_replied {nativeId, login, message}`.
+- **Segurança:** `getOwn` no lookup do nativo (`/conversar __proto__` = "não existe", testado); pool de respostas também via getOwn com fallback lacônico ("Hm.").
+- **Schema/validador:** `NativeRepliedEvent` (mensagem 1..280); cross-checks genéricos de login/nativeId cobrem o evento; teste anti-drift do cap de mensagem; toda fala roteirizada testada contra o cap.
+- **Tela:** painel HUD "Nativos" (quem habita, facção em uma linha, posição atual, última resposta dada e link "puxar conversa" → issue `/conversar` pré-preenchida), Mural agora mostra respostas ("Cinza → @brigsd: ..."), e o balão de fala no mapa também acende para `native_replied` (mesmo padrão do native_spoke). Verificado e2e (tick canônico) e em Chromium headless.
+- 206→233 testes.
+
 ## Nota de segurança — proteção de branch (dúvida do Tiago, 2026-07-15)
 Só quem tem acesso de escrita (Tiago + token da integração) empurra na `main`; desconhecido não force-pusha. Recomendado ao Tiago: ligar SÓ "block force-push + deletion" (inofensivo). NÃO exigir PR/status-checks na main — **o tick (bot) commita direto na main a cada batida**; exigir PR quebraria o coração do jogo. Decisão final é do Tiago.
 

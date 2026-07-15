@@ -18,8 +18,8 @@
  * Models integration is a later, optional v2.5 layer on top of this.
  */
 
-import type { Native, NativeSpokeEvent, Position, World, WorldEvent } from './types';
-import { NATIVE_MESSAGE_MAX_LENGTH, getTile } from './types';
+import type { Native, NativeSpokeEvent, Player, Position, World, WorldEvent } from './types';
+import { NATIVE_MESSAGE_MAX_LENGTH, RESOURCE_TYPES, getOwn, getTile } from './types';
 import type { Rng } from './rng';
 
 export type BTNodeStatus = 'success' | 'failure';
@@ -74,6 +74,63 @@ export const DIALOGUES: Record<string, string[]> = {
     'O Detached Head vigia de longe.',
   ],
 };
+
+// ---------------------------------------------------------------------------
+// Conversas (v2 "interação leve"): scripted replies for /conversar. Unlike
+// DIALOGUES above (autonomous small talk the trees emit on their own beat),
+// these are ANSWERS - a Native responding to a specific player who walked up
+// and spoke to it. Same rules: pt-BR, LORE voice, no LLM in runtime (D-09).
+// ---------------------------------------------------------------------------
+
+/** Reply pools keyed by Native id, so each of the three keeps their own voice. */
+export const CONVERSATION_REPLIES: Record<string, string[]> = {
+  gota: [
+    'Você fala como quem chegou faz pouco. Todos chegam.',
+    'O rio muda de ideia a cada batida. Eu só acompanho.',
+    'Se procura o começo, procure o Commit Primordial. Ninguém achou ainda.',
+    'Eu já fui mais longe. O mapa acabou antes de mim.',
+    'Anda comigo um pouco. O Coração é menor a dois.',
+  ],
+  raiz: [
+    'Conversa é de graça. O resto tem preço.',
+    'Trago madeira da floresta funda. Fragmentos abrem meu melhor estoque.',
+    'Os Nós sempre querem falar do mundo. Eu prefiro falar de troca.',
+    'A floresta dá, a floresta toma. Eu só faço a ponte.',
+  ],
+  cinza: [
+    'As ruínas não gostam de pergunta. Eu respondo por elas.',
+    'Vigio o que restou. Alguém precisa.',
+    'Não desça onde a pedra escurece. O Detached Head não conversa.',
+    'Você grava tudo, eu sei. As pedras também.',
+  ],
+};
+
+/** What a Native with no pool of its own says - a future Nativo degrades to terse, never to a crash. */
+export const CONVERSATION_FALLBACK_REPLIES: string[] = [
+  'Hm.',
+  'O vento responde por mim.',
+];
+
+/** Extra line a merchant drops when the player's pack isn't empty - a nudge toward a future trade. */
+export const MERCHANT_BAG_REPLY = 'Sua mochila faz barulho. Isso se resolve com uma troca.';
+
+/**
+ * Picks the line `native` answers `player` with. Deterministic: every draw
+ * comes from the caller's `rng` (engine/commands.ts seeds it per event from
+ * the world seed + issue number), so the same conversation always lands the
+ * same words. The pool lookup goes through getOwn out of habit - `native.id`
+ * comes from validated world state today, but this function must stay safe
+ * even if a future caller hands it something player-shaped.
+ */
+export function conversationReply(native: Native, player: Player, rng: Rng): string {
+  const pool = [...(getOwn(CONVERSATION_REPLIES, native.id) ?? CONVERSATION_FALLBACK_REPLIES)];
+  const carriesSomething = RESOURCE_TYPES.some((resource) => (player.inventory[resource] ?? 0) > 0);
+  if (native.faction === 'merchant' && carriesSomething) {
+    pool.push(MERCHANT_BAG_REPLY);
+  }
+  const line = pool[rng.nextInt(0, pool.length - 1)] ?? CONVERSATION_FALLBACK_REPLIES[0]!;
+  return line.slice(0, NATIVE_MESSAGE_MAX_LENGTH);
+}
 
 /** Shape used to persist a Native's small scratch state across beats (Native.behaviorState, JSON-encoded). */
 interface BehaviorState {

@@ -113,7 +113,8 @@ export type WorldEventType =
   | 'resource_collected'
   | 'player_said'
   | 'core_pulse'
-  | 'native_spoke';
+  | 'native_spoke'
+  | 'native_replied';
 
 interface WorldEventBase {
   type: WorldEventType;
@@ -159,13 +160,26 @@ export interface NativeSpokeEvent extends WorldEventBase {
   message: string;
 }
 
+/**
+ * A Native answering a specific player's /conversar (v2 "interação leve").
+ * Unlike native_spoke (autonomous small talk from the behavior trees), this
+ * one is addressed: `login` is who the Native replied to.
+ */
+export interface NativeRepliedEvent extends WorldEventBase {
+  type: 'native_replied';
+  nativeId: string;
+  login: string;
+  message: string;
+}
+
 export type WorldEvent =
   | PlayerJoinedEvent
   | PlayerMovedEvent
   | ResourceCollectedEvent
   | PlayerSaidEvent
   | CorePulseEvent
-  | NativeSpokeEvent;
+  | NativeSpokeEvent
+  | NativeRepliedEvent;
 
 // ---------------------------------------------------------------------------
 // World

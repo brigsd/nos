@@ -1,8 +1,9 @@
 /**
  * src/mural.ts
  *
- * Renders "O Mural" — the HUD panel listing the most recent /dizer messages
- * published by players (engine/commands.ts's `player_said` event). This is
+ * Renders "O Mural" — the HUD panel listing the world's most recent voices:
+ * /dizer messages from players (`player_said`) and, since the v2 light
+ * interaction, Nativos answering players (`native_replied`). This is
  * a plain DOM overlay, not canvas: it reads `world.events` (already fetched
  * once by src/world.ts, same as the rest of the HUD) and writes list items.
  * Deliberately kept out of src/renderer.ts so it can't collide with the
@@ -14,13 +15,16 @@
  * be parsed as markup/script by a viewer's browser, no matter what a player
  * types.
  */
-import type { PlayerSaidEvent, World, WorldEvent } from '../../engine/types';
+import type { NativeRepliedEvent, PlayerSaidEvent, World, WorldEvent } from '../../engine/types';
+import { getOwn } from '../../engine/types';
 
-/** How many of the most recent messages the Mural shows at once. */
+/** How many of the most recent entries the Mural shows at once. */
 const MAX_ENTRIES = 8;
 
-function isPlayerSaid(event: WorldEvent): event is PlayerSaidEvent {
-  return event.type === 'player_said';
+type MuralEvent = PlayerSaidEvent | NativeRepliedEvent;
+
+function isMuralEvent(event: WorldEvent): event is MuralEvent {
+  return event.type === 'player_said' || event.type === 'native_replied';
 }
 
 /** "agora" on the current beat, "há N pulsos" otherwise — Pulso/batida is the world's unit of time (docs/LORE.md). */
@@ -32,16 +36,16 @@ function pulseAgo(eventTick: number, currentTick: number): string {
 }
 
 /**
- * Renders the last `MAX_ENTRIES` `player_said` events (newest first) into
- * `listEl`. Pure function of `world` - call again whenever a freshly fetched
- * world should replace what's on screen.
+ * Renders the last `MAX_ENTRIES` mural events (newest first) into `listEl`.
+ * Pure function of `world` - call again whenever a freshly fetched world
+ * should replace what's on screen.
  */
 export function renderMural(listEl: HTMLOListElement, world: World): void {
-  const messages = world.events.filter(isPlayerSaid).slice(-MAX_ENTRIES).reverse();
+  const entries = world.events.filter(isMuralEvent).slice(-MAX_ENTRIES).reverse();
 
   listEl.replaceChildren();
 
-  if (messages.length === 0) {
+  if (entries.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'hud-mural-empty';
     empty.textContent = 'Ninguém disse nada ainda.';
@@ -49,7 +53,7 @@ export function renderMural(listEl: HTMLOListElement, world: World): void {
     return;
   }
 
-  for (const event of messages) {
+  for (const event of entries) {
     const item = document.createElement('li');
     item.className = 'hud-mural-entry';
 
@@ -58,14 +62,27 @@ export function renderMural(listEl: HTMLOListElement, world: World): void {
 
     const author = document.createElement('span');
     author.className = 'hud-mural-author';
-    author.textContent = `@${event.login}`;
 
     // Untrusted player text: textContent only, never innerHTML.
     const message = document.createElement('span');
     message.className = 'hud-mural-message';
-    message.textContent = event.message;
 
-    line.append(author, document.createTextNode(' '), message);
+    if (event.type === 'player_said') {
+      author.textContent = `@${event.login}`;
+      message.textContent = event.message;
+      line.append(author, document.createTextNode(' '), message);
+    } else {
+      // A Native answering someone: "Gota → @alice: ..." (getOwn - the
+      // nativeId inside a validated event is safe, but the habit is the rule).
+      const nativeName = getOwn(world.natives ?? {}, event.nativeId)?.name ?? event.nativeId;
+      author.textContent = nativeName;
+      author.classList.add('hud-mural-native');
+      message.textContent = event.message;
+      const addressee = document.createElement('span');
+      addressee.className = 'hud-mural-to';
+      addressee.textContent = `→ @${event.login}`;
+      line.append(author, document.createTextNode(' '), addressee, document.createTextNode(' '), message);
+    }
 
     const when = document.createElement('span');
     when.className = 'hud-mural-when';

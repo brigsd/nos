@@ -271,3 +271,119 @@ body {
 .status[hidden] {
   display: none;
 }
+
+/* --- Nativos (v2 interação leve): quem habita, onde anda, puxar conversa --- */
+
+.hud-mural-native {
+  color: #cfff5e; /* leaf-light from Resurrect 64: a Native's voice, not a player's */
+}
+
+.hud-mural-to {
+  font-size: 10px;
+  color: var(--nos-text-dim);
+}
+
+.hud-nativos {
+  align-self: flex-start;
+  max-width: min(80vw, 320px);
+  pointer-events: auto;
+  background: var(--nos-panel);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 14px;
+  padding: 8px 14px 10px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.hud-nativos-summary {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: var(--nos-text-dim);
+  cursor: pointer;
+}
+
+.hud-nativos[open] .hud-nativos-summary {
+  margin-bottom: 6px;
+}
+
+.nativo-empty {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--nos-text-dim);
+}
+
+.nativo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 30vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.nativo-card {
+  border-top: 1px solid rgba(168, 132, 243, 0.16);
+  padding-top: 6px;
+}
+
+.nativo-card:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.nativo-header {
+  margin: 0;
+  font-size: 12px;
+  color: var(--nos-text);
+}
+
+.nativo-desc {
+  font-size: 11px;
+  color: var(--nos-text-dim);
+}
+
+.nativo-where {
+  margin: 1px 0 2px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--nos-text-dim);
+  opacity: 0.8;
+}
+
+.nativo-quote {
+  margin: 2px 0 3px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--nos-text);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.nativo-quote-to {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--nos-text-dim);
+}
+
+.nativo-talk {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--nos-accent);
+  text-decoration: none;
+  background: rgba(168, 132, 243, 0.12);
+  border: 1px solid var(--nos-panel-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.nativo-talk:hover {
+  border-color: var(--nos-accent);
+  background: rgba(168, 132, 243, 0.22);
+}

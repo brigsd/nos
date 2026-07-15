@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   BEHAVIOR_TREES,
+  CONVERSATION_FALLBACK_REPLIES,
+  CONVERSATION_REPLIES,
   DIALOGUES,
   DIALOGUE_COOLDOWN_TICKS,
+  MERCHANT_BAG_REPLY,
   NPC_HOMES,
   PLAYER_PROXIMITY_TILES,
+  conversationReply,
   evaluateBTNode,
   evaluateCondition,
   executeAction,
@@ -467,4 +471,73 @@ describe('BEHAVIOR_TREES - decision cases end to end', () => {
       walk(tree);
     },
   );
+});
+
+describe('conversationReply (/conversar, v2 interação leve)', () => {
+  const CONVERSING_IDS = ['gota', 'raiz', 'cinza'];
+
+  it('is deterministic: the same seed always picks the same line', () => {
+    const native = gota();
+    const player = playerAt('alice', 2, 2);
+    const first = conversationReply(native, player, new Rng('seed-conversa-1'));
+    const second = conversationReply(native, player, new Rng('seed-conversa-1'));
+    expect(second).toBe(first);
+  });
+
+  it('different seeds may pick different lines, always from the native own pool', () => {
+    const native = gota();
+    const player = playerAt('alice', 2, 2);
+    const pool = CONVERSATION_REPLIES['gota']!;
+    for (let issue = 1; issue <= 20; issue++) {
+      const line = conversationReply(native, player, new Rng(`seed-conversa-${issue}`));
+      expect(pool).toContain(line);
+    }
+  });
+
+  it('a merchant nudges toward trade when the player carries something', () => {
+    const raiz = gota({ id: 'raiz', name: 'Raiz', faction: 'merchant' });
+    const carrying = { ...playerAt('alice', 2, 2), inventory: { wood: 1 } };
+    // The bag line joins the pool only for a carrying player - find a seed that draws it.
+    const drawsBagLine = Array.from({ length: 200 }, (_, i) =>
+      conversationReply(raiz, carrying, new Rng(`bag-${i}`)),
+    ).some((line) => line === MERCHANT_BAG_REPLY);
+    expect(drawsBagLine).toBe(true);
+
+    // An empty-handed player can never hear it, whatever the seed.
+    const emptyHanded = playerAt('alice', 2, 2);
+    for (let i = 0; i < 200; i++) {
+      expect(conversationReply(raiz, emptyHanded, new Rng(`bag-${i}`))).not.toBe(MERCHANT_BAG_REPLY);
+    }
+  });
+
+  it('an unknown native id falls back to the terse pool - never throws, never goes silent', () => {
+    const stranger = gota({ id: 'forasteiro', name: 'Forasteiro' });
+    const line = conversationReply(stranger, playerAt('alice', 2, 2), new Rng('x'));
+    expect(CONVERSATION_FALLBACK_REPLIES).toContain(line);
+  });
+
+  it('a hostile native id (__proto__) falls back cleanly via getOwn', () => {
+    const hostile = gota({ id: '__proto__', name: 'Impostor' });
+    const line = conversationReply(hostile, playerAt('alice', 2, 2), new Rng('x'));
+    expect(CONVERSATION_FALLBACK_REPLIES).toContain(line);
+  });
+
+  it('every scripted reply fits the schema message cap and is non-empty (anti-drift)', () => {
+    const allLines = [
+      ...Object.values(CONVERSATION_REPLIES).flat(),
+      ...CONVERSATION_FALLBACK_REPLIES,
+      MERCHANT_BAG_REPLY,
+    ];
+    expect(allLines.length).toBeGreaterThan(0);
+    for (const line of allLines) {
+      expect(line.length).toBeGreaterThan(0);
+      expect(line.length).toBeLessThanOrEqual(NATIVE_MESSAGE_MAX_LENGTH);
+    }
+  });
+
+  it('ships a dedicated voice for each seeded Nativo', () => {
+    for (const id of CONVERSING_IDS) {
+      expect(CONVERSATION_REPLIES[id]?.length ?? 0).toBeGreaterThanOrEqual(3);
+    }
+  });
 });

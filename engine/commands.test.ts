@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { World, Player } from './types';
-import { parseMoverCoords, parseDizerMessage, parseRawIssues, processCommands, applyCommand } from './commands';
+import type { Native, World, Player } from './types';
+import {
+  parseMoverCoords,
+  parseDizerMessage,
+  parseConversarTarget,
+  parseRawIssues,
+  processCommands,
+  applyCommand,
+} from './commands';
+import { CONVERSATION_REPLIES, PLAYER_PROXIMITY_TILES } from './behavior';
 
 function mockWorld(): World {
   return {
@@ -274,5 +282,154 @@ describe('processCommands - per-command failure isolation (issue #28)', () => {
     expect(res.results).toHaveLength(1);
     expect(res.results[0]?.success).toBe(true);
     expect(res.world.players['alice']).toBeDefined();
+  });
+});
+
+describe('/conversar - interação leve com os Nativos (v2)', () => {
+  function gotaAt(x: number, y: number, overrides: Partial<Native> = {}): Native {
+    return {
+      id: 'gota',
+      name: 'Gota',
+      position: { x, y },
+      behaviorTree: 'wanderer',
+      behaviorState: '{}',
+      inventory: {},
+      hp: 100,
+      faction: 'wanderer',
+      ...overrides,
+    };
+  }
+
+  function converseWorld(): World {
+    const world = mockWorld();
+    world.players['alice'] = { login: 'alice', position: { x: 30, y: 30 }, inventory: {}, energy: 10 };
+    world.natives = { gota: gotaAt(31, 29) };
+    return world;
+  }
+
+  function conversar(id: number, params: unknown) {
+    return {
+      id,
+      login: 'alice',
+      type: 'conversar' as const,
+      params: params as any,
+      createdAt: '2026-07-14T20:00:00Z',
+    };
+  }
+
+  it('the Native answers: native_replied event recorded, feedback carries the line, zero energy spent', () => {
+    const world = converseWorld();
+    const res = processCommands(world, [conversar(1, 'gota')], 6, 360);
+
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.world.events).toHaveLength(1);
+    const event = res.world.events[0]!;
+    expect(event).toMatchObject({ type: 'native_replied', tick: 6, worldTime: 360, nativeId: 'gota', login: 'alice' });
+    const message = (event as { message?: string }).message ?? '';
+    expect(CONVERSATION_REPLIES['gota']).toContain(message);
+    expect(res.results[0]?.message).toContain(message);
+    expect(res.results[0]?.message).toContain('Gota responde');
+    expect(res.world.players['alice']?.energy).toBe(10); // talking is free
+  });
+
+  it('is deterministic: same world + same issue number => same reply, always', () => {
+    const first = processCommands(converseWorld(), [conversar(7, 'gota')], 6, 360);
+    const second = processCommands(converseWorld(), [conversar(7, 'gota')], 6, 360);
+    expect(second.world).toEqual(first.world);
+    expect(second.results).toEqual(first.results);
+  });
+
+  it('different issue numbers may draw different lines (per-event seed)', () => {
+    const replies = new Set<string>();
+    for (let issue = 1; issue <= 30; issue++) {
+      const res = processCommands(converseWorld(), [conversar(issue, 'gota')], 6, 360);
+      const event = res.world.events[0] as { message?: string };
+      replies.add(event.message ?? '');
+    }
+    expect(replies.size).toBeGreaterThan(1);
+  });
+
+  it('rejects an unknown native, world untouched', () => {
+    const res = processCommands(converseWorld(), [conversar(1, 'fantasma')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('Nenhum Nativo chamado "fantasma"');
+    expect(res.world.events).toHaveLength(0);
+  });
+
+  it.each(['__proto__', 'constructor', 'toString'])(
+    'treats hostile native id %s as "not found" (getOwn) and the batch keeps flowing',
+    (hostileKey) => {
+      const res = processCommands(
+        converseWorld(),
+        [
+          conversar(1, hostileKey),
+          { id: 2, login: 'alice', type: 'dizer' as const, params: 'sigo aqui', createdAt: '2026-07-14T20:01:00Z' },
+        ],
+        6,
+        360,
+      );
+      expect(res.results[0]?.success).toBe(false);
+      expect(res.results[0]?.message).toContain('Nenhum Nativo chamado');
+      expect(res.results[1]?.success).toBe(true);
+    },
+  );
+
+  it('rejects talking from beyond the proximity radius', () => {
+    const world = converseWorld();
+    world.natives!['gota'] = gotaAt(30 + PLAYER_PROXIMITY_TILES + 1, 30);
+    const res = processCommands(world, [conversar(1, 'gota')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('não te ouve daí');
+  });
+
+  it('allows talking exactly at the edge of the radius', () => {
+    const world = converseWorld();
+    world.natives!['gota'] = gotaAt(30 + PLAYER_PROXIMITY_TILES, 30 - PLAYER_PROXIMITY_TILES);
+    const res = processCommands(world, [conversar(1, 'gota')], 6, 360);
+    expect(res.results[0]?.success).toBe(true);
+  });
+
+  it('rejects malformed params without throwing', () => {
+    const res = processCommands(converseWorld(), [conversar(1, null), conversar(2, 42)], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[1]?.success).toBe(false);
+  });
+
+  it('requires /entrar first, like every other action', () => {
+    const world = converseWorld();
+    delete world.players['alice'];
+    const res = processCommands(world, [conversar(1, 'gota')], 6, 360);
+    expect(res.results[0]?.success).toBe(false);
+    expect(res.results[0]?.message).toContain('/entrar');
+  });
+});
+
+describe('parseConversarTarget', () => {
+  it('parses the issue-form markdown body', () => {
+    expect(parseConversarTarget('### Nativo\n\nGota')).toBe('gota');
+  });
+
+  it('parses the free-text fallback', () => {
+    expect(parseConversarTarget('/conversar raiz')).toBe('raiz');
+    expect(parseConversarTarget('conversar cinza')).toBe('cinza');
+  });
+
+  it('returns null when no target is present', () => {
+    expect(parseConversarTarget('')).toBeNull();
+    expect(parseConversarTarget('bom dia')).toBeNull();
+  });
+
+  it('is mapped from issues by parseRawIssues', () => {
+    const parsed = parseRawIssues([
+      {
+        number: 50,
+        title: 'Comando: /conversar',
+        body: '### Nativo\n\ngota',
+        author: { login: 'tester1' },
+        createdAt: '2026-07-14T20:00:00Z',
+      },
+    ]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ type: 'conversar', params: 'gota' });
   });
 });
