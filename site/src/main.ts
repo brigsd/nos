@@ -60,14 +60,21 @@ const HOME_PORTAL_ID = 'coracao';
 
 /**
  * Fixed, hand-picked O Coração tile for the portal marker (R6, D-17): the
- * centre of a clean 7x7 meadow clearing near the western edge (x<=6 within a
- * 2-tile radius), reachable on foot from spawn (30,30) without crossing the
- * river (verified by BFS over the live world/heart.json tiles during
- * authoring), 25+ tiles from every A Fábrica machine and 33+ tiles from
- * every Nativo. See docs/PORTALS_PROTOCOL.md / the PR description for the
- * full reachability check.
+ * centre of a clean 7x7 meadow clearing near the EASTERN edge (x>=54 within
+ * a 2-tile radius), reachable on foot from spawn (30,30) without crossing
+ * the river (verified by BFS over the live world/heart.json tiles during
+ * authoring), 23+ tiles from every A Fábrica machine and 42+ tiles from
+ * every Nativo. Deliberately the east edge, not the west: the HUD's left
+ * column of panels (.hud-panel/.hud-auth/.hud-meuno/.hud-mural/...) covers
+ * roughly the screen's left ~330px at the default "whole map visible" zoom,
+ * and at that zoom the camera is fully clamped/centred (the map is smaller
+ * than the viewport, so panning is a no-op until the player zooms in) - a
+ * west-edge marker would sit permanently behind the HUD on first paint,
+ * defeating the "click/tap the tile" affordance for anyone who hasn't
+ * zoomed in yet. The east edge has no such conflict. See
+ * docs/PORTALS_PROTOCOL.md / the PR description for the full check.
  */
-const PORTAL_MARKER_POSITION: Position = { x: 5, y: 30 };
+const PORTAL_MARKER_POSITION: Position = { x: 57, y: 34 };
 
 /** Chebyshev "within 1 tile" (same 8-neighbour adjacency engine/behavior.ts's PLAYER_PROXIMITY_TILES uses) that auto-opens the Portais panel while standing next to the marker. */
 const PORTAL_PROXIMITY_TILES = 1;
@@ -356,14 +363,21 @@ async function main(): Promise<void> {
     refreshPortaisUI();
     try {
       const freshHeart = await loadWorld();
+      const back = homePosition ?? { x: 30, y: 30 };
+      // Flip the state BEFORE applyFreshWorld: that call synchronously
+      // re-renders every panel via refreshAuthenticatedPanels(), which reads
+      // `visitingWorldId` to decide `readOnly` - flipping it after would
+      // render this first pass with the STALE (still-visiting) flag, and
+      // nothing would ever re-render it correctly afterward (bug caught in
+      // QA: the panels stayed read-only after "voltar" until the next live
+      // poll happened to fire).
+      homePosition = null;
+      visitingWorldId = null;
       applyFreshWorld(freshHeart);
       camera.resize(freshHeart.width * TILE_SIZE_PX, freshHeart.height * TILE_SIZE_PX);
-      const back = homePosition ?? { x: 30, y: 30 };
       teleportLocalPlayer(back);
       camera.centerOnWorld((back.x + 0.5) * TILE_SIZE_PX, (back.y + 0.5) * TILE_SIZE_PX);
       camera.clamp();
-      homePosition = null;
-      visitingWorldId = null;
       liveEl.hidden = false;
       liveHandle = startLivePolling({ initialWorld: freshHeart, onWorld: applyFreshWorld, onStatus: updateLiveIndicator });
     } catch (err) {
@@ -404,13 +418,17 @@ async function main(): Promise<void> {
         homePosition = { x: localPlayer.x, y: localPlayer.y };
       }
 
+      // Flip the state BEFORE applyFreshWorld - see voltarAoCoracao's
+      // matching comment: that call re-renders every panel synchronously,
+      // reading `visitingWorldId` for `readOnly`, so it must already be
+      // correct on this very first render of the arriving world.
+      visitingWorldId = entry.id;
       applyFreshWorld(freshWorld);
       camera.resize(freshWorld.width * TILE_SIZE_PX, freshWorld.height * TILE_SIZE_PX);
       const arrival = findArrivalTile(freshWorld);
       teleportLocalPlayer(arrival);
       camera.centerOnWorld((arrival.x + 0.5) * TILE_SIZE_PX, (arrival.y + 0.5) * TILE_SIZE_PX);
       camera.clamp();
-      visitingWorldId = entry.id;
     } catch (err) {
       console.warn('Falha ao atravessar o portal:', err);
       portalError = err instanceof Error ? err.message : 'Não foi possível atravessar agora.';
