@@ -185,12 +185,24 @@ function isEntityDict(dict: unknown, requireInventory: boolean): boolean {
  * misses is contained by the try/catch around `onWorld` in
  * consumeWorldResponse and the try/finally in runCycle, so the polling loop
  * survives regardless.
+ *
+ * Exported (R6, D-17): site/src/portals.ts reuses this exact check before
+ * trusting a world fetched through a portal — a visited world deserves
+ * exactly the same "won't crash the renderer" guarantee as O Coração's own
+ * live poll, and the task is explicit that this must be shared, not
+ * re-implemented a second time.
  */
-function isPlausibleWorld(value: unknown): value is World {
+export function isPlausibleWorld(value: unknown): value is World {
   if (typeof value !== 'object' || value === null) return false;
   const w = value as { [key: string]: unknown };
-  if (typeof w.width !== 'number' || typeof w.height !== 'number') return false;
+  // Trust boundary (review finding on PR #44): a federated world is remote,
+  // untrusted data. Unbounded dimensions freeze the page downstream (full-map
+  // render, arrival-tile ring search) - a synchronous freeze no try/catch can
+  // save. Positive integers, sane cap, and a tile grid that matches.
+  if (!Number.isInteger(w.width) || !Number.isInteger(w.height)) return false;
+  if ((w.width as number) < 1 || (w.height as number) > 512 || (w.width as number) > 512 || (w.height as number) < 1) return false;
   if (!Array.isArray(w.tiles)) return false;
+  if (w.tiles.length !== (w.width as number) * (w.height as number)) return false;
   if (!Array.isArray(w.events)) return false;
   if (typeof w.meta !== 'object' || w.meta === null) return false;
   if (typeof (w.meta as { [key: string]: unknown }).tickCount !== 'number') return false;
@@ -261,12 +273,14 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
 
   /** Updates the tier shown in the HUD and re-emits status, WITHOUT touching `lastCheckedAt` — for attempts that didn't actually confirm anything about the world (network error, 401/403, an unexpected status). */
   function emitStatus(tier: LiveTier): void {
+    if (stopped) return;
     status.tier = tier;
     onStatus({ ...status });
   }
 
   /** Same as `emitStatus`, but also stamps `lastCheckedAt` — only for a CONFIRMED read (304 "still this" or a parsed 200), so "atualizado há Xs" never lies by resetting to "agora" on a failed attempt (see module doc's honesty note). */
   function touchAndEmit(tier: LiveTier): void {
+    if (stopped) return;
     status.lastCheckedAt = Date.now();
     emitStatus(tier);
   }
@@ -285,6 +299,9 @@ export function startLivePolling(options: StartLiveOptions): LiveHandle {
       console.warn('Mundo ao vivo veio ilegível (JSON inválido) — ignorando esta leitura.', err);
       return;
     }
+    // stop() may have landed while the body was in flight (e.g. o jogador
+    // atravessou um Portal, PR #44 review): a stopped handle must never emit.
+    if (stopped) return;
     if (!isPlausibleWorld(parsed)) {
       console.warn('Mundo ao vivo veio com formato inesperado — ignorando esta leitura.');
       return;

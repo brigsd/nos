@@ -17,6 +17,8 @@ import type { LocalPlayer } from './player';
 const WATER_FRAME_MS = 1000;
 /** Core breathing loop: 4 frames, ~1.4s per full pulse - reads as a heartbeat, not a flicker. */
 const CORE_FRAME_MS = 350;
+/** Portal hum: 2 frames - deliberately a different cadence from o Núcleo (350ms) and água (1000ms) so none of the three visually sync up (R6, D-17). */
+const PORTAL_FRAME_MS = 700;
 /** Void behind the map island - darkest tone of Resurrect 64, dimmed further. */
 const BG_COLOR = '#100c15';
 /** Share of meadow tiles that bloom with flowers. */
@@ -32,6 +34,15 @@ export interface RenderContext {
   /** devicePixelRatio at the time the canvas backing store was sized. */
   dpr: number;
   localPlayer: LocalPlayer;
+  /**
+   * Fixed map position of O Coração's portal marker (R6, D-17) - data-driven
+   * from the portal registry (site/src/portals.ts / main.ts), NEVER engine
+   * state: this tile isn't part of world.json anywhere, on purpose. `null`/
+   * `undefined` while it shouldn't be drawn (registry still loading or
+   * empty, or the player is currently visiting another world - see
+   * main.ts's getPortalMarker()).
+   */
+  portalMarker?: { x: number; y: number } | null;
 }
 
 /** Deterministic meadow variant so tile choice never depends on draw order/frame - and never forms a checkerboard. */
@@ -297,6 +308,26 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
 
     drawSpriteFrame(ctx, sprites.oficina, 0, mx0, my0, mx1, my1);
     drawPlayerName(ctx, machine.name, mx0, my0, mx1, false);
+  }
+
+  // 2.2. Draw the Portal marker (O Salão de Portais' map affordance, R6/D-17).
+  // Data-driven from the portal registry (site/src/portals.ts), NOT engine
+  // state - this tile isn't part of world.json anywhere. main.ts only hands
+  // a position through when there's somewhere to travel TO and we're home
+  // in O Coração to begin with (see main.ts's getPortalMarker()).
+  if (rc.portalMarker) {
+    const px = rc.portalMarker.x;
+    const py = rc.portalMarker.y;
+    if (px >= tileMinX && px <= tileMaxX && py >= tileMinY && py <= tileMaxY) {
+      const px0 = camera.worldToScreenX(px * TILE_SIZE_PX);
+      const px1 = camera.worldToScreenX((px + 1) * TILE_SIZE_PX);
+      const py0 = camera.worldToScreenY(py * TILE_SIZE_PX);
+      const py1 = camera.worldToScreenY((py + 1) * TILE_SIZE_PX);
+
+      const portalFrame = Math.floor(nowMs / PORTAL_FRAME_MS) % sprites.portal.frameCount;
+      drawSpriteFrame(ctx, sprites.portal, portalFrame, px0, py0, px1, py1);
+      drawPlayerName(ctx, 'Portais', px0, py0, px1, false);
+    }
   }
 
   // 2.5. Draw Nativos (NPCs — official world state, so solid like other players).

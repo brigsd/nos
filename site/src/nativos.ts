@@ -15,6 +15,11 @@
  * sits next to "puxar conversa" and POSTs the /conversar issue directly via
  * the API. Falls back to opening the link on any failure (no scope,
  * offline, ...).
+ *
+ * R6 (D-17): `readOnly` (main.ts, true while visiting another world through
+ * a portal) hides "puxar conversa" and "agir daqui" - the command always
+ * targets O Coração's Nativos, so it makes no sense pointed at a visited
+ * world. Who's there and what they last said stay visible either way.
  */
 import type { Native, NativeRepliedEvent, World, WorldEvent } from '../../engine/types';
 import { createCommandIssue, isLoggedIn } from './auth';
@@ -69,7 +74,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function nativeCard(world: World, native: Native): HTMLElement {
+function nativeCard(world: World, native: Native, readOnly: boolean): HTMLElement {
   const card = el('li', 'nativo-card');
 
   const header = el('p', 'nativo-header');
@@ -94,6 +99,8 @@ function nativeCard(world: World, native: Native): HTMLElement {
     card.appendChild(quote);
   }
 
+  if (readOnly) return card; // R6/D-17: informational only while visiting - see module doc.
+
   const talk = el('a', 'nativo-talk', 'puxar conversa');
   talk.href = conversarIssueUrl(native.id);
   talk.target = '_blank';
@@ -114,9 +121,10 @@ function nativeCard(world: World, native: Native): HTMLElement {
 
 /**
  * Renders the panel into `rootEl` (a <details> body). Pure function of
- * `world` - call again when a fresh world arrives.
+ * `world` - call again when a fresh world arrives. `readOnly` (R6, D-17):
+ * true while visiting another world through a portal - see nativeCard's doc.
  */
-export function renderNativos(rootEl: HTMLElement, world: World): void {
+export function renderNativos(rootEl: HTMLElement, world: World, readOnly = false): void {
   rootEl.replaceChildren();
 
   const natives = Object.values(world.natives ?? {});
@@ -126,12 +134,18 @@ export function renderNativos(rootEl: HTMLElement, world: World): void {
   }
 
   rootEl.appendChild(
-    el('p', 'nativo-empty', 'Chegue a até 3 tiles de um Nativo e puxe conversa — a resposta vem na próxima batida.'),
+    el(
+      'p',
+      'nativo-empty',
+      readOnly
+        ? 'Você está de visita — dá pra ver quem mora aqui, mas puxar conversa só funciona n\'O Coração.'
+        : 'Chegue a até 3 tiles de um Nativo e puxe conversa — a resposta vem na próxima batida.',
+    ),
   );
 
   const list = el('ul', 'nativo-list');
   for (const native of natives.sort((a, b) => a.id.localeCompare(b.id))) {
-    list.appendChild(nativeCard(world, native));
+    list.appendChild(nativeCard(world, native, readOnly));
   }
   rootEl.appendChild(list);
 }

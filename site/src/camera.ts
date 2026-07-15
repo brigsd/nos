@@ -30,8 +30,8 @@ export class Camera {
   viewport: Size = { width: 0, height: 0 };
 
   constructor(
-    public readonly worldWidthPx: number,
-    public readonly worldHeightPx: number,
+    public worldWidthPx: number,
+    public worldHeightPx: number,
   ) {}
 
   private fitZoom(padding: number): number {
@@ -57,6 +57,30 @@ export class Camera {
     } else {
       this.zoom = clampNum(this.zoom, this.minZoom, this.maxZoom);
     }
+    this.clamp();
+  }
+
+  /**
+   * Resizes the world bounds this camera fits/clamps against — e.g. after
+   * travelling through a portal into a differently-sized world (R6, D-17).
+   * `worldWidthPx`/`worldHeightPx` used to be `readonly`, fixed for a given
+   * world's lifetime (O Coração's 64x64 map never resizes itself); portal
+   * travel is exactly the "future migration" the old comment anticipated.
+   * Refits the zoom the same way the very first `setViewport` call does
+   * (`fit * 0.94`, whole map comfortably visible) rather than trying to
+   * preserve the old numeric zoom level, which would read wrong for a
+   * differently-sized/shaped map. Callers still need their own
+   * `centerOnWorld` afterward to choose WHERE in the new map to look —
+   * this method only knows the map's new size, not where the player should
+   * land in it.
+   */
+  resize(worldWidthPx: number, worldHeightPx: number): void {
+    this.worldWidthPx = worldWidthPx;
+    this.worldHeightPx = worldHeightPx;
+    const fit = this.fitZoom(1);
+    this.minZoom = fit * 0.82;
+    this.maxZoom = Math.max(fit * 10, 6);
+    this.zoom = fit * 0.94;
     this.clamp();
   }
 

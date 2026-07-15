@@ -30,6 +30,14 @@ Contexto de personagem foi lido em `engine/behavior.ts` e `engine/natives.ts` de
 
 Usado 4x (Forja/Cozinha/Bancada/Estaleiro) com o nome de cada oficina desenhado ao lado via `drawPlayerName` (`site/src/renderer.ts`) — mesmo padrão dos Nativos. Não é economia de escopo disfarçada: D-25a já fixa a estética "sintetizador atemporal" (o estilo do produto vem da receita/material, nunca de uma máquina duplicada), então UM arquétipo de console lido 4x com rótulo é a leitura fiel da decisão de design, não só a mais barata. Console metálico atarracado, tampo achatado, base tipo bigorna alargada, luz topo-esquerda (mesma convenção do `no_avatar`/Nativos); a janela de brilho no corpo usa o mesmo par violeta/carmesim do Núcleo e do acento do HUD (`--nos-accent`/`--nos-pulse`) — rima visual: as oficinas correm no mesmo Pulso que o Núcleo respira.
 
+## Sprite do Portal (R6 fase 1 — Portais, D-17)
+
+`portal_2frames.json`: marco do Salão de Portais, 16×16, 2 quadros, paleta Resurrect 64, **original**, gerado por código (`genPortalFrame` em `tools/author-portal.cjs`, mesma técnica de `author-sprites.cjs`/`author-nativos.cjs` — gradientes com dithering ordenado sobre formas geométricas). Nenhum pack CC0 externo foi adaptado.
+
+Um arco de pedra antigo (tons plum/cinza da família da `ruina.json` — liga o portal a "algo antigo que sempre esteve aqui", não a um gadget futurista) emoldurando um vazio giratório índigo/azul — uma família de cor que nenhum outro sprite usa (o Núcleo é violeta/carmesim, a oficina d'A Fábrica é violeta, a água é ciano/teal), então o portal nunca é confundido com "outro Núcleo" ou "uma poça" à primeira vista. Um único pixel violeta-claro no topo (a "pedra-chave") liga o marco ao acento do HUD (`--nos-accent`), o mesmo tipo de rima visual que a `oficina.json` já faz com o Núcleo. 2 quadros: os braços em espiral do vazio giram meia-volta e os pontos de luz à deriva mudam de lugar — um zumbido lento (~700ms, `PORTAL_FRAME_MS` em `site/src/renderer.ts`) deliberadamente distinto da batida de 350ms do Núcleo e do brilho de 1000ms da água, para os três nunca sincronizarem visualmente.
+
+Desenhado uma única vez no mapa (posição fixa `PORTAL_MARKER_POSITION` em `site/src/main.ts`, ver `docs/PORTALS_PROTOCOL.md` para a escolha do local) — landmark do cliente, nunca estado do motor (`world.machines`/`world.natives` não o conhecem).
+
 ## Ferramentas
 
-`tools/` (encoder PNG manual + compositor) é código original deste projeto, sem dependências externas (só `fs`, `path`, `zlib` do Node). `tools/author-nativos.cjs` e `tools/contact-sheet-nativos.cjs` (issue #23) seguem a mesma regra.
+`tools/` (encoder PNG manual + compositor) é código original deste projeto, sem dependências externas (só `fs`, `path`, `zlib` do Node). `tools/author-nativos.cjs` e `tools/contact-sheet-nativos.cjs` (issue #23) seguem a mesma regra. `tools/author-portal.cjs` (R6 fase 1) idem.

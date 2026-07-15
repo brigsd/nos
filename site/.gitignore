@@ -2,7 +2,8 @@ node_modules/
 dist/
 
 # Regenerated on every dev/build by scripts/copy-data.mjs from the repo's
-# canonical world/ and assets/sprites/ - never the source of truth, never
-# committed.
+# canonical world/, worlds/ (R6, D-17) and assets/sprites/ - never the
+# source of truth, never committed.
 public/world/
+public/worlds/
 public/assets/
