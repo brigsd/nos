@@ -417,16 +417,22 @@ describe('seedInitialNatives - retrofitting the live world/heart.json (issue #22
   const onDiskRaw: unknown = JSON.parse(readFileSync(heartJsonPath, 'utf-8'));
   assertValidWorld(onDiskRaw);
   const onDisk = onDiskRaw;
+  // The live world has since been retrofitted with os Nativos in production
+  // (issue #27's tick seeded gota/raiz/cinza). To keep testing the retrofit
+  // LOGIC regardless of the live file's current state - the same lesson as the
+  // byte-for-byte mapgen check above - derive a synthetic pre-migration world
+  // (same real playtime, natives stripped) and seed THAT.
+  const preMigration: World = { ...onDisk, natives: undefined };
 
-  it('sanity: the live world already has real playtime to protect (tickCount, a player, events)', () => {
+  it('sanity: the live world has real playtime to protect and the Nativos migration has run', () => {
     expect(onDisk.meta.tickCount).toBeGreaterThanOrEqual(26);
     expect(Object.keys(onDisk.players)).toContain('brigsd');
     expect(onDisk.events.length).toBeGreaterThan(0);
-    expect(onDisk.natives).toBeUndefined(); // this world predates os Nativos
+    expect(onDisk.natives).toBeDefined(); // issue #27's tick already seeded the Nativos
   });
 
   it('(a) seeding alone adds exactly the 3 Nativos, deterministically', () => {
-    const seeded = seedInitialNatives(onDisk);
+    const seeded = seedInitialNatives(preMigration);
     expect(Object.keys(seeded.natives ?? {}).sort()).toEqual(['cinza', 'gota', 'raiz']);
     // Same seed ("commit-primordial") + same tiles => same spots a fresh
     // generateHeartWorld() would have used from genesis.
@@ -435,7 +441,7 @@ describe('seedInitialNatives - retrofitting the live world/heart.json (issue #22
   });
 
   it('(b) seeding alone preserves players.brigsd, tickCount and every pre-existing event byte-for-byte', () => {
-    const seeded = seedInitialNatives(onDisk);
+    const seeded = seedInitialNatives(preMigration);
     expect(seeded.meta.tickCount).toBe(onDisk.meta.tickCount);
     expect(seeded.meta.worldTime).toBe(onDisk.meta.worldTime);
     expect(seeded.players).toEqual(onDisk.players);
@@ -445,20 +451,20 @@ describe('seedInitialNatives - retrofitting the live world/heart.json (issue #22
   });
 
   it('(c) the seeded world passes the hardened validator', () => {
-    const seeded = seedInitialNatives(onDisk);
+    const seeded = seedInitialNatives(preMigration);
     const result = validateWorld(seeded);
     expect(result.errors).toEqual([]);
     expect(result.valid).toBe(true);
   });
 
   it('seeding is idempotent when applied to the live world twice', () => {
-    const once = seedInitialNatives(onDisk);
+    const once = seedInitialNatives(preMigration);
     const twice = seedInitialNatives(once);
     expect(twice).toEqual(once);
   });
 
   it('the full tick flow (seed + advanceWorld, as scripts/tick.ts runs it) preserves brigsd/tickCount/events and stays valid', () => {
-    const seeded = seedInitialNatives(onDisk);
+    const seeded = seedInitialNatives(preMigration);
     assertValidWorld(seeded);
 
     // Deterministic "exactly 1 beat due" instant, independent of wall-clock
@@ -501,7 +507,7 @@ describe('seedInitialNatives - retrofitting the live world/heart.json (issue #22
   });
 
   it('the Nativos seeded onto the live world sit on walkable (non-water) tiles', () => {
-    const seeded = seedInitialNatives(onDisk);
+    const seeded = seedInitialNatives(preMigration);
     for (const native of Object.values(seeded.natives!) as Native[]) {
       const tile = seeded.tiles[tileIndex(native.position.x, native.position.y, seeded.width)]!;
       expect(tile.biome).not.toBe('water');
