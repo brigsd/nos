@@ -34,7 +34,7 @@
 - [x] R2 · Login GitHub (D-13) — PAT-based hoje (device flow travado por CORS, código pronto atrás de flag; ver docs/CONTINUITY.md)
 - [x] R3 · Comparativo (D-26: PixiJS opt-in, canvas padrão) canvas vs. PixiJS + janela WebGL (mira: luz Eastward/Octopath; contrato de mundo intocado)
 - [x] R4 · Motor de fabricação (PR #39, mesclado) + painel Oficinas na tela (PR #42, mesclado): 4 máquinas-sintetizador (D-25a), receitas JSON, comando /sintetizar, oficinas no mapa e no HUD — minijogos plugam depois (design do ideador)
-- [ ] R5 · Fluidez B: polling autenticado 1–3s (ETag/304) — presença + chat-speed
+- [x] R5 · Fluidez B (PR #43): polling autenticado ~3s (ETag/304) + indicador "pulso ao vivo"
 - [ ] R6 · Portais: protocolo + hall + 2º mundo de teste (travessia entre repos na mesma janela)
 - [ ] R7 · Fluidez A: WebRTC P2P (camada Intenção; STUN público, opt-in com aviso de IP — D-25c)
 
