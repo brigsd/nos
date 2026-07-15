@@ -21,6 +21,8 @@ import { loadWorld } from './world';
 import { LocalPlayer } from './player';
 import { startLivePolling } from './live';
 import { renderLiveIndicator } from './live-indicator';
+import { createP2PPanel, type P2PController } from './p2p-ui';
+import type { Face, PeerGhost } from './p2p';
 import {
   fetchPortalWorld,
   findArrivalTile,
@@ -102,6 +104,7 @@ async function main(): Promise<void> {
   const portaisBodyEl = requireEl<HTMLDivElement>('hud-portais-body');
   const portaisDetailsEl = requireEl<HTMLDetailsElement>('hud-portais');
   const visitingEl = requireEl<HTMLElement>('hud-visiting');
+  const p2pEl = requireEl<HTMLElement>('hud-p2p');
   const liveEl = requireEl<HTMLElement>('hud-live');
   const liveDotEl = requireEl<HTMLElement>('hud-live-dot');
   const liveLabelEl = requireEl<HTMLElement>('hud-live-label');
@@ -144,6 +147,18 @@ async function main(): Promise<void> {
   // world (R6): O Coração's live poll pauses for the duration of a visit,
   // see atravessarPara/voltarAoCoracao.
   let liveHandle: ReturnType<typeof startLivePolling> | null = null;
+
+  // R7 (D-25c) — "modo tempo real (P2P)". Same "declared here, assigned
+  // once its DOM host exists" idiom as liveHandle above, for the same
+  // reason (handleAuthChange below closes over it ahead of time). Unlike
+  // liveHandle, this one is NOT paused/recreated on portal travel - the
+  // WebRTC session itself keeps running while visiting; only reporting our
+  // own position and rendering peers' ghosts pause (see frame() below),
+  // because both are O Coração-relative and the underlying connection is
+  // cheap to just leave open.
+  let p2pController: P2PController | null = null;
+  /** Latest snapshot from p2p.ts, handed to the renderer each frame - see p2pController's onGhostsChanged wiring below. */
+  let p2pGhosts: ReadonlyMap<string, PeerGhost> = new Map();
 
   // R6 (D-17) — Portais/travessia state. `visitingWorldId` null means "home
   // in O Coração"; any other value is the registry id of the world currently
@@ -200,9 +215,32 @@ async function main(): Promise<void> {
   function handleAuthChange(): void {
     refreshAuthenticatedPanels();
     liveHandle?.refreshNow();
+    p2pController?.refresh(); // R7: logging out mid-session must drop any active P2P connection (see p2p-ui.ts's render())
   }
   renderAuth(authEl, handleAuthChange);
   refreshAuthenticatedPanels();
+
+  // R7 (D-25c): the P2P panel owns a live session across re-renders (unlike
+  // every other panel above, which is a stateless "call again to refresh"
+  // function - see p2p-ui.ts's module doc), so it is built once here rather
+  // than inside refreshAuthenticatedPanels().
+  p2pController = createP2PPanel({
+    root: p2pEl,
+    // Live getter, not a snapshot: `world` is reassigned by live polling and
+    // by portal travel (see applyFreshWorld) - reading it at CALL time keeps
+    // inbound ghost positions clamped to whichever world is actually on
+    // screen right now.
+    getWorldBounds: () => ({ width: world.width, height: world.height }),
+    onGhostsChanged: (ghosts) => {
+      p2pGhosts = ghosts;
+      // QA-only introspection point (site/qa/p2p-screenshot.mjs): the
+      // ghosts only ever reach the screen via a canvas drawImage call, which
+      // (unlike every other panel in this HUD) leaves no DOM trace a test
+      // could assert against. Read-only and never consulted by any real
+      // code path - harmless to leave in a production bundle.
+      (window as unknown as { __NOS_QA_P2P_GHOSTS__?: PeerGhost[] }).__NOS_QA_P2P_GHOSTS__ = Array.from(ghosts.values());
+    },
+  });
 
   // localPlayer instantiation
   const localPlayer = new LocalPlayer(30, 30);
@@ -467,6 +505,14 @@ async function main(): Promise<void> {
   // opens the panel once, not every frame - a player who then closes it by
   // hand isn't fought back open until they actually step away and back.
   let wasNearPortal = false;
+  // R7 (D-25c): a cheap facing cue derived from the local avatar's own
+  // frame-to-frame movement, sent alongside `pos` so a connected peer's
+  // ghost can mirror left/right (renderer.ts reuses the water-rim flip -
+  // there's no directional sprite sheet to pick a real animation frame
+  // from). Sticky on purpose (only updates on an actual horizontal move) so
+  // it doesn't flicker back to a default while standing still.
+  let prevLocalVisualX = localPlayer.visualX;
+  let localFace: Face | undefined;
 
   function frame(nowMs: number): void {
     const deltaTimeSeconds = Math.min(0.1, (nowMs - lastTimeMs) / 1000);
@@ -482,7 +528,32 @@ async function main(): Promise<void> {
       wasNearPortal = false;
     }
 
-    drawFrame({ ctx, world, sprites, camera, dpr, localPlayer, portalMarker: getPortalMarker() }, nowMs);
+    // R7 (D-25c): ghost interpolation runs every frame regardless of where
+    // we are (cheap, and keeps a peer's ghost reasonably caught-up for
+    // whenever we return); REPORTING our own position and RENDERING peers'
+    // ghosts are gated to "actually home" - both are O Coração-relative
+    // coordinates that would be meaningless drawn over a visited world.
+    p2pController?.tick(deltaTimeSeconds);
+    const dx = localPlayer.visualX - prevLocalVisualX;
+    if (Math.abs(dx) > 0.001) localFace = dx < 0 ? 'left' : 'right';
+    prevLocalVisualX = localPlayer.visualX;
+    if (visitingWorldId === null) {
+      p2pController?.reportPosition(localPlayer.visualX, localPlayer.visualY, localFace);
+    }
+
+    drawFrame(
+      {
+        ctx,
+        world,
+        sprites,
+        camera,
+        dpr,
+        localPlayer,
+        portalMarker: getPortalMarker(),
+        p2pGhosts: visitingWorldId === null ? p2pGhosts : undefined,
+      },
+      nowMs,
+    );
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
