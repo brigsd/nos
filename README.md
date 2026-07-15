@@ -16,8 +16,8 @@ O primeiro mundo se chama **O Coração**. Ele pulsa. Mesmo agora.
 <!-- stats-start -->
 ### Status do Mundo
 
-- 💓 **Batidas (Ticks):** `0`
-- 👥 **Jogadores Ativos:** `0`
+- 💓 **Batidas (Ticks):** `24`
+- 👥 **Jogadores Ativos:** `1`
 <!-- stats-end -->
 
 ## Como jogar

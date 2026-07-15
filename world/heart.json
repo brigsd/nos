@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 0,
-    "worldTime": 0
+    "tickCount": 24,
+    "worldTime": 1440
   },
   "width": 64,
   "height": 64,
@@ -4105,6 +4105,143 @@
     {"biome":"meadow"},
     {"biome":"meadow"}
   ],
-  "players": {},
-  "events": []
+  "players": {
+    "brigsd": {
+      "login": "brigsd",
+      "position": {
+        "x": 30,
+        "y": 30
+      },
+      "inventory": {},
+      "energy": 100
+    }
+  },
+  "events": [
+    {
+      "type": "player_joined",
+      "tick": 1,
+      "worldTime": 60,
+      "login": "brigsd"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 1,
+      "worldTime": 60
+    },
+    {
+      "type": "core_pulse",
+      "tick": 2,
+      "worldTime": 120
+    },
+    {
+      "type": "core_pulse",
+      "tick": 3,
+      "worldTime": 180
+    },
+    {
+      "type": "core_pulse",
+      "tick": 4,
+      "worldTime": 240
+    },
+    {
+      "type": "core_pulse",
+      "tick": 5,
+      "worldTime": 300
+    },
+    {
+      "type": "core_pulse",
+      "tick": 6,
+      "worldTime": 360
+    },
+    {
+      "type": "core_pulse",
+      "tick": 7,
+      "worldTime": 420
+    },
+    {
+      "type": "core_pulse",
+      "tick": 8,
+      "worldTime": 480
+    },
+    {
+      "type": "core_pulse",
+      "tick": 9,
+      "worldTime": 540
+    },
+    {
+      "type": "core_pulse",
+      "tick": 10,
+      "worldTime": 600
+    },
+    {
+      "type": "core_pulse",
+      "tick": 11,
+      "worldTime": 660
+    },
+    {
+      "type": "core_pulse",
+      "tick": 12,
+      "worldTime": 720
+    },
+    {
+      "type": "core_pulse",
+      "tick": 13,
+      "worldTime": 780
+    },
+    {
+      "type": "core_pulse",
+      "tick": 14,
+      "worldTime": 840
+    },
+    {
+      "type": "core_pulse",
+      "tick": 15,
+      "worldTime": 900
+    },
+    {
+      "type": "core_pulse",
+      "tick": 16,
+      "worldTime": 960
+    },
+    {
+      "type": "core_pulse",
+      "tick": 17,
+      "worldTime": 1020
+    },
+    {
+      "type": "core_pulse",
+      "tick": 18,
+      "worldTime": 1080
+    },
+    {
+      "type": "core_pulse",
+      "tick": 19,
+      "worldTime": 1140
+    },
+    {
+      "type": "core_pulse",
+      "tick": 20,
+      "worldTime": 1200
+    },
+    {
+      "type": "core_pulse",
+      "tick": 21,
+      "worldTime": 1260
+    },
+    {
+      "type": "core_pulse",
+      "tick": 22,
+      "worldTime": 1320
+    },
+    {
+      "type": "core_pulse",
+      "tick": 23,
+      "worldTime": 1380
+    },
+    {
+      "type": "core_pulse",
+      "tick": 24,
+      "worldTime": 1440
+    }
+  ]
 }
