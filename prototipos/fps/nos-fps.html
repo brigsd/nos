@@ -1,0 +1,498 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>NÓS — Visão da Intenção (protótipo)</title>
+<style>
+  :root {
+    --void: #100c15;
+    --panel: #1a1423;
+    --line: #2e223f;
+    --ink: #e9e3f2;
+    --dim: #8f86a3;
+    --accent: #fbff86;
+    --mystic: #a06bf0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--void);
+    color: var(--ink);
+    font-family: "Courier New", Courier, monospace;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--line);
+    flex: none;
+  }
+  header h1 {
+    font-size: 14px;
+    letter-spacing: 0.35em;
+    color: var(--accent);
+    font-weight: bold;
+  }
+  header .sub { font-size: 11px; color: var(--dim); letter-spacing: 0.08em; }
+  #stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+  }
+  canvas#view {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    display: block;
+  }
+  #minimap {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 96px;
+    height: 96px;
+    image-rendering: pixelated;
+    border: 1px solid var(--line);
+    opacity: 0.85;
+    background: var(--void);
+  }
+  #hudTop {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 11px;
+    color: var(--dim);
+    text-align: right;
+    line-height: 1.5;
+    text-shadow: 0 1px 0 #000;
+  }
+  #hint {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    background: rgba(16, 12, 21, 0.72);
+    border: 1px solid var(--line);
+    padding: 6px 10px;
+    white-space: nowrap;
+    transition: opacity 0.6s ease;
+  }
+  #hint.gone { opacity: 0; }
+  .padzone {
+    position: absolute;
+    bottom: 0;
+    width: 50%;
+    height: 55%;
+    opacity: 0;
+  }
+  #padMove { left: 0; }
+  #padLook { right: 0; }
+  footer {
+    flex: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 14px;
+    border-top: 1px solid var(--line);
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.05em;
+  }
+  footer .k { color: var(--accent); }
+  @media (max-width: 560px) {
+    header h1 { font-size: 12px; letter-spacing: 0.25em; }
+    footer { font-size: 10px; }
+  }
+</style>
+
+<header>
+  <h1>N Ó S</h1>
+  <span class="sub">O Coração em primeira pessoa — protótipo raycasting, mundo real da batida <span id="tickNo"></span></span>
+</header>
+
+<div id="stage">
+  <canvas id="view" width="320" height="180"></canvas>
+  <canvas id="minimap" width="64" height="64"></canvas>
+  <div id="hudTop"></div>
+  <div id="padMove" class="padzone"></div>
+  <div id="padLook" class="padzone"></div>
+  <div id="hint">arraste: esquerda anda · direita olha</div>
+</div>
+
+<footer>
+  <span><span class="k">W A S D</span> andar · <span class="k">← →</span> olhar · <span class="k">M</span> mapa</span>
+  <span>a mesma world/heart.json — nada além do Registro</span>
+</footer>
+
+<script src="data.js"></script>
+<script>
+'use strict';
+/* NÓS — protótipo "Visão da Intenção": raycaster clássico (DDA + floor casting
+   + billboards) lendo o MESMO mundo (world/heart.json, batida real) e os
+   MESMOS sprites 16px do jogo. Nada aqui é engine novo: é só mais uma
+   "janela" (D-26) sobre o Registro. */
+
+const W = 320, H = 180, HALF = H / 2;
+const FOV_PLANE = 0.66;
+const TEX = 16;
+
+const view = document.getElementById('view');
+const vctx = view.getContext('2d');
+const frame = vctx.createImageData(W, H);
+const px = new Uint32Array(frame.data.buffer);
+
+const world = {
+  w: NOS_DATA.width,
+  h: NOS_DATA.height,
+  at(x, y) {
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return 'f';
+    return NOS_DATA.tiles[y * this.w + x];
+  },
+};
+document.getElementById('tickNo').textContent = '#' + NOS_DATA.tick;
+
+const isWall = (t) => t === 'f' || t === 'r';
+const blocks = (t) => isWall(t) || t === 'w' || t === 'c';
+
+/* ---------- texturas ---------- */
+const textures = {}; // name -> {w,h,data:Uint32Array}
+function loadTexture(name, src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, img.width, img.height);
+      textures[name] = { w: img.width, h: img.height, data: new Uint32Array(d.data.buffer) };
+      resolve();
+    };
+    img.src = src;
+  });
+}
+
+/* frame de uma folha horizontal de sprites 16xN */
+function texAt(t, frameIx, u, v) {
+  return t.data[v * t.w + ((frameIx * TEX + u) % t.w)];
+}
+
+/* ---------- estado ---------- */
+const spawn = NOS_DATA.players.brigsd ?? { x: 31, y: 30 };
+const cam = { x: 26.5, y: 27.5, a: 0.70 }; /* recuado do spawn oficial só pro enquadramento inicial da demo */
+const CORE = { x: 33, y: 33 };
+const keys = {};
+let showMap = true;
+
+/* billboards: máquinas, nativos, jogadores, portal (marco client-side do site) */
+const bills = [];
+function addBill(x, y, tex, frames, label, scale = 1, lift = 0) { bills.push({ x: x + 0.5, y: y + 0.5, tex, frames, label, scale, lift }); }
+for (const [name, p] of Object.entries(NOS_DATA.machines)) addBill(p.x, p.y, 'oficina', 1, name); /* selfGlow via label check abaixo */
+addBill(NOS_DATA.natives.gota?.x ?? 4, NOS_DATA.natives.gota?.y ?? 2, 'gota', 1, 'gota');
+addBill(NOS_DATA.natives.raiz?.x ?? 43, NOS_DATA.natives.raiz?.y ?? 6, 'raiz', 1, 'raiz');
+addBill(NOS_DATA.natives.cinza?.x ?? 25, NOS_DATA.natives.cinza?.y ?? 8, 'cinza', 1, 'cinza');
+addBill(62, 32, 'portal', 2, 'portais');
+bills.push({ x: 33, y: 33, tex: 'orb', frames: 1, label: 'nucleo', scale: 2.0, lift: 0.45 }); /* o orbe procedural do Núcleo, centro do CORE 2x2 */
+for (const [login, p] of Object.entries(NOS_DATA.players)) {
+  if (Math.abs(p.x + 0.5 - cam.x) + Math.abs(p.y + 0.5 - cam.y) > 1) addBill(p.x, p.y, 'avatar', 1, login);
+}
+
+/* ---------- céu ---------- */
+const stars = [];
+{
+  let s = 20260715;
+  const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let i = 0; i < 240; i++) stars.push({ a: rnd() * Math.PI * 2, y: rnd() * (HALF - 12), b: 90 + rnd() * 140 });
+}
+
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const rgb = (r, g, b) => (255 << 24) | (b << 16) | (g << 8) | r;
+
+/* fog pro vazio do NÓS (#100c15) */
+const FOG_R = 16, FOG_G = 12, FOG_B = 21;
+function shade(c, f, glow) {
+  let r = (c & 255) * f + FOG_R * (1 - f) + 96 * glow;
+  let g = ((c >> 8) & 255) * f + FOG_G * (1 - f) + 52 * glow;
+  let b = ((c >> 16) & 255) * f + FOG_B * (1 - f) + 140 * glow;
+  return rgb(clamp(r | 0, 0, 255), clamp(g | 0, 0, 255), clamp(b | 0, 0, 255));
+}
+const fogAt = (d) => 1 / (1 + 0.021 * d * d);
+let pulse = 1;
+function glowAt(wx, wy) {
+  const dx = wx - CORE.x, dy = wy - CORE.y;
+  return (pulse * 1.15) / (1 + 0.32 * (dx * dx + dy * dy));
+}
+
+/* ---------- render ---------- */
+const zbuf = new Float32Array(W);
+
+function render(now) {
+  pulse = 0.82 + 0.18 * Math.sin((now / 1400) * Math.PI * 2);
+  const coreFrame = ((now / 350) | 0) % 4;
+  const waterFrame = ((now / 1000) | 0) % 2;
+  const dirX = Math.cos(cam.a), dirY = Math.sin(cam.a);
+  const plX = -dirY * FOV_PLANE, plY = dirX * FOV_PLANE;
+
+  /* céu: vazio + estrelas + bruma violeta no horizonte */
+  for (let y = 0; y < HALF; y++) {
+    const t = y / HALF;
+    const r = 16 + 26 * t * t, g = 12 + 14 * t * t, b = 21 + 42 * t * t;
+    const row = rgb(r | 0, g | 0, b | 0);
+    for (let x = 0; x < W; x++) px[y * W + x] = row;
+  }
+  for (const st of stars) {
+    let da = st.a - cam.a;
+    da -= Math.floor(da / (Math.PI * 2)) * Math.PI * 2;
+    if (da > Math.PI) da -= Math.PI * 2;
+    const sx = ((da / 1.15) + 0.5) * W | 0;
+    if (sx >= 0 && sx < W) {
+      const tw = st.b * (0.75 + 0.25 * Math.sin(now / 900 + st.a * 40));
+      px[(st.y | 0) * W + sx] = rgb(tw, tw, tw + 20);
+    }
+  }
+
+  /* chão (floor casting) */
+  const posZ = HALF;
+  for (let y = HALF + 1; y < H; y++) {
+    const rowDist = posZ / (y - HALF);
+    const f = fogAt(rowDist);
+    const stepX = rowDist * (2 * FOV_PLANE * dirY) / W * (dirX ? 1 : 1);
+    /* pontos extremos do raio esquerdo/direito nessa linha */
+    let fx = cam.x + rowDist * (dirX - plX);
+    let fy = cam.y + rowDist * (dirY - plY);
+    const dxs = (rowDist * 2 * plX) / W;
+    const dys = (rowDist * 2 * plY) / W;
+    for (let x = 0; x < W; x++) {
+      const tx = fx | 0, ty = fy | 0;
+      const t = world.at(tx, ty);
+      let c;
+      if (t === 'w') {
+        const tex = textures.agua;
+        c = texAt(tex, waterFrame, ((fx - tx) * TEX) | 0, ((fy - ty) * TEX) | 0);
+      } else {
+        const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
+        const tex = h % 10 === 0 ? textures.campinaFlores : h % 3 === 0 ? textures.campina2 : textures.campina1;
+        c = texAt(tex, 0, ((fx - tx) * TEX) | 0, ((fy - ty) * TEX) | 0);
+      }
+      px[y * W + x] = shade(c, f, glowAt(fx, fy) * f);
+      fx += dxs; fy += dys;
+    }
+  }
+
+  /* paredes (DDA) */
+  for (let x = 0; x < W; x++) {
+    const camX = (2 * x) / W - 1;
+    const rdx = dirX + plX * camX, rdy = dirY + plY * camX;
+    let mapX = cam.x | 0, mapY = cam.y | 0;
+    const ddx = Math.abs(1 / (rdx || 1e-9)), ddy = Math.abs(1 / (rdy || 1e-9));
+    let stepX, stepY, sdx, sdy;
+    if (rdx < 0) { stepX = -1; sdx = (cam.x - mapX) * ddx; } else { stepX = 1; sdx = (mapX + 1 - cam.x) * ddx; }
+    if (rdy < 0) { stepY = -1; sdy = (cam.y - mapY) * ddy; } else { stepY = 1; sdy = (mapY + 1 - cam.y) * ddy; }
+    let side = 0, tile = 'f', guard = 0;
+    while (guard++ < 128) {
+      if (sdx < sdy) { sdx += ddx; mapX += stepX; side = 0; } else { sdy += ddy; mapY += stepY; side = 1; }
+      tile = world.at(mapX, mapY);
+      if (isWall(tile)) break;
+    }
+    const dist = side === 0 ? sdx - ddx : sdy - ddy;
+    zbuf[x] = dist;
+    const lineH = (H / dist) | 0;
+    let y0 = clamp(HALF - (lineH >> 1), 0, H - 1);
+    let y1 = clamp(HALF + (lineH >> 1), 0, H - 1);
+    let wallX = side === 0 ? cam.y + dist * rdy : cam.x + dist * rdx;
+    wallX -= wallX | 0;
+    const u = clamp((wallX * TEX) | 0, 0, TEX - 1);
+    const tex = tile === 'c' ? textures.nucleo : tile === 'r' ? textures.ruina : textures.floresta;
+    const fIx = tile === 'c' ? coreFrame : 0;
+    const f = fogAt(dist) * (side === 1 ? 0.78 : 1);
+    const hx = mapX + 0.5, hy = mapY + 0.5;
+    const glow = tile === 'c' ? 0.45 * pulse : glowAt(hx, hy) * f;
+    const texStep = TEX / lineH;
+    let texPos = (y0 - HALF + (lineH >> 1)) * texStep;
+    for (let y = y0; y <= y1; y++) {
+      const v = clamp(texPos | 0, 0, TEX - 1);
+      texPos += texStep;
+      const c = texAt(tex, fIx, u, v);
+      px[y * W + x] = tile === 'c'
+        ? shade(c, clamp(f + 0.5, 0, 1), glow)  /* o Núcleo emite: quase sem fog */
+        : shade(c, f, glow);
+    }
+  }
+
+  /* billboards (longe -> perto) */
+  const order = bills
+    .map((b) => ({ b, d: (b.x - cam.x) ** 2 + (b.y - cam.y) ** 2 }))
+    .sort((a, z) => z.d - a.d);
+  const inv = 1 / (plX * dirY - dirX * plY);
+  for (const { b } of order) {
+    const rx = b.x - cam.x, ry = b.y - cam.y;
+    const tx = inv * (dirY * rx - dirX * ry);
+    const ty = inv * (-plY * rx + plX * ry);
+    if (ty <= 0.15) continue;
+    const sx = ((W / 2) * (1 + tx / ty)) | 0;
+    const unit = Math.abs(H / ty);
+    const sh = (unit * (b.scale || 1)) | 0;
+    const sw = sh;
+    const bottom = HALF + unit * 0.5 - unit * (b.lift || 0);
+    const fIx = b.frames > 1 ? ((now / 700) | 0) % b.frames : 0;
+    const tex = textures[b.tex];
+    const f = fogAt(ty);
+    const glow = glowAt(b.x, b.y) * f;
+    const y0c = bottom - sh, y1c = bottom;
+    const rx0 = sx - (sw >> 1), rx1 = sx + (sw >> 1);
+    if (rx1 < 0 || rx0 >= W || y1c < 0 || y0c >= H) continue; /* 100% fora da tela */
+    const y0 = clamp(y0c | 0, 0, H - 1), y1 = clamp(y1c | 0, 0, H - 1);
+    const x0 = clamp(rx0, 0, W - 1), x1 = clamp(rx1, 0, W - 1);
+    if (b.tex === 'orb') {
+      /* o Núcleo: esfera procedural pulsante — luz, não parede (D-22: o coração vivo) */
+      const cx = (rx0 + rx1) / 2, cy = (y0c + y1c) / 2, rad = sh / 2;
+      for (let x = x0; x <= x1; x++) {
+        if (ty >= zbuf[x]) continue;
+        for (let y = y0; y <= y1; y++) {
+          const nx = (x - cx) / rad, ny = (y - cy) / rad;
+          const r2 = nx * nx + ny * ny;
+          if (r2 > 1.15) continue;
+          if (r2 > 1) { /* halo fino */
+            const base = px[y * W + x];
+            px[y * W + x] = shade(base, 1, 0.35 * pulse);
+            continue;
+          }
+          const t = Math.sqrt(r2);
+          const hl = Math.max(0, 1 - ((nx + 0.35) ** 2 + (ny + 0.35) ** 2)); /* brilho off-center */
+          let r = 60 + 140 * (1 - t) + 90 * hl;
+          let g = 30 + 60 * (1 - t) + 80 * hl;
+          let bch = 110 + 130 * (1 - t) + 60 * hl;
+          const dim = 0.8 + 0.2 * pulse;
+          /* dither retrô em anel */
+          const band = ((x + y) & 1) === 0 ? 1 : 0.92;
+          px[y * W + x] = rgb(clamp(r * dim * band | 0, 0, 255), clamp(g * dim * band | 0, 0, 255), clamp(bch * dim * band | 0, 0, 255));
+        }
+      }
+      continue;
+    }
+    const selfGlow = b.tex === 'oficina' || b.tex === 'portal' ? 0.16 : 0;
+    for (let x = x0; x <= x1; x++) {
+      if (ty >= zbuf[x]) continue;
+      const u = clamp((((x - rx0) / sw) * TEX) | 0, 0, TEX - 1);
+      for (let y = y0; y <= y1; y++) {
+        const v = clamp((((y - y0c) / sh) * TEX) | 0, 0, TEX - 1);
+        const c = texAt(tex, fIx, u, v);
+        if (((c >> 24) & 255) < 40) continue; /* transparente */
+        px[y * W + x] = shade(c, clamp(f + selfGlow, 0, 1), glow + selfGlow * pulse);
+      }
+    }
+  }
+
+  vctx.putImageData(frame, 0, 0);
+  drawMinimap();
+}
+
+/* ---------- minimapa ---------- */
+const mm = document.getElementById('minimap');
+const mctx = mm.getContext('2d');
+const MM_COLORS = { m: '#274a2c', f: '#16301c', w: '#1b4956', r: '#4a4258', c: '#a06bf0' };
+function drawMinimap() {
+  if (!showMap) { mm.style.display = 'none'; return; }
+  mm.style.display = 'block';
+  for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
+    mctx.fillStyle = MM_COLORS[world.at(x, y)];
+    mctx.fillRect(x, y, 1, 1);
+  }
+  mctx.fillStyle = '#fbff86';
+  mctx.fillRect((cam.x | 0), (cam.y | 0), 1, 1);
+  mctx.strokeStyle = 'rgba(251,255,134,0.6)';
+  mctx.beginPath();
+  mctx.moveTo(cam.x, cam.y);
+  mctx.lineTo(cam.x + Math.cos(cam.a) * 6, cam.y + Math.sin(cam.a) * 6);
+  mctx.stroke();
+}
+
+/* ---------- movimento ---------- */
+function tryMove(nx, ny) {
+  const R = 0.22;
+  if (!blocks(world.at((nx + R) | 0, cam.y | 0)) && !blocks(world.at((nx - R) | 0, cam.y | 0))) cam.x = nx;
+  if (!blocks(world.at(cam.x | 0, (ny + R) | 0)) && !blocks(world.at(cam.x | 0, (ny - R) | 0))) cam.y = ny;
+}
+
+let touchMove = { on: false, dx: 0, dy: 0 };
+let touchLook = { on: false, lastX: 0 };
+function bindPad(el, isMove) {
+  let sx = 0, sy = 0;
+  el.addEventListener('pointerdown', (e) => {
+    el.setPointerCapture(e.pointerId);
+    sx = e.clientX; sy = e.clientY;
+    if (isMove) touchMove = { on: true, dx: 0, dy: 0 };
+    else touchLook = { on: true, lastX: e.clientX };
+    document.getElementById('hint').classList.add('gone');
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (isMove && touchMove.on) {
+      touchMove.dx = clamp((e.clientX - sx) / 60, -1, 1);
+      touchMove.dy = clamp((e.clientY - sy) / 60, -1, 1);
+    } else if (!isMove && touchLook.on) {
+      cam.a += (e.clientX - touchLook.lastX) * 0.006;
+      touchLook.lastX = e.clientX;
+    }
+  });
+  const off = () => { if (isMove) touchMove.on = false; else touchLook.on = false; };
+  el.addEventListener('pointerup', off);
+  el.addEventListener('pointercancel', off);
+}
+bindPad(document.getElementById('padMove'), true);
+bindPad(document.getElementById('padLook'), false);
+
+addEventListener('keydown', (e) => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key.toLowerCase() === 'm') showMap = !showMap;
+  document.getElementById('hint').classList.add('gone');
+});
+addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+/* ---------- loop ---------- */
+const hud = document.getElementById('hudTop');
+let last = performance.now(), fpsAcc = 0, fpsN = 0, fpsShown = 0;
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  const walk = 3.4 * dt, turn = 2.4 * dt;
+  const dirX = Math.cos(cam.a), dirY = Math.sin(cam.a);
+  let mx = 0, my = 0;
+  if (keys.w || keys.arrowup) { mx += dirX; my += dirY; }
+  if (keys.s || keys.arrowdown) { mx -= dirX; my -= dirY; }
+  if (keys.a) { mx += dirY; my -= dirX; }
+  if (keys.d) { mx -= dirY; my += dirX; }
+  if (keys.arrowleft) cam.a -= turn;
+  if (keys.arrowright) cam.a += turn;
+  if (touchMove.on) {
+    mx += dirX * -touchMove.dy + dirY * -touchMove.dx;
+    my += dirY * -touchMove.dy - dirX * -touchMove.dx;
+  }
+  if (mx || my) {
+    const n = Math.hypot(mx, my) || 1;
+    tryMove(cam.x + (mx / n) * walk, cam.y + (my / n) * walk);
+  }
+  render(now);
+  fpsAcc += 1 / Math.max(dt, 1e-3); fpsN++;
+  if (fpsN >= 20) { fpsShown = (fpsAcc / fpsN) | 0; fpsAcc = 0; fpsN = 0; }
+  hud.textContent = `${fpsShown} fps · (${cam.x.toFixed(1)}, ${cam.y.toFixed(1)})`;
+  requestAnimationFrame(loop);
+}
+
+Promise.all(Object.entries(NOS_SPRITES).map(([k, v]) => loadTexture(k, v))).then(() => {
+  requestAnimationFrame(loop);
+});
+</script>
