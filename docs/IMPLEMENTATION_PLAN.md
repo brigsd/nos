@@ -19,9 +19,10 @@
 - [ ] 🎉 Lançamento v1: primeiro jogador externo entra no mundo
 
 ## v2 — O mundo responde
-- [ ] Nativos (NPCs) com árvores de comportamento + falas do lore-writer
-- [ ] Combate por turnos autoritativo com replay animado no cliente
+- [x] Nativos (NPCs) com árvores de comportamento + falas do lore-writer (fatia "até a tela" concluída)
+- [ ] ~~Combate por turnos~~ → **cancelado n'O Coração (D-23)**; combate é tema de outros mundos (v3)
 - [ ] Economia: Pulso (₱), inventário, comércio com Nativos
+- [ ] **A Fábrica (D-23)**: receitas + oficinas de ofício com minijogos (fases: 2–3 ofícios primeiro)
 - [ ] Construção de estruturas persistentes
 - [ ] Mural do mundo + registro de eventos — a Crônica auto-escrita (D-16)
 - [ ] Login com GitHub no site (OAuth device flow, D-13) — agir sem sair do jogo
