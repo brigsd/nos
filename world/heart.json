@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 33,
-    "worldTime": 1980
+    "tickCount": 34,
+    "worldTime": 2040
   },
   "width": 64,
   "height": 64,
@@ -4308,6 +4308,18 @@
       "type": "core_pulse",
       "tick": 33,
       "worldTime": 1980
+    },
+    {
+      "type": "player_said",
+      "tick": 34,
+      "worldTime": 2040,
+      "login": "brigsd",
+      "message": "Não estamos mais sós. Os Nativos despertaram n'O Coração."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 34,
+      "worldTime": 2040
     }
   ],
   "natives": {
@@ -4315,7 +4327,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 0,
+        "x": 1,
         "y": 0
       },
       "behaviorTree": "wanderer",
