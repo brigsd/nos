@@ -81,6 +81,25 @@ function isWaterTile(world: World, x: number, y: number): boolean {
   return getTile(world, x, y)?.biome === 'water';
 }
 
+/**
+ * Art-reviewer follow-up (PR #12): MEADOW_RIM_NEIGHBORS always draws the
+ * exact same hand-authored strip, so a long straight coastline repeated one
+ * identical relief every 16px - obvious at close zoom. Breaking that up
+ * without full autotiling: pick one of two rim sprites (margemAgua /
+ * margemAguaB - same technique, different wave phase, see
+ * assets/tools/author-sprites.cjs) and independently mirror the draw
+ * horizontally, both via a positional hash of the tile so the pick is
+ * stable across redraws (same reasoning as meadowSprite above) and both
+ * sides of an inlet corner still agree on one look for that tile.
+ */
+function rimVariant(sprites: Sprites, x: number, y: number): SpriteSheet {
+  return hashTile(x, y, 3) % 2 === 0 ? sprites.margemAgua : sprites.margemAguaB;
+}
+
+function rimFlipped(x: number, y: number): boolean {
+  return hashTile(x, y, 4) % 2 === 0;
+}
+
 /** Draws the rim strip on top of an already-drawn campina tile for every cardinal side touching water. */
 function drawMeadowRim(
   ctx: CanvasRenderingContext2D,
@@ -93,9 +112,11 @@ function drawMeadowRim(
   sx1: number,
   sy1: number,
 ): void {
+  const sheet = rimVariant(sprites, x, y);
+  const flip = rimFlipped(x, y);
   for (const { dx, dy, frame } of MEADOW_RIM_NEIGHBORS) {
     if (isWaterTile(world, x + dx, y + dy)) {
-      drawSpriteFrame(ctx, sprites.margemAgua, frame, sx0, sy0, sx1, sy1);
+      drawSpriteFrame(ctx, sheet, frame, sx0, sy0, sx1, sy1, flip);
     }
   }
 }
@@ -108,21 +129,33 @@ function drawSpriteFrame(
   sy0: number,
   sx1: number,
   sy1: number,
+  /** Mirror the drawn frame horizontally in place. Only used by drawMeadowRim so far. */
+  flipX = false,
 ): void {
   const w = sx1 - sx0;
   const h = sy1 - sy0;
   if (w <= 0 || h <= 0) return;
-  ctx.drawImage(
-    sheet.image,
-    frameIndex * sheet.frameWidth,
-    0,
-    sheet.frameWidth,
-    sheet.frameHeight,
-    sx0,
-    sy0,
-    w,
-    h,
-  );
+  if (!flipX) {
+    ctx.drawImage(
+      sheet.image,
+      frameIndex * sheet.frameWidth,
+      0,
+      sheet.frameWidth,
+      sheet.frameHeight,
+      sx0,
+      sy0,
+      w,
+      h,
+    );
+    return;
+  }
+  // Mirror horizontally about the tile's own screen rect, so the flip never
+  // shifts where the tile is drawn - only which way the rim strip faces.
+  ctx.save();
+  ctx.translate(sx0 + w, sy0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(sheet.image, frameIndex * sheet.frameWidth, 0, sheet.frameWidth, sheet.frameHeight, 0, 0, w, h);
+  ctx.restore();
 }
 
 function drawPlayerName(

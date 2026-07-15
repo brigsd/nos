@@ -47,6 +47,11 @@ export interface Sprites {
    *  4 static orientation frames, water-side S/W/N/E - see meadowRimFrame
    *  in renderer.ts. */
   margemAgua: SpriteSheet;
+  /** Second rim variant (art-reviewer follow-up, PR #12): same 4-frame
+   *  layout as margemAgua, different wave/fleck placement. drawMeadowRim
+   *  in renderer.ts alternates between the two per-tile so a straight
+   *  coastline doesn't repeat one identical relief every 16px. */
+  margemAguaB: SpriteSheet;
   /** 4-frame breathing pulse, 32x32 per frame (covers the Core's 2x2 tile footprint). */
   nucleo: SpriteSheet;
   /** Player avatar: small hooded traveler. */
@@ -58,7 +63,7 @@ export interface Sprites {
 }
 
 export async function loadSprites(): Promise<Sprites> {
-  const [campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza] =
+  const [campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, margemAguaB, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza] =
     await Promise.all([
       loadSheet('campina_1.png', 16, 16, 1),
       loadSheet('campina_2.png', 16, 16, 1),
@@ -68,11 +73,12 @@ export async function loadSprites(): Promise<Sprites> {
       loadSheet('ruina.png', 16, 16, 1),
       loadSheet('agua_ondula_2frames.png', 16, 16, 2),
       loadSheet('margem_agua_4dir.png', 16, 16, 4),
+      loadSheet('margem_agua_4dir_b.png', 16, 16, 4),
       loadSheet('nucleo_pulse_4frames.png', 32, 32, 4),
       loadSheet('no_avatar.png', 16, 16, 1),
       loadSheet('nativo_gota.png', 16, 16, 1),
       loadSheet('nativo_raiz.png', 16, 16, 1),
       loadSheet('nativo_cinza.png', 16, 16, 1),
     ]);
-  return { campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza };
+  return { campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, margemAguaB, nucleo, no_avatar, nativoGota, nativoRaiz, nativoCinza };
 }
