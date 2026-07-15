@@ -6,17 +6,17 @@
  *   2. build the contact sheet (all sprites/frames side by side at 8x)
  *   3. build the 8x8 map mock (scene-cohesion check)
  *
- * Does NOT run author-sprites.js — that's the one-time/opt-in generator for
+ * Does NOT run author-sprites.cjs — that's the one-time/opt-in generator for
  * the initial matrices. Once assets/sprites/src/*.json exist, they are the
  * source of truth and this is the only script that needs to run again after
  * hand-editing them.
  *
- * Usage: node assets/tools/build.js
+ * Usage: node assets/tools/build.cjs
  */
 
-const { renderAll } = require('./render');
-const contactSheet = require('./contact-sheet');
-const mapMock = require('./map-mock');
+const { renderAll } = require('./render.cjs');
+const contactSheet = require('./contact-sheet.cjs');
+const mapMock = require('./map-mock.cjs');
 
 function run() {
   renderAll();

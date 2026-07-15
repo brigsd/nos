@@ -4,7 +4,7 @@
  */
 
 const fs = require('fs');
-const { encodePNG } = require('./png');
+const { encodePNG } = require('./png.cjs');
 
 /** @returns {{width:number,height:number,data:Uint8ClampedArray}} fully transparent canvas */
 function createCanvas(width, height) {

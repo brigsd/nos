@@ -15,7 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matrixToCanvas, compositeOver, createCanvas } = require('./canvas');
+const { matrixToCanvas, compositeOver, createCanvas } = require('./canvas.cjs');
 
 function loadSpriteSrc(filePath) {
   const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));

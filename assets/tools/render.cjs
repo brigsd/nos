@@ -12,13 +12,13 @@
  * Multi-frame sprites (animations) are laid out as a single horizontal
  * spritesheet, matching the project's `nome_acao_Nframes.png` convention.
  *
- * Usage: node assets/tools/render.js
+ * Usage: node assets/tools/render.cjs
  */
 
 const fs = require('fs');
 const path = require('path');
-const { loadPalette, scaleNearest, savePNG } = require('./lib/canvas');
-const { loadSpriteSrc, composeFramesHorizontal } = require('./lib/spritesrc');
+const { loadPalette, scaleNearest, savePNG } = require('./lib/canvas.cjs');
+const { loadSpriteSrc, composeFramesHorizontal } = require('./lib/spritesrc.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..'); // repo root (assets/tools/.. .. )
 const ASSETS = path.join(ROOT, 'assets');

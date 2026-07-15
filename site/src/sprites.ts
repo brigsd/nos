@@ -1,11 +1,12 @@
 /**
  * src/sprites.ts
  *
- * Loads the pre-rendered tileset PNGs (built by assets/tools/render.js from
+ * Loads the pre-rendered tileset PNGs (built by assets/tools/render.cjs from
  * the palette-index sources in assets/sprites/src/*.json) as plain
  * <img> elements. Multi-frame sprites are single-row spritesheets, per the
  * project's `nome_acao_Nframes.png` convention - see docs/GDD.md and
- * assets/CREDITS.md.
+ * assets/CREDITS.md. margem_agua_4dir is the one exception: its 4 frames
+ * are static orientation variants (water-side S/W/N/E), not an animation.
  */
 
 export interface SpriteSheet {
@@ -36,11 +37,16 @@ async function loadSheet(file: string, frameWidth: number, frameHeight: number, 
 export interface Sprites {
   campina1: SpriteSheet;
   campina2: SpriteSheet;
+  campina3: SpriteSheet;
   campinaFlores: SpriteSheet;
   floresta: SpriteSheet;
   ruina: SpriteSheet;
   /** 2-frame shimmer loop, 16x16 per frame. */
   agua: SpriteSheet;
+  /** Sandy/wet rim drawn over campina tiles bordering water (issue #12).
+   *  4 static orientation frames, water-side S/W/N/E - see meadowRimFrame
+   *  in renderer.ts. */
+  margemAgua: SpriteSheet;
   /** 4-frame breathing pulse, 32x32 per frame (covers the Core's 2x2 tile footprint). */
   nucleo: SpriteSheet;
   /** Player avatar: small hooded traveler. */
@@ -48,15 +54,18 @@ export interface Sprites {
 }
 
 export async function loadSprites(): Promise<Sprites> {
-  const [campina1, campina2, campinaFlores, floresta, ruina, agua, nucleo, no_avatar] = await Promise.all([
-    loadSheet('campina_1.png', 16, 16, 1),
-    loadSheet('campina_2.png', 16, 16, 1),
-    loadSheet('campina_flores.png', 16, 16, 1),
-    loadSheet('floresta.png', 16, 16, 1),
-    loadSheet('ruina.png', 16, 16, 1),
-    loadSheet('agua_ondula_2frames.png', 16, 16, 2),
-    loadSheet('nucleo_pulse_4frames.png', 32, 32, 4),
-    loadSheet('no_avatar.png', 16, 16, 1),
-  ]);
-  return { campina1, campina2, campinaFlores, floresta, ruina, agua, nucleo, no_avatar };
+  const [campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, nucleo, no_avatar] =
+    await Promise.all([
+      loadSheet('campina_1.png', 16, 16, 1),
+      loadSheet('campina_2.png', 16, 16, 1),
+      loadSheet('campina_3.png', 16, 16, 1),
+      loadSheet('campina_flores.png', 16, 16, 1),
+      loadSheet('floresta.png', 16, 16, 1),
+      loadSheet('ruina.png', 16, 16, 1),
+      loadSheet('agua_ondula_2frames.png', 16, 16, 2),
+      loadSheet('margem_agua_4dir.png', 16, 16, 4),
+      loadSheet('nucleo_pulse_4frames.png', 32, 32, 4),
+      loadSheet('no_avatar.png', 16, 16, 1),
+    ]);
+  return { campina1, campina2, campina3, campinaFlores, floresta, ruina, agua, margemAgua, nucleo, no_avatar };
 }

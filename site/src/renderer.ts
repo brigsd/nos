@@ -7,7 +7,7 @@
  * Pure presentation - no game rules live here.
  */
 import type { World } from '../../engine/types';
-import { TILE_SIZE_PX } from '../../engine/types';
+import { getTile, TILE_SIZE_PX } from '../../engine/types';
 import type { Camera } from './camera';
 import { hashTile } from './hash';
 import type { Sprites, SpriteSheet } from './sprites';
@@ -38,7 +38,54 @@ export interface RenderContext {
 function meadowSprite(sprites: Sprites, x: number, y: number): SpriteSheet {
   const isFlower = hashTile(x, y, 1) % 1000 < FLOWER_CHANCE * 1000;
   if (isFlower) return sprites.campinaFlores;
-  return (hashTile(x, y, 2) & 1) === 0 ? sprites.campina1 : sprites.campina2;
+  switch (hashTile(x, y, 2) % 3) {
+    case 0:
+      return sprites.campina1;
+    case 1:
+      return sprites.campina2;
+    default:
+      return sprites.campina3;
+  }
+}
+
+/**
+ * Sandy/wet rim for the grass->water border (issue #12: the meeting used to
+ * be a hard cut). Each entry is a neighbour offset paired with the
+ * matching frame in sprites.margemAgua (S,W,N,E - see
+ * assets/tools/author-sprites.cjs, genMargemAgua4Dir). Deliberately just a
+ * 4-direction cardinal check, not full 16-variant autotiling: for every
+ * side of a campina tile that touches water, draw that side's rim strip on
+ * top: two touching sides (an inlet corner) simply draw two overlapping
+ * strips, no extra cases needed.
+ */
+const MEADOW_RIM_NEIGHBORS: ReadonlyArray<{ dx: number; dy: number; frame: number }> = [
+  { dx: 0, dy: 1, frame: 0 }, // water to the south
+  { dx: -1, dy: 0, frame: 1 }, // water to the west
+  { dx: 0, dy: -1, frame: 2 }, // water to the north
+  { dx: 1, dy: 0, frame: 3 }, // water to the east
+];
+
+function isWaterTile(world: World, x: number, y: number): boolean {
+  return getTile(world, x, y)?.biome === 'water';
+}
+
+/** Draws the rim strip on top of an already-drawn campina tile for every cardinal side touching water. */
+function drawMeadowRim(
+  ctx: CanvasRenderingContext2D,
+  sprites: Sprites,
+  world: World,
+  x: number,
+  y: number,
+  sx0: number,
+  sy0: number,
+  sx1: number,
+  sy1: number,
+): void {
+  for (const { dx, dy, frame } of MEADOW_RIM_NEIGHBORS) {
+    if (isWaterTile(world, x + dx, y + dy)) {
+      drawSpriteFrame(ctx, sprites.margemAgua, frame, sx0, sy0, sx1, sy1);
+    }
+  }
 }
 
 function drawSpriteFrame(
@@ -135,6 +182,7 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
       switch (tile.biome) {
         case 'meadow':
           drawSpriteFrame(ctx, meadowSprite(sprites, x, y), 0, sx0, sy0, sx1, sy1);
+          drawMeadowRim(ctx, sprites, world, x, y, sx0, sy0, sx1, sy1);
           break;
         case 'forest':
           drawSpriteFrame(ctx, sprites.floresta, 0, sx0, sy0, sx1, sy1);
