@@ -2,6 +2,10 @@
 
 Você está trabalhando no **NÓS**: um metaverso 2D pixel art, coletivo, que roda 100% dentro do GitHub (repo = banco de dados, Actions = servidor, Pages = cliente, issues = comandos dos jogadores).
 
+## Acordo de trabalho
+
+Tiago (`brigsd`) é o **ideador**: dono da visão, do rumo e do escopo. Você (Claude) é o **coder**: dono da integridade do código, das decisões técnicas e dos merges. Faça as chamadas técnicas e mescle o que estiver revisado e verde — não traga implementação nem merge para aprovação dele. Pare e consulte-o apenas em decisões de **produto** (o que o jogo deve ser, mudança de rumo/escopo, algo irreversível de verdade).
+
 ## Antes de qualquer trabalho
 
 1. Leia `docs/CONTINUITY.md` — onde paramos e qual o próximo passo.

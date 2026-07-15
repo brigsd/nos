@@ -9,10 +9,10 @@
 ## v1 — O Coração pulsa (meta: jogável)
 - [x] T1 · Engine: tipos do mundo + JSON Schema + validador (PR #11, 62 testes; follow-up #13)
 - [x] T2 · Gerador procedural do mapa d'O Coração (64×64, seed fixa) (PR #11, stress-test 25k seeds)
-- [ ] T3 · Tick mínimo: cron horário + disparo por evento de comando (D-11), 1 commit por lote ("batida" visível)
-- [ ] T4 · Site no Pages: renderiza o mapa em canvas, mobile + desktop
-- [x] T5 · Avatar local andável (toque/WASD) com sprite próprio
-- [ ] T6 · Comandos `/entrar`, `/mover`, `/coletar`, `/dizer` via issue-form + processamento no tick
+- [x] T3 · Tick mínimo: cron horário + disparo por evento de comando (D-11), 1 commit por lote ("batida" visível) (PR #14)
+- [x] T4 · Site no Pages: renderiza o mapa em canvas, mobile + desktop (PR #14)
+- [x] T5 · Avatar local andável (toque/WASD) com sprite próprio (PR #14)
+- [x] T6 · Comandos `/entrar`, `/mover`, `/coletar`, `/dizer` via issue-form + processamento no tick (PR #14)
 - [x] T7 · Arte base: tileset adaptado à paleta + sprite do Núcleo pulsante (PR #10; refinos em #12)
 - [x] T8 · CI guardrails: testes, schema, lint de sprites — bloqueando merge
 - [x] T9 · README vivo: contador de batidas + jogadores ativos

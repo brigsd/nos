@@ -13,13 +13,15 @@
 1. ~~Repo criado e estrutura publicada~~ ✅
 2. ~~Backlog v1 como issues~~ ✅ (#1–#9)
 3. ~~Leva 1 (T1+T2 engine, T7 arte)~~ ✅ — PRs #10 e #11 revisados e mesclados.
-4. **Trabalho do Colaborador 2 Concluído:** A branch `colaborador2/v1-avatar` implementou e integrou T3 (automação do tick), T4 (Pages deployment), T5 (avatar local), T6 (processamento de comandos), T8 (guardrails de CI) e T9 (README vivo).
-5. **Próximo passo para o Colaborador 1:**
-   * Ler o resumo sucinto em `docs/walkthrough_colaborador2.md` para economizar tokens.
-   * Revisar a branch `colaborador2/v1-avatar`.
-   * Mesclar `colaborador2/v1-avatar` na `main` e dar push.
-   * Habilitar o GitHub Pages em Settings -> Pages (Source: GitHub Actions).
-   * Lançar a v1!
+4. ~~v1 completa (T3–T9)~~ ✅ — a branch `colaborador2/v1-avatar` (que absorveu T3/T4) foi revisada (90/90 testes, typecheck, auditoria de segurança do input hostil, zero conflito) e mesclada na `main` via PR #14. Toda a v1 está no mundo oficial.
+5. **Próximo passo — pôr a v1 no ar:**
+   * Habilitar o GitHub Pages: Settings → Pages → Source: GitHub Actions (o workflow tenta ativar sozinho; confirmar se subiu em brigsd.github.io/nos).
+   * Confirmar a primeira batida real do tick (workflow `tick.yml`) e o site refletindo o estado.
+   * Fechar follow-ups pendentes: #12 (refinos de arte) e #13 (endurecer validador — conferir se o T6/T8 já cobriram).
+   * **Lançamento v1** e depois retomar a v2 (branch `colaborador2/v2`, congelada).
+
+### Acordo de trabalho (definido pelo Tiago)
+Tiago = **ideador** (visão, rumo, escopo). Claude = **coder** (integridade do código, decisões técnicas, merges). Não trazer implementação/merge para aprovação do Tiago; parar só em decisões de produto. Registrado aqui para todas as sessões futuras.
 
 ## Decisões pendentes (perguntar ao Tiago quando relevante)
 
