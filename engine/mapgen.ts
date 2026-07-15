@@ -639,8 +639,13 @@ export function cityDecoPlan(): CityPlanTile[] {
   // with the arch row on the portal's own meridian: two awake arches
   // flanking it, then dormant arch seeds marching south - visible room for
   // every future federated world (D-17: one more world, one more arch).
+  // The floor deliberately STOPS one row past the last awake arch (scene
+  // self-audit round 2, R2-11/R2-15: a 5x9 slab read as one monolithic grey
+  // rectangle at map zoom): the dormant seeds stand on bare meadow beyond
+  // the pavement's edge - when a world wakes an arch, a future migration
+  // extends the floor to meet it. The hall is visibly unfinished on purpose.
   const esplanadeX1 = portal.x + 2;
-  for (let y = portal.y - 2; y <= portal.y + 6; y++) {
+  for (let y = portal.y - 2; y <= portal.y + 3; y++) {
     for (let x = esplanadeX0; x <= esplanadeX1; x++) {
       plan.push({ x, y, deco: 'plaza' });
     }

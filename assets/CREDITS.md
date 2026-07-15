@@ -38,6 +38,19 @@ Um arco de pedra antigo (tons plum/cinza da família da `ruina.json` — liga o 
 
 Desenhado uma única vez no mapa (posição fixa `PORTAL_MARKER_POSITION` em `site/src/main.ts`, ver `docs/PORTALS_PROTOCOL.md` para a escolha do local) — landmark do cliente, nunca estado do motor (`world.machines`/`world.natives` não o conhecem).
 
+## Kit da Cidade (R7 — `docs/CITY_PLAN.md`)
+
+Oito sprites novos, 16×16, paleta Resurrect 64, **originais**, gerados por código (`tools/author-city.cjs`, mesma técnica dos demais `author-*.cjs`; achados do self-audit de arte registrados em comentários "R1-"/"R2-" no próprio gerador). Nenhum pack CC0 externo foi adaptado.
+
+- `laje_praca.json` / `laje_praca_b.json` — piso de lajes da praça/largos (deco `plaza`): *crazy paving* por mapa de regiões (cada letra = uma laje; junta rebaixada onde as letras mudam), sem junta na borda do tile (tiles vizinhos se fundem em calçamento orgânico, mesmo raciocínio das variantes de campina). Tons plum/cinza **da mesma família da `ruina.json`** — decisão de tema (atemporal mítico-tecnológico): a cidade e as ruínas são a mesma arquitetura. Musgo retomando juntas + uma laje afundada mostrando terra (só na variante a).
+- `calcada_veia.json` / `calcada_veia_b.json` — pavimento da avenida (deco `pavement`): fiadas retangulares em aparelho corrido (lê-se como estrada CONSTRUÍDA, vs. as lajes orgânicas da praça), meio-passo mais escuro que a praça (achado R2-3: os dois pisos não podem borrar numa massa cinza só). A variante b carrega o nó de veia: luz violeta empoçada nas juntas, rampa do próprio Núcleo (darkIndigo→violet→lightViolet→paleLavender). O renderer espalha a b por hash posicional (~1/3 dos tiles).
+- `pilar_pulso_4frames.json` — pilar de luz (deco `pylon`): estela de pedra com veia entalhada que respira **no mesmo relógio de 4 quadros do Núcleo** (`CORE_FRAME_MS` no renderer) — o pico (f2) enrubesce carmesim como a batida do Núcleo. Um Pulso, uma cidade.
+- `arco_desperto.json` — arco desperto do Salão (deco `arch`): arco completo de pedra, lintel em ARCO (achado R1-1: ombros quadrados brigavam com o oval do marco vivo do portal), véu índigo pontilhado no vão (achado R2-9: motes soltos sumiam contra a laje) + pedra-chave violeta — a mesma rima de acento do marco do portal e da `oficina.json`.
+- `arco_semente.json` — arco-semente adormecido (deco `arch_dormant`): tocos quebrados nas MESMAS colunas do arco desperto (a relação antes/depois é arquitetural, achado R1-2), lintel caído em dois blocos com junta visível, musgo, **zero pixels de luz** de propósito. Fica sobre grama nua além da borda do piso (achado R2-11: o chão chega quando o mundo chegar).
+- `pedra_mural.json` — pedra do mural (deco `mural_stone`): estela de topo arredondado com fileiras entalhadas de riscos coloridos de comprimento irregular (paleCyan/gold/lightPink/paleYellow) — as vozes dos Nós (`/dizer`) feitas pedra.
+
+`tools/city-mock.cjs` (novo): irmão em escala de cidade do `map-mock.cjs` — renderiza REGIÕES de um world.json real (biomas + `Tile.deco` + máquinas + Nativos + jogadores) espelhando as regras de desenho do `site/src/renderer.ts` (mesmo `hashTile`, mesmos salts de variante, mesma base de laje sob objetos de cidade, grama nua sob `arch_dormant`), para o loop de auto-auditoria de composição sem navegador.
+
 ## Ferramentas
 
-`tools/` (encoder PNG manual + compositor) é código original deste projeto, sem dependências externas (só `fs`, `path`, `zlib` do Node). `tools/author-nativos.cjs` e `tools/contact-sheet-nativos.cjs` (issue #23) seguem a mesma regra. `tools/author-portal.cjs` (R6 fase 1) idem.
+`tools/` (encoder PNG manual + compositor) é código original deste projeto, sem dependências externas (só `fs`, `path`, `zlib` do Node). `tools/author-nativos.cjs` e `tools/contact-sheet-nativos.cjs` (issue #23) seguem a mesma regra. `tools/author-portal.cjs` (R6 fase 1) idem. `tools/author-city.cjs` e `tools/city-mock.cjs` (R7) idem.
