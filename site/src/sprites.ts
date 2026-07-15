@@ -64,6 +64,22 @@ export interface Sprites {
   oficina: SpriteSheet;
   /** O Salão de Portais' map marker (R6, D-17) - drawn once, at a fixed spot in O Coração only. 2-frame slow hum (see renderer.ts's PORTAL_FRAME_MS). */
   portal: SpriteSheet;
+  /** A Cidade (R7, docs/CITY_PLAN.md) - Tile.deco layer. Plaza flagstone floor, 2 hash-picked variants (deco "plaza"; also the base under standing city objects). */
+  lajePraca: SpriteSheet;
+  lajePracaB: SpriteSheet;
+  /** Avenue pavement (deco "pavement"): plain courses / violet vein-node variant, hash-scattered. */
+  calcadaVeia: SpriteSheet;
+  calcadaVeiaB: SpriteSheet;
+  /** Dirt trail (deco "trail") - the T7 caminho_terra tile, finally on the map: the south road decaying into the periphery. */
+  caminhoTerra: SpriteSheet;
+  /** Light pylon (deco "pylon"), 4 frames breathing on the SAME clock as o Núcleo (CORE_FRAME_MS). */
+  pilarPulso: SpriteSheet;
+  /** Awake portal-hall arch (deco "arch") - static; only the living portal marker animates. */
+  arcoDesperto: SpriteSheet;
+  /** Dormant arch socket (deco "arch_dormant") - stands on bare meadow beyond the pavement's edge. */
+  arcoSemente: SpriteSheet;
+  /** The mural stone at o Largo do Mural (deco "mural_stone"). */
+  pedraMural: SpriteSheet;
 }
 
 export async function loadSprites(): Promise<Sprites> {
@@ -84,6 +100,15 @@ export async function loadSprites(): Promise<Sprites> {
     nativoCinza,
     oficina,
     portal,
+    lajePraca,
+    lajePracaB,
+    calcadaVeia,
+    calcadaVeiaB,
+    caminhoTerra,
+    pilarPulso,
+    arcoDesperto,
+    arcoSemente,
+    pedraMural,
   ] = await Promise.all([
     loadSheet('campina_1.png', 16, 16, 1),
     loadSheet('campina_2.png', 16, 16, 1),
@@ -101,6 +126,15 @@ export async function loadSprites(): Promise<Sprites> {
     loadSheet('nativo_cinza.png', 16, 16, 1),
     loadSheet('oficina.png', 16, 16, 1),
     loadSheet('portal_2frames.png', 16, 16, 2),
+    loadSheet('laje_praca.png', 16, 16, 1),
+    loadSheet('laje_praca_b.png', 16, 16, 1),
+    loadSheet('calcada_veia.png', 16, 16, 1),
+    loadSheet('calcada_veia_b.png', 16, 16, 1),
+    loadSheet('caminho_terra.png', 16, 16, 1),
+    loadSheet('pilar_pulso_4frames.png', 16, 16, 4),
+    loadSheet('arco_desperto.png', 16, 16, 1),
+    loadSheet('arco_semente.png', 16, 16, 1),
+    loadSheet('pedra_mural.png', 16, 16, 1),
   ]);
   return {
     campina1,
@@ -119,5 +153,14 @@ export async function loadSprites(): Promise<Sprites> {
     nativoCinza,
     oficina,
     portal,
+    lajePraca,
+    lajePracaB,
+    calcadaVeia,
+    calcadaVeiaB,
+    caminhoTerra,
+    pilarPulso,
+    arcoDesperto,
+    arcoSemente,
+    pedraMural,
   };
 }

@@ -6,7 +6,7 @@
  * players in world state and the local player with smooth movement).
  * Pure presentation - no game rules live here.
  */
-import type { World } from '../../engine/types';
+import type { Tile, World } from '../../engine/types';
 import { getTile, TILE_SIZE_PX } from '../../engine/types';
 import type { Camera } from './camera';
 import { hashTile } from './hash';
@@ -132,6 +132,70 @@ function meadowSprite(sprites: Sprites, x: number, y: number): SpriteSheet {
       return sprites.campina2;
     default:
       return sprites.campina3;
+  }
+}
+
+/** Plaza flagstone variant (deco 'plaza' + the base under standing city objects) - same hash-not-checkerboard reasoning as meadowSprite. Salt 5 (3/4 are the rim's). */
+function lajeSprite(sprites: Sprites, x: number, y: number): SpriteSheet {
+  return hashTile(x, y, 5) % 2 === 0 ? sprites.lajePraca : sprites.lajePracaB;
+}
+
+/** Avenue pavement variant: the violet vein-node surfaces on a hashed ~1/3 of tiles (salt 6) - "sob as lajes corre uma veia que ninguém cavou" (docs/CITY_PLAN.md). */
+function calcadaSprite(sprites: Sprites, x: number, y: number): SpriteSheet {
+  return hashTile(x, y, 6) % 3 === 0 ? sprites.calcadaVeiaB : sprites.calcadaVeia;
+}
+
+/**
+ * A Cidade's Tile.deco layer (R7, docs/CITY_PLAN.md) - purely visual, laid
+ * by engine/mapgen.ts's seedCityLayout. Drawn INSIDE the tile loop, right
+ * after the tile's biome ground (and rim), so every standing entity drawn
+ * in later blocks (oficinas 2.1, portal 2.2, Nativos 2.5, players 3/4)
+ * always reads in front of the city, never behind it.
+ *
+ * Ground kinds repaint the floor; standing kinds (pylon/arch/mural_stone)
+ * sit on a hashed flagstone base. 'arch_dormant' deliberately does NOT get
+ * the base: the dormant seeds stand on bare meadow beyond the pavement's
+ * edge - the floor arrives when the world does (CITY_PLAN, Salão growth).
+ * The pylon breathes on the SAME clock as o Núcleo (pilarFrame is derived
+ * from CORE_FRAME_MS in drawFrame) - one Pulse, one city.
+ */
+function drawTileDeco(
+  ctx: CanvasRenderingContext2D,
+  sprites: Sprites,
+  deco: NonNullable<Tile['deco']>,
+  x: number,
+  y: number,
+  pilarFrame: number,
+  sx0: number,
+  sy0: number,
+  sx1: number,
+  sy1: number,
+): void {
+  switch (deco) {
+    case 'plaza':
+      drawSpriteFrame(ctx, lajeSprite(sprites, x, y), 0, sx0, sy0, sx1, sy1);
+      break;
+    case 'pavement':
+      drawSpriteFrame(ctx, calcadaSprite(sprites, x, y), 0, sx0, sy0, sx1, sy1);
+      break;
+    case 'trail':
+      drawSpriteFrame(ctx, sprites.caminhoTerra, 0, sx0, sy0, sx1, sy1);
+      break;
+    case 'pylon':
+      drawSpriteFrame(ctx, lajeSprite(sprites, x, y), 0, sx0, sy0, sx1, sy1);
+      drawSpriteFrame(ctx, sprites.pilarPulso, pilarFrame, sx0, sy0, sx1, sy1);
+      break;
+    case 'arch':
+      drawSpriteFrame(ctx, lajeSprite(sprites, x, y), 0, sx0, sy0, sx1, sy1);
+      drawSpriteFrame(ctx, sprites.arcoDesperto, 0, sx0, sy0, sx1, sy1);
+      break;
+    case 'arch_dormant':
+      drawSpriteFrame(ctx, sprites.arcoSemente, 0, sx0, sy0, sx1, sy1);
+      break;
+    case 'mural_stone':
+      drawSpriteFrame(ctx, lajeSprite(sprites, x, y), 0, sx0, sy0, sx1, sy1);
+      drawSpriteFrame(ctx, sprites.pedraMural, 0, sx0, sy0, sx1, sy1);
+      break;
   }
 }
 
@@ -308,6 +372,8 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
   const tileMaxY = Math.min(world.height - 1, Math.ceil(viewWorldY1 / TILE_SIZE_PX) + 1);
 
   const waterFrame = Math.floor(nowMs / WATER_FRAME_MS) % sprites.agua.frameCount;
+  // The city's pylons breathe on the Núcleo's own clock (R7, CITY_PLAN).
+  const pilarFrame = Math.floor(nowMs / CORE_FRAME_MS) % sprites.pilarPulso.frameCount;
 
   let coreMinX = Infinity;
   let coreMinY = Infinity;
@@ -351,6 +417,12 @@ export function drawFrame(rc: RenderContext, nowMs: number): void {
           break;
         default:
           break;
+      }
+
+      // 1.1. A Cidade's deco layer (R7) - after the tile's own ground, before
+      // every standing entity of the later blocks. See drawTileDeco.
+      if (tile.deco !== undefined) {
+        drawTileDeco(ctx, sprites, tile.deco, x, y, pilarFrame, sx0, sy0, sx1, sy1);
       }
     }
   }
