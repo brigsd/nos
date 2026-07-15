@@ -29,6 +29,15 @@
 - [ ] v2.5 · Nativos com IA via GitHub Models (D-15)
 - [ ] Tick auto-corretivo + snapshots como releases (D-19)
 
+## v2.5 — Os trilhos do coder (D-24, autonomia total; ordem de execução)
+- [ ] R1 · O Eco no renderer (D-25b: jogador sólido, Registro fantasma)
+- [ ] R2 · Login GitHub OAuth device flow (D-13) — jogar sem sair do site; base da fluidez B
+- [ ] R3 · Comparativo canvas vs. PixiJS + janela WebGL (mira: luz Eastward/Octopath; contrato de mundo intocado)
+- [ ] R4 · Motor de fabricação: 4 máquinas-sintetizador (D-25a), receitas JSON, comando /sintetizar, oficinas no mapa — minijogos plugam depois (design do ideador)
+- [ ] R5 · Fluidez B: polling autenticado 1–3s (ETag/304) — presença + chat-speed
+- [ ] R6 · Portais: protocolo + hall + 2º mundo de teste (travessia entre repos na mesma janela)
+- [ ] R7 · Fluidez A: WebRTC P2P (camada Intenção; STUN público, opt-in com aviso de IP — D-25c)
+
 ## v3 — O metaverso
 - [ ] Portais e segundo mundo
 - [ ] Kit de criação de mundos + pipeline de PR comunitário (validação automática)
