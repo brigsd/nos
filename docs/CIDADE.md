@@ -1,9 +1,15 @@
-# A Cidade da Clareira — proposta de arquitetura
+# A Clareira — a cidade d'O Coração
 
-> **Status: PROPOSTA** aguardando sign-off estético do ideador (lição do PR #46:
-> nenhum tijolo antes do "sim"). O **sítio já existe no jogo** (D-31): o carreiro
-> sai do spawn, atravessa a floresta NE e deságua numa clareira sem árvores de
-> raio ~5 tiles centrada em (46.2, 15.6) — anel de mata por todos os lados.
+> **Status: APROVADA E CONSTRUÍDA (v1 client-side, D-32).** O ideador respondeu
+> as 3 perguntas: telhados de **cobre oxidado**, **veias de luz sim**, nome
+> **A Clareira**. A v1 está no jogo: 4 alas, 3 bancas, Hall de Portais com o
+> Átrio aceso, chaminé fumegando, largo calçado de pedra e veios azuis/roxos
+> do Pulso pulsando (fio de dia, brilho à noite).
+> **Pendências (dependem de autorização do ideador, mexem no Registro vivo):**
+> migrar as 4 máquinas do quad antigo para os vãos das alas e canonizar os
+> tiles da clareira (floresta→campina) em `world/heart.json`. Fase 2 de
+> arquitetura: doca do Estaleiro apontando pro vazio, placas/letreiros,
+> lampiões, interiores.
 
 ## Conceito: a vila-oficina atemporal
 

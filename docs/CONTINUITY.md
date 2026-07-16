@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 3) — A Clareira construída (D-32)
+
+- **Ideador aprovou e respondeu**: telhados de cobre oxidado, veias de luz sim (azuis/roxos, pulsantes), nome **A Clareira**; no meio da build pediu o largo calçado de PEDRA (feito: lajotas 64px assadas, 2 variantes, borda em dither).
+- **v1 no ar, 100% client-side**: paredes DDA com altura por tile (CITY map: 4 alas em U com vão de porta pro largo, Forja com chaminé 2.05 + fumaça 3-frames, bancas com toldo listrado), Hall de Portais (3 arcos billboard, Átrio aceso com véu teal, pilares com colisão fina), veias assadas (fbm ridge × fade) com cor pulsando de dia e halo à noite via glowAt.
+- **Regra confirmada na prática**: tentativa de editar `world/heart.json` (canonizar clareira + migrar máquinas) foi BLOQUEADA por permissão — correto: o Registro vivo só muda com autorização explícita do ideador. Pendente como C2 no plano.
+- **QA**: colisão parede/vão/pilar + travessia do arco testadas em página real; 56-60fps dia/noite; boot sem erros.
+
 ## Sessão 2026-07-16 (parte 2) — o carreiro, a clareira e a proposta da cidade (D-31)
 
 - **Level design a pedido do ideador**: spawn saiu da beira do rio (26.5,27.5 → 27.0,12.0, campina norte, ruínas de cenário ao fundo); **carreiro** de terra batida do spawn até a floresta NE, com fileiras de árvores plantadas emoldurando o trecho de campina e corredor desbastado na mata; **clareira** de raio 5 escavada na floresta NE (46.2,15.6) com largo de terra — o sítio reservado da cidade. Tudo client-side no FPS (campo de distância 256×256 estilo RIMF); `world/heart.json` intocado. Detalhes na D-31.

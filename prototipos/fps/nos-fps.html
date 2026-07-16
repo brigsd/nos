@@ -1173,6 +1173,144 @@ function pathAt(fx, fy) {
   return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
 }
 
+/* ---------- A CLAREIRA (D-32): a vila-oficina atemporal ----------
+   Aprovada pelo ideador (telhados de cobre oxidado, veias de luz do Pulso,
+   nome "A Clareira" — ver docs/CIDADE.md). 100% client-side, como o
+   carreiro: o world/heart.json oficial NÃO muda; a migração das máquinas
+   pra cá é um passo à parte, autorizado pelo ideador quando quiser.
+   Anatomia: paredes DDA client-side com ALTURA por tile (CITY map),
+   texturas geradas (pedra/madeira/cobre oxidado), arcos de portal e fumaça
+   como billboards, veias de luz do Pulso no chão (emissivas à noite). */
+function genWallTex(kind, seed) {
+  const Wt = 16, Ht = kind === 'chimney' ? 64 : kind === 'stall' ? 24 : 48;
+  const rnd = mulberry32(seed * 60493 + 11);
+  const buf = new Int16Array(Wt * Ht).fill(6);
+  const ROOF = kind === 'stall' ? 10 : 12; // faixa de telhado/toldo no topo
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+    const i = y * Wt + x;
+    if (kind === 'stall') {
+      if (y < ROOF) { // toldo listrado (verdigris/branco), barra inferior escura
+        buf[i] = ((x >> 1) & 1) === 0 ? 41 : 9;
+        if (y === ROOF - 1) buf[i] = 40;
+        if (y === 0) buf[i] = 43;
+      } else { // corpo: balcão de madeira clara, postes nas bordas
+        buf[i] = 4;
+        if (vnoise(x * 0.8 + seed, y * 0.8) > 0.62) buf[i] = 3;
+        if (x < 2 || x > 13) buf[i] = 24;
+        if (y === ROOF) buf[i] = 22; // tampo do balcão
+        if (y > Ht - 3) buf[i] = 24;
+      }
+      continue;
+    }
+    if (kind !== 'chimney' && y < ROOF) { // TELHADO DE COBRE OXIDADO (decisão do ideador)
+      const n = vnoise(x * 0.9 + seed * 3, y * 0.7 + seed);
+      buf[i] = n > 0.66 ? 42 : n < 0.3 ? 40 : 41;
+      if (y === 0 && ((x + 1) & 3) === 0) buf[i] = 43;         // brilho da cumeeira
+      if (y === ROOF - 1) buf[i] = 22;                          // pingadeira de cobre novo
+      continue;
+    }
+    if (kind === 'stone' || kind === 'chimney') {
+      const dark = kind === 'chimney';
+      const course = ((y / 5) | 0), off = (course & 1) * 4;
+      const mortarY = y % 5 === 0, mortarX = ((x + off) % 8) === 0;
+      if (mortarY || mortarX) buf[i] = dark ? 1 : 2;
+      else {
+        const n = vnoise(x * 0.7 + seed, y * 0.6 + seed * 2);
+        buf[i] = dark ? (n > 0.6 ? 6 : 2) : (n > 0.62 ? 7 : 6);
+        if (!dark && n > 0.86) buf[i] = 8;
+      }
+      if (kind === 'chimney' && y < 7) buf[i] = ((x + y) & 1) === 0 ? 1 : 34; // fuligem da boca
+      if (!dark && y > Ht - 4 && rnd() < 0.3) buf[i] = 36;      // musgo no soco
+    } else { // 'wood': tábuas verticais quentes
+      const groove = (x & 3) === 0;
+      const n = vnoise(x * 1.1 + seed * 2, y * 0.5 + seed);
+      buf[i] = groove ? 24 : n > 0.62 ? 22 : 21;
+      if (!groove && rnd() < 0.012) buf[i] = 24;                // nó da madeira
+      if (y === ROOF) buf[i] = 23;                              // viga sob o telhado
+      if (y > Ht - 3) buf[i] = 24;                              // soco escuro
+    }
+  }
+  return bufToTex({ buf, W: Wt, H: Ht });
+}
+const CT = {
+  stone: genWallTex('stone', 31), wood: genWallTex('wood', 47),
+  chimney: genWallTex('chimney', 53), stall: genWallTex('stall', 71),
+};
+/* ruínas NW ocultas SÓ no FPS (pedido do ideador): viravam blocos cinza sem
+   leitura colados no spawn. O Registro continua com elas (o 2D as mostra);
+   quando ganharem arte de ruína de verdade (paredes quebradas, musgo), voltam. */
+const HIDDEN_RUINS = new Set();
+for (let ty = 6; ty <= 12; ty++) for (let tx = 23; tx <= 29; tx++) {
+  if (world.at(tx, ty) === 'r') HIDDEN_RUINS.add(ty * world.w + tx);
+}
+const CITY = new Map();
+const cityWall = (tx, ty, kind, h, mm) => CITY.set(ty * world.w + tx, { tex: CT[kind], h, mm });
+/* Estaleiro (NW, madeira alta — a doca pro vazio é fase 2) */
+cityWall(43, 12, 'wood', 1.6, '#cd683d'); cityWall(44, 12, 'wood', 1.6, '#cd683d'); cityWall(43, 13, 'wood', 1.6, '#cd683d');
+/* Forja (NE, pedra + chaminé fumegando) */
+cityWall(48, 12, 'stone', 1.3, '#7f708a'); cityWall(49, 12, 'chimney', 2.05, '#625565'); cityWall(49, 13, 'stone', 1.3, '#7f708a');
+/* Bancada (SW, oficina baixa de madeira) */
+cityWall(43, 19, 'wood', 1.05, '#cd683d'); cityWall(44, 19, 'wood', 1.05, '#cd683d'); cityWall(43, 18, 'wood', 1.05, '#cd683d');
+/* Cozinha (SE, madeira) */
+cityWall(48, 19, 'wood', 1.15, '#cd683d'); cityWall(49, 19, 'wood', 1.15, '#cd683d'); cityWall(49, 18, 'wood', 1.15, '#cd683d');
+/* bancas do mercado (toldos verdigris) — fileira norte + uma ao sul */
+cityWall(45, 12, 'stall', 0.62, '#30e1b9'); cityWall(47, 12, 'stall', 0.62, '#30e1b9'); cityWall(46, 19, 'stall', 0.62, '#30e1b9');
+
+/* o LARGO é calçado de pedra (decisão do ideador): lajotas irregulares
+   assadas em 2 variantes 64px, mesmo esquema da grama — 1 lookup por pixel */
+function genStoneTile(seed) {
+  const rnd = mulberry32(seed * 15013 + 7);
+  const buf = new Int16Array(GTEX * GTEX).fill(6);
+  for (let y = 0; y < GTEX; y++) for (let x = 0; x < GTEX; x++) {
+    const n = vnoise(x * 0.22 + seed * 5, y * 0.22 + seed * 3);
+    buf[y * GTEX + x] = n > 0.62 ? 7 : n < 0.3 ? 2 : 6;
+  }
+  /* rejuntes: fiadas horizontais tortas + cortes verticais defasados */
+  let yy = 0;
+  while (yy < GTEX) {
+    const rowH = 10 + (rnd() * 8) | 0;
+    for (let x = 0; x < GTEX; x++) {
+      const wob = ((vnoise(x * 0.3 + seed, yy) - 0.5) * 3) | 0;
+      const gy = Math.min(GTEX - 1, Math.max(0, yy + wob));
+      buf[gy * GTEX + x] = 2;
+      if (rnd() < 0.5) buf[Math.min(GTEX - 1, gy + 1) * GTEX + x] = 1;
+    }
+    let xx = ((rnd() * 10) | 0);
+    while (xx < GTEX) {
+      const stoneW = 12 + (rnd() * 10) | 0;
+      for (let k = yy + 1; k < Math.min(GTEX, yy + rowH); k++) buf[k * GTEX + xx] = 2;
+      xx += stoneW;
+    }
+    yy += rowH;
+  }
+  for (let k = 0; k < 46; k++) { // brilhos e desgaste
+    const x = (rnd() * GTEX) | 0, y = (rnd() * GTEX) | 0;
+    buf[y * GTEX + x] = rnd() < 0.6 ? 8 : 7;
+  }
+  return bufToTex({ buf, W: GTEX, H: GTEX });
+}
+const STONE_TILES = [genStoneTile(3), genStoneTile(11)];
+
+/* veias de luz do Pulso (decisão do ideador): campo de cristas assado sobre
+   a bbox da Clareira, mais forte perto do largo, derretendo até r~4.8 */
+const VEIN_X0 = 40, VEIN_Y0 = 9, VEIN_RES = 8, VEIN_N = 14 * VEIN_RES;
+const VEINF = new Float32Array(VEIN_N * VEIN_N);
+for (let gy = 0; gy < VEIN_N; gy++) for (let gx = 0; gx < VEIN_N; gx++) {
+  const fx = VEIN_X0 + gx / VEIN_RES, fy = VEIN_Y0 + gy / VEIN_RES;
+  const r = Math.hypot(fx - PLAZA.x, fy - PLAZA.y);
+  const ridge = Math.abs(fbm(fx * 1.05 + 91, fy * 1.05 + 47, 2) - 0.5);
+  const v = Math.max(0, 1 - ridge / 0.05) * Math.max(0, 1 - r / 4.8);
+  VEINF[gy * VEIN_N + gx] = v * v;
+}
+function veinAt(fx, fy) {
+  if (fx <= VEIN_X0 || fy <= VEIN_Y0 || fx >= VEIN_X0 + 13.8 || fy >= VEIN_Y0 + 13.8) return 0;
+  const gx = (fx - VEIN_X0) * VEIN_RES, gy = (fy - VEIN_Y0) * VEIN_RES;
+  const x0 = gx | 0, y0 = gy | 0, sx = gx - x0, sy = gy - y0;
+  const i = y0 * VEIN_N + x0;
+  const a = VEINF[i], b = VEINF[i + 1], c = VEINF[i + VEIN_N], d = VEINF[i + VEIN_N + 1];
+  return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy;
+}
+
 /* mar de nuvens sob a ilha (campo assado, rolado no sample) */
 const CSEA = new Uint8Array(256 * 256);
 for (let gy = 0; gy < 256; gy++) for (let gx = 0; gx < 256; gx++) {
@@ -1324,6 +1462,7 @@ for (let ty = 0; ty < world.h; ty++) {
   for (let tx = 0; tx < world.w; tx++) {
     const t = world.at(tx, ty);
     if (rimAt(tx + 0.5, ty + 0.5) < 0.8) continue; // nada nasce no lábio/além da borda
+    if (CITY.has(ty * world.w + tx)) continue;     // nada nasce dentro das construções d'A Clareira
     if (t === 'f') {
       /* A CLAREIRA (D-31): dentro do anel nada de árvore — é o sítio da
          futura cidade — mas ela é VIVA: graminha e flores de campina. */
@@ -1451,6 +1590,7 @@ for (let ty = 0; ty < world.h; ty++) {
         const typ = cyp + ux * off * sg + (hash2(n * 31, salt + 8) - 0.5) * 0.5;
         if (world.at(txp | 0, typ | 0) !== 'm') continue;      // só na campina
         if (rimAt(txp, typ) < 0.9 || pathAt(txp, typ) < 0.85) continue;
+        if (Math.hypot(txp - PLAZA.x, typ - PLAZA.y) < 4.9) continue; // dentro d'A Clareira quem emoldura é a cidade
         const hv = hash2(n * 7, salt + 12);
         let v = TREE_VARIANTS[(hv * TREE_VARIANTS.length) | 0];
         if (hash2(n * 37, salt + 16) < 0.16) v = TREE_CEREJEIRA; // cerejeiras pontuando o caminho
@@ -1462,6 +1602,88 @@ for (let ty = 0; ty < world.h; ty++) {
       side = -side;
     }
   }
+}
+
+/* ---------- A CLAREIRA (D-32): arcos do Hall de Portais + fumaça da Forja ---------- */
+function genArch(lit, seed) {
+  const Wa = 64, Ha = 88;
+  const rnd = mulberry32(seed * 92821 + 5);
+  const buf = new Int16Array(Wa * Ha).fill(-1);
+  const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < Wa && y < Ha) buf[y * Wa + x] = v; };
+  const stone = (x, y) => {
+    const m = (y % 6 === 0) || (((x + ((y / 6 | 0) & 1) * 3) % 7) === 0);
+    return m ? 2 : vnoise(x * 0.7 + seed, y * 0.6) > 0.6 ? 7 : 6;
+  };
+  /* pilares com plinto e capitel */
+  for (const px0 of [6, 46]) {
+    for (let y = 26; y < 88; y++) for (let x = px0; x < px0 + 12; x++) put(x, y, stone(x, y));
+    for (let y = 80; y < 88; y++) for (let x = px0 - 2; x < px0 + 14; x++) put(x, y, stone(x, y)); // plinto
+    for (let y = 24; y < 28; y++) for (let x = px0 - 1; x < px0 + 13; x++) put(x, y, 7);           // capitel
+    for (let y = 26; y < 88; y++) { put(px0, y, 1); put(px0 + 11, y, 1); }                          // aresta
+  }
+  /* arco de volta perfeita (aduelas) + pedra-chave */
+  const cx0 = 32, cy0 = 30, R1 = 20, R2 = 27;
+  for (let y = 0; y <= cy0; y++) for (let x = 0; x < Wa; x++) {
+    const d = Math.hypot(x - cx0, y - cy0);
+    if (d >= R1 && d <= R2) {
+      const seg = ((Math.atan2(cy0 - y, x - cx0) / Math.PI) * 7) | 0;
+      put(x, y, (seg & 1) === 0 ? 7 : 6);
+      if (d > R2 - 1.2 || d < R1 + 1.2) put(x, y, 1);
+    }
+  }
+  for (let y = 2; y < 12; y++) for (let x = 29; x < 36; x++) put(x, y, y < 4 ? 8 : 7); // pedra-chave
+  /* verdigris escorrendo do topo (o cobre da cidade vive aqui também) */
+  for (let x = 8; x < 56; x++) if (rnd() < 0.4) { const yv = 2 + (rnd() * 8) | 0; for (let k = 0; k < 3; k++) put(x, yv + k, 41); }
+  if (lit) { /* O Átrio aceso: véu de luz preenchendo o vão ATÉ O CHÃO */
+    for (let y = 12; y < 86; y++) for (let x = 18; x < 46; x++) {
+      const d = Math.hypot(x - cx0, y - cy0);
+      if (d < R1 - 1 || y > cy0) {
+        const n = vnoise(x * 0.5 + 9, y * 0.35 - seed);
+        if (buf[y * Wa + x] === -1) put(x, y, n > 0.72 ? 43 : n > 0.4 ? 42 : 41);
+      }
+    }
+    /* a energia toca o chão: poça de luz derramando na base, em dither */
+    for (let y = 84; y < 88; y++) for (let x = 15; x < 49; x++) {
+      if (buf[y * Wa + x] === -1 && ((x + y) & 1) === 0) put(x, y, y < 86 ? 42 : 41);
+    }
+  }
+  return bufToTex({ buf, W: Wa, H: Ha });
+}
+function genSmoke(fr) {
+  const Ws = 26, Hs = 40;
+  const rnd = mulberry32(fr * 7643 + 29);
+  const buf = new Int16Array(Ws * Hs).fill(-1);
+  /* 3 novelos subindo, deriva pra leste; frame desloca a fase */
+  for (let p = 0; p < 3; p++) {
+    const t = (p + fr / 3) % 3;
+    const cy = 34 - t * 12, cx = 13 + Math.sin((t + fr) * 2.1) * 3 + t * 2.2, r = 3 + t * 2.4;
+    for (let y = 0; y < Hs; y++) for (let x = 0; x < Ws; x++) {
+      const d = Math.hypot(x - cx, y - cy);
+      if (d < r && rnd() < 0.82 - (d / r) * 0.5) {
+        const i = y * Ws + x;
+        if (buf[i] === -1) buf[i] = d < r * 0.5 ? 8 : 7;
+      }
+    }
+  }
+  return bufToTex({ buf, W: Ws, H: Hs });
+}
+{
+  const ARCHES = [
+    { x: 50.4, y: 13.4, lit: 0, seed: 5 },
+    { x: 51.1, y: 15.6, lit: 1, seed: 9 },  /* O Átrio — aceso */
+    { x: 50.4, y: 17.8, lit: 0, seed: 13 },
+  ];
+  for (const a of ARCHES) {
+    bills.push({ x: a.x, y: a.y, genFrames: [genArch(a.lit, a.seed)], label: 'arco', scale: 2.3, lift: 0 });
+    /* pilares tangentes ao semicírculo do hall — dá pra ATRAVESSAR o vão */
+    const ang = Math.atan2(a.y - PLAZA.y, a.x - 50.9);
+    const tvx = -Math.sin(ang), tvy = Math.cos(ang);
+    for (const s of [-0.62, 0.62]) {
+      const bx1 = a.x + tvx * s, by1 = a.y + tvy * s;
+      addTrunk(bx1 | 0, by1 | 0, bx1, by1, 0.2);
+    }
+  }
+  bills.push({ x: 49.5, y: 12.5, genFrames: [genSmoke(0), genSmoke(1), genSmoke(2)], loop: true, label: 'fumaca', scale: 1.2, lift: 2.1 });
 }
 
 
@@ -1484,7 +1706,12 @@ const fogAt = (d) => 1 / (1 + 0.0085 * d * d); /* bruma diurna suave — objetos
 let pulse = 1;
 function glowAt(wx, wy) {
   const dx = wx - CORE.x, dy = wy - CORE.y;
-  return (pulse * 0.6) / (1 + 0.32 * (dx * dx + dy * dy));
+  let g = (pulse * 0.6) / (1 + 0.32 * (dx * dx + dy * dy));
+  /* as veias d'A Clareira são emissivas e pulsam junto com o Núcleo (D-32);
+     o halo cresce com a noite — de dia fica só o fio violeta no chão */
+  const v = veinAt(wx, wy);
+  if (v > 0) g += v * (0.1 + 0.5 * SKYST.wNight) * pulse;
+  return g;
 }
 
 /* ---------- render ---------- */
@@ -1748,6 +1975,17 @@ function render(now) {
             c = ((x + y) & 1) === 0 ? 0xff7a94ab : 0xff90bab2;       // franja terra<->grama
           }
         }
+        /* o LARGO d'A Clareira é calçado de pedra (D-32): disco orgânico
+           sobre o barro, com borda em dither — as veias correm por cima */
+        const dPz = Math.hypot(fx - PLAZA.x, fy - PLAZA.y);
+        if (dPz < 3.2) {
+          const wob = (WAVE_B[(((fy * 5) & 63) * 64 + ((fx * 5) & 63)) | 0] / 255 - 0.5) * 0.5;
+          const stoneR = 2.7 + wob;
+          if (dPz < stoneR || (dPz < stoneR + 0.3 && (BAYER[y & 3][x & 3] / 16) < (1 - (dPz - stoneR) / 0.3) * 0.8)) {
+            const st = STONE_TILES[(tx + ty) & 1];
+            c = st.data[((((fy - ty) * GTEX) | 0) * GTEX + (((fx - tx) * GTEX) | 0))];
+          }
+        }
         // LÁBIO da ilha: grama -> terra -> fio de rocha escura na borda
         if (rim < 1.0) {
           if (rim < 0.3) c = ((x + y) & 1) === 0 ? 0xff2f2222 : 0xff463546;
@@ -1760,6 +1998,17 @@ function render(now) {
           if (ld < 0.10) c = ((x + y) & 1) === 0 ? 0xff6c6c96 : 0xff7a94ab;      // areia molhada (escura)
           else if (ld < 0.22) c = ((x + y) & 1) === 0 ? 0xff7a94ab : 0xffb0cbfd; // areia clara
           else if ((BAYER[y & 3][x & 3] / 16) < (1 - (ld - 0.22) / 0.20) * 0.6) c = 0xff7a94ab; // franja na grama
+        }
+        /* veias de luz do Pulso n'A Clareira (D-32): violeta correndo pelo
+           chão, mais denso perto do largo; o brilho noturno vem do glowAt */
+        const vv = veinAt(fx, fy);
+        if (vv > 0.14) { // traço fino de dia; à noite o glowAt alarga o brilho
+          /* veios AZUIS e ROXOS (decisão do ideador), pulsando com o Núcleo */
+          const blue = vnoise(fx * 0.85 + 13, fy * 0.85 + 29) > 0.52;
+          const vr = blue ? 77 : 168, vg = blue ? 155 : 132, vb = blue ? 230 : 243;
+          const k = Math.min(0.85, vv * 1.15) * (0.72 + 0.28 * pulse);
+          const r0 = c & 255, g0 = (c >> 8) & 255, b0 = (c >> 16) & 255;
+          c = rgb((r0 + (vr - r0) * k) | 0, (g0 + (vg - g0) * k) | 0, (b0 + (vb - b0) * k) | 0);
         }
       }
       let darkK = shadowed ? 0.86 : 1;
@@ -1779,33 +2028,40 @@ function render(now) {
     let stepX, stepY, sdx, sdy;
     if (rdx < 0) { stepX = -1; sdx = (cam.x - mapX) * ddx; } else { stepX = 1; sdx = (mapX + 1 - cam.x) * ddx; }
     if (rdy < 0) { stepY = -1; sdy = (cam.y - mapY) * ddy; } else { stepY = 1; sdy = (mapY + 1 - cam.y) * ddy; }
-    let side = 0, tile = 'f', guard = 0;
+    let side = 0, tile = 'f', guard = 0, cw = null;
     while (guard++ < 128) {
       if (sdx < sdy) { sdx += ddx; mapX += stepX; side = 0; } else { sdy += ddy; mapY += stepY; side = 1; }
       tile = world.at(mapX, mapY);
-      if (isWall(tile)) break;
+      if (isWall(tile) && !HIDDEN_RUINS.has(mapY * world.w + mapX)) break;
+      cw = CITY.get(mapY * world.w + mapX); /* paredes d'A Clareira (D-32): client-side, altura própria */
+      if (cw) break;
     }
     const dist = side === 0 ? sdx - ddx : sdy - ddy;
     zbuf[x] = dist;
     const lineH = (H / dist) | 0;
-    let y0 = clamp(HALF - (lineH >> 1), 0, H - 1);
-    let y1 = clamp(HALF + (lineH >> 1), 0, H - 1);
+    /* base fixa no chão; a parede cresce PRA CIMA conforme a altura do tile */
+    const fullH = cw ? Math.max(1, (lineH * cw.h) | 0) : lineH;
+    const yBase = HALF + (lineH >> 1);
+    const y0r = yBase - fullH;
+    let y0 = clamp(y0r, 0, H - 1);
+    let y1 = clamp(yBase, 0, H - 1);
     wallTop[x] = y0; /* acima disto é céu aberto — a parede não oculta nada lá */
     let wallX = side === 0 ? cam.y + dist * rdy : cam.x + dist * rdx;
     wallX -= wallX | 0;
     const u = clamp((wallX * TEX) | 0, 0, TEX - 1);
-    const tex = tile === 'c' ? textures.nucleo : tile === 'r' ? textures.ruina : textures.floresta;
-    const fIx = tile === 'c' ? coreFrame : 0;
+    const tex = cw ? cw.tex : tile === 'c' ? textures.nucleo : tile === 'r' ? textures.ruina : textures.floresta;
+    const fIx = !cw && tile === 'c' ? coreFrame : 0;
     const f = fogAt(dist) * (side === 1 ? 0.78 : 1);
     const hx = mapX + 0.5, hy = mapY + 0.5;
-    const glow = tile === 'c' ? 0.45 * pulse : glowAt(hx, hy) * f;
-    const texStep = TEX / lineH;
-    let texPos = (y0 - HALF + (lineH >> 1)) * texStep;
+    const glow = !cw && tile === 'c' ? 0.45 * pulse : glowAt(hx, hy) * f;
+    const texH = cw ? tex.h : TEX;
+    const texStep = texH / fullH;
+    let texPos = (y0 - y0r) * texStep;
     for (let y = y0; y <= y1; y++) {
-      const v = clamp(texPos | 0, 0, TEX - 1);
+      const v = clamp(texPos | 0, 0, texH - 1);
       texPos += texStep;
       const c = texAt(tex, fIx, u, v);
-      px[y * W + x] = tile === 'c'
+      px[y * W + x] = !cw && tile === 'c'
         ? shade(c, clamp(f + 0.5, 0, 1), glow)  /* o Núcleo emite: quase sem fog */
         : shade(c, f, glow);
     }
@@ -2097,6 +2353,10 @@ function drawMinimap() {
   for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
     if (pathAt(x + 0.5, y + 0.5) < 0.1) mctx.fillRect(x, y, 1, 1);
   }
+  for (const [k, cwv] of CITY) { // A Clareira
+    mctx.fillStyle = cwv.mm;
+    mctx.fillRect(k % world.w, (k / world.w) | 0, 1, 1);
+  }
   mctx.fillStyle = '#fbff86';
   mctx.fillRect((cam.x | 0), (cam.y | 0), 1, 1);
   mctx.strokeStyle = 'rgba(251,255,134,0.6)';
@@ -2111,7 +2371,9 @@ const PLAYER_R = 0.14;
 function tileSolid(px, py) {
   if (rimAt(px, py) < 0.3) return true; // ninguém cai da ilha (por enquanto)
   const tx = px | 0, ty = py | 0;
-  if (blocks(world.at(tx, ty))) return true;
+  const t = world.at(tx, ty);
+  if (blocks(t) && !(t === 'r' && HIDDEN_RUINS.has(ty * world.w + tx))) return true;
+  if (CITY.has(ty * world.w + tx)) return true; // construções d'A Clareira
   return rockTiles.has(ty * world.w + tx);
 }
 /* colisão fina: só o TRONCO (círculo), varrendo o tile do ponto + 8 vizinhos */

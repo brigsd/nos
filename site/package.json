@@ -1,6 +1,6 @@
 {
   "name": "nos-site",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "NOS client - canvas 2D renderer for O Coracao, published to GitHub Pages (brigsd.github.io/nos). Self-contained: own toolchain, imports shared types from ../engine/types.ts by relative path.",
