@@ -52,6 +52,7 @@
 - [x] F8 · **GI assada (D-36, passe A dos gráficos)**: path tracer offline em `prototipos/fps/bake/` (sol/céu/rebote/copas/luzes ocluídas, 3 horários, PNG 58KB), inlined pelo build, 1 sampler no cliente + paredes por coluna, tecla G, 59-60fps — calibrado em 4 rodadas pelo `npm run olhar`
 - [ ] F9 · Gráficos passes B e C (D-36): horizonte matte-painting path-traced em camadas com paralaxe; "a quietude revela" (acumulação temporal parado = o quadro converge pra pintura — mecânica-metáfora do D-22)
 - [x] F10 · **A Clareira v2 (D-37)**: portal único que acende o painel MUNDOS CONECTADOS (registry inline), bancas removidas, texturas com carpintaria (chapas de cobre, beiral, prumos, socos, janelas por seed), telhados em desnível, GI re-assada
+- [x] F11 · **O chafariz (D-38)**: billboard 4 quadros (jato + arcos d'água com gotas avançando) + bacia de água cristalina no floor casting (ondas concêntricas, cáustica, espuma), colisão nos 4 tiles, brilho teal noturno via GI
 - [ ] F6 · Habitantes fase 3: mais verbos (/trocar, /fabricar, mover-se), presença no estado do mundo, GitHub App pra identidade própria de bot, mentes apadrinhadas pela comunidade (template)
 - [ ] C3 · A Clareira fase 3: doca do Estaleiro apontando pro vazio, letreiros/lampiões, interiores; arte de ruína de verdade pras ruínas NW (hoje ocultas no FPS)
 

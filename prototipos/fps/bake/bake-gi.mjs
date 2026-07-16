@@ -62,6 +62,7 @@ const LIGHTS = [
   [47.4, 17.1, 0.95, 1.0, 0.72, 0.35, 0, 1.2, 2.0, 4.0],
   [51.1, 15.6, 0.7, 0.35, 1.0, 0.85, 0.25, 0.7, 1.2, 2.4], // véu do Átrio
   [33.5, 33.5, 0.6, 0.75, 0.45, 1.0, 1.1, 1.1, 1.1, 0.9],  // o Núcleo, sempre
+  [46.2, 15.6, 0.35, 0.4, 0.95, 0.85, 0.1, 0.42, 0.95, 3.2], // o chafariz: água do Pulso aflorando (D-38)
 ];
 for (let i = 0; i < 26; i++) { // veias: anel semeado ao redor do largo (fios, não lavagem)
   const a = rnd() * Math.PI * 2, r = 1.6 + rnd() * 3.0;

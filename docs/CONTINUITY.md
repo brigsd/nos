@@ -2,6 +2,12 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 14) — o chafariz (D-38)
+
+- Pedido do ideador: chafariz ⛲ no centro da praça, água cristalina, animação bonita. Feito em duas camadas: **billboard 4 quadros** (pedestal+taça+jato com jitter+coroa+2 arcos de gotas que avançam e respingam) + **bacia no chão** (ondas concêntricas do pedestal, cáustica fina, espuma nas cristas, anel de pedra com lábio aceso).
+- Calibração pelo olhar (1 rodada): a bacia v1 vazava um disco ciano chapado pelo largo — encolhida pra caber DENTRO da bacia do sprite, cor mais funda, cáustica fina. Colisão r0.62 nos 4 tiles tocados.
+- À noite a água **brilha** (selfGlow + luz teal na GI): o largo agora tem três presenças de luz — lampiões âmbar, véu do portal, chafariz teal. Ponto canônico `chafariz` no olhar. 59-60fps.
+
 ## Sessão 2026-07-16 (parte 13) — A Clareira v2 (D-37): um portal, praça aberta, carpintaria
 
 - Direção do ideador: alas feias, bancas estranhas tapando o caminho, e "só um portal — quando a pessoa passa, mostra os mundos conectados". Feito: **Portal do Átrio único** (dois arcos mortos removidos, calçamento leva direto), painel **◈ MUNDOS CONECTADOS** por proximidade (<2.4 tiles, histerese, `NOS_WORLDS` = registry inline no build, passivo — zero clique), **4 bancas removidas**, texturas v2 (chapas de cobre com costura, beiral fundo, prumos/travessa, socos, janela+peitoril variando por seed, seeds próprios por ala), telhados com desnível por tile. Baker da GI sincronizado + re-assado.
