@@ -293,6 +293,47 @@ function growTree(opts) {
       if ((x > 0 && buf2[y * W + x - 1] < 0) || (x < W - 1 && buf2[y * W + x + 1] < 0) ||
           (y > 0 && buf2[(y - 1) * W + x] < 0) || (y < H - 1 && buf2[(y + 1) * W + x] < 0)) buf2[y * W + x] = OUTLINE;
     }
+
+  /* ---- ATERRAMENTO: sombra de contato + franja de grama na base ----
+     (o que cola a árvore no chão: a sombra assenta, a grama cobre o corte
+     reto do contorno na linha do solo) */
+  {
+    // vão do tronco na base: varre as últimas linhas por pixels de casca
+    let minX = W, maxX = -1;
+    for (let y = H - 10; y < H; y++) for (let x = 0; x < W; x++) {
+      if (buf2[y * W + x] >= 0) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+    }
+    if (maxX >= minX) {
+      const cxg = (minX + maxX) / 2, span = Math.max(3, (maxX - minX) / 2);
+      const shR = span * 1.25 + 2, shRy = Math.max(2, span * 0.38);
+      const gy = H - 3.5;
+      // sombra: miolo sólido, borda ditherada — só onde é transparente
+      for (let y = (gy - shRy) | 0; y <= Math.min(H - 1, (gy + shRy) | 0); y++) {
+        for (let x = Math.max(0, (cxg - shR) | 0); x <= Math.min(W - 1, (cxg + shR) | 0); x++) {
+          const ex = (x - cxg) / shR, ey = (y - gy) / shRy;
+          const e = ex * ex + ey * ey;
+          if (e > 1 || buf2[y * W + x] >= 0) continue;
+          if (e < 0.5) buf2[y * W + x] = 35;
+          else if ((BAYER[y & 3][x & 3] / 16) < (1 - e) * 1.6) buf2[y * W + x] = 30;
+        }
+      }
+      // franja de grama: lâminas POR CIMA do tronco/contorno/sombra
+      const moodRamp = LEAF_RAMPS[opts.mood] || LEAF_RAMPS.verao;
+      const blades = Math.max(5, (span * 1.9) | 0);
+      for (let i = 0; i < blades; i++) {
+        const hsh = hash2(i * 37 + ((opts.seed | 0) & 1023), 91);
+        const bx = cxg + (hsh - 0.5) * (span * 1.7 + 6);
+        const bh = 2 + hash2(i * 53, 17) * (2.5 + span * 0.22);
+        const lean = (hash2(i * 71, 5) - 0.5) * 2.4;
+        const tone = moodRamp[hash2(i * 13, 3) < 0.55 ? 1 : hash2(i, 9) < 0.5 ? 2 : 3];
+        for (let k = 0; k <= bh; k++) {
+          const t = k / bh;
+          put2(bx + lean * t * t, H - 3 - k, tone);
+          if (t < 0.4) put2(bx + 1 + lean * t * t, H - 3 - k, tone);
+        }
+      }
+    }
+  }
     return { buf: buf2, W, H, glow };
   }
   grow(baseX, baseY, UP + (rnd() - 0.5) * 0.1, S.len, S.width, S.depth);
@@ -380,7 +421,50 @@ function growTree(opts) {
     }
   }
 
-  if (S.noLeaves) return { buf, W, H, glow }; // árvore seca: só o esqueleto com contorno
+  if (S.noLeaves) {
+
+    /* ---- ATERRAMENTO: sombra de contato + franja de grama na base ----
+       (o que cola a árvore no chão: a sombra assenta, a grama cobre o corte
+       reto do contorno na linha do solo) */
+    {
+      // vão do tronco na base: varre as últimas linhas por pixels de casca
+      let minX = W, maxX = -1;
+      for (let y = H - 10; y < H; y++) for (let x = 0; x < W; x++) {
+        if (buf[y * W + x] >= 0) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+      }
+      if (maxX >= minX) {
+        const cxg = (minX + maxX) / 2, span = Math.max(3, (maxX - minX) / 2);
+        const shR = span * 1.25 + 2, shRy = Math.max(2, span * 0.38);
+        const gy = H - 3.5;
+        // sombra: miolo sólido, borda ditherada — só onde é transparente
+        for (let y = (gy - shRy) | 0; y <= Math.min(H - 1, (gy + shRy) | 0); y++) {
+          for (let x = Math.max(0, (cxg - shR) | 0); x <= Math.min(W - 1, (cxg + shR) | 0); x++) {
+            const ex = (x - cxg) / shR, ey = (y - gy) / shRy;
+            const e = ex * ex + ey * ey;
+            if (e > 1 || buf[y * W + x] >= 0) continue;
+            if (e < 0.5) buf[y * W + x] = 35;
+          else if ((BAYER[y & 3][x & 3] / 16) < (1 - e) * 1.6) buf[y * W + x] = 30;
+          }
+        }
+        // franja de grama: lâminas POR CIMA do tronco/contorno/sombra
+        const moodRamp = LEAF_RAMPS[opts.mood] || LEAF_RAMPS.verao;
+        const blades = Math.max(5, (span * 1.9) | 0);
+        for (let i = 0; i < blades; i++) {
+          const hsh = hash2(i * 37 + ((opts.seed | 0) & 1023), 91);
+          const bx = cxg + (hsh - 0.5) * (span * 1.7 + 6);
+          const bh = 2 + hash2(i * 53, 17) * (2.5 + span * 0.22);
+          const lean = (hash2(i * 71, 5) - 0.5) * 2.4;
+          const tone = moodRamp[hash2(i * 13, 3) < 0.55 ? 1 : hash2(i, 9) < 0.5 ? 2 : 3];
+          for (let k = 0; k <= bh; k++) {
+            const t = k / bh;
+            put(bx + lean * t * t, H - 3 - k, tone);
+            if (t < 0.4) put(bx + 1 + lean * t * t, H - 3 - k, tone);
+          }
+        }
+      }
+    }
+    return { buf, W, H, glow }; // árvore seca aterrada
+  }
 
   /* ---- copa em LOBOS: cada aglomerado é uma bolota cel-shaded com contorno
      próprio; lobos de baixo sobrepõem os de cima -> vincos escuros entre
@@ -491,6 +575,47 @@ function growTree(opts) {
     if (v < 0 || v === OUTLINE) continue;
     if ((x > 0 && buf[y * W + x - 1] < 0) || (x < W - 1 && buf[y * W + x + 1] < 0) ||
         (y > 0 && buf[(y - 1) * W + x] < 0) || (y < H - 1 && buf[(y + 1) * W + x] < 0)) buf[y * W + x] = OUTLINE;
+  }
+
+  /* ---- ATERRAMENTO: sombra de contato + franja de grama na base ----
+     (o que cola a árvore no chão: a sombra assenta, a grama cobre o corte
+     reto do contorno na linha do solo) */
+  {
+    // vão do tronco na base: varre as últimas linhas por pixels de casca
+    let minX = W, maxX = -1;
+    for (let y = H - 10; y < H; y++) for (let x = 0; x < W; x++) {
+      if (buf[y * W + x] >= 0) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+    }
+    if (maxX >= minX) {
+      const cxg = (minX + maxX) / 2, span = Math.max(3, (maxX - minX) / 2);
+      const shR = span * 1.25 + 2, shRy = Math.max(2, span * 0.38);
+      const gy = H - 3.5;
+      // sombra: miolo sólido, borda ditherada — só onde é transparente
+      for (let y = (gy - shRy) | 0; y <= Math.min(H - 1, (gy + shRy) | 0); y++) {
+        for (let x = Math.max(0, (cxg - shR) | 0); x <= Math.min(W - 1, (cxg + shR) | 0); x++) {
+          const ex = (x - cxg) / shR, ey = (y - gy) / shRy;
+          const e = ex * ex + ey * ey;
+          if (e > 1 || buf[y * W + x] >= 0) continue;
+          if (e < 0.5) buf[y * W + x] = 35;
+          else if ((BAYER[y & 3][x & 3] / 16) < (1 - e) * 1.6) buf[y * W + x] = 30;
+        }
+      }
+      // franja de grama: lâminas POR CIMA do tronco/contorno/sombra
+      const moodRamp = LEAF_RAMPS[opts.mood] || LEAF_RAMPS.verao;
+      const blades = Math.max(5, (span * 1.9) | 0);
+      for (let i = 0; i < blades; i++) {
+        const hsh = hash2(i * 37 + ((opts.seed | 0) & 1023), 91);
+        const bx = cxg + (hsh - 0.5) * (span * 1.7 + 6);
+        const bh = 2 + hash2(i * 53, 17) * (2.5 + span * 0.22);
+        const lean = (hash2(i * 71, 5) - 0.5) * 2.4;
+        const tone = moodRamp[hash2(i * 13, 3) < 0.55 ? 1 : hash2(i, 9) < 0.5 ? 2 : 3];
+        for (let k = 0; k <= bh; k++) {
+          const t = k / bh;
+          put(bx + lean * t * t, H - 3 - k, tone);
+          if (t < 0.4) put(bx + 1 + lean * t * t, H - 3 - k, tone);
+        }
+      }
+    }
   }
 
   return { buf, W, H, glow };
