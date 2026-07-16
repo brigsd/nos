@@ -45,7 +45,8 @@
 - [x] F3 · Carreiro + clareira + spawn novo (D-31): estrada de terra do spawn (campina norte, rio longe) até a clareira na floresta NE — o sítio da futura cidade. Campo de distância client-side (mundo oficial intocado), fileiras de árvores na campina, corredor desbastado na mata, largo de terra, minimapa. QA: caminhada com colisão real de ponta a ponta, 57-60fps
 - [ ] W2 · Porte da cena Pixi (branch de evidência `claude/r3-webgl-comparativo`) para `renderer-webgl.ts` (Sonnet) + review Opus + validação do Tiago em dispositivo real — *repriorizar: com o FPS oficial (F1), W2 vira melhoria do mapa 2D, não do cliente principal*
 - [x] C1 · **A Clareira v1 construída (D-32)** — aprovada pelo ideador (cobre oxidado, veios azuis/roxos pulsantes, largo de pedra, nome A Clareira): paredes DDA client-side com altura por tile, 4 alas, 3 bancas, Hall de Portais com o Átrio aceso, chaminé fumegando, calçamento de lajotas com veias do Pulso. Substitui o plano antigo da cidade 2D (branch `claude/cidade-coracao`, arte reprovada)
-- [ ] C2 · A Clareira fase 2: migração das 4 máquinas pros vãos das alas + canonização dos tiles da clareira em `world/heart.json` (**autorização do ideador — mexe no Registro vivo**), doca do Estaleiro apontando pro vazio, letreiros/lampiões, interiores
+- [x] C2 · **A Clareira canonizada** (autorizada pelo ideador): 73 tiles floresta→campina (círculo r5, madeira derrubada junto — schema exige) + 4 máquinas migradas pros vãos das alas — forja (48,13), cozinha (48,18), bancada (44,18), estaleiro (44,13) — via `serializeWorld`/`assertValidWorld` do motor (formato preservado, 81 linhas de diff); guardrail de gênese em `engine/mapgen.test.ts` atualizado com a exceção documentada (única mudança de bioma pós-gênese)
+- [ ] C3 · A Clareira fase 3: doca do Estaleiro apontando pro vazio, letreiros/lampiões, interiores; arte de ruína de verdade pras ruínas NW (hoje ocultas no FPS)
 
 ## v3 — O metaverso
 - [ ] Portais e segundo mundo

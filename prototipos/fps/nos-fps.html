@@ -1506,6 +1506,9 @@ for (let ty = 0; ty < world.h; ty++) {
       stampTreeShadow(bx0, by0, 0.7 + treeScale * 0.34, 0.55 + treeScale * 0.075, 0.62);
       addTrunk(tx, ty, bx0, by0, v === TREE_SECA ? 0.26 : 0.22); // raio ~ meia-largura do tronco na base
     } else if (t === 'm') {
+      /* o largo d'A Clareira fica limpo: nada de tufo/seixo no calçamento
+         (os tiles da clareira são campina CANÔNICA desde a C2/D-32) */
+      if (Math.hypot(tx + 0.5 - PLAZA.x, ty + 0.5 - PLAZA.y) < 3.0) continue;
       const ht = hash2(tx * 29, ty * 31);
       if (ht < 0.22) { // graminha balançando — objeto, não textura
         const v = TUFT_VARIANTS[(ht * 731) % TUFT_VARIANTS.length | 0];

@@ -2,6 +2,14 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 4) — C2: A Clareira vira canônica
+
+- **Ideador autorizou** ("vou seguir sua recomendação"): 73 tiles floresta→campina no círculo r5 da clareira (o `resource: wood` sai junto — o schema condiciona madeira a floresta) e as 4 máquinas migraram pros vãos das alas: forja (48,13), cozinha (48,18), bancada (44,18), estaleiro (44,13). Edição via `serializeWorld` + `assertValidWorld` DO MOTOR (primeira tentativa em python quebrou o formato do arquivo e o schema — lição: o serializador do motor é dono do formato).
+- **Guardrail de gênese** (`mapgen.test.ts`) atualizado: aplica a transformação d'A Clareira à geração fresca antes de comparar — única exceção pós-gênese documentada; qualquer outra deriva de bioma segue sendo bug. 362/362 verdes.
+- **Consequência de jogo**: /fabricar agora acontece n'A Clareira (alcance por adjacência à máquina); a praça antiga do Núcleo fica só com a presença de luz.
+- **FPS**: largo limpo (sem tufo/seixo no calçamento), máquinas aparecem encaixadas nos vãos das alas.
+- **Portais (pergunta do ideador)**: O Átrio NÃO está linkado a outro repo — é `worlds/atrio.json` deste mesmo repositório (mundo estático de teste, D-27); a travessia read-only FUNCIONA no cliente 2D (painel Portais). O registro já aceita `worldUrl` absoluto de outro repo — federação real é v3. O arco do FPS é cenográfico por ora.
+
 ## Sessão 2026-07-16 (parte 3) — A Clareira construída (D-32)
 
 - **Ideador aprovou e respondeu**: telhados de cobre oxidado, veias de luz sim (azuis/roxos, pulsantes), nome **A Clareira**; no meio da build pediu o largo calçado de PEDRA (feito: lajotas 64px assadas, 2 variantes, borda em dither).

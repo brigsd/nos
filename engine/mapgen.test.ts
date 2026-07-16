@@ -307,6 +307,21 @@ describe('the committed world/heart.json', () => {
     const onDisk = JSON.parse(readFileSync(heartJsonPath, 'utf-8')) as World;
     const fresh = generateHeartWorld(HEART_WORLD_SEED);
 
+    // A CLAREIRA (D-32, docs/CIDADE.md): a ÚNICA mudança de bioma pós-gênese,
+    // autorizada pelo ideador — a clareira da cidade, aberta na floresta NE
+    // (círculo r5 em (46.2, 15.6): floresta -> campina, madeira derrubada
+    // junto). Aplicamos a mesma transformação à geração fresca antes de
+    // comparar; QUALQUER outra deriva de bioma continua sendo um bug pego
+    // por este teste.
+    fresh.tiles.forEach((tile, index) => {
+      const tx = index % fresh.width;
+      const ty = Math.floor(index / fresh.width);
+      if (Math.hypot(tx + 0.5 - 46.2, ty + 0.5 - 15.6) < 5.0 && tile.biome === 'forest') {
+        tile.biome = 'meadow';
+        if (tile.resource === 'wood') delete tile.resource;
+      }
+    });
+
     expect(onDisk.meta.name).toBe(fresh.meta.name);
     expect(onDisk.meta.seed).toBe(fresh.meta.seed);
     expect(onDisk.width).toBe(fresh.width);
