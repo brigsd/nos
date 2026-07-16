@@ -19,3 +19,23 @@ Controles: WASD anda, ←/→ olha, M alterna o minimapa; no touch, arraste
 
 Screenshots: `shot-spawn.png` (spawn: orbe + oficinas + rio) e
 `shot-core.png` (perto da forja).
+
+## Modo dia (iteração 2 — direção BotW)
+
+A pedido do ideador (referência: campos de Breath of the Wild), o protótipo
+virou DIA e a floresta deixou de ser parede esticada:
+
+- **Árvores geradas** (`tree-core.js`, L-system + copa por campo de
+  densidade) como BILLBOARDS de verdade — 6 variantes, uma por tile de
+  floresta (com desbaste + jitter determinístico), até ~3.0 tiles de altura.
+- **Rochas geradas** (blob + normal quantizada + musgo) espalhadas pela
+  campina por hash determinístico; bloqueiam movimento.
+- **Céu panorâmico** (gira com a câmera): gradiente liso + cúmulos + maciço
+  fixo no rumo leste como marco do mundo. Nuvens à deriva.
+- **Bruma diurna** (paleMint) no lugar do breu — a distância derrete em luz.
+- Chão de grama gerado (base clara + salpicos + flores, ref. BotW).
+- `prototipos/estudio/tree-studio.html`: o Estúdio de Cena interativo
+  (árvores 4 espécies × 5 humores, rochas, céu, cena composta — exporta PNG).
+
+Screenshots: `shot-day-forest.png`, `shot-day-forest-close.png`,
+`shot-day-rock.png`; cena 2D de referência em `../estudio/cena-11.png`.
