@@ -217,7 +217,7 @@
 </div>
 
 <footer>
-  <span><span class="k">W A S D</span> andar · <span class="k">← →</span> olhar · <span class="k">M</span> mapa/setores · <span class="k">I</span> tags</span>
+  <span><span class="k">W A S D</span> andar · <span class="k">← →</span> olhar · <span class="k">M</span> mapa/setores · <span class="k">I</span> tags · <span class="k">G</span> luz</span>
   <span>a mesma world/heart.json — nada além do Registro · <a href="../" style="color:#a884f3;text-decoration:none">mapa 2D ↗</a></span>
 </footer>
 
@@ -1923,13 +1923,68 @@ function glowAt(wx, wy) {
   /* as veias d'A Clareira são emissivas e pulsam junto com o Núcleo (D-32);
      o halo cresce com a noite — de dia fica só o fio violeta no chão */
   const v = veinAt(wx, wy);
-  if (v > 0) g += v * (0.1 + 0.62 * SKYST.wNight) * pulse;
+  if (v > 0) g += v * (0.1 + 0.62 * SKYST.wNight) * pulse * giDamp;
   /* o Átrio aceso derrama luz no pátio (halo pulsante no chão) */
   if (wx > 48.6 && wx < 53.4 && wy > 13.4 && wy < 17.8) {
     const dA = (wx - 51.1) * (wx - 51.1) + (wy - 15.6) * (wy - 15.6);
-    g += (0.2 + 0.25 * SKYST.wNight) * pulse / (1 + 1.6 * dA);
+    g += (0.2 + 0.25 * SKYST.wNight) * pulse / (1 + 1.6 * dA) * giDamp;
   }
   return g;
+}
+
+/* ---------- GI ASSADA (D-36): a luz calculada de verdade, offline ----------
+   O bake/bake-gi.mjs (path tracer, roda no build) integra sol/céu/copas/
+   paredes/lampiões/veias com sombras e rebote de cor, e entrega 3 grades
+   128×128 (dia/entardecer/noite) num PNG que o build inline como NOS_GI —
+   128 = "igual ao campo aberto". Aqui: decode 1x, mistura pelas fases do
+   céu quando elas mudam, e 1 amostra bilinear por pixel de chão (mesma
+   classe de custo do VEINF). Tecla G alterna (A/B honesto). Sem NOS_GI
+   (dev com data.js), tudo desliga sozinho. */
+let GI_A = null, GI_B = null, GI_C = null, GI_CUR = null;
+let giOn = localStorage.getItem('nos_gi') !== '0';
+let giDamp = 1; // glowAt de veias/Átrio recua quando a GI já traz essa luz
+let giWK = -1;
+let GI_R = 1, GI_G = 1, GI_Bv = 1;
+if (typeof NOS_GI !== 'undefined' && NOS_GI) {
+  const gim = new Image();
+  gim.onload = () => {
+    const cv = document.createElement('canvas'); cv.width = 128; cv.height = 384;
+    const gctx = cv.getContext('2d'); gctx.drawImage(gim, 0, 0);
+    const d = gctx.getImageData(0, 0, 128, 384).data;
+    const grab = (band) => {
+      const a = new Float32Array(128 * 128 * 3);
+      for (let i = 0; i < 128 * 128; i++) {
+        const s = (band * 128 * 128 + i) * 4;
+        a[i * 3] = d[s] / 128; a[i * 3 + 1] = d[s + 1] / 128; a[i * 3 + 2] = d[s + 2] / 128;
+      }
+      return a;
+    };
+    GI_A = grab(0); GI_B = grab(1); GI_C = grab(2);
+    GI_CUR = new Float32Array(128 * 128 * 3);
+    giWK = -1;
+  };
+  gim.src = NOS_GI;
+}
+function giBlend() {
+  if (!GI_CUR) { giDamp = 1; return; }
+  giDamp = giOn ? 0.4 : 1;
+  if (!giOn) return;
+  const key = ((SKYST.wDay * 127) | 0) * 16384 + ((SKYST.wDusk * 127) | 0) * 128 + ((SKYST.wNight * 127) | 0);
+  if (key === giWK) return;
+  giWK = key;
+  const a = SKYST.wDay, b = SKYST.wDusk, cN = SKYST.wNight;
+  for (let i = 0; i < GI_CUR.length; i++) GI_CUR[i] = GI_A[i] * a + GI_B[i] * b + GI_C[i] * cN;
+}
+function giAt(fx, fy) {
+  let gx = fx * 2 - 0.5, gy = fy * 2 - 0.5;
+  if (gx < 0) gx = 0; else if (gx > 126.999) gx = 126.999;
+  if (gy < 0) gy = 0; else if (gy > 126.999) gy = 126.999;
+  const x0 = gx | 0, y0 = gy | 0, tx = gx - x0, ty = gy - y0;
+  const o00 = (y0 * 128 + x0) * 3, o10 = o00 + 3, o01 = o00 + 384, o11 = o01 + 3;
+  const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+  GI_R = GI_CUR[o00] * w00 + GI_CUR[o10] * w10 + GI_CUR[o01] * w01 + GI_CUR[o11] * w11;
+  GI_G = GI_CUR[o00 + 1] * w00 + GI_CUR[o10 + 1] * w10 + GI_CUR[o01 + 1] * w01 + GI_CUR[o11 + 1] * w11;
+  GI_Bv = GI_CUR[o00 + 2] * w00 + GI_CUR[o10 + 2] * w10 + GI_CUR[o01 + 2] * w01 + GI_CUR[o11 + 2] * w11;
 }
 
 /* ---------- render ---------- */
@@ -1960,6 +2015,7 @@ function render(now) {
   const wSum = wDay + wDusk + wNight || 1;
   wDay /= wSum; wDusk /= wSum; wNight /= wSum;
   SKYST.elev = elev; SKYST.wDay = wDay; SKYST.wDusk = wDusk; SKYST.wNight = wNight;
+  giBlend(); /* GI assada acompanha as fases do céu (D-36) */
   const kmix = (k) => [
     KEY.day[k][0] * wDay + KEY.dusk[k][0] * wDusk + KEY.night[k][0] * wNight,
     KEY.day[k][1] * wDay + KEY.dusk[k][1] * wDusk + KEY.night[k][1] * wNight,
@@ -2247,6 +2303,13 @@ function render(now) {
           const r0 = c & 255, g0 = (c >> 8) & 255, b0 = (c >> 16) & 255;
           c = rgb((r0 + (vr - r0) * k) | 0, (g0 + (vg - g0) * k) | 0, (b0 + (vb - b0) * k) | 0);
         }
+        /* GI ASSADA (D-36): a luz de verdade modula o chão — cantos escurecem,
+           rebote esquenta, poças de lampião acendem a pedra à noite */
+        if (GI_CUR && giOn) {
+          giAt(fx, fy);
+          let gr = (c & 255) * GI_R, gg2 = ((c >> 8) & 255) * GI_G, gb = ((c >> 16) & 255) * GI_Bv;
+          c = rgb(gr > 255 ? 255 : gr | 0, gg2 > 255 ? 255 : gg2 | 0, gb > 255 ? 255 : gb | 0);
+        }
       }
       let darkK = shadowed ? 0.86 : 1;
       if (treeSh > 0) darkK *= 1 - treeSh * 0.5;
@@ -2291,13 +2354,29 @@ function render(now) {
     const f = fogAt(dist) * (side === 1 ? 0.78 : 1);
     const hx = mapX + 0.5, hy = mapY + 0.5;
     const glow = !cw && tile === 'c' ? 0.45 * pulse : glowAt(hx, hy) * f;
+    /* GI ASSADA (D-36) nas paredes da cidade: amostra o chão logo à frente
+       da face (é ele que a ilumina) — 1 lookup por COLUNA, não por pixel */
+    let gwR = 1, gwG = 1, gwB = 1;
+    if (cw && GI_CUR && giOn) {
+      const dW = Math.max(0.05, dist - 0.12); // recuo FIXO da face (proporcional caía longe da parede)
+      giAt(cam.x + rdx * dW, cam.y + rdy * dW);
+      gwR = GI_R; gwG = GI_G; gwB = GI_Bv;
+    }
     const texH = cw ? tex.h : TEX;
     const texStep = texH / fullH;
     let texPos = (y0 - y0r) * texStep;
     for (let y = y0; y <= y1; y++) {
       const v = clamp(texPos | 0, 0, texH - 1);
       texPos += texStep;
-      const c = texAt(tex, fIx, u, v);
+      let c = texAt(tex, fIx, u, v);
+      if (gwR !== 1 || gwG !== 1 || gwB !== 1) {
+        /* a luz do chão morre subindo a parede: fator cheio na base, 35% no
+           topo — senão a poça do lampião acende até o telhado de cobre */
+        const kv = 0.35 + 0.65 * (v / texH);
+        const wR = 1 + (gwR - 1) * kv, wG = 1 + (gwG - 1) * kv, wB = 1 + (gwB - 1) * kv;
+        let gr = (c & 255) * wR, gg2 = ((c >> 8) & 255) * wG, gb = ((c >> 16) & 255) * wB;
+        c = rgb(gr > 255 ? 255 : gr | 0, gg2 > 255 ? 255 : gg2 | 0, gb > 255 ? 255 : gb | 0);
+      }
       px[y * W + x] = !cw && tile === 'c'
         ? shade(c, clamp(f + 0.5, 0, 1), glow)  /* o Núcleo emite: quase sem fog */
         : shade(c, f, glow);
@@ -2758,6 +2837,11 @@ addEventListener('keydown', (e) => {
     tagsOn = !tagsOn;
     try { localStorage.setItem('nos_tags', tagsOn ? '1' : '0'); } catch { /* ok */ }
     if (!tagsOn) document.getElementById('tags').textContent = '';
+  }
+  if (e.key.toLowerCase() === 'g') { // GI assada liga/desliga (D-36) — A/B honesto
+    giOn = !giOn;
+    giWK = -1; // força re-mistura ao religar
+    try { localStorage.setItem('nos_gi', giOn ? '1' : '0'); } catch { /* ok */ }
   }
   document.getElementById('hint').classList.add('gone');
 });

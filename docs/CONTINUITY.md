@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 12) — GI assada (D-36): o Actions vira render farm
+
+- Ideador pediu "gráficos realísticos que pesem pouco, que ninguém nunca pensou" e aprovou o passe A: **luz path-traced offline, cliente só consulta**. `bake-gi.mjs` (Node puro, ~2.5s, determinístico) → PNG 58KB (3 horários, 128×128, 128=neutro) → `build-fps` inline (assa se faltar: o deploy ganha GI sem tocar workflow).
+- Cliente: mistura por frame pelos pesos do céu, bilinear por pixel de chão, parede por coluna com decaimento vertical, glowAt recua 60% com GI viva, tecla **G** (A/B), 59-60fps.
+- **Calibração PELO OLHAR (4 rodadas)** — o D-35 pagou no primeiro dia de uso: ruído→blur 3×3; noite lavada→squash+poças apertadas (breu com poças); rosa diurno→croma por horário (razão contra ref azulada infla o R); telhado ciano→decaimento vertical na parede. Antes/depois salvos e comparados; carreiro/spawn sem regressão (sem escurecimento duplo com TREE_SHADOW).
+- PoC honesto: layout da cidade DUPLICADO no assador (fonte única = produção); grade estática (rebake automático a cada deploy); poça não pulsa. Próximos: F9 (passes B horizonte-filme e C quietude-que-revela).
+
 ## Sessão 2026-07-16 (parte 11) — a bancada do coder (D-35): limitações viram ferramentas
 
 - Pergunta do ideador: "nem sei suas limitações — você consegue descobri-las sozinho?". Resposta validada: introspecção não; **diário de atrito sim** — o CONTINUITY já registra cada erro real; destilar atrito→ferramenta (a ferramenta cita o incidente de origem) é o mecanismo. Registrado como método permanente em `docs/CODER.md`.

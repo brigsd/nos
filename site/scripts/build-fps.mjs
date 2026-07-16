@@ -24,7 +24,8 @@
  * No dependencies — Node built-ins only, mirroring scripts/copy-data.mjs.
  */
 
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -78,12 +79,23 @@ const data = {
   players: positionsOf(world.players),
 };
 
+/* GI assada (D-36): o path tracer offline (prototipos/fps/bake/) escreve as
+   3 grades de luz num PNG; se o artefato não existir (checkout fresco, CI),
+   assa aqui mesmo — segundos, determinístico. Falhou? Publica sem GI: o
+   cliente degrada sozinho (typeof NOS_GI). */
+const giPng = path.join(REPO_ROOT, 'prototipos', 'fps', 'bake', 'out', 'gi.png');
+if (!existsSync(giPng)) {
+  const r = spawnSync('node', [path.join(REPO_ROOT, 'prototipos', 'fps', 'bake', 'bake-gi.mjs')], { stdio: 'inherit' });
+  if (r.status !== 0) console.warn('build-fps: bake-gi falhou — publicando sem GI');
+}
+const gi = existsSync(giPng) ? `data:image/png;base64,${readFileSync(giPng).toString('base64')}` : null;
+
 const html = readFileSync(path.join(REPO_ROOT, 'prototipos', 'fps', 'nos-fps.html'), 'utf8');
 const DATA_TAG = '<script src="data.js"></script>';
 if (!html.includes(DATA_TAG)) {
   throw new Error('build-fps: tag <script src="data.js"> não encontrada em prototipos/fps/nos-fps.html');
 }
-const inline = `<script>const NOS_DATA = ${JSON.stringify(data)};\nconst NOS_SPRITES = ${JSON.stringify(sprites)};</script>`;
+const inline = `<script>const NOS_DATA = ${JSON.stringify(data)};\nconst NOS_SPRITES = ${JSON.stringify(sprites)};\nconst NOS_GI = ${JSON.stringify(gi)};</script>`;
 const out = html.replace(DATA_TAG, inline);
 
 const outDir = path.join(SITE_ROOT, 'public', 'fps');
