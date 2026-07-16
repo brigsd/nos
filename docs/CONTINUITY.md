@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 10) — E2E dos Habitantes: o loop provado no pipeline real + o validador aprende a reconhecê-los
+
+- **O 1º `/habitar` real DERRUBOU o tick — e foi o melhor teste possível.** Issue #48 (`/habitar brasa`) postada de verdade → tick FALHOU: `Invalid world state: events[N] (native_spoke).nativeId ("brasa") does not exist in natives` (o cross-check do `validate.ts` só conhecia `world.natives`). Os 6 testes unitários do `/habitar` passavam porque validavam o COMANDO, não o mundo inteiro DEPOIS dele — o gate de validação que roda no tick real nunca era exercido.
+- **Conserto (commit `0696e49`) — os Habitantes viram identidades canônicas do motor.** `HABITANTES_CANONICOS = ['brasa','broa','quilha']` como fonte ÚNICA em `engine/types.ts`: NÃO são `world.natives` (não têm árvore de comportamento nem posição no estado — são identidades de FALA reconhecidas). `validate.ts`: um `native_spoke.nativeId` válido agora é um Nativo (`world.natives`) OU um Habitante canônico. `commands.ts` lê a MESMA constante na allowlist (uma fonte, não duas listas pra dessincronizar). Teste de regressão novo valida o mundo INTEIRO pós-comando (`validateWorld(res.world).valid`), não só que o comando não lança — a lição do #48 virou guardrail permanente.
+- **E2E provado em PRODUÇÃO (não mock).** Issues #48 (brasa) e #49 (broa) processadas pelo tick REAL e fechadas pelo `github-actions[bot]` com resposta oficial ("broa falou n'A Clareira: 'Se vier pelo carreiro, chega com fome...'"); `world/heart.json` da main tem 2 eventos `native_spoke` gravados no Registro, visíveis no Mural do 2D. O loop inteiro — issue → tick → validação → commit → Mural — roda de ponta a ponta pelo mesmo canal público dos humanos. 368/368 verdes.
+- **Pendente do ideador**: `pages.yml` precisa de `- 'prototipos/fps/**'` em `on.push.paths` (edições de workflow são bloqueadas pra minha sessão) — sem isso, mudança só-do-FPS espera a próxima batida pra deployar. O 1º ciclo 100% autônomo das mentes (Models + issue sem eu no meio) é o cron `:23` do `pensar.yml` no `nos-mentes`.
+
 ## Sessão 2026-07-16 (parte 9) — fase 2 dos Habitantes: a mão (D-34)
 
 - **NOS_PAT criado pelo ideador** (fine-grained, issues:write só no nos). Sobre validade: >90 dias não dá problema técnico; expirou = mentes mudas pro mundo até trocar o secret, nada quebra.

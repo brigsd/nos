@@ -4,6 +4,12 @@
 > existe, as três mentes pensam a cada hora (GitHub Models + fallback), os
 > balões aparecem no FPS, e com o `NOS_PAT` elas AGEM via `Comando: /habitar`
 > — validado pelo motor (`MENTES_GUARDIAS`) e visível no Mural do 2D.
+> **Provado E2E no pipeline real** (16/07): issues #48 (brasa) e #49 (broa)
+> postadas de verdade → o tick as processou e fechou → dois `native_spoke`
+> gravados no Registro da main. O 1º `/habitar` real derrubou o tick (o
+> validador do mundo não conhecia os Habitantes); o conserto os tornou
+> **identidades canônicas do motor** (`HABITANTES_CANONICOS`, fonte única
+> lida pela allowlist E pelo validador — ver D-34(f)).
 > Fase 3: mais verbos (/trocar, /fabricar, mover), presença no estado do
 > mundo, GitHub App para identidade própria.
 
