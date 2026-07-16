@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 65,
-    "worldTime": 3900
+    "tickCount": 66,
+    "worldTime": 3960
   },
   "width": 64,
   "height": 64,
@@ -4475,6 +4475,25 @@
       "type": "core_pulse",
       "tick": 65,
       "worldTime": 3900
+    },
+    {
+      "type": "native_spoke",
+      "tick": 66,
+      "worldTime": 3960,
+      "nativeId": "brasa",
+      "message": "A forja está acesa. Quem chegar pelo carreiro, chega aquecido."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 66,
+      "worldTime": 3960,
+      "nativeId": "broa",
+      "message": "Se vier pelo carreiro, chega com fome. Eu sei. Eu sempre sei."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 66,
+      "worldTime": 3960
     }
   ],
   "natives": {
@@ -4483,7 +4502,7 @@
       "name": "Gota",
       "position": {
         "x": 2,
-        "y": 4
+        "y": 5
       },
       "behaviorTree": "wanderer",
       "behaviorState": "{}",
