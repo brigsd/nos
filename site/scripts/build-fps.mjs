@@ -12,6 +12,11 @@
  * Because pages.yml redeploys on every world/** push, the FPS view stays
  * in sync with the live world at every batida, same as the 2D client.
  *
+ * Known gap: pages.yml's push paths do NOT include prototipos/fps/**, so a
+ * commit that only touches the raycaster waits for the next batida (or a
+ * site/** touch) to reach /fps/. Fix is adding 'prototipos/fps/**' to the
+ * workflow paths — needs the ideador (workflow edits are gated).
+ *
  * prototipos/fps/nos-fps.html stays the single source of truth for the
  * prototype; site/public/fps/ is pure build output, regenerated before
  * every dev/build run and never committed (see site/.gitignore).
