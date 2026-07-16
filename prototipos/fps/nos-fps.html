@@ -1144,7 +1144,10 @@ addBill(NOS_DATA.natives.gota?.x ?? 4, NOS_DATA.natives.gota?.y ?? 2, 'gota', 1,
 addBill(NOS_DATA.natives.raiz?.x ?? 43, NOS_DATA.natives.raiz?.y ?? 6, 'raiz', 1, 'raiz');
 addBill(NOS_DATA.natives.cinza?.x ?? 25, NOS_DATA.natives.cinza?.y ?? 8, 'cinza', 1, 'cinza');
 addBill(57, 32, 'portal', 2, 'portais'); /* recuado da borda da ilha */
-bills.push({ x: 33, y: 33, tex: 'orb', frames: 1, label: 'nucleo', scale: 2.0, lift: 0.45 }); /* o orbe procedural do Núcleo, centro do CORE 2x2 */
+/* O Núcleo não é mais o orbe-bola (deslocado no cenário diurno — decisão do
+   ideador, 2026-07-16): sua presença agora é LUZ — o glow violeta da praça
+   (glowAt/pulse) + as motas do Pulso orbitando o centro. Para reverter,
+   restaurar o bills.push do 'orb' aqui (x:33 y:33 scale:2.0 lift:0.45). */
 /* ilhas-irmãs flutuando no céu — os outros mundos, vistos daqui (lore dos
    portais). Acima E abaixo da nossa; as de seed par têm cachoeira. */
 {
