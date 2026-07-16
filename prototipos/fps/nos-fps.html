@@ -573,30 +573,25 @@ function genGrassTile(seed) {
 }
 const GRASS_TILES = [genGrassTile(1), genGrassTile(2), genGrassTile(3)];
 
-/* céu panorâmico diurno: gradiente + cúmulos + maciço na bruma (uma volta = 360°) */
+/* céu panorâmico diurno em CAMADAS: base estática (gradiente+maciço) e
+   duas camadas de cúmulos com parallax — longe deriva devagar, perto mais
+   rápido; a montanha é marco do mundo e fica PARADA. */
 const SKY_W = 1024, SKY_H = HALF;
-const SKY = new Uint32Array(SKY_W * SKY_H);
+const SKY_BASE = new Uint32Array(SKY_W * SKY_H);
+const CLOUD_FAR = new Uint32Array(SKY_W * SKY_H);  // alpha 0 = furo
+const CLOUD_NEAR = new Uint32Array(SKY_W * SKY_H);
 {
   const px32 = (r, g, b) => (255 << 24) | (b << 16) | (g << 8) | r;
   const lerp = (a, b, t) => a + (b - a) * t;
   const mix = (c1, c2, t) => px32(lerp(c1[0], c2[0], t) | 0, lerp(c1[1], c2[1], t) | 0, lerp(c1[2], c2[2], t) | 0);
   const C = { 47: [77,155,230], 48: [143,211,255], 8: [199,220,208], 9: [255,255,255], 7: [155,171,178], 19: [122,48,69], 3: [150,108,108], 5: [105,79,98], 6: [127,112,138] };
-  /* gradiente LISO (panorama é amostrado não-contíguo — dither viraria moiré) */
+  /* base: gradiente liso */
   for (let y = 0; y < SKY_H; y++) {
     const t = y / SKY_H;
     const row = t < 0.5 ? mix(C[47], C[48], t / 0.5) : t < 0.85 ? mix(C[48], C[8], (t - 0.5) / 0.35) : mix(C[8], C[9], (t - 0.85) / 0.15);
-    for (let x = 0; x < SKY_W; x++) SKY[y * SKY_W + x] = row;
+    for (let x = 0; x < SKY_W; x++) SKY_BASE[y * SKY_W + x] = row;
   }
-  /* cúmulos sólidos (miolo branco, borda azul-clara), sem dither */
-  for (let y = 0; y < SKY_H; y++) for (let x = 0; x < SKY_W; x++) {
-    const n = fbm(x / 46, y / 26, 4), band = Math.sin((y / SKY_H) * Math.PI);
-    const v = n * (0.55 + 0.45 * band);
-    if (v > 0.57) {
-      const c = v > 0.64 ? C[9] : y / SKY_H > 0.55 ? C[7] : C[48];
-      SKY[y * SKY_W + x] = px32(c[0], c[1], c[2]);
-    }
-  }
-  /* maciço fixo no rumo leste — bandas sólidas, base derretendo na bruma */
+  /* maciço fixo no rumo leste */
   const mx = SKY_W * 0.25, mw = SKY_W * 0.075, peak = SKY_H * 0.44;
   for (let x = 0; x < SKY_W; x++) {
     let dx = (x - mx) / mw; dx = dx < 0 ? -dx * 0.7 : dx;
@@ -604,12 +599,55 @@ const SKY = new Uint32Array(SKY_W * SKY_H);
     const ridge = peak + (SKY_H - peak) * Math.pow(dx, 1.7) + (fbm(x / 13, 7, 3) - 0.5) * 8;
     for (let y = Math.max(0, ridge | 0); y < SKY_H; y++) {
       const depth = (y - ridge) / Math.max(1, SKY_H - ridge);
-      const hazeT = Math.max(0, (y - (SKY_H - 10)) / 10); // 10 últimas linhas afundam na bruma
+      const hazeT = Math.max(0, (y - (SKY_H - 10)) / 10);
       let c = depth < 0.2 ? C[3] : C[19];
-      SKY[y * SKY_W + x] = mix(c, C[8], Math.max(hazeT, depth > 0.85 ? 0.35 : 0));
+      SKY_BASE[y * SKY_W + x] = mix(c, C[8], Math.max(hazeT, depth > 0.85 ? 0.35 : 0));
     }
   }
+
+  /* cúmulo pixel-art: união de "puffs" elípticos RECORTADA numa base achatada;
+     3 tons — topo branco, barriga azul-pálida, base cinza (ref. BotW) */
+  function stampCloud(layer, rnd, cx, cy, w, h, faint) {
+    const n = 6 + (rnd() * 4) | 0;
+    const puffs = [];
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      const centerBoost = 1 - Math.abs(t - 0.5) * 1.25; // miolo bem mais alto que as pontas
+      puffs.push({
+        px: cx + (t - 0.5) * w * 0.92 + (rnd() - 0.5) * w * 0.05,
+        py: cy - h * (0.10 + 0.44 * centerBoost) - rnd() * h * 0.10,
+        pr: h * (0.26 + rnd() * 0.16) * (0.6 + centerBoost * 0.55),
+      });
+    }
+    const baseY = cy + h * 0.18;
+    const x0 = Math.floor(cx - w * 0.62), x1 = Math.ceil(cx + w * 0.62);
+    const y0 = Math.max(0, Math.floor(cy - h * 1.1)), y1 = Math.min(SKY_H - 1, Math.ceil(baseY));
+    for (let y = y0; y <= y1; y++) {
+      for (let xx = x0; xx <= x1; xx++) {
+        let inside = false, topMost = 1e9;
+        for (const p of puffs) {
+          const dx = (xx - p.px) / p.pr, dy = (y - p.py) / (p.pr * 0.72);
+          if (dx * dx + dy * dy <= 1) { inside = true; const top = p.py - p.pr * 0.72; if (top < topMost) topMost = top; }
+        }
+        if (!inside) continue;
+        const x = ((xx % SKY_W) + SKY_W) % SKY_W; // panorama dá a volta
+        const fromBase = baseY - y;
+        const rel = (y - topMost) / Math.max(1, baseY - topMost); // 0 topo .. 1 base
+        let c;
+        if (fromBase < 2.5) c = C[7];       // base cinza achatada
+        else if (rel > 0.62) c = C[48];     // barriga à sombra
+        else c = C[9];                      // topo ao sol
+        if (faint) c = [lerp(c[0], C[48][0], 0.35) | 0, lerp(c[1], C[48][1], 0.35) | 0, lerp(c[2], C[48][2], 0.35) | 0];
+        layer[y * SKY_W + x] = px32(c[0], c[1], c[2]);
+      }
+    }
+  }
+  const rf = mulberry32(777);
+  for (let i = 0; i < 9; i++) stampCloud(CLOUD_FAR, rf, rf() * SKY_W, 10 + rf() * 26, 34 + rf() * 42, 10 + rf() * 8, true);
+  const rn = mulberry32(4242);
+  for (let i = 0; i < 5; i++) stampCloud(CLOUD_NEAR, rn, rn() * SKY_W, 22 + rn() * 30, 90 + rn() * 110, 22 + rn() * 14, false);
 }
+
 /* ---------- estado ---------- */
 const spawn = NOS_DATA.players.brigsd ?? { x: 31, y: 30 };
 const cam = { x: 26.5, y: 27.5, a: 0.70 }; /* recuado do spawn oficial só pro enquadramento inicial da demo */
@@ -682,13 +720,23 @@ function render(now) {
   const dirX = Math.cos(cam.a), dirY = Math.sin(cam.a);
   const plX = -dirY * FOV_PLANE, plY = dirX * FOV_PLANE;
 
-  /* céu panorâmico diurno: amostrado por ângulo do raio (gira com a câmera) */
-  const drift = now * 0.002; // nuvens à deriva
+  /* céu em camadas: base parada (montanha = marco), nuvens em parallax */
+  const driftFar = (now * 0.0018) % SKY_W;   // ~30s pra cruzar um oitavo do céu
+  const driftNear = (now * 0.0052) % SKY_W;  // camada baixa ~3x mais rápida
   for (let x = 0; x < W; x++) {
     const colAng = cam.a + Math.atan(((2 * x) / W - 1) * FOV_PLANE);
-    let u = ((colAng / (Math.PI * 2)) % 1 + 1) % 1;
-    const sx = ((u * SKY_W + drift) | 0) % SKY_W;
-    for (let y = 0; y < HALF; y++) px[y * W + x] = SKY[y * SKY_W + sx];
+    const u = ((colAng / (Math.PI * 2)) % 1 + 1) % 1;
+    const sxB = (u * SKY_W) | 0;
+    const sxF = ((u * SKY_W + driftFar) | 0) % SKY_W;
+    const sxN = ((u * SKY_W + driftNear) | 0) % SKY_W;
+    for (let y = 0; y < HALF; y++) {
+      let c = SKY_BASE[y * SKY_W + sxB];
+      const cf = CLOUD_FAR[y * SKY_W + sxF];
+      if (cf !== 0) c = cf;
+      const cn = CLOUD_NEAR[y * SKY_W + sxN];
+      if (cn !== 0) c = cn;
+      px[y * W + x] = c;
+    }
   }
 
   /* chão (floor casting) */
