@@ -135,6 +135,15 @@ function growTree(opts) {
     return { buf, W, H };
   }
 
+  /* vento: desloca os aglomerados de folha pro lado, mais forte no alto da
+     copa — o TRONCO fica parado; 3 frames disso viram o balanço */
+  if (opts.windAmt) {
+    for (const lf of leaves) {
+      const heightW = 0.5 + 1.3 * (1 - lf.y / H);
+      lf.x += opts.windAmt * heightW * (0.7 + hash2(lf.x | 0, lf.y | 0) * 0.8);
+    }
+  }
+
   /* ---- copa: campo de densidade -> massa coesa iluminada ---- */
   const dens = new Float32Array(W * H);
   let cx = 0, cy = 0, minY = H, maxY = 0;
@@ -202,6 +211,8 @@ function growTree(opts) {
         else buf[y * W + x] = leafRamp[idx];
         continue;
       }
+      // textura de folhagem: marquinhas 1px subindo/descendo um tom
+      if (hash2(x * 3 + 1, y * 3 + 7) < 0.13) idx = clamp(idx + (hash2(x, y * 13) < 0.5 ? -1 : 1), 0, last);
       // brilho pontual (folha pegando sol)
       if (lam > 0.32 && hash2(x + 7, y + 13) < 0.045) idx = last;
       buf[y * W + x] = leafRamp[Math.max(idx, 0)];

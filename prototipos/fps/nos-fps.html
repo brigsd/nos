@@ -277,6 +277,15 @@ function growTree(opts) {
     return { buf, W, H };
   }
 
+  /* vento: desloca os aglomerados de folha pro lado, mais forte no alto da
+     copa — o TRONCO fica parado; 3 frames disso viram o balanço */
+  if (opts.windAmt) {
+    for (const lf of leaves) {
+      const heightW = 0.5 + 1.3 * (1 - lf.y / H);
+      lf.x += opts.windAmt * heightW * (0.7 + hash2(lf.x | 0, lf.y | 0) * 0.8);
+    }
+  }
+
   /* ---- copa: campo de densidade -> massa coesa iluminada ---- */
   const dens = new Float32Array(W * H);
   let cx = 0, cy = 0, minY = H, maxY = 0;
@@ -344,6 +353,8 @@ function growTree(opts) {
         else buf[y * W + x] = leafRamp[idx];
         continue;
       }
+      // textura de folhagem: marquinhas 1px subindo/descendo um tom
+      if (hash2(x * 3 + 1, y * 3 + 7) < 0.13) idx = clamp(idx + (hash2(x, y * 13) < 0.5 ? -1 : 1), 0, last);
       // brilho pontual (folha pegando sol)
       if (lam > 0.32 && hash2(x + 7, y + 13) < 0.045) idx = last;
       buf[y * W + x] = leafRamp[Math.max(idx, 0)];
@@ -443,50 +454,79 @@ function genSky(opts) {
   return { buf, W, H };
 }
 
-/* rocha: blob convexo deformado por ruído, sombreado por normal quantizada + topo de musgo */
+/* rocha v2: blob deformado por ruído com FACETAS duras (platôs), rim light
+   no alto-esquerda, sombra dura embaixo, rachaduras e musgo ditherado.
+   `view` gira a MESMA pedra (0..3 = quartos de volta): 4 faces pré-rendidas
+   viram "rotações Doom" — a pedra lê como objeto, não adesivo. */
 function genRock(opts) {
   const seed = (opts.seed | 0) || 1;
-  const rnd = mulberry32(seed);
-  const W = opts.W || 56, H = opts.H || 40;
+  const view = opts.view || 0;
+  const rot = view * Math.PI / 2;
+  const rnd = mulberry32(seed * 33871 + 5);
+  const W = opts.W || 72, H = opts.H || 52;
   const buf = new Int16Array(W * H).fill(-1);
-  const cx = W / 2, cy = H * 0.62;
-  const rx = W * (0.34 + rnd() * 0.1), ry = H * (0.3 + rnd() * 0.08);
+  const cx = W / 2, cy = H * 0.58;
+  const rx = W * (0.34 + rnd() * 0.09), ry = H * (0.32 + rnd() * 0.08);
   const off = rnd() * 128;
-  const rad = (ang) => 1 + 0.34 * (vnoise(Math.cos(ang) * 1.4 + off, Math.sin(ang) * 1.4 + off) - 0.5) * 2;
+  const baseline = cy + ry * 0.72; // base ACHATADA: pedra sentada no chão, não oval flutuante
+  const rad = (ang) => 1 + 0.36 * (vnoise(Math.cos(ang + rot) * 1.4 + off, Math.sin(ang + rot) * 1.4 + off) - 0.5) * 2;
   const inside = (x, y) => {
+    if (y > baseline) return -1;
     const ang = Math.atan2((y - cy) / ry, (x - cx) / rx);
     const rr = rad(ang);
     const d = Math.hypot((x - cx) / (rx * rr), (y - cy) / (ry * rr));
     return d <= 1 ? d : -1;
   };
+  const cosR = Math.cos(rot), sinR = Math.sin(rot);
+  const RAMP = [1, 2, 6, 7, 8];
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const d = inside(x, y);
       if (d < 0) continue;
-      // normal aproximada pelo gradiente da distância
       const eps = 1.2;
       const dl = inside(x - eps, y), dr = inside(x + eps, y);
       const du = inside(x, y - eps), dd = inside(x, y + eps);
-      const nx = (dr < 0 ? 1.4 : dr) - (dl < 0 ? 1.4 : dl);
-      const ny = (dd < 0 ? 1.4 : dd) - (du < 0 ? 1.4 : du);
+      const nx = (dr < 0 ? 1.5 : dr) - (dl < 0 ? 1.5 : dl);
+      const ny = (dd < 0 ? 1.5 : dd) - (du < 0 ? 1.5 : du);
       const nm = Math.hypot(nx, ny) || 1e-4;
-      const lam = (-nx / nm) * -0.55 + (-ny / nm) * -0.83; // luz alto-esquerda
-      const facet = fbm(x / 7 + off, y / 7 + off, 3);       // facetas internas
-      let t = 0.55 + 0.5 * lam + (facet - 0.5) * 0.55;
-      t += (BAYER[y & 3][x & 3] / 16 - 0.5) * 0.18;
-      // musgo no topo (normal apontando pra cima + parte alta da rocha)
+      const lam = (-nx / nm) * -0.55 + (-ny / nm) * -0.83;
+      const xr = cosR * (x - cx) - sinR * (y - cy), yr = sinR * (x - cx) + cosR * (y - cy);
+      const facet = Math.floor(fbm(xr / 8 + off, yr / 8 + off, 3) * 4) / 4;
+      let t = 0.52 + 0.40 * lam + (facet - 0.5) * 0.80;
+      const boundary = inside(x - 1, y) < 0 || inside(x + 1, y) < 0 || inside(x, y - 1) < 0 || inside(x, y + 1) < 0;
       const upness = -ny / nm;
-      if (upness > 0.45 && d < 0.9 && fbm(x / 5 + off * 2, y / 5, 2) > 0.42 && y < cy) {
-        buf[y * W + x] = t > 0.62 ? 37 : 36;
+      const mossV = fbm(xr / 5 + off * 2, yr / 5, 2);
+      if (upness > 0.45 && y < cy - ry * 0.22 && (mossV > 0.46 || (mossV > 0.40 && (BAYER[y & 3][x & 3] / 16) < 0.5))) {
+        buf[y * W + x] = t > 0.6 ? 37 : 36;
         continue;
       }
-      const RAMP = [1, 2, 6, 7, 8]; // sombra..luz (cinzas do jogo)
+      if (boundary) {
+        buf[y * W + x] = lam > 0.15 ? 8 : lam < -0.25 ? 1 : 2;
+        continue;
+      }
       buf[y * W + x] = RAMP[clamp(Math.round(t * 4), 0, 4)];
+    }
+  }
+  // sombra de contato: elipse escura colada na base (por trás da pedra)
+  const shW = rx * 1.15, shH = Math.max(2.5, ry * 0.22);
+  for (let y = (baseline - shH) | 0; y <= Math.min(H - 1, (baseline + shH) | 0); y++) {
+    for (let x = 0; x < W; x++) {
+      const ex = (x - cx) / shW, ey = (y - baseline) / shH;
+      if (ex * ex + ey * ey > 1) continue;
+      if (buf[y * W + x] === -1 && (ex * ex + ey * ey < 0.72 || (BAYER[y & 3][x & 3] / 16) < 0.5)) buf[y * W + x] = 30; /* miolo sólido, só a borda dithera */
+    }
+  }
+  const cracks = 2 + (rnd() * 2) | 0;
+  for (let i = 0; i < cracks; i++) {
+    let x = cx + (rnd() - 0.5) * rx * 1.1, y = cy - ry * (0.4 + rnd() * 0.4);
+    const len = H * (0.25 + rnd() * 0.3);
+    for (let k = 0; k < len; k++) {
+      if (inside(x | 0, y | 0) >= 0 && buf[(y | 0) * W + (x | 0)] >= 1 && buf[(y | 0) * W + (x | 0)] <= 8) buf[(y | 0) * W + (x | 0)] = 1;
+      x += (rnd() - 0.5) * 1.6; y += 0.9;
     }
   }
   return { buf, W, H };
 }
-
 
 'use strict';
 /* NÓS — protótipo "Visão da Intenção": raycaster clássico (DDA + floor casting
@@ -551,56 +591,90 @@ function bufToTex(gen) {
   }
   return { w: gen.W, h: gen.H, data };
 }
-const TREE_VARIANTS = [];
-for (let i = 0; i < 6; i++) {
-  const sp = i < 4 ? 'carvalho' : 'anciao';
-  TREE_VARIANTS.push(bufToTex(growTree({ species: sp, mood: 'dia', seed: 4021 + i * 977, W: 104, H: 136 })));
-}
+/* espécies extras só do protótipo (variedade de silhueta) */
+SPECIES.copado = { ...SPECIES.carvalho, spread: 0.74, leafR: [9, 14], depth: 7, len: 20, upBias: 0.03 };
+SPECIES.jovem = { ...SPECIES.carvalho, len: 15, width: 5, leafR: [5, 8], depth: 6, jitter: 0.42 };
+/* 8 variantes x 3 frames de VENTO (folhas deslocam, tronco parado) */
+const TREE_SPECIES_SET = ['carvalho', 'carvalho', 'copado', 'copado', 'anciao', 'anciao', 'jovem', 'salgueiro'];
+const TREE_VARIANTS = TREE_SPECIES_SET.map((sp, i) =>
+  [-1, 0, 1].map((w) => bufToTex(growTree({ species: sp, mood: 'dia', seed: 4021 + i * 977, W: 104, H: 136, windAmt: w })))
+);
+/* rochas: 4 variantes x 4 FACES (rotações de 90 graus escolhidas pelo ângulo de visão) */
 const ROCK_VARIANTS = [];
-for (let i = 0; i < 4; i++) ROCK_VARIANTS.push(bufToTex(genRock({ seed: 500 + i * 61, W: 56, H: 40 })));
+for (let i = 0; i < 4; i++) {
+  const views = [];
+  for (let v = 0; v < 4; v++) views.push(bufToTex(genRock({ seed: 500 + i * 61, view: v, W: 72, H: 52 })));
+  ROCK_VARIANTS.push(views);
+}
+/* flor avulsa: haste em arco + cabeça de pétalas; 3 frames de inclinação */
+function genFlower(seed, lean) {
+  const Wf = 14, Hf = 18;
+  const rnd = mulberry32(seed * 48611 + 3);
+  const buf = new Int16Array(Wf * Hf).fill(-1);
+  const put = (x, y, idx) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < Wf && y < Hf) buf[y * Wf + x] = idx; };
+  const PETALS = [[9, 28], [57, 60], [18, 23], [53, 52], [61, 60]][(rnd() * 5) | 0];
+  const baseX = Wf / 2, baseY = Hf - 1, len = 9 + rnd() * 4;
+  const bend = lean * (2 + rnd() * 1.2);
+  let hx = baseX;
+  const hy = baseY - len;
+  for (let k = 0; k <= len; k++) {
+    const t = k / len;
+    const x = baseX + bend * t * t;
+    put(x, baseY - k, 30);
+    if (k === ((len * 0.45) | 0)) { put(x - 1, baseY - k, 31); put(x + 1, baseY - k - 1, 31); }
+    hx = x;
+  }
+  put(hx, hy - 1, PETALS[0]); put(hx - 1, hy, PETALS[0]); put(hx + 1, hy, PETALS[0]); put(hx, hy + 1, PETALS[0]);
+  put(hx - 1, hy - 1, PETALS[1]); put(hx + 1, hy - 1, PETALS[1]);
+  put(hx, hy, 28);
+  return bufToTex({ buf, W: Wf, H: Hf });
+}
+const FLOWER_VARIANTS = [];
+for (let i = 0; i < 5; i++) FLOWER_VARIANTS.push([genFlower(21 + i * 53, -1), genFlower(21 + i * 53, 0), genFlower(21 + i * 53, 1)]);
 /* grama diurna v2: base viva + PINCELADAS direcionais (lâminas deitadas na
    mesma diagonal, como grama penteada pelo vento) + touceiras escuras +
    flores em cacho de 2x2 — lê como gramado, não como confete */
+const GTEX = 32; /* 32px por tile de mundo = grão 2x mais fino */
 function genGrassTile(seed, flowery) {
   const rnd = mulberry32(seed * 7919 + 13);
-  const buf = new Int16Array(TEX * TEX).fill(32);
+  const buf = new Int16Array(GTEX * GTEX).fill(32);
   // respiração sutil da base (manchas 1 passo mais claras)
-  for (let y = 0; y < TEX; y++) for (let x = 0; x < TEX; x++) {
-    if (vnoise(x / 5 + seed * 11, y / 5 - seed * 3) > 0.70) buf[y * TEX + x] = 33;
+  for (let y = 0; y < GTEX; y++) for (let x = 0; x < GTEX; x++) {
+    if (vnoise(x / 9 + seed * 11, y / 9 - seed * 3) > 0.70) buf[y * GTEX + x] = 33;
   }
   // pinceladas: traços de 2-4px na diagonal do vento (\), tons acima/abaixo
-  const strokes = 14 + (rnd() * 6) | 0;
+  const strokes = 46 + (rnd() * 14) | 0;
   for (let i = 0; i < strokes; i++) {
-    const sx = (rnd() * TEX) | 0, sy = (rnd() * TEX) | 0;
+    const sx = (rnd() * GTEX) | 0, sy = (rnd() * GTEX) | 0;
     const len = 2 + (rnd() * 3) | 0;
     const tone = rnd() < 0.45 ? 31 : rnd() < 0.75 ? 27 : 33;
     for (let k = 0; k < len; k++) {
-      const x = (sx + k) & (TEX - 1), y = (sy - (k >> 1) + TEX) & (TEX - 1);
-      buf[y * TEX + x] = tone;
+      const x = (sx + k) & (GTEX - 1), y = (sy - (k >> 1) + TEX) & (GTEX - 1);
+      buf[y * GTEX + x] = tone;
     }
   }
   // touceiras: 2-3 aglomerados escuros pequenos (ancoram o olho)
-  const clumps = 2 + (rnd() * 2) | 0;
+  const clumps = 6 + (rnd() * 3) | 0;
   for (let i = 0; i < clumps; i++) {
-    const cx = (rnd() * TEX) | 0, cy = (rnd() * TEX) | 0;
+    const cx = (rnd() * GTEX) | 0, cy = (rnd() * GTEX) | 0;
     for (let k = 0; k < 4; k++) {
-      const x = (cx + ((rnd() * 3) | 0) - 1 + TEX) & (TEX - 1), y = (cy + ((rnd() * 2) | 0) + TEX) & (TEX - 1);
-      buf[y * TEX + x] = k === 0 ? 30 : 31;
+      const x = (cx + ((rnd() * 3) | 0) - 1 + TEX) & (GTEX - 1), y = (cy + ((rnd() * 2) | 0) + TEX) & (GTEX - 1);
+      buf[y * GTEX + x] = k === 0 ? 30 : 31;
     }
   }
   // flores em cacho (só nos tiles floridos): coroa de pétalas + miolo
   if (flowery) {
-    const n = 1 + (rnd() * 2) | 0;
+    const n = 2 + (rnd() * 3) | 0;
     for (let i = 0; i < n; i++) {
-      const fx = 2 + (rnd() * (TEX - 4)) | 0, fy = 2 + (rnd() * (TEX - 4)) | 0;
+      const fx = 2 + (rnd() * (GTEX - 4)) | 0, fy = 2 + (rnd() * (GTEX - 4)) | 0;
       const petal = [9, 57, 18, 53][(rnd() * 4) | 0];
-      buf[fy * TEX + fx] = petal;
-      buf[fy * TEX + ((fx + 1) & (TEX - 1))] = petal;
-      buf[((fy + 1) & (TEX - 1)) * TEX + fx] = petal;
-      buf[((fy + 1) & (TEX - 1)) * TEX + ((fx + 1) & (TEX - 1))] = 28; // miolo
+      buf[fy * GTEX + fx] = petal;
+      buf[fy * GTEX + ((fx + 1) & (GTEX - 1))] = petal;
+      buf[((fy + 1) & (GTEX - 1)) * GTEX + fx] = petal;
+      buf[((fy + 1) & (GTEX - 1)) * GTEX + ((fx + 1) & (GTEX - 1))] = 28; // miolo
     }
   }
-  return bufToTex({ buf, W: TEX, H: TEX });
+  return bufToTex({ buf, W: GTEX, H: GTEX });
 }
 const GRASS_TILES = [genGrassTile(1), genGrassTile(2), genGrassTile(3), genGrassTile(4), genGrassTile(5, true), genGrassTile(6, true)];
 
@@ -747,7 +821,7 @@ for (let ty = 0; ty < world.h; ty++) {
       if (h > 0.62) continue; // desbaste: floresta com respiro
       const jx = (hash2(tx * 3, ty * 7) - 0.5) * 0.6, jy = (hash2(tx * 11, ty * 5) - 0.5) * 0.6;
       const v = TREE_VARIANTS[(h * TREE_VARIANTS.length) | 0];
-      bills.push({ x: tx + 0.5 + jx, y: ty + 0.5 + jy, gen: v, label: 'arvore', scale: 2.3 + h * 0.7, lift: 0 });
+      bills.push({ x: tx + 0.5 + jx, y: ty + 0.5 + jy, genFrames: v, label: 'arvore', scale: 2.3 + h * 0.7, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
     } else if (t === 'm') {
       const ht = hash2(tx * 29, ty * 31);
       if (ht < 0.22) { // graminha balançando — objeto, não textura
@@ -756,7 +830,17 @@ for (let ty = 0; ty < world.h; ty++) {
           x: tx + 0.5 + (hash2(tx * 41, ty * 43) - 0.5) * 0.7,
           y: ty + 0.5 + (hash2(tx * 47, ty * 53) - 0.5) * 0.7,
           genFrames: v, label: 'tufo', scale: 0.44 + ht * 1.6, lift: 0,
-          phase: hash2(tx * 59, ty * 61) * Math.PI * 2,
+          phase: hash2(tx * 59, ty * 61) * Math.PI * 2, swaySpeed: 620,
+        });
+      }
+      const hf = hash2(tx * 67, ty * 71);
+      if (hf < 0.09) { // flor avulsa balançando
+        const vf = FLOWER_VARIANTS[(hf * 913) % FLOWER_VARIANTS.length | 0];
+        bills.push({
+          x: tx + 0.5 + (hash2(tx * 73, ty * 79) - 0.5) * 0.7,
+          y: ty + 0.5 + (hash2(tx * 83, ty * 89) - 0.5) * 0.7,
+          genFrames: vf, label: 'flor', scale: 0.24 + hf * 0.9, lift: 0,
+          phase: hash2(tx * 97, ty * 101) * Math.PI * 2, swaySpeed: 460,
         });
       }
       const h = hash2(tx * 13, ty * 17);
@@ -765,7 +849,7 @@ for (let ty = 0; ty < world.h; ty++) {
       if (dCore < 6) continue; // praça do Núcleo limpa
       rockTiles.add(ty * world.w + tx);
       const v = ROCK_VARIANTS[(h * 997 * ROCK_VARIANTS.length | 0) % ROCK_VARIANTS.length];
-      bills.push({ x: tx + 0.5, y: ty + 0.5, gen: v, label: 'rocha', scale: 0.55 + h * 0.5, lift: 0 });
+      bills.push({ x: tx + 0.5, y: ty + 0.5, genViews: v, label: 'rocha', scale: 0.62 + h * 0.55, lift: 0 });
     }
   }
 }
@@ -839,7 +923,7 @@ function render(now) {
       } else {
         const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
         const g = GRASS_TILES[h % GRASS_TILES.length];
-        c = g.data[((((fy - ty) * TEX) | 0) * TEX + (((fx - tx) * TEX) | 0))];
+        c = g.data[((((fy - ty) * GTEX) | 0) * GTEX + (((fx - tx) * GTEX) | 0))];
       }
       px[y * W + x] = shade(c, f, glowAt(fx, fy) * f);
       fx += dxs; fy += dys;
@@ -904,9 +988,13 @@ function render(now) {
     const sx = ((W / 2) * (1 + tx / ty)) | 0;
     let genTex = b.gen;
     if (b.genFrames) {
-      // vento: seno com fase própria — cada tufo no seu tempo, sem "coreografia"
-      const k = (Math.sin(now / 620 + b.phase) + 1) / 2;
+      // vento: seno com fase e velocidade próprias — nada de coreografia
+      const k = (Math.sin(now / (b.swaySpeed || 620) + (b.phase || 0)) + 1) / 2;
       genTex = b.genFrames[Math.round(k * (b.genFrames.length - 1))];
+    } else if (b.genViews) {
+      // "rotações Doom": a face muda conforme o ângulo de onde você olha
+      const va = Math.atan2(b.y - cam.y, b.x - cam.x);
+      genTex = b.genViews[((Math.round(va / (Math.PI / 2)) % 4) + 4) % 4];
     }
     const tex = genTex ?? textures[b.tex];
     const tw = genTex ? genTex.w : TEX, th = genTex ? genTex.h : TEX;
