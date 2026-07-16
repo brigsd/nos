@@ -948,6 +948,32 @@ const CSHAD = new Uint8Array(128 * 128);
 for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
   CSHAD[y * 128 + x] = fbm(x / 26, y / 26, 3) > 0.565 ? 1 : 0;
 }
+/* SOMBRA PROJETADA das árvores/arbustos: campo em 1/4 de tile, carimbado uma
+   vez. Direção fixa do sol (alto-esquerda, igual à luz dos sprites) -> a
+   sombra cai pra baixo-direita, esticada. É o que 'planta' a árvore no chão. */
+const SH_RES = 4;
+const SHW = world.w * SH_RES, SHH = world.h * SH_RES;
+const TREE_SHADOW = new Float32Array(SHW * SHH);
+const SDx = 0.53, SDy = 0.85; // rumo da sombra (normalizado ~1)
+function stampTreeShadow(bx, by, len, hw, inten) {
+  const cxw = bx + SDx * len * 0.42, cyw = by + SDy * len * 0.42;
+  const px = -SDy, py = SDx; // perpendicular
+  const rad = Math.ceil((len + hw) * SH_RES);
+  const ccx = (cxw * SH_RES) | 0, ccy = (cyw * SH_RES) | 0;
+  for (let gy = ccy - rad; gy <= ccy + rad; gy++) {
+    if (gy < 0 || gy >= SHH) continue;
+    for (let gx = ccx - rad; gx <= ccx + rad; gx++) {
+      if (gx < 0 || gx >= SHW) continue;
+      const wx = gx / SH_RES - cxw, wy = gy / SH_RES - cyw;
+      const al = (wx * SDx + wy * SDy) / len, pe = (wx * px + wy * py) / hw;
+      const e = al * al + pe * pe;
+      if (e > 1) continue;
+      const v = inten * (1 - e) * (1 - e);
+      const i = gy * SHW + gx;
+      if (v > TREE_SHADOW[i]) TREE_SHADOW[i] = v;
+    }
+  }
+}
 const darkenU32 = (c, k) => {
   const r = ((c & 255) * k) | 0, g = (((c >> 8) & 255) * k) | 0, b = (((c >> 16) & 255) * k) | 0;
   return (255 << 24) | (b << 16) | (g << 8) | r;
@@ -992,7 +1018,10 @@ for (let ty = 0; ty < world.h; ty++) {
       let v = TREE_VARIANTS[(h * TREE_VARIANTS.length) | 0];
       if (hs < 0.05) v = TREE_CEREJEIRA;            // bosquinho rosa raro
       else if (hs > 0.975) v = TREE_SECA;           // seca solitária
-      bills.push({ x: tx + 0.5 + jx, y: ty + 0.5 + jy, genFrames: v, label: 'arvore', scale: 4.3 + h * 1.4, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
+      const treeScale = 4.3 + h * 1.4;
+      const bx0 = tx + 0.5 + jx, by0 = ty + 0.5 + jy;
+      bills.push({ x: bx0, y: by0, genFrames: v, label: 'arvore', scale: treeScale, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
+      stampTreeShadow(bx0, by0, 0.7 + treeScale * 0.34, 0.55 + treeScale * 0.075, 0.62);
     } else if (t === 'm') {
       const ht = hash2(tx * 29, ty * 31);
       if (ht < 0.22) { // graminha balançando — objeto, não textura
@@ -1013,6 +1042,7 @@ for (let ty = 0; ty < world.h; ty++) {
           genFrames: vb, label: 'arbusto', scale: 0.7 + hb * 5, lift: 0,
           phase: hash2(tx * 137, ty * 139) * Math.PI * 2, swaySpeed: 900,
         });
+        stampTreeShadow(tx + 0.5, ty + 0.5, 0.6 + hb * 3, 0.5 + hb * 1.5, 0.42);
       }
       const hf = hash2(tx * 67, ty * 71);
       if (hf < 0.09) { // flor avulsa balançando
@@ -1098,8 +1128,10 @@ function render(now) {
     for (let x = 0; x < W; x++) {
       const tx = fx | 0, ty = fy | 0;
       const t = world.at(tx, ty);
-      /* sombra de nuvem varrendo o chão (rola com o tempo) */
+      /* sombra de nuvem (rola) + sombra PROJETADA das árvores (estática) */
       const shadowed = CSHAD[(((fy * 2 + 5) & 127) * 128 + ((fx * 2 + cloudShadowT) & 127)) | 0] === 1;
+      const shGx = (fx * SH_RES) | 0, shGy = (fy * SH_RES) | 0;
+      const treeSh = (shGx >= 0 && shGy >= 0 && shGx < SHW && shGy < SHH) ? TREE_SHADOW[shGy * SHW + shGx] : 0;
       /* linha d'água CONTÍNUA: contorno zero do campo assinado, lambendo a
          praia com a onda (avança e recua ~0.1 tile) */
       const lapWv = (WAVE_A[((fy * 5) & 63) * 64 + ((fx * 5 + waveT) & 63)]) / 255 - 0.5;
@@ -1149,7 +1181,9 @@ function render(now) {
           else if ((BAYER[y & 3][x & 3] / 16) < (1 - (ld - 0.22) / 0.20) * 0.6) c = 0xff7a94ab; // franja na grama
         }
       }
-      if (shadowed) c = darkenU32(c, 0.86);
+      let darkK = shadowed ? 0.86 : 1;
+      if (treeSh > 0) darkK *= 1 - treeSh * 0.5;
+      if (darkK < 0.999) c = darkenU32(c, darkK);
       px[y * W + x] = shade(c, f, glowAt(fx, fy) * f);
       fx += dxs; fy += dys;
     }
