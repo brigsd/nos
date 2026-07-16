@@ -17,7 +17,8 @@
     "validate-world": "tsx engine/scripts/validate-world.ts",
     "validate-worlds": "tsx scripts/validate-worlds.ts",
     "lint:sprites": "node assets/tools/lint-sprites.js",
-    "respond-issues": "tsx scripts/respond-issues.ts"
+    "respond-issues": "tsx scripts/respond-issues.ts",
+    "art": "node tools/art-mcp/cli.cjs"
   },
   "dependencies": {
     "ajv": "^8.20.0"
