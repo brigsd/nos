@@ -1330,11 +1330,18 @@ for (let ty = 0; ty < world.h; ty++) {
         });
       }
       const h = hash2(tx * 13, ty * 17);
-      if (h < 0.985) continue; // rochas raras na campina
+      if (h < 0.978) continue; // pedrinhas raras na campina
       const dCore = Math.hypot(tx - CORE.x, ty - CORE.y);
       if (dCore < 6) continue; // praça do Núcleo limpa
-      rockTiles.add(ty * world.w + tx);
-      bills.push({ x: tx + 0.5, y: ty + 0.5, rock3d: true, seed: (tx * 733 + ty * 197) | 0, label: 'rocha', scale: 0.72 + h * 0.7, lift: 0 });
+      /* PEDRINHAS, não pedregulhos (decisão do ideador, 2026-07-16): os
+         boulders 0.72-1.42 ficavam deslocados na campina. O renderer 3D
+         per-pixel (b.rock3d) continua INTACTO e aceita qualquer escala —
+         pra ressuscitar os grandes em outro cenário (ruínas? montanha?),
+         basta scale ~0.72+h*0.7 e voltar o rockTiles.add (colisão).
+         Referência visual dos grandes: shot-day-rock*.png (committados). */
+      /* tamanho por hash PRÓPRIO (h da raridade mal varia — as grandes
+         saíam todas ~1.41 por esse mesmo motivo) */
+      bills.push({ x: tx + 0.5, y: ty + 0.5, rock3d: true, seed: (tx * 733 + ty * 197) | 0, label: 'rocha', scale: 0.12 + hash2(tx * 19, ty * 23) * 0.16, lift: 0 });
     }
   }
 }
