@@ -779,6 +779,56 @@ const CLOUD_NEAR = new Uint32Array(SKY_W * SKY_H);
   for (let i = 0; i < 5; i++) stampCloud(CLOUD_NEAR, rn, rn() * SKY_W, 22 + rn() * 30, 90 + rn() * 110, 22 + rn() * 14, false);
 }
 
+/* ---------- ÁGUA CRISTALINA + SOMBRAS: campos precomputados ---------- */
+/* campo de distância à margem (BFS multi-fonte na grade 64x64):
+   água guarda distância até a TERRA; terra guarda distância até a ÁGUA */
+const shoreField = new Float32Array(world.w * world.h).fill(255);
+{
+  const q = [];
+  const at = (x, y) => (x < 0 || y < 0 || x >= world.w || y >= world.h) ? 'f' : NOS_DATA.tiles[y * world.w + x];
+  for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
+    const w0 = at(x, y) === 'w';
+    const nb = [at(x-1,y), at(x+1,y), at(x,y-1), at(x,y+1)].some((t) => (t === 'w') !== w0);
+    if (nb) { shoreField[y * world.w + x] = 0.5; q.push(x, y); }
+  }
+  for (let h = 0; h < q.length; h += 2) {
+    const x = q[h], y = q[h + 1], d = shoreField[y * world.w + x];
+    for (const [nx, ny] of [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]) {
+      if (nx < 0 || ny < 0 || nx >= world.w || ny >= world.h) continue;
+      if (shoreField[ny * world.w + nx] > d + 1) { shoreField[ny * world.w + nx] = d + 1; q.push(nx, ny); }
+    }
+  }
+}
+/* amostra bilinear do campo (suave por pixel) */
+function shoreAt(fx, fy) {
+  const gx = clamp(fx - 0.5, 0, world.w - 1.001), gy = clamp(fy - 0.5, 0, world.h - 1.001);
+  const x0 = gx | 0, y0 = gy | 0, tx = gx - x0, ty = gy - y0;
+  const i = y0 * world.w + x0;
+  const a = shoreField[i], b = shoreField[i + 1] ?? a, c = shoreField[i + world.w] ?? a, d = shoreField[i + world.w + 1] ?? a;
+  return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
+}
+/* ondas: 2 mapas de ruído 64x64 rolando em direções opostas (lookup, não noise/px) */
+const WAVE_A = new Uint8Array(64 * 64), WAVE_B = new Uint8Array(64 * 64);
+for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+  WAVE_A[y * 64 + x] = (fbm(x / 7, y / 7, 3) * 255) | 0;
+  WAVE_B[y * 64 + x] = (fbm(x / 11 + 40, y / 11 + 40, 3) * 255) | 0;
+}
+/* sombras de nuvem: mapa grande de manchas rolando com o vento */
+const CSHAD = new Uint8Array(128 * 128);
+for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+  CSHAD[y * 128 + x] = fbm(x / 26, y / 26, 3) > 0.565 ? 1 : 0;
+}
+const darkenU32 = (c, k) => {
+  const r = ((c & 255) * k) | 0, g = (((c >> 8) & 255) * k) | 0, b = (((c >> 16) & 255) * k) | 0;
+  return (255 << 24) | (b << 16) | (g << 8) | r;
+};
+/* cores da água (rampa RGB pura pra mix contínuo) */
+const SAND_RGB = [171, 148, 122];        // tan
+const SHALLOW_RGB = [48, 225, 185];      // brightCyan
+const DEEP_RGB = [11, 74, 86];          // darkTeal
+const FOAM_U32 = (255 << 24) | (0xd0 << 16) | (0xdc << 8) | 0xc7; // paleMint
+const mixRGB = (a, b, t) => rgb((a[0] + (b[0] - a[0]) * t) | 0, (a[1] + (b[1] - a[1]) * t) | 0, (a[2] + (b[2] - a[2]) * t) | 0);
+
 /* ---------- estado ---------- */
 const spawn = NOS_DATA.players.brigsd ?? { x: 31, y: 30 };
 const cam = { x: 26.5, y: 27.5, a: 0.70 }; /* recuado do spawn oficial só pro enquadramento inicial da demo */
@@ -903,6 +953,8 @@ function render(now) {
   }
 
   /* chão (floor casting) */
+  const waveT = ((now / 90) | 0);          // ondulação ~11 passos/s
+  const cloudShadowT = ((now / 240) | 0);  // sombras de nuvem à deriva
   const posZ = HALF;
   for (let y = HALF + 1; y < H; y++) {
     const rowDist = posZ / (y - HALF);
@@ -916,15 +968,53 @@ function render(now) {
     for (let x = 0; x < W; x++) {
       const tx = fx | 0, ty = fy | 0;
       const t = world.at(tx, ty);
+      /* sombra de nuvem varrendo o chão (rola com o tempo) */
+      const shadowed = CSHAD[(((fy * 2 + 5) & 127) * 128 + ((fx * 2 + cloudShadowT) & 127)) | 0] === 1;
       let c;
       if (t === 'w') {
-        const tex = textures.agua;
-        c = texAt(tex, waterFrame, ((fx - tx) * TEX) | 0, ((fy - ty) * TEX) | 0);
+        /* ÁGUA CRISTALINA (shader por pixel, tudo lookup):
+           raso -> fundo de areia visível tingido de ciano; fundo -> teal
+           profundo; reflexo REAL do céu (espelho das linhas já pintadas,
+           nuvens/montanha inclusas) crescendo com o ângulo rasante;
+           ondulação anima reflexo, cáustica e brilhos de crista. */
+        const sd = Math.min(1, shoreAt(fx, fy) / 1.9);           // 0 margem .. 1 fundo
+        const wv = (WAVE_A[((fy * 9) & 63) * 64 + ((fx * 9 + waveT) & 63)] +
+                    WAVE_B[((fy * 6 + waveT) & 63) * 64 + ((fx * 6) & 63)]) / 510 - 0.5;
+        // base: areia -> ciano raso -> teal fundo (cáustica clareia o raso)
+        let base;
+        if (sd < 0.34) {
+          const k = sd / 0.34;
+          base = mixRGB(SAND_RGB, SHALLOW_RGB, 0.35 + k * 0.6);
+          const cw = (WAVE_A[((fy * 16) & 63) * 64 + ((fx * 16 - waveT) & 63)]) / 255 - 0.5;
+          if (cw > 0.17 && cw < 0.23) base = mixRGB(SHALLOW_RGB, [143, 248, 226], 0.85); // teia de cáustica fina
+        } else {
+          base = mixRGB(SHALLOW_RGB, DEEP_RGB, Math.min(1, (sd - 0.34) / 0.5));
+        }
+        // reflexo: espelha o céu já renderizado nesta coluna, com wobble da onda
+        const mirror = clamp((HALF - (y - HALF) * 0.9 + wv * 7) | 0, 0, HALF - 1);
+        const refl = px[mirror * W + x];
+        const grazing = clamp(rowDist / 13, 0, 1);
+        const rMix = (0.22 + 0.55 * grazing) * (0.55 + sd * 0.45);
+        let r = ((base & 255) * (1 - rMix) + (refl & 255) * rMix) | 0;
+        let g = (((base >> 8) & 255) * (1 - rMix) + ((refl >> 8) & 255) * rMix) | 0;
+        let bb = (((base >> 16) & 255) * (1 - rMix) + ((refl >> 16) & 255) * rMix) | 0;
+        c = (255 << 24) | (bb << 16) | (g << 8) | r;
+        // brilho de sol na crista da onda
+        if (wv > 0.38 && ((x + y) & 1) === 0) c = (255 << 24) | (0xe2 << 16) | (0xf8 << 8) | 0x8f;
+        // espuma na margem (pulsa com a onda)
+        if (sd < 0.085 + wv * 0.03 && (BAYER[y & 3][x & 3] / 16) < 0.85) c = FOAM_U32;
       } else {
         const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
         const g = GRASS_TILES[h % GRASS_TILES.length];
         c = g.data[((((fy - ty) * GTEX) | 0) * GTEX + (((fx - tx) * GTEX) | 0))];
+        // praia: faixa de areia na beira da água
+        const ld = shoreAt(fx, fy);
+        if (ld < 0.38 && (t === 'm')) {
+          if (ld < 0.16) c = ((x + y) & 1) === 0 ? 0xff7a94ab : 0xffb0cbfd; // faixa sólida de areia
+          else if ((BAYER[y & 3][x & 3] / 16) < (1 - (ld - 0.16) / 0.22) * 0.7) c = 0xff7a94ab; // franja curta
+        }
       }
+      if (shadowed) c = darkenU32(c, 0.86);
       px[y * W + x] = shade(c, f, glowAt(fx, fy) * f);
       fx += dxs; fy += dys;
     }
