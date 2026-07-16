@@ -829,7 +829,7 @@ for (let i = 0; i < 5; i++) {
   TUFT_VARIANTS.push([genTuft(11 + i * 37, -1, flowery), genTuft(11 + i * 37, 0, flowery), genTuft(11 + i * 37, 1, flowery)]);
 }
 
-/* céu panorâmico diurno em CAMADAS: base estática (gradiente+maciço) e
+/* céu panorâmico diurno em CAMADAS: base estática (gradiente puro — somos uma ILHA no céu) e
    duas camadas de cúmulos com parallax — longe deriva devagar, perto mais
    rápido; a montanha é marco do mundo e fica PARADA. */
 const SKY_W = 1024, SKY_H = HALF;
@@ -846,19 +846,6 @@ const CLOUD_NEAR = new Uint32Array(SKY_W * SKY_H);
     const t = y / SKY_H;
     const row = t < 0.5 ? mix(C[47], C[48], t / 0.5) : t < 0.85 ? mix(C[48], C[8], (t - 0.5) / 0.35) : mix(C[8], C[9], (t - 0.85) / 0.15);
     for (let x = 0; x < SKY_W; x++) SKY_BASE[y * SKY_W + x] = row;
-  }
-  /* maciço fixo no rumo leste */
-  const mx = SKY_W * 0.25, mw = SKY_W * 0.075, peak = SKY_H * 0.44;
-  for (let x = 0; x < SKY_W; x++) {
-    let dx = (x - mx) / mw; dx = dx < 0 ? -dx * 0.7 : dx;
-    if (dx > 1) continue;
-    const ridge = peak + (SKY_H - peak) * Math.pow(dx, 1.7) + (fbm(x / 13, 7, 3) - 0.5) * 8;
-    for (let y = Math.max(0, ridge | 0); y < SKY_H; y++) {
-      const depth = (y - ridge) / Math.max(1, SKY_H - ridge);
-      const hazeT = Math.max(0, (y - (SKY_H - 10)) / 10);
-      let c = depth < 0.2 ? C[3] : C[19];
-      SKY_BASE[y * SKY_W + x] = mix(c, C[8], Math.max(hazeT, depth > 0.85 ? 0.35 : 0));
-    }
   }
 
   /* cúmulo pixel-art: união de "puffs" elípticos RECORTADA numa base achatada;
@@ -985,12 +972,118 @@ const DEEP_RGB = [11, 74, 86];          // darkTeal
 const FOAM_U32 = (255 << 24) | (0xd0 << 16) | (0xdc << 8) | 0xc7; // paleMint
 const mixRGB = (a, b, t) => rgb((a[0] + (b[0] - a[0]) * t) | 0, (a[1] + (b[1] - a[1]) * t) | 0, (a[2] + (b[2] - a[2]) * t) | 0);
 
+/* gerador de ILHA FLUTUANTE distante: topo de grama, barriga de rocha em
+   cone irregular com estalactites, mini-árvores — e cachoeira ANIMADA
+   despencando no vazio (3 frames em loop; frame só mexe nas listras). */
+function genIsland(seed, frame) {
+  const Wi = 150, Hi = 140;
+  const rnd = mulberry32(seed * 7717 + 11);
+  const buf = new Int16Array(Wi * Hi).fill(-1);
+  const put = (x, y, i) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < Wi && y < Hi) buf[y * Wi + x] = i; };
+  const cx = Wi / 2, topY = Hi * 0.22, halfW = Wi * (0.36 + rnd() * 0.08);
+  const off = rnd() * 64;
+  const surf = new Float32Array(Wi).fill(-1);
+  const bot = new Float32Array(Wi).fill(-1);
+  for (let x = 0; x < Wi; x++) {
+    const nx = (x - cx) / halfW;
+    if (nx < -1 || nx > 1) continue;
+    surf[x] = topY + (vnoise(x * 0.09 + off, 3) - 0.5) * 6 + nx * nx * 7;
+    const depth = (1 - Math.abs(nx)) * Hi * 0.42 * (0.5 + vnoise(x * 0.11 + off * 2, 9) * 0.8) + 6;
+    bot[x] = surf[x] + depth;
+  }
+  for (let x = 0; x < Wi; x++) {
+    if (surf[x] < 0) continue;
+    const nx = (x - cx) / halfW;
+    for (let y = surf[x] | 0; y <= Math.min(Hi - 4, bot[x]); y++) {
+      const d = y - surf[x];
+      let idx;
+      if (d < 2.5) idx = 27;                    // capa de grama ao sol
+      else if (d < 4.5) idx = 31;               // grama de lado
+      else if (d < 7.5) idx = 24;               // terra
+      else {
+        const t = (y - surf[x]) / Math.max(1, bot[x] - surf[x]);
+        const fac = Math.floor(fbm(x / 9 + off, y / 9 + off, 2) * 3) / 3;
+        const sh2 = 0.62 - t * 0.42 + (fac - 0.5) * 0.5 - Math.max(0, nx) * 0.25;
+        idx = [1, 2, 6, 7][clamp(Math.round(sh2 * 3), 0, 3)];
+      }
+      put(x, y, idx);
+    }
+    // estalactites de rocha
+    if (hash2(x * 3, seed & 511) < 0.05 && bot[x] > 0) {
+      const len = 3 + hash2(x * 7, 9) * 7;
+      for (let k = 0; k < len; k++) put(x, bot[x] + k, k > len - 2.5 ? 1 : 2);
+    }
+  }
+  // mini-árvores no topo (bolinhas com tronquinho)
+  const nT = 2 + (rnd() * 3 | 0);
+  for (let i = 0; i < nT; i++) {
+    const bx = (cx + (rnd() - 0.5) * halfW * 1.3) | 0;
+    if (bx < 0 || bx >= Wi || surf[bx] < 0) continue;
+    const r = 4 + rnd() * 4, by = surf[bx] - r - 2;
+    put(bx, surf[bx] - 1, 24); put(bx, surf[bx] - 2, 24);
+    for (let oy = -r; oy <= r; oy++) for (let ox = -r; ox <= r; ox++) {
+      if (ox * ox + oy * oy > r * r) continue;
+      put(bx + ox, by + oy, oy < -r * 0.25 ? 32 : ox < 0 ? 31 : 30);
+    }
+  }
+  // cachoeira em loop (seed par): listras brancas/cianas caindo + dissipação
+  if ((seed & 1) === 0) {
+    const wx = (cx + (rnd() - 0.5) * halfW * 0.7) | 0;
+    const w2 = 2 + (rnd() * 2 | 0);
+    const y0 = (surf[wx] || topY) + 1;
+    for (let y = y0; y < Hi - 1; y++) {
+      const fade = (y - Hi * 0.7) / (Hi * 0.3);
+      for (let ox = -w2; ox <= w2; ox++) {
+        if (fade > 0 && hash2((wx + ox) * 3, y * 5) < fade * 1.2) continue; // dissipa em névoa
+        const phase = ((y + frame * 5 + ((ox + 8) & 1) * 3) % 14) / 14;
+        put(wx + ox, y, phase < 0.22 ? 9 : phase < 0.55 ? 43 : 48);
+      }
+      if (fade > 0.15) { // névoa abrindo
+        if (hash2(wx * 7, y * 11) < 0.5) put(wx - w2 - 1 - fade * 3, y, 8);
+        if (hash2(wx * 13, y * 17) < 0.5) put(wx + w2 + 1 + fade * 3, y, 8);
+      }
+    }
+  }
+  // contorno de tinta
+  for (let y = 0; y < Hi; y++) for (let x = 0; x < Wi; x++) {
+    const v = buf[y * Wi + x];
+    if (v < 0 || v === OUTLINE) continue;
+    if ((x > 0 && buf[y * Wi + x - 1] < 0) || (x < Wi - 1 && buf[y * Wi + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * Wi + x] < 0) || (y < Hi - 1 && buf[(y + 1) * Wi + x] < 0)) buf[y * Wi + x] = OUTLINE;
+  }
+  return bufToTex({ buf, W: Wi, H: Hi });
+}
+
+/* ---------- A ILHA FLUTUANTE: borda orgânica + mar de nuvens ---------- */
+const RIMF = new Float32Array(256 * 256);
+for (let gy = 0; gy < 256; gy++) {
+  for (let gx = 0; gx < 256; gx++) {
+    const fx = gx / 4, fy = gy / 4;
+    const border = Math.min(fx, fy, world.w - fx, world.h - fy);
+    RIMF[gy * 256 + gx] = border - (1.1 + fbm(fx * 0.33 + 7, fy * 0.33 + 3, 2) * 2.2);
+  }
+}
+function rimAt(fx, fy) {
+  if (fx < 0 || fy < 0 || fx >= world.w - 0.26 || fy >= world.h - 0.26) return -3;
+  const gx = clamp(fx * 4, 0, 254.99), gy = clamp(fy * 4, 0, 254.99);
+  const x0 = gx | 0, y0 = gy | 0, tx = gx - x0, ty = gy - y0;
+  const i = y0 * 256 + x0;
+  const a = RIMF[i], b = RIMF[i + 1], c = RIMF[i + 256], d = RIMF[i + 257];
+  return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
+}
+/* mar de nuvens sob a ilha (campo assado, rolado no sample) */
+const CSEA = new Uint8Array(256 * 256);
+for (let gy = 0; gy < 256; gy++) for (let gx = 0; gx < 256; gx++) {
+  CSEA[gy * 256 + gx] = (fbm(gx / 30, gy / 30, 3) * 255) | 0;
+}
+
 /* ---------- estado ---------- */
 const spawn = NOS_DATA.players.brigsd ?? { x: 31, y: 30 };
 const cam = { x: 26.5, y: 27.5, a: 0.70 }; /* recuado do spawn oficial só pro enquadramento inicial da demo */
 const CORE = { x: 33, y: 33 };
 const keys = {};
 window.__NOS_FPS_CAM__ = cam; /* hook read-write SÓ de QA (padrão do projeto: nunca lido em produção) */
+window.__NOS_QA_PROBE__ = () => ({ sky: bills.filter((b) => b.sky).map((b) => ({ x: b.x, y: b.y, px: b.genFrames?.[0]?.data ? Array.from(b.genFrames[0].data).filter((v) => v !== 0).length : -1 })) });
 let showMap = true;
 
 /* billboards: máquinas, nativos, jogadores, portal (marco client-side do site) */
@@ -1000,8 +1093,29 @@ for (const [name, p] of Object.entries(NOS_DATA.machines)) addBill(p.x, p.y, 'of
 addBill(NOS_DATA.natives.gota?.x ?? 4, NOS_DATA.natives.gota?.y ?? 2, 'gota', 1, 'gota');
 addBill(NOS_DATA.natives.raiz?.x ?? 43, NOS_DATA.natives.raiz?.y ?? 6, 'raiz', 1, 'raiz');
 addBill(NOS_DATA.natives.cinza?.x ?? 25, NOS_DATA.natives.cinza?.y ?? 8, 'cinza', 1, 'cinza');
-addBill(62, 32, 'portal', 2, 'portais');
+addBill(57, 32, 'portal', 2, 'portais'); /* recuado da borda da ilha */
 bills.push({ x: 33, y: 33, tex: 'orb', frames: 1, label: 'nucleo', scale: 2.0, lift: 0.45 }); /* o orbe procedural do Núcleo, centro do CORE 2x2 */
+/* ilhas-irmãs flutuando no céu — os outros mundos, vistos daqui (lore dos
+   portais). Acima E abaixo da nossa; as de seed par têm cachoeira. */
+{
+  const DEFS = [
+    { ang: 0.42, dist: 38, lift: 4.6, scale: 13, seed: 100 },
+    { ang: 1.62, dist: 50, lift: 3.4, scale: 10, seed: 203 },
+    { ang: 2.75, dist: 44, lift: 5.8, scale: 15, seed: 306 },
+    { ang: -2.2, dist: 58, lift: -4.2, scale: 11, seed: 400 },
+    { ang: -0.85, dist: 56, lift: 2.8, scale: 9,  seed: 502 },
+    { ang: -1.55, dist: 42, lift: -6.0, scale: 14, seed: 605 },
+    { ang: 2.15, dist: 64, lift: 7.0, scale: 19, seed: 708 },
+  ];
+  for (const d of DEFS) {
+    const frames = [0, 1, 2].map((f) => genIsland(d.seed, f));
+    bills.push({
+      x: 32 + Math.cos(d.ang) * d.dist, y: 32 + Math.sin(d.ang) * d.dist,
+      genFrames: frames, loop: true, sky: true, label: 'ilha',
+      scale: d.scale, lift: d.lift, phase: (d.seed % 63) / 10,
+    });
+  }
+}
 for (const [login, p] of Object.entries(NOS_DATA.players)) {
   if (Math.abs(p.x + 0.5 - cam.x) + Math.abs(p.y + 0.5 - cam.y) > 1) addBill(p.x, p.y, 'avatar', 1, login);
 }
@@ -1012,6 +1126,7 @@ function addTrunk(tx, ty, x, y, r) { const k = ty * world.w + tx; let b = trunkB
 for (let ty = 0; ty < world.h; ty++) {
   for (let tx = 0; tx < world.w; tx++) {
     const t = world.at(tx, ty);
+    if (rimAt(tx + 0.5, ty + 0.5) < 0.8) continue; // nada nasce no lábio/além da borda
     if (t === 'f') {
       const h = hash2(tx, ty);
       if (h > 0.42) continue; // desbaste maior: floresta com respiro, copas sem se sobrepor
@@ -1118,6 +1233,7 @@ function render(now) {
   /* chão (floor casting) */
   const waveT = ((now / 90) | 0);          // ondulação ~11 passos/s
   const cloudShadowT = ((now / 240) | 0);  // sombras de nuvem à deriva
+  const seaT = ((now / 130) | 0);          // mar de nuvens sob a ilha
   const posZ = HALF;
   for (let y = HALF + 1; y < H; y++) {
     const rowDist = posZ / (y - HALF);
@@ -1130,6 +1246,20 @@ function render(now) {
     const dys = (rowDist * 2 * plY) / W;
     for (let x = 0; x < W; x++) {
       const tx = fx | 0, ty = fy | 0;
+      /* ALÉM DA BORDA DA ILHA: céu profundo + mar de nuvens à deriva */
+      const rim = rimAt(fx, fy);
+      if (rim < 0) {
+        const down = clamp(1 - rowDist / 15, 0, 1);
+        let rr = 199 + (77 - 199) * down * 0.85, gg = 220 + (125 - 220) * down * 0.85, bb2 = 208 + (200 - 208) * down * 0.35;
+        const sea = CSEA[(((fy * 3 + seaT) & 255) * 256 + ((fx * 3 + (seaT * 0.6 | 0)) & 255)) | 0] / 255;
+        if (sea > 0.52) {
+          const k = Math.min(1, (sea - 0.52) * 5.5);
+          rr += (255 - rr) * k; gg += (255 - gg) * k; bb2 += (255 - bb2) * k;
+        }
+        px[y * W + x] = shade(rgb(rr | 0, gg | 0, bb2 | 0), f, 0);
+        fx += dxs; fy += dys;
+        continue;
+      }
       const t = world.at(tx, ty);
       /* sombra de nuvem (rola) + sombra PROJETADA das árvores (estática) */
       const shadowed = CSHAD[(((fy * 2 + 5) & 127) * 128 + ((fx * 2 + cloudShadowT) & 127)) | 0] === 1;
@@ -1176,6 +1306,12 @@ function render(now) {
         const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
         const g = GRASS_TILES[h % GRASS_TILES.length];
         c = g.data[((((fy - ty) * GTEX) | 0) * GTEX + (((fx - tx) * GTEX) | 0))];
+        // LÁBIO da ilha: grama -> terra -> fio de rocha escura na borda
+        if (rim < 1.0) {
+          if (rim < 0.3) c = ((x + y) & 1) === 0 ? 0xff2f2222 : 0xff463546;
+          else if (rim < 0.62) c = ((x + y) & 1) === 0 ? 0xff243e4c : 0xff7a94ab;
+          else if ((BAYER[y & 3][x & 3] / 16) < (1 - (rim - 0.62) / 0.38) * 0.5) c = 0xff243e4c;
+        }
         // praia: areia molhada colada na linha d'água, franja seca depois
         const ld = -sSigned;
         if (ld < 0.42) {
@@ -1235,12 +1371,15 @@ function render(now) {
   /* billboards (longe -> perto), cull por distância — a bruma esconde o pop-in */
   const CULL2 = 34 * 34;
   const near = [];
+  const skyArr = [];
   for (const b of bills) {
     const d = (b.x - cam.x) ** 2 + (b.y - cam.y) ** 2;
-    if (d < CULL2) near.push({ b, d });
+    if (b.sky) skyArr.push({ b, d });
+    else if (d < CULL2) near.push({ b, d });
   }
   near.sort((a, z) => a.d - z.d);
-  const order = near.slice(0, 190).sort((a, z) => z.d - a.d);
+  skyArr.sort((a, z) => z.d - a.d);
+  const order = skyArr.concat(near.slice(0, 190).sort((a, z) => z.d - a.d)); // ilhas (longe) primeiro
   const inv = 1 / (plX * dirY - dirX * plY);
   for (const { b } of order) {
     const rx = b.x - cam.x, ry = b.y - cam.y;
@@ -1249,7 +1388,9 @@ function render(now) {
     if (ty <= 0.15) continue;
     const sx = ((W / 2) * (1 + tx / ty)) | 0;
     let genTex = b.gen;
-    if (b.genFrames) {
+    if (b.loop && b.genFrames) {
+      genTex = b.genFrames[((now / 150) | 0) % b.genFrames.length]; // cachoeira: scroll em loop
+    } else if (b.genFrames) {
       // vento: seno com fase e velocidade próprias — nada de coreografia
       const k = (Math.sin(now / (b.swaySpeed || 620) + (b.phase || 0)) + 1) / 2;
       genTex = b.genFrames[Math.round(k * (b.genFrames.length - 1))];
@@ -1263,9 +1404,10 @@ function render(now) {
     const unit = Math.abs(H / ty);
     const sh = (unit * (b.scale || 1)) | 0;
     const sw = (sh * (tw / th)) | 0;
-    const bottom = HALF + unit * 0.5 - unit * (b.lift || 0);
+    let bottom = HALF + unit * 0.5 - unit * (b.lift || 0);
+    if (b.sky) bottom += Math.sin(now / 2900 + (b.phase || 0)) * unit * 0.14; // flutuação lenta
     const fIx = b.frames > 1 ? ((now / 700) | 0) % b.frames : 0;
-    const f = fogAt(ty);
+    const f = b.sky ? Math.max(fogAt(ty), 0.62) : fogAt(ty); // ilhas furam a bruma (senão sumiriam)
     const glow = glowAt(b.x, b.y) * f;
     const y0c = bottom - sh, y1c = bottom;
     const rx0 = sx - (sw >> 1), rx1 = sx + (sw >> 1);
@@ -1396,6 +1538,7 @@ function drawMinimap() {
 /* ---------- movimento ---------- */
 const PLAYER_R = 0.14;
 function tileSolid(px, py) {
+  if (rimAt(px, py) < 0.3) return true; // ninguém cai da ilha (por enquanto)
   const tx = px | 0, ty = py | 0;
   if (blocks(world.at(tx, ty))) return true;
   return rockTiles.has(ty * world.w + tx);
