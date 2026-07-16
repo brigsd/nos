@@ -664,7 +664,7 @@ const world = {
 document.getElementById('tickNo').textContent = '#' + NOS_DATA.tick;
 
 const isWall = (t) => t === 'r'; /* floresta agora é BILLBOARD de árvore gerada, não parede */
-const blocks = (t) => isWall(t) || t === 'f' || t === 'w' || t === 'c'; /* floresta segue intransponível; rochas bloqueiam via rockTiles (tryMove) */
+const blocks = (t) => isWall(t) || t === 'w' || t === 'c'; /* água/ruína/núcleo bloqueiam por tile; TRONCOS por círculo (trunkBuckets), rochas por rockTiles */
 
 /* ---------- texturas ---------- */
 const textures = {}; // name -> {w,h,data:Uint32Array}
@@ -1007,6 +1007,8 @@ for (const [login, p] of Object.entries(NOS_DATA.players)) {
 }
 /* árvores geradas: uma por tile de floresta (com desbaste + jitter determinístico) */
 const rockTiles = new Set();
+const trunkBuckets = new Map(); // tile -> [{x,y,r}] colisão fina do tronco
+function addTrunk(tx, ty, x, y, r) { const k = ty * world.w + tx; let b = trunkBuckets.get(k); if (!b) { b = []; trunkBuckets.set(k, b); } b.push({ x, y, r }); }
 for (let ty = 0; ty < world.h; ty++) {
   for (let tx = 0; tx < world.w; tx++) {
     const t = world.at(tx, ty);
@@ -1022,6 +1024,7 @@ for (let ty = 0; ty < world.h; ty++) {
       const bx0 = tx + 0.5 + jx, by0 = ty + 0.5 + jy;
       bills.push({ x: bx0, y: by0, genFrames: v, label: 'arvore', scale: treeScale, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
       stampTreeShadow(bx0, by0, 0.7 + treeScale * 0.34, 0.55 + treeScale * 0.075, 0.62);
+      addTrunk(tx, ty, bx0, by0, v === TREE_SECA ? 0.26 : 0.22); // raio ~ meia-largura do tronco na base
     } else if (t === 'm') {
       const ht = hash2(tx * 29, ty * 31);
       if (ht < 0.22) { // graminha balançando — objeto, não textura
@@ -1391,14 +1394,28 @@ function drawMinimap() {
 }
 
 /* ---------- movimento ---------- */
-function blockedAt(x, y) {
-  if (blocks(world.at(x, y))) return true;
-  return typeof rockTiles !== 'undefined' && rockTiles.has(y * world.w + x);
+const PLAYER_R = 0.14;
+function tileSolid(px, py) {
+  const tx = px | 0, ty = py | 0;
+  if (blocks(world.at(tx, ty))) return true;
+  return rockTiles.has(ty * world.w + tx);
+}
+/* colisão fina: só o TRONCO (círculo), varrendo o tile do ponto + 8 vizinhos */
+function trunkHit(px, py) {
+  const tx = px | 0, ty = py | 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const b = trunkBuckets.get((ty + dy) * world.w + (tx + dx));
+    if (!b) continue;
+    for (const tr of b) {
+      const ex = px - tr.x, ey = py - tr.y, rr = tr.r + PLAYER_R;
+      if (ex * ex + ey * ey < rr * rr) return true;
+    }
+  }
+  return false;
 }
 function tryMove(nx, ny) {
-  const R = 0.22;
-  if (!blockedAt((nx + R) | 0, cam.y | 0) && !blockedAt((nx - R) | 0, cam.y | 0)) cam.x = nx;
-  if (!blockedAt(cam.x | 0, (ny + R) | 0) && !blockedAt(cam.x | 0, (ny - R) | 0)) cam.y = ny;
+  if (!tileSolid(nx + PLAYER_R, cam.y) && !tileSolid(nx - PLAYER_R, cam.y) && !trunkHit(nx, cam.y)) cam.x = nx;
+  if (!tileSolid(cam.x, ny + PLAYER_R) && !tileSolid(cam.x, ny - PLAYER_R) && !trunkHit(cam.x, ny)) cam.y = ny;
 }
 
 let touchMove = { on: false, dx: 0, dy: 0 };
