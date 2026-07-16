@@ -744,40 +744,52 @@ function genFlower(seed, lean) {
 }
 const FLOWER_VARIANTS = [];
 for (let i = 0; i < 5; i++) FLOWER_VARIANTS.push([genFlower(21 + i * 53, -1), genFlower(21 + i * 53, 0), genFlower(21 + i * 53, 1)]);
-/* grama diurna v2: base viva + PINCELADAS direcionais (lâminas deitadas na
-   mesma diagonal, como grama penteada pelo vento) + touceiras escuras +
-   flores em cacho de 2x2 — lê como gramado, não como confete */
-const GTEX = 32; /* 32px por tile de mundo = grão 2x mais fino */
+/* grama diurna v3: 64px por tile — texel na METADE do tamanho físico da v2,
+   então perto da câmera o chão tem o dobro de definição. Assada 1x no load
+   (6 tiles × 64×64 ≈ 100KB), o render continua 1 lookup por pixel: o "mais
+   bonito" aqui é grátis em frame-time. Receita: mosqueado em DUAS escalas
+   (mancha larga de sol + variação fina), pinceladas curtas e densas na
+   diagonal do vento, touceiras escuras com raiz, flores 2x2 (agora metade
+   do tamanho físico — viram detalhe, não confete). */
+const GTEX = 64;
 function genGrassTile(seed, flowery) {
   const rnd = mulberry32(seed * 7919 + 13);
   const buf = new Int16Array(GTEX * GTEX).fill(32);
-  // respiração sutil da base (manchas 1 passo mais claras)
+  // respiração da base em 2 escalas: mancha larga (sol/sombra de terreno)
+  // + granulado fino (relva). Os limiares se combinam sem criar listras.
   for (let y = 0; y < GTEX; y++) for (let x = 0; x < GTEX; x++) {
-    if (vnoise(x / 9 + seed * 11, y / 9 - seed * 3) > 0.70) buf[y * GTEX + x] = 33;
+    const broad = vnoise(x / 18 + seed * 11, y / 18 - seed * 3);
+    const fine = vnoise(x / 5 - seed * 7, y / 5 + seed * 17);
+    if (broad > 0.70) buf[y * GTEX + x] = 33;
+    else if (broad < 0.26 && fine > 0.6) buf[y * GTEX + x] = 31; // sombra rasteira
+    if (fine > 0.86) buf[y * GTEX + x] = 33; // fiapos claros soltos
   }
-  // pinceladas: traços de 2-4px na diagonal do vento (\), tons acima/abaixo
-  const strokes = 46 + (rnd() * 14) | 0;
+  // pinceladas: traços curtos na diagonal do vento (\) — 4x mais numerosos
+  // que na v2 (área 4x), mas CURTOS no texel novo = lâminas finas de verdade
+  const strokes = 190 + (rnd() * 50) | 0;
   for (let i = 0; i < strokes; i++) {
     const sx = (rnd() * GTEX) | 0, sy = (rnd() * GTEX) | 0;
-    const len = 2 + (rnd() * 3) | 0;
-    const tone = rnd() < 0.45 ? 31 : rnd() < 0.75 ? 27 : 33;
+    const len = 2 + (rnd() * 4) | 0;
+    const tone = rnd() < 0.4 ? 31 : rnd() < 0.75 ? 27 : rnd() < 0.93 ? 33 : 30;
     for (let k = 0; k < len; k++) {
-      const x = (sx + k) & (GTEX - 1), y = (sy - (k >> 1) + TEX) & (GTEX - 1);
+      const x = (sx + k) & (GTEX - 1), y = (sy - (k >> 1) + GTEX) & (GTEX - 1);
       buf[y * GTEX + x] = tone;
     }
   }
-  // touceiras: 2-3 aglomerados escuros pequenos (ancoram o olho)
-  const clumps = 6 + (rnd() * 3) | 0;
+  // touceiras: aglomerados escuros com "raiz" (pixel 30 na base, coroa 31) —
+  // dobram de contagem com a área, ancoram o olho sem virar poluição
+  const clumps = 12 + (rnd() * 5) | 0;
   for (let i = 0; i < clumps; i++) {
     const cx = (rnd() * GTEX) | 0, cy = (rnd() * GTEX) | 0;
-    for (let k = 0; k < 4; k++) {
-      const x = (cx + ((rnd() * 3) | 0) - 1 + TEX) & (GTEX - 1), y = (cy + ((rnd() * 2) | 0) + TEX) & (GTEX - 1);
-      buf[y * GTEX + x] = k === 0 ? 30 : 31;
+    for (let k = 0; k < 5; k++) {
+      const x = (cx + ((rnd() * 3) | 0) - 1 + GTEX) & (GTEX - 1), y = (cy + ((rnd() * 3) | 0) + GTEX) & (GTEX - 1);
+      buf[y * GTEX + x] = k === 0 ? 30 : k < 3 ? 31 : 27;
     }
   }
-  // flores em cacho (só nos tiles floridos): coroa de pétalas + miolo
+  // flores em cacho (só nos tiles floridos): coroa de pétalas + miolo.
+  // No texel de 64 elas têm metade do tamanho físico — leem como florzinha.
   if (flowery) {
-    const n = 2 + (rnd() * 3) | 0;
+    const n = 5 + (rnd() * 4) | 0;
     for (let i = 0; i < n; i++) {
       const fx = 2 + (rnd() * (GTEX - 4)) | 0, fy = 2 + (rnd() * (GTEX - 4)) | 0;
       const petal = [9, 57, 18, 53][(rnd() * 4) | 0];
@@ -848,8 +860,12 @@ const CLOUD_NEAR = new Uint32Array(SKY_W * SKY_H);
     for (let x = 0; x < SKY_W; x++) SKY_BASE[y * SKY_W + x] = row;
   }
 
-  /* cúmulo pixel-art: união de "puffs" elípticos RECORTADA numa base achatada;
-     3 tons — topo branco, barriga azul-pálida, base cinza (ref. BotW) */
+  /* cúmulo pixel-art: união de "puffs" elípticos RECORTADA numa base achatada.
+     O que faz parecer VOLUME (e não adesivo): (a) cada pixel é sombreado pelo
+     SEU puff dominante — todo lóbulo ganha topo ao sol e barriga própria, a
+     silhueta fica lobulada por dentro também; (b) 4 tons com transições
+     DITHERADAS (nada de faixa reta); (c) rim fofo — a borda é roída por
+     Bayer proporcional à cobertura, então o contorno respira. Ref. BotW. */
   function stampCloud(layer, rnd, cx, cy, w, h, faint) {
     const n = 6 + (rnd() * 4) | 0;
     const puffs = [];
@@ -867,19 +883,30 @@ const CLOUD_NEAR = new Uint32Array(SKY_W * SKY_H);
     const y0 = Math.max(0, Math.floor(cy - h * 1.1)), y1 = Math.min(SKY_H - 1, Math.ceil(baseY));
     for (let y = y0; y <= y1; y++) {
       for (let xx = x0; xx <= x1; xx++) {
-        let inside = false, topMost = 1e9;
+        /* cobertura = melhor puff; guarda o puff dominante pra sombrear */
+        let cov = 0, best = null;
         for (const p of puffs) {
           const dx = (xx - p.px) / p.pr, dy = (y - p.py) / (p.pr * 0.72);
-          if (dx * dx + dy * dy <= 1) { inside = true; const top = p.py - p.pr * 0.72; if (top < topMost) topMost = top; }
+          const v = 1 - (dx * dx + dy * dy);
+          if (v > cov) { cov = v; best = p; }
         }
-        if (!inside) continue;
+        if (cov <= 0) continue;
         const x = ((xx % SKY_W) + SKY_W) % SKY_W; // panorama dá a volta
+        const bay = BAYER[y & 3][x & 3] / 16;
+        /* rim fofo: perto da borda, pixels caem por dither (silhueta lobulada) */
+        if (cov < 0.16 && bay > cov / 0.16) continue;
         const fromBase = baseY - y;
-        const rel = (y - topMost) / Math.max(1, baseY - topMost); // 0 topo .. 1 base
+        /* luz por PUFF: acima do centro do lóbulo = sol; abaixo = sombra dele */
+        const dyL = (y - best.py) / (best.pr * 0.72); // -1 topo .. +1 barriga
+        let t = 0.62 - dyL * 0.5 + cov * 0.18;        // altura local + gordura
+        t += (bay - 0.5) * 0.16;                       // quebra as faixas em dither
         let c;
-        if (fromBase < 2.5) c = C[7];       // base cinza achatada
-        else if (rel > 0.62) c = C[48];     // barriga à sombra
-        else c = C[9];                      // topo ao sol
+        if (fromBase < 2.5 - bay) {
+          /* base achatada: lavanda suave (não cinza sujo), fundida por dither */
+          c = [lerp(C[48][0], C[6][0], 0.45) | 0, lerp(C[48][1], C[6][1], 0.45) | 0, lerp(C[48][2], C[6][2], 0.45) | 0];
+        } else if (t > 0.72) c = C[9];   // topo ao sol
+        else if (t > 0.48) c = C[8];     // meia-luz (menta pálida)
+        else c = C[48];                  // barriga à sombra (azul-pálido)
         if (faint) c = [lerp(c[0], C[48][0], 0.35) | 0, lerp(c[1], C[48][1], 0.35) | 0, lerp(c[2], C[48][2], 0.35) | 0];
         layer[y * SKY_W + x] = px32(c[0], c[1], c[2]);
       }
