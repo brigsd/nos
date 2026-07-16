@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 70,
-    "worldTime": 4200
+    "tickCount": 71,
+    "worldTime": 4260
   },
   "width": 64,
   "height": 64,
@@ -4535,6 +4535,25 @@
       "type": "core_pulse",
       "tick": 70,
       "worldTime": 4200
+    },
+    {
+      "type": "native_spoke",
+      "tick": 71,
+      "worldTime": 4260,
+      "nativeId": "brasa",
+      "message": "A forja tá quente, mas comida é prioridade. Quem traz os queijos?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 71,
+      "worldTime": 4260,
+      "nativeId": "quilha",
+      "message": "Se alguém trouxer queijo, teremos um banquete antes da travessia."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 71,
+      "worldTime": 4260
     }
   ],
   "natives": {
@@ -4543,7 +4562,7 @@
       "name": "Gota",
       "position": {
         "x": 0,
-        "y": 5
+        "y": 4
       },
       "behaviorTree": "wanderer",
       "behaviorState": "{}",
