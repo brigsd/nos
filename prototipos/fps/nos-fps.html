@@ -1301,12 +1301,15 @@ for (let ty = 0; ty < world.h; ty++) {
       const ht = hash2(tx * 29, ty * 31);
       if (ht < 0.22) { // graminha balançando — objeto, não textura
         const v = TUFT_VARIANTS[(ht * 731) % TUFT_VARIANTS.length | 0];
+        const gx0 = tx + 0.5 + (hash2(tx * 41, ty * 43) - 0.5) * 0.7;
+        const gy0 = ty + 0.5 + (hash2(tx * 47, ty * 53) - 0.5) * 0.7;
+        const gsc = 0.44 + ht * 1.6;
         bills.push({
-          x: tx + 0.5 + (hash2(tx * 41, ty * 43) - 0.5) * 0.7,
-          y: ty + 0.5 + (hash2(tx * 47, ty * 53) - 0.5) * 0.7,
-          genFrames: v, label: 'tufo', scale: 0.44 + ht * 1.6, lift: 0,
+          x: gx0, y: gy0,
+          genFrames: v, label: 'tufo', scale: gsc, lift: 0,
           phase: hash2(tx * 59, ty * 61) * Math.PI * 2, swaySpeed: 620,
         });
+        stampTreeShadow(gx0, gy0, 0.22 + gsc * 0.14, 0.16 + gsc * 0.1, 0.3); // sombrinha da graminha
       }
       const hb = hash2(tx * 103, ty * 107);
       if (hb < 0.045) { // arbusto (não bloqueia)
@@ -1322,12 +1325,15 @@ for (let ty = 0; ty < world.h; ty++) {
       const hf = hash2(tx * 67, ty * 71);
       if (hf < 0.09) { // flor avulsa balançando
         const vf = FLOWER_VARIANTS[(hf * 913) % FLOWER_VARIANTS.length | 0];
+        const fx0 = tx + 0.5 + (hash2(tx * 73, ty * 79) - 0.5) * 0.7;
+        const fy0 = ty + 0.5 + (hash2(tx * 83, ty * 89) - 0.5) * 0.7;
+        const fsc = 0.24 + hf * 0.9;
         bills.push({
-          x: tx + 0.5 + (hash2(tx * 73, ty * 79) - 0.5) * 0.7,
-          y: ty + 0.5 + (hash2(tx * 83, ty * 89) - 0.5) * 0.7,
-          genFrames: vf, label: 'flor', scale: 0.24 + hf * 0.9, lift: 0,
+          x: fx0, y: fy0,
+          genFrames: vf, label: 'flor', scale: fsc, lift: 0,
           phase: hash2(tx * 97, ty * 101) * Math.PI * 2, swaySpeed: 460,
         });
+        stampTreeShadow(fx0, fy0, 0.18 + fsc * 0.12, 0.12 + fsc * 0.08, 0.24); // sombrinha da flor
       }
       const h = hash2(tx * 13, ty * 17);
       if (h < 0.978) continue; // pedrinhas raras na campina
@@ -1341,7 +1347,11 @@ for (let ty = 0; ty < world.h; ty++) {
          Referência visual dos grandes: shot-day-rock*.png (committados). */
       /* tamanho por hash PRÓPRIO (h da raridade mal varia — as grandes
          saíam todas ~1.41 por esse mesmo motivo) */
-      bills.push({ x: tx + 0.5, y: ty + 0.5, rock3d: true, seed: (tx * 733 + ty * 197) | 0, label: 'rocha', scale: 0.12 + hash2(tx * 19, ty * 23) * 0.16, lift: 0 });
+      const rsc = 0.12 + hash2(tx * 19, ty * 23) * 0.16;
+      bills.push({ x: tx + 0.5, y: ty + 0.5, rock3d: true, seed: (tx * 733 + ty * 197) | 0, label: 'rocha', scale: rsc, lift: 0 });
+      /* sombra assada no chão (deitada, direção do sol) — a elipse embutida
+         do rock3d some nessa escala; a assada dá o assentamento */
+      stampTreeShadow(tx + 0.5, ty + 0.5, 0.34 + rsc * 1.6, 0.26 + rsc * 1.2, 0.4);
     }
   }
 }
