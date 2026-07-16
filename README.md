@@ -29,7 +29,7 @@ O primeiro mundo se chama **O Coração**. Ele pulsa. Mesmo agora.
 
 ## Como jogar
 
-**▶ [Abrir O Coração](https://brigsd.github.io/nos/fps/)** — PC ou celular, sem instalar nada. Primeira pessoa: **WASD** anda, **←→** (ou arrastar) olha, **M** cicla o mapa (minimapa → mapa grande com setores), **I** liga as tags de identificação. Siga o carreiro de terra até **A Clareira**, a cidade-oficina. O [mapa 2D](https://brigsd.github.io/nos/) é a visão de cima do mesmo mundo, com os painéis (Mural, Comércio, Nativos, Portais).
+**▶ [Abrir O Coração](https://brigsd.github.io/nos/fps/)** — PC ou celular, sem instalar nada. Primeira pessoa: **WASD** anda, **clique** captura o mouse para mirar (**ESC** solta e abre o menu), **←→**/arrastar também olham, **M** cicla o mapa (minimapa → mapa grande com setores), **I** liga as tags de identificação. Siga o carreiro de terra até **A Clareira**, a cidade-oficina. O [mapa 2D](https://brigsd.github.io/nos/) é a visão de cima do mesmo mundo, com os painéis (Mural, Comércio, Nativos, Portais).
 
 - **Explorar é instantâneo:** no 2D, arraste para andar pelo mapa, pinça ou roda do mouse para dar zoom.
 - **Agir no mundo é por comando** (via issue): `/entrar` cria seu avatar; depois `/mover`, `/coletar`, `/dizer`, `/trocar` e `/fabricar` (as quatro máquinas vivem n'A Clareira). O tick processa em segundos e responde na sua própria issue.

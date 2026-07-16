@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 6) — mouse-look, menu ESC, input destravado, névoa baixa
+
+- **Mouse-look com pointer lock**: clique captura o mouse (desktop, `pointer:fine`), `movementX` gira a câmera; ESC solta e abre o **menu** (vazio por ora, botão continuar religa o lock). Pads de toque dormem enquanto o lock está ativo; menu aberto silencia as teclas do jogo.
+- **Bug do "anda sozinho infinito" CORRIGIDO**: era input preso — soltar o botão FORA da zona do pad nunca disparava o pointerup do elemento. Agora pointerup/pointercancel no window zeram os pads, e blur/visibilitychange zeram teclas+pads.
+- **Tags refinadas** (feedback do ideador): alcance 9→5.2 tiles, teto 22→12, oclusão por zbuf (parede esconde tag) e âncora no TRONCO (altura ≤1.35 tile), não no topo da copa.
+- **Névoa baixa**: 14 fiapos rasteiros (96×14, traços horizontais contíguos — nunca pontos soltos, que viravam quadradões) respirando pelo seno do vento (3 frames quase-nada→cheio, fase/ritmo próprios), maioria perto d'água, largo limpo. Lição de render: decoração sem colisão precisa de recuo mínimo de desenho (tufo/flor/rocha/arbusto < 0.85 tile e névoa < 1.5 não desenham) — a câmera em cima esticava o sprite numa faixa gigante.
+
 ## Sessão 2026-07-16 (parte 5) — D-33: IDs, setores, ?cam= e a borda-céu
 
 - **Tecla I**: tags flutuantes com ID determinístico (`tipo-XxY`, tile de origem = âncora no código) sobre os 22 objetos mais próximos; HUD mostra `setor · tile · mira · ?cam=`; persiste. **Tecla M cicla**: minimapa → mapa grande 288px com setores A1–H8 (grade, rótulos, setor atual, seta) → nada. **?cam=x,y,a** na URL abre a câmera exata. Tudo em `docs/COMUNICACAO.md` (+ exemplos de pedido).

@@ -84,6 +84,35 @@
     pointer-events: none;
     font: 500 10px/1.15 ui-monospace, monospace;
   }
+  #menu {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 8, 14, 0.72);
+    backdrop-filter: blur(2px);
+    z-index: 6;
+  }
+  #menu .panel {
+    background: #171221;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px 32px;
+    text-align: center;
+  }
+  #menu h2 { margin: 0 0 4px; letter-spacing: 0.35em; font-size: 16px; color: #eaaded; }
+  #menu p { margin: 0 0 16px; font-size: 11px; color: #9b93a8; }
+  #menu button {
+    background: #a884f3;
+    color: #171221;
+    border: 0;
+    border-radius: 6px;
+    padding: 8px 24px;
+    font: 600 12px ui-monospace, monospace;
+    cursor: pointer;
+  }
+  #menu button:hover { background: #c3a6ff; }
   #tags span {
     position: absolute;
     transform: translate(-50%, -100%);
@@ -155,10 +184,17 @@
   <canvas id="minimap" width="64" height="64"></canvas>
   <canvas id="bigmap" width="288" height="288"></canvas>
   <div id="tags"></div>
+  <div id="menu">
+    <div class="panel">
+      <h2>N Ó S</h2>
+      <p>menu em construção — por enquanto, só a saída</p>
+      <button id="btnContinue">continuar ▶</button>
+    </div>
+  </div>
   <div id="hudTop"></div>
   <div id="padMove" class="padzone"></div>
   <div id="padLook" class="padzone"></div>
-  <div id="hint">arraste: esquerda anda · direita olha</div>
+  <div id="hint">clique: mirar com o mouse (ESC solta) · arraste: esquerda anda · direita olha</div>
 </div>
 
 <footer>
@@ -1718,6 +1754,49 @@ function genSmoke(fr) {
   bills.push({ x: 49.5, y: 12.5, genFrames: [genSmoke(0), genSmoke(1), genSmoke(2)], loop: true, label: 'fumaca', scale: 1.2, lift: 2.1 });
 }
 
+/* ---------- névoa baixa (pedido do ideador): fiapos rasteiros que respiram ----------
+   3 frames por fiapo (quase nada -> leve -> cheio) percorridos pelo MESMO
+   seno do vento das árvores (swaySpeed lento) — a névoa "aparece de vez em
+   quando" e some, cada fiapo no seu próprio ritmo/fase. Dither pesado faz
+   a translucidez; nasce de preferência perto d'água e em baixadas. */
+function genMist(fr, seed) {
+  /* fiapos = TRAÇOS horizontais contíguos (noise suave em x -> runs longos),
+     nunca pontos soltos (a curta distância cada texel vira um quadradão);
+     a translucidez vem dos vãos entre traços, não de dither picotado */
+  const Wm = 96, Hm = 14;
+  const rnd = mulberry32(seed * 3571 + fr * 977 + 17);
+  const buf = new Int16Array(Wm * Hm).fill(-1);
+  const thr = [0.8, 0.69, 0.6][fr]; // frame 0 quase some, frame 2 mais cheio
+  for (let y = 0; y < Hm; y++) {
+    if ((y + seed) % 3 === 2) continue; // linhas vazias entre fiapos
+    for (let x = 0; x < Wm; x++) {
+      const ex = (x - Wm / 2) / (Wm * 0.5), ey = (y - Hm * 0.6) / (Hm * 0.62);
+      if (ex * ex + ey * ey > 1) continue;
+      const n = vnoise(x * 0.09 + seed * 3 + fr * 0.7, y * 0.9 + seed);
+      if (n > thr) buf[y * Wm + x] = (x + y) % 17 === 0 ? 9 : 8;
+    }
+  }
+  return bufToTex({ buf, W: Wm, H: Hm });
+}
+{
+  let planted = 0;
+  for (let i = 0; planted < 14 && i < 400; i++) {
+    const mx = 3 + hash2(i * 37, 11) * 58, my = 3 + hash2(i * 41, 29) * 58;
+    if (rimAt(mx, my) < 1.2 || world.at(mx | 0, my | 0) === 'w') continue;
+    if (Math.hypot(mx - PLAZA.x, my - PLAZA.y) < 4.5) continue;    // o largo fica limpo
+    const nearWater = shoreAt(mx, my) > -3.2;
+    if (!nearWater && hash2(i * 53, 7) > 0.35) continue;           // maioria perto d'água
+    const h = hash2(i * 59, 13);
+    bills.push({
+      x: mx, y: my,
+      genFrames: [genMist(0, i), genMist(1, i), genMist(2, i)],
+      label: 'nevoa', scale: 0.5 + h * 0.35, lift: 0.03, /* rasteira: meio tile de altura, larga */
+      phase: hash2(i * 61, 17) * Math.PI * 2, swaySpeed: 5200 + h * 3400,
+    });
+    planted++;
+  }
+}
+
 /* ---------- IDENTIFICAÇÃO (D-33): IDs + setores, o vocabulário ideador<->coder ----------
    Ver docs/COMUNICACAO.md. Todo objeto ganha um ID determinístico e estável:
    - tipos genéricos (arvore, tufo, flor, arbusto, rocha, arco, fumaca):
@@ -1727,7 +1806,7 @@ function genSmoke(fr) {
      jogadores): o próprio nome.
    O mapa (tecla M, 2º toque) divide a ilha em SETORES 8x8 tiles: A1 (NW) a
    H8 (SE) — "área C2" localiza sem precisar descrever a paisagem. */
-const GENERIC_IDS = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'rocha', 'arco', 'fumaca']);
+const GENERIC_IDS = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'rocha', 'arco', 'fumaca', 'nevoa']);
 {
   const seen = new Set();
   for (const b of bills) {
@@ -2167,6 +2246,10 @@ function render(now) {
     const tx = inv * (dirY * rx - dirX * ry);
     const ty = inv * (-plY * rx + plX * ry);
     if (ty <= 0.15) continue;
+    /* decoração rasteira NÃO desenha com a câmera em cima (sem colisão, dá
+       pra atravessar — e um tufo a 0.2 tile virava uma faixa gigante) */
+    if (b.label === 'nevoa' && ty < 1.5) continue;
+    if (ty < 0.85 && (b.label === 'tufo' || b.label === 'flor' || b.label === 'rocha' || b.label === 'arbusto')) continue;
     const sx = ((W / 2) * (1 + tx / ty)) | 0;
     let genTex = b.gen;
     if (b.loop && b.genFrames) {
@@ -2506,6 +2589,7 @@ let touchLook = { on: false, lastX: 0 };
 function bindPad(el, isMove) {
   let sx = 0, sy = 0;
   el.addEventListener('pointerdown', (e) => {
+    if (isLocked()) return; // com o mouse capturado, quem olha é o movementX — pads dormem
     el.setPointerCapture(e.pointerId);
     sx = e.clientX; sy = e.clientY;
     if (isMove) touchMove = { on: true, dx: 0, dy: 0 };
@@ -2528,7 +2612,46 @@ function bindPad(el, isMove) {
 bindPad(document.getElementById('padMove'), true);
 bindPad(document.getElementById('padLook'), false);
 
+/* INPUT NUNCA FICA PRESO: soltar o botão FORA da zona do pad, trocar de
+   aba ou perder o foco da janela zera tudo — era o "personagem andando
+   sozinho infinitamente" (o pointerup morria fora do elemento). */
+function clearInputs() {
+  for (const k of Object.keys(keys)) keys[k] = false;
+  touchMove.on = false;
+  touchLook.on = false;
+}
+addEventListener('pointerup', () => { touchMove.on = false; touchLook.on = false; });
+addEventListener('pointercancel', () => { touchMove.on = false; touchLook.on = false; });
+addEventListener('blur', clearInputs);
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearInputs(); });
+
+/* mouse-look (pointer lock) + menu no ESC — desktop */
+const stageEl = document.getElementById('stage');
+const menuEl = document.getElementById('menu');
+let everLocked = false;
+const isLocked = () => document.pointerLockElement === stageEl;
+stageEl.addEventListener('click', () => {
+  if (!isLocked() && menuEl.style.display !== 'flex' && matchMedia('(pointer:fine)').matches) {
+    stageEl.requestPointerLock?.();
+  }
+});
+menuEl.addEventListener('click', (e) => e.stopPropagation());
+document.getElementById('btnContinue').addEventListener('click', () => {
+  menuEl.style.display = 'none';
+  stageEl.requestPointerLock?.();
+});
+document.addEventListener('pointerlockchange', () => {
+  if (isLocked()) { everLocked = true; menuEl.style.display = 'none'; }
+  else if (everLocked) { menuEl.style.display = 'flex'; clearInputs(); } // ESC soltou o mouse -> menu
+});
+document.addEventListener('mousemove', (e) => { if (isLocked()) cam.a += e.movementX * 0.0032; });
+
 addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { // com pointer lock o navegador solta sozinho; sem, a gente alterna o menu
+    if (!isLocked()) menuEl.style.display = menuEl.style.display === 'flex' ? 'none' : 'flex';
+    return;
+  }
+  if (menuEl.style.display === 'flex') return; // menu aberto: jogo não ouve teclas
   keys[e.key.toLowerCase()] = true;
   if (e.key.toLowerCase() === 'm') mapMode = (mapMode + 1) % 3;
   if (e.key.toLowerCase() === 'i') { // tags de identificação (D-33)
@@ -2549,18 +2672,26 @@ function paintTags() {
   for (const b of bills) {
     const dx = b.x - cam.x, dy = b.y - cam.y;
     const dist = Math.hypot(dx, dy);
-    if (dist < 0.5 || dist > 9) continue;
+    if (dist < 0.5 || dist > 5.2) continue; // só o que está PERTO — tag não é raio-x
     const rel = wrapAng(Math.atan2(dy, dx) - cam.a);
     if (Math.abs(rel) > 0.58) continue;
     cands.push({ b, dist, rel });
   }
   cands.sort((p, q) => p.dist - q.dist);
-  let html = '';
-  for (const { b, dist, rel } of cands.slice(0, 22)) {
+  let html = '', shown = 0;
+  for (const { b, dist, rel } of cands) {
+    if (shown >= 12) break;
     const sx = (Math.tan(rel) / FOV_PLANE + 1) * (W / 2);
+    const col = sx | 0;
+    if (col < 0 || col >= W) continue;
+    if (zbuf[col] < dist - 0.25) continue; // parede na frente esconde a tag
     const lineH = H / dist;
-    const sy = clamp(HALF + lineH * (0.5 - (b.scale ?? 1) - (b.lift ?? 0)), 8, H - 8);
+    /* âncora no TRONCO/corpo, não no topo da copa: altura da tag limitada
+       a ~1.35 tile acima do chão (fumaça sobe junto via lift) */
+    const hTag = Math.min(b.scale ?? 1, 1.35) + (b.lift ?? 0);
+    const sy = clamp(HALF + lineH * (0.5 - hTag), 8, H - 8);
     html += `<span style="left:${((sx / W) * 100).toFixed(1)}%;top:${((sy / H) * 100).toFixed(1)}%">${b.id}</span>`;
+    shown++;
   }
   tagsDiv.innerHTML = html;
 }

@@ -7,7 +7,8 @@
 ## As duas teclas
 
 - **`I`** — liga/desliga as **tags de identificação**: cada objeto próximo
-  (até ~9 tiles, os 22 mais perto) ganha uma etiqueta flutuante com seu ID.
+  (até ~5 tiles, os 12 mais perto, com oclusão — parede na frente esconde a
+  tag) ganha uma etiqueta flutuante ancorada no tronco/corpo do objeto.
   O HUD passa a mostrar `setor x,y · mira setor x,y · ?cam=…`. A escolha
   fica salva (localStorage) — é uma mecânica permanente, ligue quando quiser
   apontar algo e desligue pra jogar limpo.
