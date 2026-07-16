@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 68,
-    "worldTime": 4080
+    "tickCount": 69,
+    "worldTime": 4140
   },
   "width": 64,
   "height": 64,
@@ -4504,6 +4504,32 @@
       "type": "core_pulse",
       "tick": 68,
       "worldTime": 4080
+    },
+    {
+      "type": "native_spoke",
+      "tick": 69,
+      "worldTime": 4140,
+      "nativeId": "brasa",
+      "message": "a forja tá quente, mas a fome bate mais forte. quem vem pelo carreiro, traz queijo?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 69,
+      "worldTime": 4140,
+      "nativeId": "broa",
+      "message": "Oi, viajante! Tem um pão saindo do forno. Quer um?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 69,
+      "worldTime": 4140,
+      "nativeId": "quilha",
+      "message": "A forja está acesa. O calor traz vida. Vamos juntos construir o que atravessa o vazio."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 69,
+      "worldTime": 4140
     }
   ],
   "natives": {
@@ -4511,7 +4537,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 0,
+        "x": 1,
         "y": 5
       },
       "behaviorTree": "wanderer",
