@@ -798,6 +798,11 @@ const shoreField = new Float32Array(world.w * world.h).fill(255);
       if (shoreField[ny * world.w + nx] > d + 1) { shoreField[ny * world.w + nx] = d + 1; q.push(nx, ny); }
     }
   }
+  /* ASSINA o campo: positivo dentro da água, negativo na terra — o contorno
+     zero da amostra bilinear é uma CURVA suave, não a escadinha do grid */
+  for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
+    if (at(x, y) !== 'w') shoreField[y * world.w + x] = -shoreField[y * world.w + x];
+  }
 }
 /* amostra bilinear do campo (suave por pixel) */
 function shoreAt(fx, fy) {
@@ -970,14 +975,18 @@ function render(now) {
       const t = world.at(tx, ty);
       /* sombra de nuvem varrendo o chão (rola com o tempo) */
       const shadowed = CSHAD[(((fy * 2 + 5) & 127) * 128 + ((fx * 2 + cloudShadowT) & 127)) | 0] === 1;
+      /* linha d'água CONTÍNUA: contorno zero do campo assinado, lambendo a
+         praia com a onda (avança e recua ~0.1 tile) */
+      const lapWv = (WAVE_A[((fy * 5) & 63) * 64 + ((fx * 5 + waveT) & 63)]) / 255 - 0.5;
+      const sSigned = shoreAt(fx, fy) + lapWv * 0.16;
       let c;
-      if (t === 'w') {
+      if (sSigned > 0) {
         /* ÁGUA CRISTALINA (shader por pixel, tudo lookup):
            raso -> fundo de areia visível tingido de ciano; fundo -> teal
            profundo; reflexo REAL do céu (espelho das linhas já pintadas,
            nuvens/montanha inclusas) crescendo com o ângulo rasante;
            ondulação anima reflexo, cáustica e brilhos de crista. */
-        const sd = Math.min(1, shoreAt(fx, fy) / 1.9);           // 0 margem .. 1 fundo
+        const sd = Math.min(1, sSigned / 1.9);           // 0 margem .. 1 fundo
         const wv = (WAVE_A[((fy * 9) & 63) * 64 + ((fx * 9 + waveT) & 63)] +
                     WAVE_B[((fy * 6 + waveT) & 63) * 64 + ((fx * 6) & 63)]) / 510 - 0.5;
         // base: areia -> ciano raso -> teal fundo (cáustica clareia o raso)
@@ -1007,11 +1016,12 @@ function render(now) {
         const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
         const g = GRASS_TILES[h % GRASS_TILES.length];
         c = g.data[((((fy - ty) * GTEX) | 0) * GTEX + (((fx - tx) * GTEX) | 0))];
-        // praia: faixa de areia na beira da água
-        const ld = shoreAt(fx, fy);
-        if (ld < 0.38 && (t === 'm')) {
-          if (ld < 0.16) c = ((x + y) & 1) === 0 ? 0xff7a94ab : 0xffb0cbfd; // faixa sólida de areia
-          else if ((BAYER[y & 3][x & 3] / 16) < (1 - (ld - 0.16) / 0.22) * 0.7) c = 0xff7a94ab; // franja curta
+        // praia: areia molhada colada na linha d'água, franja seca depois
+        const ld = -sSigned;
+        if (ld < 0.42) {
+          if (ld < 0.10) c = ((x + y) & 1) === 0 ? 0xff6c6c96 : 0xff7a94ab;      // areia molhada (escura)
+          else if (ld < 0.22) c = ((x + y) & 1) === 0 ? 0xff7a94ab : 0xffb0cbfd; // areia clara
+          else if ((BAYER[y & 3][x & 3] / 16) < (1 - (ld - 0.22) / 0.20) * 0.6) c = 0xff7a94ab; // franja na grama
         }
       }
       if (shadowed) c = darkenU32(c, 0.86);
