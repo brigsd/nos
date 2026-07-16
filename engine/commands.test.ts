@@ -12,6 +12,7 @@ import {
   applyCommand,
 } from './commands';
 import { CONVERSATION_REPLIES, PLAYER_PROXIMITY_TILES } from './behavior';
+import { validateWorld } from './validate';
 import { FABRICATION_RANGE_TILES } from './fabrication';
 
 function mockWorld(): World {
@@ -818,10 +819,16 @@ describe('/habitar - as mentes dirigem os Habitantes (D-34)', () => {
   const habitarCmd = (params: any, login = 'brigsd', id = 90) =>
     ({ id, login, type: 'habitar' as const, params, createdAt: '2026-07-16T12:00:00Z' });
 
-  it('guardião autorizado faz um habitante falar: vira native_spoke no mundo', () => {
+  it('guardião autorizado faz um habitante falar: vira native_spoke no mundo E o mundo segue válido', () => {
     const world = mockWorld();
+    // o mockWorld põe wood em campina (viola o schema wood⇒forest) — este
+    // teste valida o mundo INTEIRO, então conserta o tile antes
+    world.tiles[30 * 64 + 30] = { biome: 'forest', resource: 'wood' };
     const res = processCommands(world, [habitarCmd({ habitante: 'brasa', mensagem: 'Ferro bom não tem pressa.' })], 66, 3960);
     expect(res.results[0]?.success).toBe(true);
+    // regressão do 1º E2E real: o validador cruzava nativeId só com natives
+    // e derrubava o tick — habitantes são identidades reconhecidas agora
+    expect(validateWorld(res.world).valid).toBe(true);
     expect(res.world.events).toHaveLength(1);
     expect(res.world.events[0]).toEqual({
       type: 'native_spoke',

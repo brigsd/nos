@@ -187,6 +187,14 @@ export interface Machine {
 // Events
 // ---------------------------------------------------------------------------
 
+/**
+ * Habitantes d'A Clareira (D-34): gente da cidade, dirigida pelas mentes de
+ * brigsd/nos-mentes via /habitar. NÃO são world.natives (não têm behavior
+ * tree no tick) — mas são identidades reconhecidas: o validador aceita
+ * native_spoke com estes ids, e o Mural os exibe pelo próprio nome.
+ */
+export const HABITANTES_CANONICOS = ['brasa', 'broa', 'quilha'] as const;
+
 export type WorldEventType =
   | 'player_joined'
   | 'player_moved'

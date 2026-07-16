@@ -17,6 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv, { type ErrorObject } from 'ajv';
 import type { Position, World } from './types';
+import { HABITANTES_CANONICOS } from './types';
 import { isInBounds } from './types';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -122,8 +123,12 @@ function semanticErrors(world: World): string[] {
 
     // Same idea as the login cross-check above, for the one event type that
     // references a Native instead of a Player (native_spoke).
-    if ('nativeId' in event && !(event.nativeId in (world.natives ?? {}))) {
-      errors.push(`${label}.nativeId ("${event.nativeId}") does not exist in natives`);
+    if (
+      'nativeId' in event &&
+      !(event.nativeId in (world.natives ?? {})) &&
+      !(HABITANTES_CANONICOS as readonly string[]).includes(event.nativeId)
+    ) {
+      errors.push(`${label}.nativeId ("${event.nativeId}") does not exist in natives nem em HABITANTES_CANONICOS`);
     }
 
     // Same idea again, for item_synthesized's machineId (A Fábrica, v2.5).

@@ -7,7 +7,7 @@
  */
 
 import type { World, Player, Position, WorldEvent, ResourceType } from './types';
-import { STARTING_ENERGY, STARTING_PULSO, MAX_ENERGY, ACTIONS_PER_TICK, getOwn, getTile, tileIndex } from './types';
+import { STARTING_ENERGY, STARTING_PULSO, MAX_ENERGY, ACTIONS_PER_TICK, HABITANTES_CANONICOS, getOwn, getTile, tileIndex } from './types';
 import { executeTrade, TRADE_ENERGY_COST, TRADE_RANGE_TILES } from './economy';
 import { conversationReply, PLAYER_PROXIMITY_TILES } from './behavior';
 import { attemptSynthesis, FABRICATION_RANGE_TILES, inMachinePhrase, itemLabel, SYNTHESIS_RECIPES } from './fabrication';
@@ -126,7 +126,7 @@ export function parseDizerMessage(body: string): string {
  * só pode falar pelos habitantes listados. Mudar isto é um PR auditável.
  */
 export const MENTES_GUARDIAS: Record<string, readonly string[]> = {
-  brigsd: ['brasa', 'broa', 'quilha'],
+  brigsd: HABITANTES_CANONICOS,
 };
 export const HABITAR_MAX_POR_TICK = 2;
 export const HABITAR_MAX_MENSAGEM = 240;
