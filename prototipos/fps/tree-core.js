@@ -119,13 +119,13 @@ function growTree(opts) {
       const cx = s.x1 + dx * t, cy = s.y1 + dy * t;
       const halfW = s.w / 2;
       for (let o = -halfW; o <= halfW; o += 0.5) {
-        const frac = (o / halfW) * litSign; // -1 borda iluminada .. +1 sombra
-        let idx;
-        if (frac < -0.35) idx = barkRamp[3];
-        else if (frac > 0.45) idx = barkRamp[0];
-        else if (frac > 0.1) idx = barkRamp[1];
-        else idx = barkRamp[2];
-        put(cx + pxn * o, cy + pyn * o, idx);
+        // cilindro: claro perto da borda iluminada, escurecendo em curva até a sombra
+        const sfrac = (o / halfW) * litSign; // -1 luz .. +1 sombra
+        let b5 = clamp(4 - Math.round((sfrac + 1) * 2), 0, 4);
+        const ridge = hash2(Math.round(o * 4) + 31, 0); // estrias verticais da casca
+        if (ridge < 0.24) b5 = clamp(b5 - 1, 0, 4);
+        else if (ridge > 0.9) b5 = clamp(b5 + 1, 0, 4);
+        put(cx + pxn * o, cy + pyn * o, barkRamp[b5]);
       }
     }
   }

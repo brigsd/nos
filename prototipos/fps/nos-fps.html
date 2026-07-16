@@ -261,13 +261,14 @@ function growTree(opts) {
       const cx = s.x1 + dx * t, cy = s.y1 + dy * t;
       const halfW = s.w / 2;
       for (let o = -halfW; o <= halfW; o += 0.5) {
-        const frac = (o / halfW) * litSign; // -1 borda iluminada .. +1 sombra
-        let idx;
-        if (frac < -0.35) idx = barkRamp[3];
-        else if (frac > 0.45) idx = barkRamp[0];
-        else if (frac > 0.1) idx = barkRamp[1];
-        else idx = barkRamp[2];
-        put(cx + pxn * o, cy + pyn * o, idx);
+        // cilindro: claro perto da borda iluminada, escurecendo em curva até a sombra
+        const sfrac = (o / halfW) * litSign; // -1 luz .. +1 sombra
+        let b5 = clamp(4 - Math.round((sfrac + 1) * 2), 0, 4);
+        // estrias verticais da casca (colunas fixas ao longo do tronco)
+        const ridge = hash2(Math.round(o * 4) + 31, 0);
+        if (ridge < 0.24) b5 = clamp(b5 - 1, 0, 4);
+        else if (ridge > 0.9) b5 = clamp(b5 + 1, 0, 4);
+        put(cx + pxn * o, cy + pyn * o, barkRamp[b5]);
       }
     }
   }
@@ -581,6 +582,7 @@ function texAt(t, frameIx, u, v) {
 
 /* ---------- assets GERADOS (mesmo gerador do Estúdio de Cena) ---------- */
 const PAL_RGB = PALETTE.map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+const PAL_RGB_U32 = PAL_RGB.map(([r, g, b]) => (255 << 24) | (b << 16) | (g << 8) | r);
 function bufToTex(gen) {
   const data = new Uint32Array(gen.W * gen.H);
   for (let i = 0; i < data.length; i++) {
@@ -596,8 +598,9 @@ SPECIES.copado = { ...SPECIES.carvalho, spread: 0.74, leafR: [9, 14], depth: 7, 
 SPECIES.jovem = { ...SPECIES.carvalho, len: 15, width: 5, leafR: [5, 8], depth: 6, jitter: 0.42 };
 /* 8 variantes x 3 frames de VENTO (folhas deslocam, tronco parado) */
 const TREE_SPECIES_SET = ['carvalho', 'carvalho', 'copado', 'copado', 'anciao', 'anciao', 'jovem', 'salgueiro'];
+const TREE_RES = 1.6; // fonte ~1.6x mais densa: tronco deixa de parecer chunky de perto
 const TREE_VARIANTS = TREE_SPECIES_SET.map((sp, i) =>
-  [-1, 0, 1].map((w) => bufToTex(growTree({ species: sp, mood: 'dia', seed: 4021 + i * 977, W: 104, H: 136, windAmt: w })))
+  [-1, 0, 1].map((w) => bufToTex(growTree({ species: sp, mood: 'dia', seed: 4021 + i * 977, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES, windAmt: w * TREE_RES })))
 );
 /* rochas: 4 variantes x 4 FACES (rotações de 90 graus escolhidas pelo ângulo de visão) */
 const ROCK_VARIANTS = [];
@@ -848,8 +851,7 @@ for (let ty = 0; ty < world.h; ty++) {
       const dCore = Math.hypot(tx - CORE.x, ty - CORE.y);
       if (dCore < 6) continue; // praça do Núcleo limpa
       rockTiles.add(ty * world.w + tx);
-      const v = ROCK_VARIANTS[(h * 997 * ROCK_VARIANTS.length | 0) % ROCK_VARIANTS.length];
-      bills.push({ x: tx + 0.5, y: ty + 0.5, genViews: v, label: 'rocha', scale: 0.62 + h * 0.55, lift: 0 });
+      bills.push({ x: tx + 0.5, y: ty + 0.5, rock3d: true, seed: (tx * 733 + ty * 197) | 0, label: 'rocha', scale: 0.72 + h * 0.7, lift: 0 });
     }
   }
 }
@@ -1010,6 +1012,63 @@ function render(now) {
     if (rx1 < 0 || rx0 >= W || y1c < 0 || y0c >= H) continue; /* 100% fora da tela */
     const y0 = clamp(y0c | 0, 0, H - 1), y1 = clamp(y1c | 0, 0, H - 1);
     const x0 = clamp(rx0, 0, W - 1), x1 = clamp(rx1, 0, W - 1);
+    if (b.rock3d) {
+      /* rocha como VOLUME 3D per-pixel (mesma classe do orbe, não billboard):
+         relevo ancorado no MUNDO via o azimute câmera->rocha, então circular
+         mostra lados diferentes de verdade; luz do sol FIXA no mundo faz o
+         lado iluminado ficar parado — é isso que lê como sólido, não foto. */
+      const cxr = (rx0 + rx1) / 2, radX = Math.max(1, sw / 2), radY = Math.max(1, sh / 2);
+      const cyr = y1c - radY * 0.86;            // centro subido -> base achatada no chão
+      const az = Math.atan2(b.y - cam.y, b.x - cam.x);
+      const seed = (b.seed || 1) * 0.013;
+      const SUN_AZ = -2.2, SUN_EL = 0.5, cosEl = Math.cos(SUN_EL), sinEl = Math.sin(SUN_EL);
+      const ROCK = [1, 2, 6, 7, 8], MOSS = [35, 36, 37, 38];
+      // sombra de contato no chão (elipse escura sob a pedra)
+      const shW = radX * 1.05, shH = Math.max(1.5, radY * 0.22);
+      for (let x = Math.max(0, (cxr - shW) | 0); x <= Math.min(W - 1, (cxr + shW) | 0); x++) {
+        if (ty >= zbuf[x]) continue;
+        for (let y = (y1c - shH) | 0; y <= Math.min(H - 1, (y1c + shH) | 0); y++) {
+          const ex = (x - cxr) / shW, ey = (y - y1c) / shH;
+          if (ex * ex + ey * ey > 1) continue;
+          if ((BAYER[y & 3][x & 3] / 16) < 0.62 - ex * ex * 0.3) px[y * W + x] = shade(PAL_RGB_U32[30], f, 0);
+        }
+      }
+      for (let x = x0; x <= x1; x++) {
+        if (ty >= zbuf[x]) continue;
+        const nx = (x - cxr) / radX;
+        if (nx < -1 || nx > 1) continue;
+        const bearing0 = az + Math.asin(clamp(nx, -1, 1)); // rumo no mundo da coluna visível
+        for (let y = y0; y <= y1; y++) {
+          if (y > y1c) continue;                 // base plana
+          const nyv = (y - cyr) / radY;
+          const relief = (fbm(Math.cos(bearing0) * 2.4 + seed, nyv * 2.4 + Math.sin(bearing0) * 2.4 + seed, 3) - 0.5) * 0.55;
+          const rr = 1 + relief;
+          const r2 = nx * nx + nyv * nyv;
+          if (r2 > rr * rr) continue;            // fora do volume deformado
+          const nyN = clamp(nyv / rr, -1, 1);
+          const nzt = Math.sqrt(Math.max(0, 1 - (nx / rr) * (nx / rr) - nyN * nyN));
+          const horiz = Math.sqrt(Math.max(0, 1 - nyN * nyN));
+          const bearing = az + Math.atan2(nx / rr, nzt + 1e-4);
+          // normal no MUNDO (z = cima) -> luz do sol fixa
+          const wnx = horiz * Math.cos(bearing), wny = horiz * Math.sin(bearing), wnz = -nyN;
+          const lam = wnx * Math.cos(SUN_AZ) * cosEl + wny * Math.sin(SUN_AZ) * cosEl + wnz * sinEl;
+          const facet = Math.floor((fbm(Math.cos(bearing) * 6 + seed, nyN * 6 + seed, 2)) * 3) / 3;
+          let tt = 0.5 + 0.46 * lam + (facet - 0.5) * 0.5;
+          tt += (BAYER[y & 3][x & 3] / 16 - 0.5) * 0.12;
+          const edge = r2 > (rr - 0.09) * (rr - 0.09);
+          let idx;
+          if (wnz > 0.42 && fbm(Math.cos(bearing) * 4 + seed * 2, nyN * 4, 2) > 0.46) {
+            idx = MOSS[clamp(Math.round(tt * 3), 0, 3)]; // musgo no topo
+          } else if (edge && lam < 0.05) {
+            idx = 1; // contorno escuro no lado à sombra
+          } else {
+            idx = ROCK[clamp(Math.round(tt * 4), 0, 4)];
+          }
+          px[y * W + x] = shade(PAL_RGB_U32[idx], f, 0);
+        }
+      }
+      continue;
+    }
     if (b.tex === 'orb') {
       /* o Núcleo: esfera procedural pulsante — luz, não parede (D-22: o coração vivo) */
       const cx = (rx0 + rx1) / 2, cy = (y0c + y1c) / 2, rad = sh / 2;
