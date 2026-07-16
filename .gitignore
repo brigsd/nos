@@ -11,3 +11,7 @@ command_results.json
 # Previews de sprites (8x, contact sheets, mapa mock) — artefatos de build,
 # regenerados por `npm run build:sprites` (assets/tools/) em assets/preview/.
 assets/preview/
+
+# Screenshots da auditoria visual do FPS (`npm run olhar`, D-35) — evidência
+# regenerável, nunca versionada (D-30).
+prototipos/fps/qa/out/

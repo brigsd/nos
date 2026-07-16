@@ -18,7 +18,8 @@
     "validate-worlds": "tsx scripts/validate-worlds.ts",
     "lint:sprites": "node assets/tools/lint-sprites.js",
     "respond-issues": "tsx scripts/respond-issues.ts",
-    "art": "node tools/art-mcp/cli.cjs"
+    "art": "node tools/art-mcp/cli.cjs",
+    "olhar": "node prototipos/fps/qa/olhar.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0"

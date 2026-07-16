@@ -2,6 +2,15 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 11) — a bancada do coder (D-35): limitações viram ferramentas
+
+- Pergunta do ideador: "nem sei suas limitações — você consegue descobri-las sozinho?". Resposta validada: introspecção não; **diário de atrito sim** — o CONTINUITY já registra cada erro real; destilar atrito→ferramenta (a ferramenta cita o incidente de origem) é o mecanismo. Registrado como método permanente em `docs/CODER.md`.
+- **`npm run olhar`** (`prototipos/fps/qa/olhar.mjs` + `pontos.json`): auditoria visual do cliente oficial em um comando — build fresco (mundo inline), server efêmero, Chromium local, screenshots lidos pelo coder. 100% offline. Pontos canônicos: spawn, carreiro, chegada, 4 alas, portais, largo-noite, borda. Regra: criou área nova → adiciona o ponto.
+- **`?tod=0..1`** no cliente (junto do `?cam=`): hora do dia congelada pra auditoria determinística. Bug pego no ato: `Number(null)===0` teria prendido todo jogador à meia-noite — get() checado antes de converter.
+- Primeiro uso já se auto-corrigiu: ponto "borda" nasceu mal (tronco no quadro, longe do rebordo), reposicionado lendo o screenshot — rebordo oeste agora prova o fix céu-vs-mar do D-33 em um comando.
+- Auditoria d'A Clareira (6 ângulos, batida #66) rendeu o diagnóstico do próximo passe de beleza: (1) o que destoa NÃO é a arquitetura, é o `tex:'avatar'` genérico dos 3 habitantes (mesmo sprite do 2D em pé, sem cara, idêntico pros três) — arte própria por habitante é o maior ganho; (2) alas são caixas — beiral/porta marcada/degrau dariam silhueta; (3) lampiões tímidos à noite. Hall de Portais está no nível certo.
+- `CLAUDE.md` ganhou o item 5 (aponta a bancada antes de trabalho visual).
+
 ## Sessão 2026-07-16 (parte 10) — E2E dos Habitantes: o loop provado no pipeline real + o validador aprende a reconhecê-los
 
 - **O 1º `/habitar` real DERRUBOU o tick — e foi o melhor teste possível.** Issue #48 (`/habitar brasa`) postada de verdade → tick FALHOU: `Invalid world state: events[N] (native_spoke).nativeId ("brasa") does not exist in natives` (o cross-check do `validate.ts` só conhecia `world.natives`). Os 6 testes unitários do `/habitar` passavam porque validavam o COMANDO, não o mundo inteiro DEPOIS dele — o gate de validação que roda no tick real nunca era exercido.

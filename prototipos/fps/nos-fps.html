@@ -2831,6 +2831,11 @@ try {
     const [qx, qy, qa] = q.split(',').map(Number);
     if (Number.isFinite(qx) && Number.isFinite(qy)) { cam.x = qx; cam.y = qy; if (Number.isFinite(qa)) cam.a = qa; }
   }
+  /* ?tod=0..1 congela a hora do dia (D-35: auditoria visual determinística —
+     0.3 dia, 0.55 entardecer, 0.8 noite); mesma alavanca do window.__setTod.
+     Cuidado clássico: Number(null)===0, então o get() é checado antes. */
+  const qtRaw = new URLSearchParams(location.search).get('tod');
+  if (qtRaw !== null && qtRaw !== '' && Number.isFinite(Number(qtRaw))) window.__setTod(((Number(qtRaw) % 1) + 1) % 1);
 } catch { /* sem query string */ }
 let last = performance.now(), fpsAcc = 0, fpsN = 0, fpsShown = 0;
 function loop(now) {
