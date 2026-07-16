@@ -1014,8 +1014,8 @@ for (let ty = 0; ty < world.h; ty++) {
     const t = world.at(tx, ty);
     if (t === 'f') {
       const h = hash2(tx, ty);
-      if (h > 0.62) continue; // desbaste: floresta com respiro
-      const jx = (hash2(tx * 3, ty * 7) - 0.5) * 0.6, jy = (hash2(tx * 11, ty * 5) - 0.5) * 0.6;
+      if (h > 0.42) continue; // desbaste maior: floresta com respiro, copas sem se sobrepor
+      const jx = (hash2(tx * 3, ty * 7) - 0.5) * 0.4, jy = (hash2(tx * 11, ty * 5) - 0.5) * 0.4;
       const hs = hash2(tx * 5, ty * 23);
       let v = TREE_VARIANTS[(h * TREE_VARIANTS.length) | 0];
       if (hs < 0.05) v = TREE_CEREJEIRA;            // bosquinho rosa raro
