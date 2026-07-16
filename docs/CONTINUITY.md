@@ -2,6 +2,12 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 5) — D-33: IDs, setores, ?cam= e a borda-céu
+
+- **Tecla I**: tags flutuantes com ID determinístico (`tipo-XxY`, tile de origem = âncora no código) sobre os 22 objetos mais próximos; HUD mostra `setor · tile · mira · ?cam=`; persiste. **Tecla M cicla**: minimapa → mapa grande 288px com setores A1–H8 (grade, rótulos, setor atual, seta) → nada. **?cam=x,y,a** na URL abre a câmera exata. Tudo em `docs/COMUNICACAO.md` (+ exemplos de pedido).
+- **README**: seção Portais e federação (registro aceita worldUrl absoluto de outro repo; entrada via PR quando a federação chegar) + seção "para quem quer mexer" + controles atualizados.
+- **Borda da ilha**: o "mar" que o ideador viu era o teto de nuvens amostrado colado no chão (marolinha + azul saturado). Fix: raio esticado 9× no sample (perspectiva de plano fundo, nuvem grande) + gradiente pra azul-céu. Céu embaixo, como manda a ilha flutuante.
+
 ## Sessão 2026-07-16 (parte 4) — C2: A Clareira vira canônica
 
 - **Ideador autorizou** ("vou seguir sua recomendação"): 73 tiles floresta→campina no círculo r5 da clareira (o `resource: wood` sai junto — o schema condiciona madeira a floresta) e as 4 máquinas migraram pros vãos das alas: forja (48,13), cozinha (48,18), bancada (44,18), estaleiro (44,13). Edição via `serializeWorld` + `assertValidWorld` DO MOTOR (primeira tentativa em python quebrou o formato do arquivo e o schema — lição: o serializador do motor é dono do formato).

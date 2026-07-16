@@ -46,6 +46,7 @@
 - [ ] W2 · Porte da cena Pixi (branch de evidência `claude/r3-webgl-comparativo`) para `renderer-webgl.ts` (Sonnet) + review Opus + validação do Tiago em dispositivo real — *repriorizar: com o FPS oficial (F1), W2 vira melhoria do mapa 2D, não do cliente principal*
 - [x] C1 · **A Clareira v1 construída (D-32)** — aprovada pelo ideador (cobre oxidado, veios azuis/roxos pulsantes, largo de pedra, nome A Clareira): paredes DDA client-side com altura por tile, 4 alas, 3 bancas, Hall de Portais com o Átrio aceso, chaminé fumegando, calçamento de lajotas com veias do Pulso. Substitui o plano antigo da cidade 2D (branch `claude/cidade-coracao`, arte reprovada)
 - [x] C2 · **A Clareira canonizada** (autorizada pelo ideador): 73 tiles floresta→campina (círculo r5, madeira derrubada junto — schema exige) + 4 máquinas migradas pros vãos das alas — forja (48,13), cozinha (48,18), bancada (44,18), estaleiro (44,13) — via `serializeWorld`/`assertValidWorld` do motor (formato preservado, 81 linhas de diff); guardrail de gênese em `engine/mapgen.test.ts` atualizado com a exceção documentada (única mudança de bioma pós-gênese)
+- [x] F4 · Comunicação ideador↔coder (D-33): tags de ID (tecla I), setores A1–H8 no mapa grande (M cicla), ?cam= na URL, `docs/COMUNICACAO.md`; fix da borda-céu (nuvens em perspectiva de plano fundo)
 - [ ] C3 · A Clareira fase 3: doca do Estaleiro apontando pro vazio, letreiros/lampiões, interiores; arte de ruína de verdade pras ruínas NW (hoje ocultas no FPS)
 
 ## v3 — O metaverso

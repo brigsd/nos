@@ -67,6 +67,32 @@
     opacity: 0.85;
     background: var(--void);
   }
+  #bigmap {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(70vh, 82%);
+    image-rendering: pixelated;
+    border: 2px solid var(--line);
+    background: var(--void);
+    display: none;
+  }
+  #tags {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    font: 500 10px/1.15 ui-monospace, monospace;
+  }
+  #tags span {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    background: rgba(16, 12, 21, 0.78);
+    color: #8ff8e2;
+    padding: 1px 4px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
   #hudTop {
     position: absolute;
     top: 10px;
@@ -127,6 +153,8 @@
 <div id="stage">
   <canvas id="view" width="320" height="180"></canvas>
   <canvas id="minimap" width="64" height="64"></canvas>
+  <canvas id="bigmap" width="288" height="288"></canvas>
+  <div id="tags"></div>
   <div id="hudTop"></div>
   <div id="padMove" class="padzone"></div>
   <div id="padLook" class="padzone"></div>
@@ -134,7 +162,7 @@
 </div>
 
 <footer>
-  <span><span class="k">W A S D</span> andar · <span class="k">← →</span> olhar · <span class="k">M</span> mapa</span>
+  <span><span class="k">W A S D</span> andar · <span class="k">← →</span> olhar · <span class="k">M</span> mapa/setores · <span class="k">I</span> tags</span>
   <span>a mesma world/heart.json — nada além do Registro · <a href="../" style="color:#a884f3;text-decoration:none">mapa 2D ↗</a></span>
 </footer>
 
@@ -1416,7 +1444,8 @@ function updateCritters(now) {
 const keys = {};
 window.__NOS_FPS_CAM__ = cam; /* hook read-write SÓ de QA (padrão do projeto: nunca lido em produção) */
 window.__NOS_QA_PROBE__ = () => ({ sky: bills.filter((b) => b.sky).map((b) => ({ x: b.x, y: b.y, px: b.genFrames?.[0]?.data ? Array.from(b.genFrames[0].data).filter((v) => v !== 0).length : -1 })) });
-let showMap = true;
+let mapMode = 1; // 0 = sem mapa · 1 = minimapa · 2 = mapa grande com setores (M cicla)
+let tagsOn = false; try { tagsOn = localStorage.getItem('nos_tags') === '1'; } catch { /* file:// sem storage */ }
 
 /* billboards: máquinas, nativos, jogadores, portal (marco client-side do site) */
 const bills = [];
@@ -1689,6 +1718,27 @@ function genSmoke(fr) {
   bills.push({ x: 49.5, y: 12.5, genFrames: [genSmoke(0), genSmoke(1), genSmoke(2)], loop: true, label: 'fumaca', scale: 1.2, lift: 2.1 });
 }
 
+/* ---------- IDENTIFICAÇÃO (D-33): IDs + setores, o vocabulário ideador<->coder ----------
+   Ver docs/COMUNICACAO.md. Todo objeto ganha um ID determinístico e estável:
+   - tipos genéricos (arvore, tufo, flor, arbusto, rocha, arco, fumaca):
+     `tipo-XxY` com X,Y = tile de origem — o MESMO tile que o gerador usa,
+     então achar `arvore-38x12` no código é ir direto ao scatter desse tile;
+   - nomeados (forja/cozinha/bancada/estaleiro, gota/raiz/cinza, portais,
+     jogadores): o próprio nome.
+   O mapa (tecla M, 2º toque) divide a ilha em SETORES 8x8 tiles: A1 (NW) a
+   H8 (SE) — "área C2" localiza sem precisar descrever a paisagem. */
+const GENERIC_IDS = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'rocha', 'arco', 'fumaca']);
+{
+  const seen = new Set();
+  for (const b of bills) {
+    let id = GENERIC_IDS.has(b.label) ? `${b.label}-${b.x | 0}x${b.y | 0}` : String(b.label ?? 'obj');
+    if (seen.has(id)) { let n = 2; while (seen.has(`${id}-${n}`)) n++; id = `${id}-${n}`; }
+    seen.add(id);
+    b.id = id;
+  }
+}
+const secOf = (x, y) => String.fromCharCode(65 + Math.min(7, (x / 8) | 0)) + (Math.min(7, (y / 8) | 0) + 1);
+
 
 /* clamp: já declarado pelo gerador acima */
 const rgb = (r, g, b) => (255 << 24) | (b << 16) | (g << 8) | r;
@@ -1888,12 +1938,17 @@ function render(now) {
       /* ALÉM DA BORDA DA ILHA: céu profundo + mar de nuvens à deriva */
       const rim = rimAt(fx, fy);
       if (rim < 0) {
+        /* CÉU sob a ilha, não mar: o teto de nuvens fica MUITO abaixo, então
+           é amostrado em perspectiva de plano fundo (raio esticado 9x — perto
+           da borda a nuvem é GRANDE e macia, nunca marolinha) e o gradiente
+           desce para azul-céu atmosférico, não azul-oceano saturado. */
         const down = clamp(1 - rowDist / 15, 0, 1);
-        let rr = 199 + (77 - 199) * down * 0.85, gg = 220 + (125 - 220) * down * 0.85, bb2 = 208 + (200 - 208) * down * 0.35;
-        const sea = CSEA[(((fy * 3 + seaT) & 255) * 256 + ((fx * 3 + (seaT * 0.6 | 0)) & 255)) | 0] / 255;
-        if (sea > 0.52) {
-          const k = Math.min(1, (sea - 0.52) * 5.5);
-          rr += (255 - rr) * k; gg += (255 - gg) * k; bb2 += (255 - bb2) * k;
+        let rr = 199 + (128 - 199) * down * 0.8, gg = 220 + (176 - 220) * down * 0.8, bb2 = 208 + (238 - 208) * down * 0.8;
+        const cfx = cam.x + (fx - cam.x) * 9, cfy = cam.y + (fy - cam.y) * 9;
+        const sea = CSEA[(((cfy * 0.9 + seaT) & 255) * 256 + ((cfx * 0.9 + (seaT * 0.6 | 0)) & 255)) | 0] / 255;
+        if (sea > 0.5) {
+          const k = Math.min(1, (sea - 0.5) * 4.2);
+          rr += (255 - rr) * k; gg += (252 - gg) * k; bb2 += (246 - bb2) * k;
         }
         /* O SOL AFUNDA NO MAR DE NUVENS: abaixo do horizonte ele só existe
            nos pixels de vazio (este ramo) — o nosso chão o oculta de graça.
@@ -2346,27 +2401,76 @@ const mm = document.getElementById('minimap');
 const mctx = mm.getContext('2d');
 const MM_COLORS = { m: '#274a2c', f: '#16301c', w: '#1b4956', r: '#4a4258', c: '#a06bf0' };
 function drawMinimap() {
-  if (!showMap) { mm.style.display = 'none'; return; }
-  mm.style.display = 'block';
-  for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
-    mctx.fillStyle = MM_COLORS[world.at(x, y)];
-    mctx.fillRect(x, y, 1, 1);
+  const bm = document.getElementById('bigmap');
+  mm.style.display = mapMode === 1 ? 'block' : 'none';
+  bm.style.display = mapMode === 2 ? 'block' : 'none';
+  if (mapMode === 1) {
+    for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
+      mctx.fillStyle = MM_COLORS[world.at(x, y)];
+      mctx.fillRect(x, y, 1, 1);
+    }
+    mctx.fillStyle = '#ab947a'; // o carreiro
+    for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
+      if (pathAt(x + 0.5, y + 0.5) < 0.1) mctx.fillRect(x, y, 1, 1);
+    }
+    for (const [k, cwv] of CITY) { // A Clareira
+      mctx.fillStyle = cwv.mm;
+      mctx.fillRect(k % world.w, (k / world.w) | 0, 1, 1);
+    }
+    mctx.fillStyle = '#fbff86';
+    mctx.fillRect((cam.x | 0), (cam.y | 0), 1, 1);
+    mctx.strokeStyle = 'rgba(251,255,134,0.6)';
+    mctx.beginPath();
+    mctx.moveTo(cam.x, cam.y);
+    mctx.lineTo(cam.x + Math.cos(cam.a) * 6, cam.y + Math.sin(cam.a) * 6);
+    mctx.stroke();
+  } else if (mapMode === 2) drawBigMap(bm);
+}
+
+/* mapa grande (M, 2º toque): a ilha em SETORES A1..H8 — localização macro
+   pro vocabulário ideador<->coder (D-33, docs/COMUNICACAO.md) */
+let bigBase = null;
+function drawBigMap(bm) {
+  const S = 4.5; // px por tile (288 / 64)
+  if (!bigBase) {
+    bigBase = document.createElement('canvas');
+    bigBase.width = bm.width; bigBase.height = bm.height;
+    const g = bigBase.getContext('2d');
+    for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
+      const beyond = rimAt(x + 0.5, y + 0.5) < 0; // além da borda: céu
+      g.fillStyle = beyond ? '#141020' : MM_COLORS[world.at(x, y)];
+      g.fillRect(x * S, y * S, S + 0.5, S + 0.5);
+      if (!beyond && pathAt(x + 0.5, y + 0.5) < 0.1) { g.fillStyle = '#ab947a'; g.fillRect(x * S, y * S, S + 0.5, S + 0.5); }
+    }
+    for (const [k, cwv] of CITY) {
+      g.fillStyle = cwv.mm;
+      g.fillRect((k % world.w) * S, ((k / world.w) | 0) * S, S + 0.5, S + 0.5);
+    }
+    g.strokeStyle = 'rgba(255,255,255,0.28)';
+    g.lineWidth = 1;
+    for (let i = 0; i <= 8; i++) {
+      g.beginPath(); g.moveTo(i * 8 * S, 0); g.lineTo(i * 8 * S, bm.height); g.stroke();
+      g.beginPath(); g.moveTo(0, i * 8 * S); g.lineTo(bm.width, i * 8 * S); g.stroke();
+    }
+    g.font = '600 11px ui-monospace, monospace';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let sy = 0; sy < 8; sy++) for (let sx = 0; sx < 8; sx++) {
+      g.fillStyle = 'rgba(255,255,230,0.55)';
+      g.fillText(String.fromCharCode(65 + sx) + (sy + 1), sx * 8 * S + 4 * 8 * S / 8, sy * 8 * S + 4 * 8 * S / 8);
+    }
   }
-  mctx.fillStyle = '#ab947a'; // o carreiro
-  for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
-    if (pathAt(x + 0.5, y + 0.5) < 0.1) mctx.fillRect(x, y, 1, 1);
-  }
-  for (const [k, cwv] of CITY) { // A Clareira
-    mctx.fillStyle = cwv.mm;
-    mctx.fillRect(k % world.w, (k / world.w) | 0, 1, 1);
-  }
-  mctx.fillStyle = '#fbff86';
-  mctx.fillRect((cam.x | 0), (cam.y | 0), 1, 1);
-  mctx.strokeStyle = 'rgba(251,255,134,0.6)';
-  mctx.beginPath();
-  mctx.moveTo(cam.x, cam.y);
-  mctx.lineTo(cam.x + Math.cos(cam.a) * 6, cam.y + Math.sin(cam.a) * 6);
-  mctx.stroke();
+  const c2 = bm.getContext('2d');
+  c2.drawImage(bigBase, 0, 0);
+  const S2 = 4.5;
+  /* setor atual destacado + seta do jogador */
+  c2.strokeStyle = 'rgba(251,255,134,0.85)';
+  c2.lineWidth = 1.5;
+  c2.strokeRect(((cam.x / 8) | 0) * 8 * S2, ((cam.y / 8) | 0) * 8 * S2, 8 * S2, 8 * S2);
+  c2.fillStyle = '#fbff86';
+  c2.beginPath(); c2.arc(cam.x * S2, cam.y * S2, 3, 0, Math.PI * 2); c2.fill();
+  c2.strokeStyle = 'rgba(251,255,134,0.8)';
+  c2.beginPath(); c2.moveTo(cam.x * S2, cam.y * S2);
+  c2.lineTo((cam.x + Math.cos(cam.a) * 4) * S2, (cam.y + Math.sin(cam.a) * 4) * S2); c2.stroke();
 }
 
 /* ---------- movimento ---------- */
@@ -2426,13 +2530,51 @@ bindPad(document.getElementById('padLook'), false);
 
 addEventListener('keydown', (e) => {
   keys[e.key.toLowerCase()] = true;
-  if (e.key.toLowerCase() === 'm') showMap = !showMap;
+  if (e.key.toLowerCase() === 'm') mapMode = (mapMode + 1) % 3;
+  if (e.key.toLowerCase() === 'i') { // tags de identificação (D-33)
+    tagsOn = !tagsOn;
+    try { localStorage.setItem('nos_tags', tagsOn ? '1' : '0'); } catch { /* ok */ }
+    if (!tagsOn) document.getElementById('tags').textContent = '';
+  }
   document.getElementById('hint').classList.add('gone');
 });
 addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
+/* ---------- tags flutuantes (D-33): ID visível sobre cada objeto ---------- */
+const tagsDiv = document.getElementById('tags');
+let lastTagPaint = 0;
+const wrapAng = (a) => { a %= Math.PI * 2; if (a > Math.PI) a -= Math.PI * 2; if (a < -Math.PI) a += Math.PI * 2; return a; };
+function paintTags() {
+  const cands = [];
+  for (const b of bills) {
+    const dx = b.x - cam.x, dy = b.y - cam.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.5 || dist > 9) continue;
+    const rel = wrapAng(Math.atan2(dy, dx) - cam.a);
+    if (Math.abs(rel) > 0.58) continue;
+    cands.push({ b, dist, rel });
+  }
+  cands.sort((p, q) => p.dist - q.dist);
+  let html = '';
+  for (const { b, dist, rel } of cands.slice(0, 22)) {
+    const sx = (Math.tan(rel) / FOV_PLANE + 1) * (W / 2);
+    const lineH = H / dist;
+    const sy = clamp(HALF + lineH * (0.5 - (b.scale ?? 1) - (b.lift ?? 0)), 8, H - 8);
+    html += `<span style="left:${((sx / W) * 100).toFixed(1)}%;top:${((sy / H) * 100).toFixed(1)}%">${b.id}</span>`;
+  }
+  tagsDiv.innerHTML = html;
+}
+
 /* ---------- loop ---------- */
 const hud = document.getElementById('hudTop');
+/* ?cam=x,y,a — link direto pra um ponto de vista exato (D-33) */
+try {
+  const q = new URLSearchParams(location.search).get('cam');
+  if (q) {
+    const [qx, qy, qa] = q.split(',').map(Number);
+    if (Number.isFinite(qx) && Number.isFinite(qy)) { cam.x = qx; cam.y = qy; if (Number.isFinite(qa)) cam.a = qa; }
+  }
+} catch { /* sem query string */ }
 let last = performance.now(), fpsAcc = 0, fpsN = 0, fpsShown = 0;
 function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
@@ -2460,7 +2602,16 @@ function loop(now) {
   render(now);
   fpsAcc += 1 / Math.max(dt, 1e-3); fpsN++;
   if (fpsN >= 20) { fpsShown = (fpsAcc / fpsN) | 0; fpsAcc = 0; fpsN = 0; }
-  hud.textContent = `${fpsShown} fps · (${cam.x.toFixed(1)}, ${cam.y.toFixed(1)})`;
+  if (tagsOn) {
+    /* modo identificação (D-33): setor + tile atual, tile na mira e o ?cam=
+       copiável — o vocabulário exato pra pedir mudanças (docs/COMUNICACAO.md) */
+    const ax = cam.x + dirX * 2, ay = cam.y + dirY * 2;
+    hud.textContent = `${fpsShown} fps · ${secOf(cam.x, cam.y)} ${cam.x | 0},${cam.y | 0} · mira ${secOf(ax, ay)} ${ax | 0},${ay | 0} · ?cam=${cam.x.toFixed(1)},${cam.y.toFixed(1)},${cam.a.toFixed(2)}`;
+    if (mapMode === 2) { if (tagsDiv.firstChild) tagsDiv.textContent = ''; }
+    else if (now - lastTagPaint > 140) { lastTagPaint = now; paintTags(); }
+  } else {
+    hud.textContent = `${fpsShown} fps · (${cam.x.toFixed(1)}, ${cam.y.toFixed(1)})`;
+  }
   requestAnimationFrame(loop);
 }
 
