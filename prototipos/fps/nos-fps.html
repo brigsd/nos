@@ -845,20 +845,55 @@ for (let i = 0; i < 5; i++) {
    duas camadas de cúmulos com parallax — longe deriva devagar, perto mais
    rápido; a montanha é marco do mundo e fica PARADA. */
 const SKY_W = 1024, SKY_H = HALF;
-const SKY_BASE = new Uint32Array(SKY_W * SKY_H);
 const CLOUD_FAR = new Uint32Array(SKY_W * SKY_H);  // alpha 0 = furo
 const CLOUD_NEAR = new Uint32Array(SKY_W * SKY_H);
+
+/* ---------- DIA E NOITE: o relógio do céu ----------
+   Um ciclo completo em DAY_MS. tod: 0 = meia-noite, .25 = amanhecer,
+   .5 = meio-dia, .75 = pôr-do-sol. O sol percorre o panorama inteiro por
+   dia (nasce num rumo, se põe no oposto); a lua anda em oposição.
+
+   O TRUQUE DA ILHA FLUTUANTE: aqui não há montanha nem chão do mundo — o
+   horizonte é o MAR DE NUVENS lá embaixo, que converge exatamente na
+   altura dos olhos (y = HALF) no infinito. Então o sol se põe AFUNDANDO
+   no mar de nuvens sob a ilha: cruza y=HALF e continua descendo, visível
+   só pelos pixels de vazio (groundMask=0) além da borda — nunca através
+   do nosso chão. O mar pega fogo perto de onde ele desce. A lua nasce do
+   mesmo jeito, e à noite ergue um pilar de luz (fenômeno real). */
+const DAY_MS = 240000;
+let todOverride = null;             // debug/QA: window.__setTod(0.75)
+let timeOffset = 0;                 // tecla T acelera o tempo
+window.__setTod = (t) => { todOverride = t; };
+const timeOfDay = (now) => todOverride ?? (((now + timeOffset) / DAY_MS + 0.42) % 1);
+
+/* paletas-chave (RGB): dia / crepúsculo / noite — tudo desliza entre elas */
+const KEY = {
+  day:   { top: [77, 155, 230], mid: [143, 211, 255], low: [199, 220, 208], fog: [199, 220, 208], amb: [1, 1, 1] },
+  dusk:  { top: [58, 62, 120],  mid: [222, 120, 82],  low: [251, 185, 84],  fog: [214, 152, 118], amb: [1.04, 0.86, 0.78] },
+  night: { top: [7, 9, 24],     mid: [20, 26, 54],    low: [40, 50, 84],    fog: [24, 30, 52],    amb: [0.5, 0.56, 0.82] },
+};
+/* estado celeste do frame (preenchido no render) */
+const SKYST = { elev: 1, wDay: 1, wDusk: 0, wNight: 0, sunSx: -999, sunSy: 0, moonSx: -999, moonSy: 0, sunAz: 0 };
+const COL_U = new Float32Array(W); // rumo (0..1) de cada coluna neste frame
+
+/* estrelas: assadas num mapa panorâmico (brilho 0..255); cintilam por fase de x */
+const STARMAP = new Uint8Array(SKY_W * SKY_H);
+{
+  const rs = mulberry32(31415);
+  for (let i = 0; i < 210; i++) {
+    const sx = (rs() * SKY_W) | 0, sy = (rs() * (SKY_H - 8)) | 0;
+    const b = 90 + rs() * 165;
+    STARMAP[sy * SKY_W + sx] = b;
+    if (b > 210) { STARMAP[sy * SKY_W + ((sx + 1) & (SKY_W - 1))] = 70; STARMAP[(sy + 1) * SKY_W + sx] = 70; } // as maiores ganham cruzinha
+  }
+}
+
 {
   const px32 = (r, g, b) => (255 << 24) | (b << 16) | (g << 8) | r;
   const lerp = (a, b, t) => a + (b - a) * t;
   const mix = (c1, c2, t) => px32(lerp(c1[0], c2[0], t) | 0, lerp(c1[1], c2[1], t) | 0, lerp(c1[2], c2[2], t) | 0);
   const C = { 47: [77,155,230], 48: [143,211,255], 8: [199,220,208], 9: [255,255,255], 7: [155,171,178], 19: [122,48,69], 3: [150,108,108], 5: [105,79,98], 6: [127,112,138] };
-  /* base: gradiente liso */
-  for (let y = 0; y < SKY_H; y++) {
-    const t = y / SKY_H;
-    const row = t < 0.5 ? mix(C[47], C[48], t / 0.5) : t < 0.85 ? mix(C[48], C[8], (t - 0.5) / 0.35) : mix(C[8], C[9], (t - 0.85) / 0.15);
-    for (let x = 0; x < SKY_W; x++) SKY_BASE[y * SKY_W + x] = row;
-  }
+  void mix;
 
   /* cúmulo pixel-art: união de "puffs" elípticos RECORTADA numa base achatada.
      O que faz parecer VOLUME (e não adesivo): (a) cada pixel é sombreado pelo
@@ -1131,6 +1166,75 @@ const MOTES = [];
     });
   }
 }
+
+/* ---------- vida: pássaros no céu, grilos e sapinhos no chão ----------
+   Tudo RARO de propósito (pedido do ideador: sem repetição). Pássaros são
+   bandos ocasionais cruzando o panorama de dia; grilos/sapos são visitas
+   curtas perto da câmera — nascem, dão meia dúzia de pulos parabólicos e
+   vão embora. Sapos só perto d'água (shoreField). */
+const BIRDS = [];
+let nextFlock = 6000;
+const critRnd = mulberry32(97531);
+function updateBirds(now, dayW) {
+  for (let i = BIRDS.length - 1; i >= 0; i--) if (now > BIRDS[i].dies) BIRDS.splice(i, 1);
+  if (dayW > 0.5 && now > nextFlock && BIRDS.length === 0) {
+    const az0 = critRnd() * Math.PI * 2;
+    const dir = critRnd() < 0.5 ? 1 : -1;
+    const n = 3 + (critRnd() * 3) | 0;
+    for (let i = 0; i < n; i++) {
+      BIRDS.push({
+        az: az0 + (critRnd() - 0.5) * 0.14, y: 14 + critRnd() * 22 + i * 2.4,
+        spd: dir * (0.00016 + critRnd() * 0.00007), ph: critRnd() * Math.PI * 2,
+        born: now, dies: now + 46000,
+      });
+    }
+    nextFlock = now + 24000 + critRnd() * 30000; // bando a cada ~24-54s
+  }
+}
+
+const CRITTERS = [];
+let nextCritter = 9000;
+function spawnCritter(now) {
+  for (let tryN = 0; tryN < 14; tryN++) {
+    const ang = critRnd() * Math.PI * 2, dist = 2.2 + critRnd() * 4.5;
+    const x = cam.x + Math.cos(ang) * dist, y = cam.y + Math.sin(ang) * dist;
+    if (rimAt(x, y) < 0.8) continue;
+    const tile = world.at(x | 0, y | 0);
+    if (tile === 'w' || tile === 'r' || tile === 'c') continue;
+    const nearWater = shoreAt(x, y) > -1.4; // até ~1.4 tiles da margem
+    const frog = nearWater && critRnd() < 0.7;
+    if (!frog && tile === 'f') continue; // grilo prefere campina aberta
+    CRITTERS.push({
+      x, y, frog, born: now, dies: now + 11000 + critRnd() * 5000,
+      hop0: 0, hopDur: frog ? 470 : 340, hopLen: frog ? 0.5 : 0.3, hopH: frog ? 0.3 : 0.17,
+      dir: critRnd() * Math.PI * 2, nextHop: now + 400 + critRnd() * 1200, h: 0,
+    });
+    return;
+  }
+}
+function updateCritters(now) {
+  for (let i = CRITTERS.length - 1; i >= 0; i--) {
+    const c = CRITTERS[i];
+    if (now > c.dies && !c.hop0) { CRITTERS.splice(i, 1); continue; }
+    if (c.hop0) {
+      const t = (now - c.hop0) / c.hopDur;
+      if (t >= 1) { c.hop0 = 0; c.h = 0; c.nextHop = now + 700 + critRnd() * 2200; }
+      else {
+        c.h = Math.sin(t * Math.PI) * c.hopH;
+        const step = c.hopLen / c.hopDur * 16.7;
+        const nx = c.x + Math.cos(c.dir) * step, ny = c.y + Math.sin(c.dir) * step;
+        if (rimAt(nx, ny) > 0.6 && world.at(nx | 0, ny | 0) !== 'w') { c.x = nx; c.y = ny; }
+      }
+    } else if (now > c.nextHop) {
+      c.dir += (critRnd() - 0.5) * 2.2; // muda de ideia a cada pulo
+      c.hop0 = now;
+    }
+  }
+  if (now > nextCritter && CRITTERS.length < 3) {
+    spawnCritter(now);
+    nextCritter = now + 8000 + critRnd() * 14000; // visita a cada ~8-22s
+  }
+}
 const keys = {};
 window.__NOS_FPS_CAM__ = cam; /* hook read-write SÓ de QA (padrão do projeto: nunca lido em produção) */
 window.__NOS_QA_PROBE__ = () => ({ sky: bills.filter((b) => b.sky).map((b) => ({ x: b.x, y: b.y, px: b.genFrames?.[0]?.data ? Array.from(b.genFrames[0].data).filter((v) => v !== 0).length : -1 })) });
@@ -1240,11 +1344,15 @@ for (let ty = 0; ty < world.h; ty++) {
 const rgb = (r, g, b) => (255 << 24) | (b << 16) | (g << 8) | r;
 
 /* bruma diurna (paleMint da referência) — a distância derrete em luz, não em breu */
-const FOG_R = 199, FOG_G = 220, FOG_B = 208;
+/* fog e ambiente agora são DINÂMICOS (dia/noite): atualizados por frame a
+   partir das paletas-chave. O glow (violeta do Núcleo) NÃO é multiplicado
+   pelo ambiente — é luz emissiva, então à noite ele domina lindamente. */
+let FOG_R = 199, FOG_G = 220, FOG_B = 208;
+let AMB_R = 1, AMB_G = 1, AMB_B = 1;
 function shade(c, f, glow) {
-  let r = (c & 255) * f + FOG_R * (1 - f) + 96 * glow;
-  let g = ((c >> 8) & 255) * f + FOG_G * (1 - f) + 52 * glow;
-  let b = ((c >> 16) & 255) * f + FOG_B * (1 - f) + 140 * glow;
+  let r = ((c & 255) * f + FOG_R * (1 - f)) * AMB_R + 96 * glow;
+  let g = (((c >> 8) & 255) * f + FOG_G * (1 - f)) * AMB_G + 52 * glow;
+  let b = (((c >> 16) & 255) * f + FOG_B * (1 - f)) * AMB_B + 140 * glow;
   return rgb(clamp(r | 0, 0, 255), clamp(g | 0, 0, 255), clamp(b | 0, 0, 255));
 }
 const fogAt = (d) => 1 / (1 + 0.0085 * d * d); /* bruma diurna suave — objetos legíveis a média distância */
@@ -1272,22 +1380,137 @@ function render(now) {
   const dirX = Math.cos(cam.a), dirY = Math.sin(cam.a);
   const plX = -dirY * FOV_PLANE, plY = dirX * FOV_PLANE;
 
-  /* céu em camadas: base parada (montanha = marco), nuvens em parallax */
+  /* ---------- CÉU DINÂMICO (dia/noite) ---------- */
+  const tD = timeOfDay(now);
+  const elev = Math.sin((tD - 0.25) * Math.PI * 2); // 1 meio-dia .. -1 meia-noite
+  /* pesos das fases: sino do crepúsculo centrado no horizonte */
+  let wDusk = Math.exp(-((elev / 0.24) ** 2));
+  let wDay = elev > 0 ? clamp((elev - 0.05) / 0.3, 0, 1) : 0;
+  let wNight = elev < 0 ? clamp((-elev - 0.05) / 0.3, 0, 1) : 0;
+  const wSum = wDay + wDusk + wNight || 1;
+  wDay /= wSum; wDusk /= wSum; wNight /= wSum;
+  SKYST.elev = elev; SKYST.wDay = wDay; SKYST.wDusk = wDusk; SKYST.wNight = wNight;
+  const kmix = (k) => [
+    KEY.day[k][0] * wDay + KEY.dusk[k][0] * wDusk + KEY.night[k][0] * wNight,
+    KEY.day[k][1] * wDay + KEY.dusk[k][1] * wDusk + KEY.night[k][1] * wNight,
+    KEY.day[k][2] * wDay + KEY.dusk[k][2] * wDusk + KEY.night[k][2] * wNight,
+  ];
+  const cTop = kmix('top'), cMid = kmix('mid'), cLow = kmix('low');
+  const cFog = kmix('fog'), cAmb = kmix('amb');
+  FOG_R = cFog[0]; FOG_G = cFog[1]; FOG_B = cFog[2];
+  AMB_R = cAmb[0]; AMB_G = cAmb[1]; AMB_B = cAmb[2];
+  /* posições celestes em ESPAÇO DE TELA (disco redondo, matemática simples) */
+  const sunAz = tD * Math.PI * 2;
+  const moonAz = sunAz + Math.PI;
+  const wrapA = (a) => { a %= Math.PI * 2; if (a > Math.PI) a -= Math.PI * 2; if (a < -Math.PI) a += Math.PI * 2; return a; };
+  const screenX = (az) => { const rel = wrapA(az - cam.a); return Math.abs(rel) < 1.2 ? (Math.tan(rel) / FOV_PLANE + 1) * (W / 2) : -9999; };
+  const celestY = (e) => e >= 0 ? 5 + (1 - e) * (SKY_H - 5) : SKY_H + -e * (H - HALF) * 0.9;
+  SKYST.sunAz = sunAz;
+  SKYST.sunSx = screenX(sunAz); SKYST.sunSy = celestY(elev);
+  SKYST.moonSx = screenX(moonAz); SKYST.moonSy = celestY(-elev);
+  const twk = now / 320;
+
+  /* base + estrelas + discos + nuvens tingidas, por pixel */
   const driftFar = (now * 0.0018) % SKY_W;   // ~30s pra cruzar um oitavo do céu
   const driftNear = (now * 0.0052) % SKY_W;  // camada baixa ~3x mais rápida
+  /* tinta das nuvens: dia neutra, crepúsculo rosada, noite azul-escura */
+  const clR = 1 * wDay + 1.12 * wDusk + 0.30 * wNight;
+  const clG = 1 * wDay + 0.78 * wDusk + 0.34 * wNight;
+  const clB = 1 * wDay + 0.72 * wDusk + 0.52 * wNight;
   for (let x = 0; x < W; x++) {
     const colAng = cam.a + Math.atan(((2 * x) / W - 1) * FOV_PLANE);
     const u = ((colAng / (Math.PI * 2)) % 1 + 1) % 1;
+    COL_U[x] = u;
     const sxB = (u * SKY_W) | 0;
     const sxF = ((u * SKY_W + driftFar) | 0) % SKY_W;
     const sxN = ((u * SKY_W + driftNear) | 0) % SKY_W;
+    /* viés quente do crepúsculo: forte perto do rumo do sol, some no oposto */
+    const dSun = wrapA(colAng - sunAz);
+    const warmBias = wDusk * Math.exp(-((dSun / 1.05) ** 2));
+    const dxSun = x - SKYST.sunSx, dxMoon = x - SKYST.moonSx;
     for (let y = 0; y < HALF; y++) {
-      let c = SKY_BASE[y * SKY_W + sxB];
+      const t = y / SKY_H;
+      /* gradiente vertical da fase + fusão pro quente perto do horizonte */
+      let r, g, b;
+      if (t < 0.55) { const k = t / 0.55; r = cTop[0] + (cMid[0] - cTop[0]) * k; g = cTop[1] + (cMid[1] - cTop[1]) * k; b = cTop[2] + (cMid[2] - cTop[2]) * k; }
+      else { const k = (t - 0.55) / 0.45; r = cMid[0] + (cLow[0] - cMid[0]) * k; g = cMid[1] + (cLow[1] - cMid[1]) * k; b = cMid[2] + (cLow[2] - cMid[2]) * k; }
+      const wb = warmBias * (0.25 + 0.75 * t); // o quente cola no horizonte
+      if (wb > 0.01) { r += (252 - r) * wb; g += (150 - g) * wb; b += (86 - b) * wb; }
+      /* estrelas (atrás das nuvens), cintilando */
+      if (wNight > 0.02) {
+        const st = STARMAP[y * SKY_W + sxB];
+        if (st) {
+          const tw = 0.72 + 0.28 * Math.sin(twk + sxB * 1.7);
+          const a = (st / 255) * wNight * tw;
+          r += (255 - r) * a; g += (255 - g) * a; b += (255 - b) * a;
+        }
+      }
+      /* disco do sol (atrás das nuvens; corona vem depois) */
+      if (dxSun > -26 && dxSun < 26) {
+        const dy = y - SKYST.sunSy;
+        const d2 = dxSun * dxSun + dy * dy;
+        if (d2 < 42) { r = 255; g = 244 - wDusk * 60; b = 205 - wDusk * 105; }
+        else if (d2 < 240) { const k = (1 - (d2 - 42) / 198) * (0.5 + wDusk * 0.3); r += (255 - r) * k; g += (230 - g) * k; b += (150 - b) * k; }
+      }
+      /* disco da lua com crateras + halo fino */
+      if (wNight > 0.02 && dxMoon > -18 && dxMoon < 18) {
+        const dy = y - SKYST.moonSy;
+        const d2 = dxMoon * dxMoon + dy * dy;
+        if (d2 < 26) {
+          let lr = 226, lg = 232, lb = 248;
+          /* crateras fixas (3 manchas) + terminador suave à direita */
+          const cr1 = (dxMoon + 2) ** 2 + (dy - 1) ** 2, cr2 = (dxMoon - 2) ** 2 + (dy + 2) ** 2, cr3 = (dxMoon) ** 2 + (dy + 3.5) ** 2;
+          if (cr1 < 2.3 || cr2 < 1.7 || cr3 < 1.2) { lr = 168; lg = 178; lb = 205; }
+          if (dxMoon > 2.6) { lr *= 0.82; lg *= 0.84; lb *= 0.9; }
+          const a = Math.min(1, wNight * 2);
+          r += (lr - r) * a; g += (lg - g) * a; b += (lb - b) * a;
+        } else if (d2 < 120) { const k = (1 - (d2 - 26) / 94) * 0.3 * wNight; r += (200 - r) * k; g += (215 - g) * k; b += (255 - b) * k; }
+      }
+      /* nuvens por cima (tingidas pela hora) */
       const cf = CLOUD_FAR[y * SKY_W + sxF];
-      if (cf !== 0) c = cf;
       const cn = CLOUD_NEAR[y * SKY_W + sxN];
-      if (cn !== 0) c = cn;
-      px[y * W + x] = c;
+      const cl = cn !== 0 ? cn : cf;
+      if (cl !== 0) {
+        r = Math.min(255, (cl & 255) * clR);
+        g = Math.min(255, ((cl >> 8) & 255) * clG);
+        b = Math.min(255, ((cl >> 16) & 255) * clB);
+        /* crepúsculo: barriga das nuvens acesa perto do sol */
+        if (wb > 0.05) { r = Math.min(255, r + 70 * wb); g = Math.min(255, g + 14 * wb); }
+      }
+      px[y * W + x] = rgb(r | 0, g | 0, b | 0);
+    }
+    /* raios crepusculares: hastes verticais suaves perto do sol no horizonte */
+    if (wDusk > 0.12 && Math.abs(dxSun) < 60 && SKYST.sunSy > SKY_H * 0.45) {
+      const rayK = wDusk * Math.exp(-((dxSun / 34) ** 2)) * (0.42 + 0.58 * Math.abs(Math.sin(u * 210 + now / 1400)));
+      if (rayK > 0.03) {
+        const yTop = Math.max(0, (SKYST.sunSy - 54) | 0);
+        const yBot = Math.min(HALF - 1, SKY_H - 1);
+        for (let y = yTop; y <= yBot; y++) {
+          const fall = 1 - (SKYST.sunSy - y) / 58;
+          if (fall <= 0) continue;
+          const i = y * W + x;
+          const b0 = px[i];
+          const k = rayK * fall * 0.34;
+          px[i] = rgb(
+            Math.min(255, (b0 & 255) + 200 * k) | 0,
+            Math.min(255, ((b0 >> 8) & 255) + 120 * k) | 0,
+            Math.min(255, ((b0 >> 16) & 255) + 40 * k) | 0,
+          );
+        }
+      }
+    }
+    /* pilar de luz da lua (noite): coluna fininha de brilho frio */
+    if (wNight > 0.1 && Math.abs(dxMoon) < 4 && SKYST.moonSy < SKY_H) {
+      const pk = wNight * (1 - Math.abs(dxMoon) / 4) * 0.16;
+      for (let y = Math.max(0, (SKYST.moonSy + 6) | 0); y < HALF; y++) {
+        const i = y * W + x;
+        const b0 = px[i];
+        px[i] = rgb(
+          Math.min(255, (b0 & 255) + 140 * pk) | 0,
+          Math.min(255, ((b0 >> 8) & 255) + 160 * pk) | 0,
+          Math.min(255, ((b0 >> 16) & 255) + 220 * pk) | 0,
+        );
+      }
     }
   }
 
@@ -1316,6 +1539,24 @@ function render(now) {
         if (sea > 0.52) {
           const k = Math.min(1, (sea - 0.52) * 5.5);
           rr += (255 - rr) * k; gg += (255 - gg) * k; bb2 += (255 - bb2) * k;
+        }
+        /* O SOL AFUNDA NO MAR DE NUVENS: abaixo do horizonte ele só existe
+           nos pixels de vazio (este ramo) — o nosso chão o oculta de graça.
+           Perto de onde ele desce, o mar incandesce. A lua idem, prateada. */
+        if (SKYST.sunSy > SKY_H - 8) {
+          const dxs = x - SKYST.sunSx, dys = y - SKYST.sunSy;
+          const d2s = dxs * dxs + dys * dys;
+          if (d2s < 46) { rr = 255; gg = 236; bb2 = 168; }
+          else {
+            const heat = Math.exp(-d2s / 2600) * (SKYST.wDusk * 0.85 + SKYST.wNight * 0.1);
+            if (heat > 0.02) { rr += (255 - rr) * heat; gg += (168 - gg) * heat; bb2 += (66 - bb2) * heat; }
+          }
+        }
+        if (SKYST.wNight > 0.05 && SKYST.moonSy > SKY_H - 8) {
+          const dxm = x - SKYST.moonSx, dym = y - SKYST.moonSy;
+          const d2m = dxm * dxm + dym * dym;
+          if (d2m < 30) { rr = 224; gg = 230; bb2 = 246; }
+          else { const mg = Math.exp(-d2m / 1800) * SKYST.wNight * 0.42; rr += (200 - rr) * mg; gg += (215 - gg) * mg; bb2 += (255 - bb2) * mg; }
         }
         px[y * W + x] = shade(rgb(rr | 0, gg | 0, bb2 | 0), f, 0);
         groundMask[y * W + x] = 0; /* vazio: ilha de baixo pode aparecer aqui */
@@ -1430,6 +1671,30 @@ function render(now) {
         ? shade(c, clamp(f + 0.5, 0, 1), glow)  /* o Núcleo emite: quase sem fog */
         : shade(c, f, glow);
     }
+  }
+
+  /* pássaros: silhuetas batendo asa cruzando o panorama (atrás dos billboards,
+     na frente do céu; parede oculta via wallTop) */
+  for (const bd of BIRDS) {
+    const az = bd.az + bd.spd * (now - bd.born) * Math.PI * 2;
+    const rel = wrapA(az - cam.a);
+    if (Math.abs(rel) > 0.62) continue;
+    const sx = ((Math.tan(rel) / FOV_PLANE + 1) * (W / 2)) | 0;
+    const sy = (bd.y + Math.sin(now / 2200 + bd.ph) * 2.5) | 0;
+    if (sx < 1 || sx >= W - 1 || sy < 1 || sy >= HALF - 1 || sy >= wallTop[sx]) continue;
+    const up = Math.sin(now / 130 + bd.ph) > 0;
+    const putB = (X, Y) => {
+      const i = Y * W + X;
+      const b0 = px[i];
+      px[i] = rgb(
+        ((b0 & 255) * 0.25 + 40 * 0.75) | 0,
+        (((b0 >> 8) & 255) * 0.25 + 46 * 0.75) | 0,
+        (((b0 >> 16) & 255) * 0.25 + 62 * 0.75) | 0,
+      );
+    };
+    putB(sx, sy);
+    if (up) { putB(sx - 1, sy - 1); putB(sx + 1, sy - 1); } // asas em ^
+    else { putB(sx - 1, sy); putB(sx + 1, sy); }            // asas abertas
   }
 
   /* billboards (longe -> perto), cull por distância — a bruma esconde o pop-in */
@@ -1580,6 +1845,41 @@ function render(now) {
         if (((c >> 24) & 255) < 40) continue; /* transparente */
         px[y * W + x] = shade(c, clamp(f + selfGlow, 0, 1), glow + selfGlow * pulse);
       }
+    }
+  }
+
+  /* ---------- grilos e sapinhos: visitas raras pulando por aí ---------- */
+  for (const c of CRITTERS) {
+    const rx = c.x - cam.x, ry = c.y - cam.y;
+    const txp = inv * (dirY * rx - dirX * ry);
+    const typ = inv * (-plY * rx + plX * ry);
+    if (typ <= 0.3 || typ > 9) continue;
+    const sx = ((W / 2) * (1 + txp / typ)) | 0;
+    if (sx < 2 || sx >= W - 2) continue;
+    const occY = typ >= zbuf[sx] ? wallTop[sx] : H;
+    const unit = H / typ;
+    const bottom = (HALF + unit * 0.5) | 0;
+    const sy = (bottom - unit * c.h) | 0;
+    if (sy < 1 || sy >= H - 1 || sy >= occY) continue;
+    const f = fogAt(typ);
+    const big = unit > 42; // perto o bicho ganha 1px a mais
+    if (c.frog) {
+      const body = shade(rgb(28, 108, 72), f, 0);
+      const belly = shade(rgb(150, 198, 130), f, 0);
+      px[sy * W + sx] = body;
+      px[sy * W + sx - 1] = body;
+      if (big) { px[(sy - 1) * W + sx] = body; px[sy * W + sx + 1] = belly; }
+      else px[sy * W + sx + 1] = belly;
+    } else {
+      const dark = shade(rgb(74, 88, 34), f, 0);
+      px[sy * W + sx] = dark;
+      if (big) px[sy * W + sx + 1] = shade(rgb(110, 124, 52), f, 0);
+    }
+    /* sombra de contato quando no ar (vende o pulo) */
+    if (c.h > 0.02 && bottom < H && bottom < occY) {
+      const i = bottom * W + sx;
+      const b0 = px[i];
+      px[i] = rgb(((b0 & 255) * 0.62) | 0, (((b0 >> 8) & 255) * 0.62) | 0, (((b0 >> 16) & 255) * 0.62) | 0);
     }
   }
 
@@ -1739,6 +2039,9 @@ function loop(now) {
     const n = Math.hypot(mx, my) || 1;
     tryMove(cam.x + (mx / n) * walk, cam.y + (my / n) * walk);
   }
+  if (keys.t) timeOffset += dt * 40000; // segure T: o dia voa (~1 ciclo/6s)
+  updateBirds(now, SKYST.wDay);
+  updateCritters(now);
   render(now);
   fpsAcc += 1 / Math.max(dt, 1e-3); fpsN++;
   if (fpsN >= 20) { fpsShown = (fpsAcc / fpsN) | 0; fpsAcc = 0; fpsN = 0; }

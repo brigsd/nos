@@ -39,3 +39,17 @@ virou DIA e a floresta deixou de ser parede esticada:
 
 Screenshots: `shot-day-forest.png`, `shot-day-forest-close.png`,
 `shot-day-rock.png`; cena 2D de referência em `../estudio/cena-11.png`.
+
+## Dia e noite (iteração 3)
+
+Ciclo completo em ~4 min (segure **T** para o dia voar; QA:
+`window.__setTod(0.75)`). A sacada da ilha flutuante: **o horizonte é o
+mar de nuvens lá embaixo** — o sol se põe AFUNDANDO nele (visível só pelos
+pixels de vazio além da borda; o nosso chão o oculta via groundMask), e o
+mar incandesce perto de onde ele desce. À noite: lua com crateras, halo e
+**pilar de luz**, estrelas cintilando atrás das nuvens, mundo em luz fria
+(fog/ambiente dinâmicos no shade()) — o glow violeta do Núcleo é emissivo
+e domina o escuro. Crepúsculo: céu quente concentrado no rumo do sol,
+nuvens rosadas, raios crepusculares. Vida: bandos de pássaros ocasionais
+de dia, grilos e sapinhos raros pulando perto da câmera (sapos só perto
+d'água, via shoreField).
