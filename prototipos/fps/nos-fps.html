@@ -867,7 +867,7 @@ for (let ty = 0; ty < world.h; ty++) {
       let v = TREE_VARIANTS[(h * TREE_VARIANTS.length) | 0];
       if (hs < 0.05) v = TREE_CEREJEIRA;            // bosquinho rosa raro
       else if (hs > 0.975) v = TREE_SECA;           // seca solitária
-      bills.push({ x: tx + 0.5 + jx, y: ty + 0.5 + jy, genFrames: v, label: 'arvore', scale: 2.3 + h * 0.7, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
+      bills.push({ x: tx + 0.5 + jx, y: ty + 0.5 + jy, genFrames: v, label: 'arvore', scale: 4.3 + h * 1.4, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
     } else if (t === 'm') {
       const ht = hash2(tx * 29, ty * 31);
       if (ht < 0.22) { // graminha balançando — objeto, não textura
@@ -885,7 +885,7 @@ for (let ty = 0; ty < world.h; ty++) {
         bills.push({
           x: tx + 0.5 + (hash2(tx * 109, ty * 113) - 0.5) * 0.6,
           y: ty + 0.5 + (hash2(tx * 127, ty * 131) - 0.5) * 0.6,
-          genFrames: vb, label: 'arbusto', scale: 0.5 + hb * 4, lift: 0,
+          genFrames: vb, label: 'arbusto', scale: 0.7 + hb * 5, lift: 0,
           phase: hash2(tx * 137, ty * 139) * Math.PI * 2, swaySpeed: 900,
         });
       }
