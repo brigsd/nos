@@ -1294,6 +1294,14 @@ function genWallTex(kind, seed) {
       if (y > Ht - 3) buf[i] = 24;                              // soco escuro
     }
   }
+  /* JANELINHA acesa no corpo (pedra e madeira): moldura escura + vidro
+     âmbar — o ritmo de janelas é o que faz parede virar construção */
+  if (kind === 'stone' || kind === 'wood') {
+    for (let y = ROOF + 7; y < ROOF + 13; y++) for (let x = 5; x < 11; x++) {
+      const border = y === ROOF + 7 || y === ROOF + 12 || x === 5 || x === 10;
+      buf[y * Wt + x] = border ? 1 : (x + y) % 3 === 0 ? 23 : 18;
+    }
+  }
   return bufToTex({ buf, W: Wt, H: Ht });
 }
 const CT = {
@@ -1309,14 +1317,18 @@ for (let ty = 6; ty <= 12; ty++) for (let tx = 23; tx <= 29; tx++) {
 }
 const CITY = new Map();
 const cityWall = (tx, ty, kind, h, mm) => CITY.set(ty * world.w + tx, { tex: CT[kind], h, mm });
-/* Estaleiro (NW, madeira alta — a doca pro vazio é fase 2) */
-cityWall(43, 12, 'wood', 1.6, '#cd683d'); cityWall(44, 12, 'wood', 1.6, '#cd683d'); cityWall(43, 13, 'wood', 1.6, '#cd683d');
-/* Forja (NE, pedra + chaminé fumegando) */
-cityWall(48, 12, 'stone', 1.3, '#7f708a'); cityWall(49, 12, 'chimney', 2.05, '#625565'); cityWall(49, 13, 'stone', 1.3, '#7f708a');
-/* Bancada (SW, oficina baixa de madeira) */
-cityWall(43, 19, 'wood', 1.05, '#cd683d'); cityWall(44, 19, 'wood', 1.05, '#cd683d'); cityWall(43, 18, 'wood', 1.05, '#cd683d');
-/* Cozinha (SE, madeira) */
-cityWall(48, 19, 'wood', 1.15, '#cd683d'); cityWall(49, 19, 'wood', 1.15, '#cd683d'); cityWall(49, 18, 'wood', 1.15, '#cd683d');
+/* Estaleiro (NW, madeira ALTA + anexo baixo — silhueta em degraus) */
+cityWall(43, 12, 'wood', 1.75, '#cd683d'); cityWall(44, 12, 'wood', 1.75, '#cd683d'); cityWall(43, 13, 'wood', 1.75, '#cd683d');
+cityWall(42, 12, 'wood', 0.85, '#cd683d');
+/* Forja (NE, pedra + chaminé fumegando + depósito baixo) */
+cityWall(48, 12, 'stone', 1.35, '#7f708a'); cityWall(49, 12, 'chimney', 2.05, '#625565'); cityWall(49, 13, 'stone', 1.35, '#7f708a');
+cityWall(50, 12, 'stone', 0.8, '#7f708a');
+/* Bancada (SW, oficina baixa de madeira + telheiro) */
+cityWall(43, 19, 'wood', 0.95, '#cd683d'); cityWall(44, 19, 'wood', 0.95, '#cd683d'); cityWall(43, 18, 'wood', 0.95, '#cd683d');
+cityWall(42, 19, 'wood', 0.7, '#cd683d');
+/* Cozinha (SE, madeira + banquinha de toldo colada) */
+cityWall(48, 19, 'wood', 1.1, '#cd683d'); cityWall(49, 19, 'wood', 1.1, '#cd683d'); cityWall(49, 18, 'wood', 1.1, '#cd683d');
+cityWall(50, 19, 'stall', 0.6, '#30e1b9');
 /* bancas do mercado (toldos verdigris) — fileira norte + uma ao sul */
 cityWall(45, 12, 'stall', 0.62, '#30e1b9'); cityWall(47, 12, 'stall', 0.62, '#30e1b9'); cityWall(46, 19, 'stall', 0.62, '#30e1b9');
 
@@ -1754,6 +1766,27 @@ function genSmoke(fr) {
   bills.push({ x: 49.5, y: 12.5, genFrames: [genSmoke(0), genSmoke(1), genSmoke(2)], loop: true, label: 'fumaca', scale: 1.2, lift: 2.1 });
 }
 
+/* lampiões do largo: postes com lanterna âmbar, emissivos (brilham à noite
+   e pulsam junto com o Núcleo — "mais efeito onde tem luz", ideador) */
+function genLamp(seed) {
+  const Wl = 12, Hl = 30;
+  const rnd = mulberry32(seed * 401 + 3);
+  const buf = new Int16Array(Wl * Hl).fill(-1);
+  for (let y = 8; y < Hl; y++) { buf[y * Wl + 5] = 1; buf[y * Wl + 6] = 34; } // poste
+  for (let x = 3; x < 9; x++) buf[28 * Wl + x] = 1;                            // base
+  for (let y = 1; y < 8; y++) for (let x = 3; x < 9; x++) {                    // lanterna
+    const border = y === 1 || y === 7 || x === 3 || x === 8;
+    buf[y * Wl + x] = border ? 1 : (x + y) % 2 === 0 ? 18 : 23;                // vidro âmbar
+  }
+  buf[0 * Wl + 5] = 1; buf[0 * Wl + 6] = 1;                                    // topete
+  buf[4 * Wl + 5] = 9;                                                          // miolo aceso
+  return bufToTex({ buf, W: Wl, H: Hl });
+}
+for (const [i, [lx, ly]] of [[45.0, 14.1], [47.4, 14.1], [45.0, 17.1], [47.4, 17.1]].entries()) {
+  bills.push({ x: lx, y: ly, genFrames: [genLamp(i + 1)], label: 'lampiao', scale: 1.05, lift: 0, selfGlow: 0.5 });
+  addTrunk(lx | 0, ly | 0, lx, ly, 0.1);
+}
+
 /* ---------- névoa baixa (pedido do ideador): fiapos rasteiros que respiram ----------
    3 frames por fiapo (quase nada -> leve -> cheio) percorridos pelo MESMO
    seno do vento das árvores (swaySpeed lento) — a névoa "aparece de vez em
@@ -1842,7 +1875,12 @@ function glowAt(wx, wy) {
   /* as veias d'A Clareira são emissivas e pulsam junto com o Núcleo (D-32);
      o halo cresce com a noite — de dia fica só o fio violeta no chão */
   const v = veinAt(wx, wy);
-  if (v > 0) g += v * (0.1 + 0.5 * SKYST.wNight) * pulse;
+  if (v > 0) g += v * (0.1 + 0.62 * SKYST.wNight) * pulse;
+  /* o Átrio aceso derrama luz no pátio (halo pulsante no chão) */
+  if (wx > 48.6 && wx < 53.4 && wy > 13.4 && wy < 17.8) {
+    const dA = (wx - 51.1) * (wx - 51.1) + (wy - 15.6) * (wy - 15.6);
+    g += (0.2 + 0.25 * SKYST.wNight) * pulse / (1 + 1.6 * dA);
+  }
   return g;
 }
 
@@ -2113,12 +2151,26 @@ function render(now) {
           }
         }
         /* o LARGO d'A Clareira é calçado de pedra (D-32): disco orgânico
-           sobre o barro, com borda em dither — as veias correm por cima */
-        const dPz = Math.hypot(fx - PLAZA.x, fy - PLAZA.y);
-        if (dPz < 3.2) {
+           sobre o barro, com borda em dither — as veias correm por cima.
+           A calçada continua: corredor até o Hall de Portais com pátio sob
+           cada arco, e um pátio no vão de cada ala (pedido do ideador). */
+        if (fx > 41 && fx < 53.5 && fy > 10 && fy < 21.5) {
           const wob = (WAVE_B[(((fy * 5) & 63) * 64 + ((fx * 5) & 63)) | 0] / 255 - 0.5) * 0.5;
-          const stoneR = 2.7 + wob;
-          if (dPz < stoneR || (dPz < stoneR + 0.3 && (BAYER[y & 3][x & 3] / 16) < (1 - (dPz - stoneR) / 0.3) * 0.8)) {
+          let sd = Math.hypot(fx - PLAZA.x, fy - PLAZA.y) - (2.7 + wob);
+          if (fx > 47.4) { // braço leste: corredor + pátios dos arcos
+            sd = Math.min(sd, segDist(fx, fy, 48.4, 15.6, 50.9, 15.6) - (0.95 + wob * 0.4));
+            sd = Math.min(sd, Math.hypot(fx - 50.4, fy - 13.4) - 1.0);
+            sd = Math.min(sd, Math.hypot(fx - 51.1, fy - 15.6) - 1.1);
+            sd = Math.min(sd, Math.hypot(fx - 50.4, fy - 17.8) - 1.0);
+            sd = Math.min(sd, segDist(fx, fy, 50.1, 14.2, 50.4, 13.5) - 0.7);
+            sd = Math.min(sd, segDist(fx, fy, 50.1, 17.0, 50.4, 17.7) - 0.7);
+          }
+          /* pátios dos vãos das alas (as portas das oficinas) */
+          sd = Math.min(sd, Math.hypot(fx - 44.5, fy - 13.5) - 0.95);
+          sd = Math.min(sd, Math.hypot(fx - 48.5, fy - 13.5) - 0.95);
+          sd = Math.min(sd, Math.hypot(fx - 44.5, fy - 18.5) - 0.95);
+          sd = Math.min(sd, Math.hypot(fx - 48.5, fy - 18.5) - 0.95);
+          if (sd < 0 || (sd < 0.3 && (BAYER[y & 3][x & 3] / 16) < (1 - sd / 0.3) * 0.8)) {
             const st = STONE_TILES[(tx + ty) & 1];
             c = st.data[((((fy - ty) * GTEX) | 0) * GTEX + (((fx - tx) * GTEX) | 0))];
           }
@@ -2143,7 +2195,7 @@ function render(now) {
           /* veios AZUIS e ROXOS (decisão do ideador), pulsando com o Núcleo */
           const blue = vnoise(fx * 0.85 + 13, fy * 0.85 + 29) > 0.52;
           const vr = blue ? 77 : 168, vg = blue ? 155 : 132, vb = blue ? 230 : 243;
-          const k = Math.min(0.85, vv * 1.15) * (0.72 + 0.28 * pulse);
+          const k = Math.min(0.85, vv * 1.15) * (0.55 + 0.45 * pulse); // pulso mais fundo (ideador)
           const r0 = c & 255, g0 = (c >> 8) & 255, b0 = (c >> 16) & 255;
           c = rgb((r0 + (vr - r0) * k) | 0, (g0 + (vg - g0) * k) | 0, (b0 + (vb - b0) * k) | 0);
         }
@@ -2373,7 +2425,7 @@ function render(now) {
       }
       continue;
     }
-    const selfGlow = b.tex === 'oficina' || b.tex === 'portal' ? 0.16 : 0;
+    const selfGlow = b.selfGlow ?? (b.tex === 'oficina' || b.tex === 'portal' ? 0.3 : 0); /* oficinas acesas no vão; lampiões via b.selfGlow */
     for (let x = x0; x <= x1; x++) {
       /* parede mais perto? Ela oculta só do TOPO dela pra baixo — acima é
          céu aberto (copas e ilhas atrás de muros aparecem por cima). */
@@ -2686,9 +2738,14 @@ function paintTags() {
     if (col < 0 || col >= W) continue;
     if (zbuf[col] < dist - 0.25) continue; // parede na frente esconde a tag
     const lineH = H / dist;
-    /* âncora no TRONCO/corpo, não no topo da copa: altura da tag limitada
-       a ~1.35 tile acima do chão (fumaça sobe junto via lift) */
-    const hTag = Math.min(b.scale ?? 1, 1.35) + (b.lift ?? 0);
+    /* âncora POR TIPO (pedido do ideador): árvore no tronco, decoração no
+       próprio centro, construções/máquinas perto do chão; fumaça sobe junto */
+    let hTag;
+    if (b.label === 'fumaca') hTag = Math.min(b.scale ?? 1, 1.2) + (b.lift ?? 0);
+    else if (b.label === 'arvore') hTag = 0.72;
+    else if (b.label === 'arco') hTag = 1.0;
+    else if (GENERIC_IDS.has(b.label)) hTag = (b.scale ?? 1) * 0.5 + (b.lift ?? 0); // tufo/flor/rocha/arbusto/nevoa: centro
+    else hTag = 0.5; // máquinas (forja...), nativos, jogadores, portal: rente ao chão
     const sy = clamp(HALF + lineH * (0.5 - hTag), 8, H - 8);
     html += `<span style="left:${((sx / W) * 100).toFixed(1)}%;top:${((sy / H) * 100).toFixed(1)}%">${b.id}</span>`;
     shown++;

@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 7) — polish da cidade + proposta dos Habitantes
+
+- **Tags por tipo** (feedback): árvore no tronco (0.72), decoração no próprio centro (scale·0.5), máquinas/nomeados rente ao chão (0.5), arco 1.0, fumaça acompanha o lift.
+- **Calçada de pedra** agora liga o largo ao Hall de Portais (corredor + pátio sob cada arco) e cada vão de ala ganhou um pátio de pedra — campo de distância com segDist/discos, só dentro da bbox da cidade.
+- **Arquitetura**: janelinhas âmbar nas texturas (pedra/madeira), anexos baixos em cada ala (silhueta em degraus: estaleiro 1.75 + anexo 0.85, forja + depósito 0.8, bancada + telheiro 0.7, cozinha + banquinha de toldo), 4 lampiões emissivos no largo (selfGlow 0.5, pulsam com o Núcleo), oficinas mais acesas no vão (0.3), halo do Átrio derramando no pátio, veias com pulso mais fundo (0.55+0.45).
+- **`docs/HABITANTES.md` (PROPOSTA)**: a resposta ao "mecanismo revolucionário de vida" — NPCs como REPOSITÓRIOS que jogam pelo canal público (repo nos-mentes + GitHub Models no Actions + comandos via issue + memória commitada). Aguarda: criar repo, PAT issues:write, batismo dos 3 primeiros.
+
 ## Sessão 2026-07-16 (parte 6) — mouse-look, menu ESC, input destravado, névoa baixa
 
 - **Mouse-look com pointer lock**: clique captura o mouse (desktop, `pointer:fine`), `movementX` gira a câmera; ESC solta e abre o **menu** (vazio por ora, botão continuar religa o lock). Pads de toque dormem enquanto o lock está ativo; menu aberto silencia as teclas do jogo.
