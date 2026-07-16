@@ -2,6 +2,12 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 8) — os Habitantes acordam (fase 1)
+
+- **brigsd/nos-mentes criado pelo ideador e populado**: brasa (ferreira), broa (cozinheira), quilha (mestre-estaleiro) — batismo do lore-writer, minúsculas de coisa concreta como gota/raiz/cinza. Cada mente = JSON com persona, objetivos, falasBase e MEMÓRIAS commitadas. `pensar.mjs` (cron horário `pensar.yml`, defasado do tick): lê o heart.json raw, pensa via GitHub Models (`models: read`, sem API key) com fallback determinístico, escreve memórias + `falas.json`.
+- **FPS**: camada Habitantes — fetch do falas.json (raw, no-store, poll 90s, falha silenciosa), billboard avatar em casa + BALÃO de fala (DOM, oclusão por zbuf, some no mapa grande). Falas sanitizadas (a mente escreve, o cliente escapa <>&).
+- **Fase 2 pendente**: agir via issues no nos (mesmo canal dos jogadores) — precisa do secret NOS_PAT no nos-mentes (instruções no README de lá) + comando/identidade no motor (decidir: /habitar dirigindo nativos-habitantes vs. players-bot). Sandbox não alcança raw de dentro do navegador — balões testados com injeção manual; produção ok (o 2D já usa raw ao vivo).
+
 ## Sessão 2026-07-16 (parte 7) — polish da cidade + proposta dos Habitantes
 
 - **Tags por tipo** (feedback): árvore no tronco (0.72), decoração no próprio centro (scale·0.5), máquinas/nomeados rente ao chão (0.5), arco 1.0, fumaça acompanha o lift.

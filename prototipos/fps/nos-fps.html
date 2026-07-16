@@ -84,6 +84,24 @@
     pointer-events: none;
     font: 500 10px/1.15 ui-monospace, monospace;
   }
+  #bubbles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    font: 500 10px/1.3 ui-monospace, monospace;
+  }
+  #bubbles span {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    background: rgba(23, 18, 33, 0.88);
+    border: 1px solid rgba(168, 132, 243, 0.45);
+    color: #e8e0f2;
+    padding: 3px 7px;
+    border-radius: 7px 7px 7px 2px;
+    max-width: 210px;
+    white-space: normal;
+  }
+  #bubbles b { color: #fbb954; }
   #menu {
     position: absolute;
     inset: 0;
@@ -184,6 +202,7 @@
   <canvas id="minimap" width="64" height="64"></canvas>
   <canvas id="bigmap" width="288" height="288"></canvas>
   <div id="tags"></div>
+  <div id="bubbles"></div>
   <div id="menu">
     <div class="panel">
       <h2>N Ó S</h2>
@@ -1787,6 +1806,35 @@ for (const [i, [lx, ly]] of [[45.0, 14.1], [47.4, 14.1], [45.0, 17.1], [47.4, 17
   addTrunk(lx | 0, ly | 0, lx, ly, 0.1);
 }
 
+/* ---------- OS HABITANTES: mentes que vivem em brigsd/nos-mentes ----------
+   NPCs que pensam FORA do motor (GitHub Models + memória commitada, ver
+   docs/HABITANTES.md) e publicam falas.json; aqui eles aparecem em casa,
+   com balão de fala. Camada 100% opcional: sem rede, o mundo segue. */
+const HABITANTES = [];
+(() => {
+  const FALAS_URL = 'https://raw.githubusercontent.com/brigsd/nos-mentes/main/falas.json';
+  const load = async () => {
+    try {
+      const r = await fetch(FALAS_URL, { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json();
+      for (const h of j.habitantes ?? []) {
+        if (typeof h.x !== 'number' || typeof h.y !== 'number') continue;
+        let b = HABITANTES.find((q) => q.id === h.id);
+        if (!b) {
+          b = { x: h.x, y: h.y, tex: 'avatar', frames: 1, label: String(h.id), id: String(h.id), scale: 1, lift: 0, selfGlow: 0.12 };
+          HABITANTES.push(b);
+          bills.push(b);
+        }
+        b.x = h.x; b.y = h.y;
+        b.fala = String(h.fala ?? '').replace(/[<>&]/g, '').slice(0, 160); // mente escreve, a gente sanitiza
+      }
+    } catch { /* offline/file:// — A Clareira fica quieta, sem erro */ }
+  };
+  load();
+  setInterval(load, 90000);
+})();
+
 /* ---------- névoa baixa (pedido do ideador): fiapos rasteiros que respiram ----------
    3 frames por fiapo (quase nada -> leve -> cheio) percorridos pelo MESMO
    seno do vento das árvores (swaySpeed lento) — a névoa "aparece de vez em
@@ -2753,6 +2801,27 @@ function paintTags() {
   tagsDiv.innerHTML = html;
 }
 
+/* balões de fala dos Habitantes: sempre visíveis de perto (independe das tags) */
+const bubblesDiv = document.getElementById('bubbles');
+let lastBubblePaint = 0;
+function paintBubbles() {
+  let html = '';
+  for (const h of HABITANTES) {
+    if (!h.fala) continue;
+    const dx = h.x - cam.x, dy = h.y - cam.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.55 || dist > 6.5) continue;
+    const rel = wrapAng(Math.atan2(dy, dx) - cam.a);
+    if (Math.abs(rel) > 0.55) continue;
+    const sx = (Math.tan(rel) / FOV_PLANE + 1) * (W / 2);
+    const col = sx | 0;
+    if (col < 0 || col >= W || zbuf[col] < dist - 0.25) continue;
+    const sy = clamp(HALF + (H / dist) * (0.5 - 1.18), 7, H - 12);
+    html += `<span style="left:${((sx / W) * 100).toFixed(1)}%;top:${((sy / H) * 100).toFixed(1)}%"><b>${h.id}</b> ${h.fala}</span>`;
+  }
+  bubblesDiv.innerHTML = html;
+}
+
 /* ---------- loop ---------- */
 const hud = document.getElementById('hudTop');
 /* ?cam=x,y,a — link direto pra um ponto de vista exato (D-33) */
@@ -2799,6 +2868,12 @@ function loop(now) {
     else if (now - lastTagPaint > 140) { lastTagPaint = now; paintTags(); }
   } else {
     hud.textContent = `${fpsShown} fps · (${cam.x.toFixed(1)}, ${cam.y.toFixed(1)})`;
+  }
+  /* balões dos Habitantes: sempre, com ou sem tags */
+  if (now - lastBubblePaint > 240) {
+    lastBubblePaint = now;
+    if (mapMode === 2) { if (bubblesDiv.firstChild) bubblesDiv.textContent = ''; }
+    else paintBubbles();
   }
   requestAnimationFrame(loop);
 }
