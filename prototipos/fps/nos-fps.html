@@ -1755,8 +1755,13 @@ function render(now) {
          relevo ancorado no MUNDO via o azimute câmera->rocha, então circular
          mostra lados diferentes de verdade; luz do sol FIXA no mundo faz o
          lado iluminado ficar parado — é isso que lê como sólido, não foto. */
-      const cxr = (rx0 + rx1) / 2, radX = Math.max(1, sw / 2), radY = Math.max(1, sh / 2);
-      const cyr = y1c - radY * 0.86;            // centro subido -> base achatada no chão
+      /* seixo ACHATADO (pedido do ideador): largo pros lados, baixo — não uma
+         bola oval. SQ_W alarga o volume, SQ_H o esmaga na vertical. */
+      const SQ_W = 1.6, SQ_H = 0.62;
+      const cxr = (rx0 + rx1) / 2, radX = Math.max(1.5, (sw / 2) * SQ_W), radY = Math.max(1.5, (sh / 2) * SQ_H);
+      const cyr = y1c - radY * 0.82;            // centro subido -> base achatada no chão
+      /* faixa de colunas do seixo alargado (o sw original é mais estreito) */
+      const x0r = Math.max(0, (cxr - radX) | 0), x1r = Math.min(W - 1, (cxr + radX) | 0);
       const az = Math.atan2(b.y - cam.y, b.x - cam.x);
       const seed = (b.seed || 1) * 0.013;
       const SUN_AZ = -2.2, SUN_EL = 0.5, cosEl = Math.cos(SUN_EL), sinEl = Math.sin(SUN_EL);
@@ -1774,7 +1779,7 @@ function render(now) {
           if ((BAYER[y & 3][x & 3] / 16) < 0.62 - ex * ex * 0.3) px[y * W + x] = shade(PAL_RGB_U32[30], f, 0);
         }
       }
-      for (let x = x0; x <= x1; x++) {
+      for (let x = x0r; x <= x1r; x++) {
         const occY = ty >= zbuf[x] ? wallTop[x] : H;
         const nx = (x - cxr) / radX;
         if (nx < -1 || nx > 1) continue;
