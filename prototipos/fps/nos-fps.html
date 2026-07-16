@@ -1760,7 +1760,9 @@ function render(now) {
       const az = Math.atan2(b.y - cam.y, b.x - cam.x);
       const seed = (b.seed || 1) * 0.013;
       const SUN_AZ = -2.2, SUN_EL = 0.5, cosEl = Math.cos(SUN_EL), sinEl = Math.sin(SUN_EL);
-      const ROCK = [1, 2, 6, 7, 8], MOSS = [35, 36, 37, 38];
+      /* rampa clareada (pedido do ideador): cinza claro no corpo, ameixa só
+         no acento mais fundo — antes a base era plumDark e a pedra lia escura */
+      const ROCK = [2, 6, 7, 7, 8], MOSS = [35, 36, 37, 38];
       // sombra de contato no chão (elipse escura sob a pedra)
       const shW = radX * 1.05, shH = Math.max(1.5, radY * 0.22);
       for (let x = Math.max(0, (cxr - shW) | 0); x <= Math.min(W - 1, (cxr + shW) | 0); x++) {
@@ -1793,14 +1795,15 @@ function render(now) {
           const wnx = horiz * Math.cos(bearing), wny = horiz * Math.sin(bearing), wnz = -nyN;
           const lam = wnx * Math.cos(SUN_AZ) * cosEl + wny * Math.sin(SUN_AZ) * cosEl + wnz * sinEl;
           const facet = Math.floor((fbm(Math.cos(bearing) * 6 + seed, nyN * 6 + seed, 2)) * 3) / 3;
-          let tt = 0.5 + 0.46 * lam + (facet - 0.5) * 0.5;
+          /* piso alto: o lado à sombra fica cinza médio, não escuro (ideador) */
+          let tt = 0.64 + 0.36 * lam + (facet - 0.5) * 0.42;
           tt += (BAYER[y & 3][x & 3] / 16 - 0.5) * 0.12;
           const edge = r2 > (rr - 0.09) * (rr - 0.09);
           let idx;
           if (wnz > 0.42 && fbm(Math.cos(bearing) * 4 + seed * 2, nyN * 4, 2) > 0.46) {
             idx = MOSS[clamp(Math.round(tt * 3), 0, 3)]; // musgo no topo
           } else if (edge && lam < 0.05) {
-            idx = 1; // contorno escuro no lado à sombra
+            idx = 2; // contorno à sombra (ameixa média, não breu)
           } else {
             idx = ROCK[clamp(Math.round(tt * 4), 0, 4)];
           }
