@@ -121,7 +121,7 @@
 
 <header>
   <h1>N Ó S</h1>
-  <span class="sub">O Coração em primeira pessoa, MODO DIA — árvores e rochas geradas (L-system), mundo real da batida <span id="tickNo"></span></span>
+  <span class="sub">O Coração em primeira pessoa — siga o carreiro até a clareira · mundo real da batida <span id="tickNo"></span></span>
 </header>
 
 <div id="stage">
@@ -1133,6 +1133,46 @@ function rimAt(fx, fy) {
   const a = RIMF[i], b = RIMF[i + 1], c = RIMF[i + 256], d = RIMF[i + 257];
   return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
 }
+/* ---------- O CARREIRO (D-31): a estrada de terra do spawn à clareira ----------
+   Polilinha campina norte -> floresta NE -> clareira (o sítio da futura
+   cidade, ver docs/CIDADE.md). Campo assinado de distância (dist até a
+   polilinha − meia-largura com wobble orgânico), grade 256x256 com sample
+   bilinear — mesmo esquema do RIMF. Consumido por: chão (terra batida),
+   desbaste de árvores (corredor + clareira), fileiras plantadas na campina,
+   guarda de tufos/flores/seixos e minimapa. */
+const PATH_PTS = [[27.0, 12.0], [30.6, 11.2], [34.2, 10.9], [38.5, 12.2], [41.4, 13.4], [44.0, 14.8], [46.2, 15.6]];
+const PLAZA = { x: 46.2, y: 15.6, r: 2.3 }; // largo de terra onde o carreiro deságua
+const CLEAR_R = 5.0;                        // raio sem árvores: a clareira da cidade
+function segDist(qx, qy, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+  let t = ((qx - ax) * dx + (qy - ay) * dy) / L2;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.hypot(ax + dx * t - qx, ay + dy * t - qy);
+}
+const PATHF = new Float32Array(256 * 256);
+for (let gy = 0; gy < 256; gy++) {
+  for (let gx = 0; gx < 256; gx++) {
+    const fx = gx / 4, fy = gy / 4;
+    let d = 1e9;
+    for (let i = 0; i < PATH_PTS.length - 1; i++) {
+      const s = segDist(fx, fy, PATH_PTS[i][0], PATH_PTS[i][1], PATH_PTS[i + 1][0], PATH_PTS[i + 1][1]);
+      if (s < d) d = s;
+    }
+    const dp = Math.hypot(fx - PLAZA.x, fy - PLAZA.y) - (PLAZA.r - 0.55);
+    if (dp < d) d = dp;
+    const hw = 0.55 + (fbm(fx * 0.9 + 31, fy * 0.9 + 17, 2) - 0.5) * 0.34; // a largura respira
+    PATHF[gy * 256 + gx] = d - hw;
+  }
+}
+function pathAt(fx, fy) {
+  if (fx < 0 || fy < 0 || fx >= world.w - 0.26 || fy >= world.h - 0.26) return 99;
+  const gx = clamp(fx * 4, 0, 254.99), gy = clamp(fy * 4, 0, 254.99);
+  const x0 = gx | 0, y0 = gy | 0, tx = gx - x0, ty = gy - y0;
+  const i = y0 * 256 + x0;
+  const a = PATHF[i], b = PATHF[i + 1], c = PATHF[i + 256], d = PATHF[i + 257];
+  return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
+}
+
 /* mar de nuvens sob a ilha (campo assado, rolado no sample) */
 const CSEA = new Uint8Array(256 * 256);
 for (let gy = 0; gy < 256; gy++) for (let gx = 0; gx < 256; gx++) {
@@ -1141,7 +1181,7 @@ for (let gy = 0; gy < 256; gy++) for (let gx = 0; gx < 256; gx++) {
 
 /* ---------- estado ---------- */
 const spawn = NOS_DATA.players.brigsd ?? { x: 31, y: 30 };
-const cam = { x: 26.5, y: 27.5, a: 0.70 }; /* recuado do spawn oficial só pro enquadramento inicial da demo */
+const cam = { x: 27.0, y: 12.0, a: -0.22 }; /* spawn no início do carreiro (D-31): campina norte com as ruínas antigas de cenário atrás, rio bem longe, a estrada de terra à frente convidando pra clareira */
 const CORE = { x: 33, y: 33 };
 
 /* partículas no ar: pólen dourado pela campina + motas violetas do Pulso
@@ -1285,6 +1325,34 @@ for (let ty = 0; ty < world.h; ty++) {
     const t = world.at(tx, ty);
     if (rimAt(tx + 0.5, ty + 0.5) < 0.8) continue; // nada nasce no lábio/além da borda
     if (t === 'f') {
+      /* A CLAREIRA (D-31): dentro do anel nada de árvore — é o sítio da
+         futura cidade — mas ela é VIVA: graminha e flores de campina. */
+      const dClear = Math.hypot(tx + 0.5 - PLAZA.x, ty + 0.5 - PLAZA.y);
+      if (dClear < CLEAR_R) {
+        const hcg = hash2(tx * 151, ty * 157);
+        if (hcg < 0.2) {
+          const gx0 = tx + 0.5 + (hash2(tx * 163, ty * 167) - 0.5) * 0.7;
+          const gy0 = ty + 0.5 + (hash2(tx * 173, ty * 179) - 0.5) * 0.7;
+          if (pathAt(gx0, gy0) > 0.05) {
+            const v = TUFT_VARIANTS[(hcg * 731) % TUFT_VARIANTS.length | 0];
+            const gsc = 0.44 + hcg * 1.5;
+            bills.push({ x: gx0, y: gy0, genFrames: v, label: 'tufo', scale: gsc, lift: 0, phase: hash2(tx * 181, ty * 191) * Math.PI * 2, swaySpeed: 620 });
+            stampTreeShadow(gx0, gy0, 0.22 + gsc * 0.14, 0.16 + gsc * 0.1, 0.3);
+          }
+        }
+        const hcf = hash2(tx * 193, ty * 197);
+        if (hcf < 0.11) {
+          const fx0 = tx + 0.5 + (hash2(tx * 199, ty * 211) - 0.5) * 0.7;
+          const fy0 = ty + 0.5 + (hash2(tx * 223, ty * 227) - 0.5) * 0.7;
+          if (pathAt(fx0, fy0) > 0.05) {
+            const vf = FLOWER_VARIANTS[(hcf * 913) % FLOWER_VARIANTS.length | 0];
+            const fsc = 0.24 + hcf * 0.8;
+            bills.push({ x: fx0, y: fy0, genFrames: vf, label: 'flor', scale: fsc, lift: 0, phase: hash2(tx * 229, ty * 233) * Math.PI * 2, swaySpeed: 460 });
+            stampTreeShadow(fx0, fy0, 0.18 + fsc * 0.12, 0.12 + fsc * 0.08, 0.24);
+          }
+        }
+        continue;
+      }
       const h = hash2(tx, ty);
       if (h > 0.42) continue; // desbaste maior: floresta com respiro, copas sem se sobrepor
       const jx = (hash2(tx * 3, ty * 7) - 0.5) * 0.4, jy = (hash2(tx * 11, ty * 5) - 0.5) * 0.4;
@@ -1294,6 +1362,7 @@ for (let ty = 0; ty < world.h; ty++) {
       else if (hs > 0.975) v = TREE_SECA;           // seca solitária
       const treeScale = 4.3 + h * 1.4;
       const bx0 = tx + 0.5 + jx, by0 = ty + 0.5 + jy;
+      if (pathAt(bx0, by0) < 1.05) continue; // O CARREIRO abre o corredor: tronco nunca no caminho, as copas dos lados emolduram
       bills.push({ x: bx0, y: by0, genFrames: v, label: 'arvore', scale: treeScale, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
       stampTreeShadow(bx0, by0, 0.7 + treeScale * 0.34, 0.55 + treeScale * 0.075, 0.62);
       addTrunk(tx, ty, bx0, by0, v === TREE_SECA ? 0.26 : 0.22); // raio ~ meia-largura do tronco na base
@@ -1303,16 +1372,18 @@ for (let ty = 0; ty < world.h; ty++) {
         const v = TUFT_VARIANTS[(ht * 731) % TUFT_VARIANTS.length | 0];
         const gx0 = tx + 0.5 + (hash2(tx * 41, ty * 43) - 0.5) * 0.7;
         const gy0 = ty + 0.5 + (hash2(tx * 47, ty * 53) - 0.5) * 0.7;
-        const gsc = 0.44 + ht * 1.6;
-        bills.push({
-          x: gx0, y: gy0,
-          genFrames: v, label: 'tufo', scale: gsc, lift: 0,
-          phase: hash2(tx * 59, ty * 61) * Math.PI * 2, swaySpeed: 620,
-        });
-        stampTreeShadow(gx0, gy0, 0.22 + gsc * 0.14, 0.16 + gsc * 0.1, 0.3); // sombrinha da graminha
+        if (pathAt(gx0, gy0) > 0.05) { // nunca em cima da terra batida (a franja pode)
+          const gsc = 0.44 + ht * 1.6;
+          bills.push({
+            x: gx0, y: gy0,
+            genFrames: v, label: 'tufo', scale: gsc, lift: 0,
+            phase: hash2(tx * 59, ty * 61) * Math.PI * 2, swaySpeed: 620,
+          });
+          stampTreeShadow(gx0, gy0, 0.22 + gsc * 0.14, 0.16 + gsc * 0.1, 0.3); // sombrinha da graminha
+        }
       }
       const hb = hash2(tx * 103, ty * 107);
-      if (hb < 0.045) { // arbusto (não bloqueia)
+      if (hb < 0.045 && pathAt(tx + 0.5, ty + 0.5) > 0.6) { // arbusto (não bloqueia; longe da estrada)
         const vb = BUSH_VARIANTS[(hb * 1201) % BUSH_VARIANTS.length | 0];
         bills.push({
           x: tx + 0.5 + (hash2(tx * 109, ty * 113) - 0.5) * 0.6,
@@ -1327,18 +1398,21 @@ for (let ty = 0; ty < world.h; ty++) {
         const vf = FLOWER_VARIANTS[(hf * 913) % FLOWER_VARIANTS.length | 0];
         const fx0 = tx + 0.5 + (hash2(tx * 73, ty * 79) - 0.5) * 0.7;
         const fy0 = ty + 0.5 + (hash2(tx * 83, ty * 89) - 0.5) * 0.7;
-        const fsc = 0.24 + hf * 0.9;
-        bills.push({
-          x: fx0, y: fy0,
-          genFrames: vf, label: 'flor', scale: fsc, lift: 0,
-          phase: hash2(tx * 97, ty * 101) * Math.PI * 2, swaySpeed: 460,
-        });
-        stampTreeShadow(fx0, fy0, 0.18 + fsc * 0.12, 0.12 + fsc * 0.08, 0.24); // sombrinha da flor
+        if (pathAt(fx0, fy0) > 0.05) { // flores na beirada sim, no barro não
+          const fsc = 0.24 + hf * 0.9;
+          bills.push({
+            x: fx0, y: fy0,
+            genFrames: vf, label: 'flor', scale: fsc, lift: 0,
+            phase: hash2(tx * 97, ty * 101) * Math.PI * 2, swaySpeed: 460,
+          });
+          stampTreeShadow(fx0, fy0, 0.18 + fsc * 0.12, 0.12 + fsc * 0.08, 0.24); // sombrinha da flor
+        }
       }
       const h = hash2(tx * 13, ty * 17);
       if (h < 0.978) continue; // pedrinhas raras na campina
       const dCore = Math.hypot(tx - CORE.x, ty - CORE.y);
       if (dCore < 6) continue; // praça do Núcleo limpa
+      if (pathAt(tx + 0.5, ty + 0.5) < 0.55) continue; // estrada limpa de seixos
       /* PEDRINHAS, não pedregulhos (decisão do ideador, 2026-07-16): os
          boulders 0.72-1.42 ficavam deslocados na campina. O renderer 3D
          per-pixel (b.rock3d) continua INTACTO e aceita qualquer escala —
@@ -1352,6 +1426,40 @@ for (let ty = 0; ty < world.h; ty++) {
       /* sombra assada no chão (deitada, direção do sol) — a elipse embutida
          do rock3d some nessa escala; a assada dá o assentamento */
       stampTreeShadow(tx + 0.5, ty + 0.5, 0.34 + rsc * 1.6, 0.26 + rsc * 1.2, 0.4);
+    }
+  }
+}
+
+/* fileiras do carreiro (D-31): no trecho de campina, árvores PLANTADAS
+   emoldurando a estrada dos dois lados, defasadas e com jitter (na mata,
+   as naturais emolduram sozinhas — o corredor é o desbaste lá em cima). */
+{
+  let acc = 1.8, side = 1, n = 0;
+  for (let i = 0; i < PATH_PTS.length - 1; i++) {
+    const a = PATH_PTS[i], b = PATH_PTS[i + 1];
+    const segL = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const ux = (b[0] - a[0]) / segL, uy = (b[1] - a[1]) / segL;
+    for (let s = 0; s < segL; s += 0.25) {
+      acc += 0.25;
+      if (acc < 2.35) continue;
+      acc = 0; n++;
+      const cxp = a[0] + ux * s, cyp = a[1] + uy * s;
+      for (const sg of [1, -1]) {
+        const salt = sg === 1 ? 7 : 97;
+        const off = (sg === side ? 1.58 : 1.92) + hash2(n * 13, salt) * 0.5;
+        const txp = cxp - uy * off * sg + (hash2(n * 29, salt + 4) - 0.5) * 0.5;
+        const typ = cyp + ux * off * sg + (hash2(n * 31, salt + 8) - 0.5) * 0.5;
+        if (world.at(txp | 0, typ | 0) !== 'm') continue;      // só na campina
+        if (rimAt(txp, typ) < 0.9 || pathAt(txp, typ) < 0.85) continue;
+        const hv = hash2(n * 7, salt + 12);
+        let v = TREE_VARIANTS[(hv * TREE_VARIANTS.length) | 0];
+        if (hash2(n * 37, salt + 16) < 0.16) v = TREE_CEREJEIRA; // cerejeiras pontuando o caminho
+        const sc = 4.0 + hv * 1.3;
+        bills.push({ x: txp, y: typ, genFrames: v, label: 'arvore', scale: sc, lift: 0, phase: hash2(n * 41, salt + 20) * Math.PI * 2, swaySpeed: 1600 });
+        stampTreeShadow(txp, typ, 0.7 + sc * 0.34, 0.55 + sc * 0.075, 0.62);
+        addTrunk(txp | 0, typ | 0, txp, typ, 0.22);
+      }
+      side = -side;
     }
   }
 }
@@ -1627,6 +1735,19 @@ function render(now) {
         const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
         const g = GRASS_TILES[h % GRASS_TILES.length];
         c = g.data[((((fy - ty) * GTEX) | 0) * GTEX + (((fx - tx) * GTEX) | 0))];
+        /* O CARREIRO (D-31): terra batida mosqueada, borda derretendo na
+           grama em dither (mesma linguagem da praia) */
+        const pd = pathAt(fx, fy);
+        if (pd < 0.30) {
+          if (pd < 0) {
+            const dn = WAVE_B[(((fy * 9) & 63) * 64 + ((fx * 9) & 63)) | 0];
+            c = dn < 196 ? 0xff7a94ab : 0xff90bab2;                  // terra batida / grão seco
+            if (dn > 251) c = 0xff243e4c;                            // seixinho escuro raro
+            else if (dn >= 196 && ((x + y) & 3) === 0) c = 0xffb0cbfd; // grão seco claro
+          } else if ((BAYER[y & 3][x & 3] / 16) < (1 - pd / 0.30) * 0.8) {
+            c = ((x + y) & 1) === 0 ? 0xff7a94ab : 0xff90bab2;       // franja terra<->grama
+          }
+        }
         // LÁBIO da ilha: grama -> terra -> fio de rocha escura na borda
         if (rim < 1.0) {
           if (rim < 0.3) c = ((x + y) & 1) === 0 ? 0xff2f2222 : 0xff463546;
@@ -1971,6 +2092,10 @@ function drawMinimap() {
   for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
     mctx.fillStyle = MM_COLORS[world.at(x, y)];
     mctx.fillRect(x, y, 1, 1);
+  }
+  mctx.fillStyle = '#ab947a'; // o carreiro
+  for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
+    if (pathAt(x + 0.5, y + 0.5) < 0.1) mctx.fillRect(x, y, 1, 1);
   }
   mctx.fillStyle = '#fbff86';
   mctx.fillRect((cam.x | 0), (cam.y | 0), 1, 1);
