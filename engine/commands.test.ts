@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Machine, Native, World, Player } from './types';
 import {
+  parseHabitarParams,
   parseMoverCoords,
   parseDizerMessage,
   parseTrocarParams,
@@ -810,5 +811,70 @@ describe('parseSintetizarRecipe', () => {
     ]);
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toMatchObject({ type: 'sintetizar', params: 'lanterna' });
+  });
+});
+
+describe('/habitar - as mentes dirigem os Habitantes (D-34)', () => {
+  const habitarCmd = (params: any, login = 'brigsd', id = 90) =>
+    ({ id, login, type: 'habitar' as const, params, createdAt: '2026-07-16T12:00:00Z' });
+
+  it('guardião autorizado faz um habitante falar: vira native_spoke no mundo', () => {
+    const world = mockWorld();
+    const res = processCommands(world, [habitarCmd({ habitante: 'brasa', mensagem: 'Ferro bom não tem pressa.' })], 66, 3960);
+    expect(res.results[0]?.success).toBe(true);
+    expect(res.world.events).toHaveLength(1);
+    expect(res.world.events[0]).toEqual({
+      type: 'native_spoke',
+      tick: 66,
+      worldTime: 3960,
+      nativeId: 'brasa',
+      message: 'Ferro bom não tem pressa.',
+    });
+  });
+
+  it('não exige avatar de jogador nem consome o orçamento de ações do guardião', () => {
+    const world = mockWorld();
+    world.players['brigsd'] = { login: 'brigsd', position: { x: 30, y: 30 }, inventory: {}, energy: 10 };
+    const cmds = [
+      habitarCmd({ habitante: 'brasa', mensagem: 'a' }, 'brigsd', 1),
+      habitarCmd({ habitante: 'broa', mensagem: 'b' }, 'brigsd', 2),
+      { id: 3, login: 'brigsd', type: 'dizer' as const, params: 'oi', createdAt: '2026-07-16T12:00:00Z' },
+    ];
+    const res = processCommands(world, cmds, 66, 3960);
+    expect(res.results.map((r) => r.success)).toEqual([true, true, true]);
+  });
+
+  it('rejeita login fora da allowlist e habitante fora da guarda', () => {
+    const world = mockWorld();
+    const intruso = processCommands(world, [habitarCmd({ habitante: 'brasa', mensagem: 'oi' }, 'mallory')], 66, 3960);
+    expect(intruso.results[0]?.success).toBe(false);
+    expect(intruso.world.events).toHaveLength(0);
+    const gota = processCommands(world, [habitarCmd({ habitante: 'gota', mensagem: 'oi' })], 66, 3960);
+    expect(gota.results[0]?.success).toBe(false);
+  });
+
+  it('rejeita mensagem vazia/longa e aplica o teto por habitante por tick', () => {
+    const world = mockWorld();
+    expect(processCommands(world, [habitarCmd({ habitante: 'brasa', mensagem: '' })], 66, 3960).results[0]?.success).toBe(false);
+    expect(processCommands(world, [habitarCmd({ habitante: 'brasa', mensagem: 'x'.repeat(241) })], 66, 3960).results[0]?.success).toBe(false);
+    const tres = [1, 2, 3].map((n) => habitarCmd({ habitante: 'quilha', mensagem: `fala ${n}` }, 'brigsd', n));
+    const res = processCommands(world, tres, 66, 3960);
+    expect(res.results.map((r) => r.success)).toEqual([true, true, false]);
+  });
+});
+
+describe('parseHabitarParams', () => {
+  it('lê o formato de issue-form (### Habitante / ### Mensagem)', () => {
+    expect(parseHabitarParams('### Habitante\nbrasa\n\n### Mensagem\nFerro bom não tem pressa.')).toEqual({
+      habitante: 'brasa',
+      mensagem: 'Ferro bom não tem pressa.',
+    });
+  });
+  it('lê o formato inline e devolve null sem params', () => {
+    expect(parseHabitarParams('/habitar quilha a doca aponta pro vazio')).toEqual({
+      habitante: 'quilha',
+      mensagem: 'a doca aponta pro vazio',
+    });
+    expect(parseHabitarParams('sem nada aqui')).toBeNull();
   });
 });

@@ -20,6 +20,7 @@
 import type {
   ItemSynthesizedEvent,
   NativeRepliedEvent,
+  NativeSpokeEvent,
   PlayerSaidEvent,
   TradeCompletedEvent,
   World,
@@ -32,14 +33,16 @@ import { inMachinePhrase, itemLabel } from '../../engine/fabrication';
 /** How many of the most recent entries the Mural shows at once. */
 const MAX_ENTRIES = 8;
 
-type MuralEvent = PlayerSaidEvent | TradeCompletedEvent | NativeRepliedEvent | ItemSynthesizedEvent;
+type MuralEvent = PlayerSaidEvent | TradeCompletedEvent | NativeRepliedEvent | ItemSynthesizedEvent | NativeSpokeEvent;
 
 function isMuralEvent(event: WorldEvent): event is MuralEvent {
   return (
     event.type === 'player_said' ||
     event.type === 'trade_completed' ||
     event.type === 'native_replied' ||
-    event.type === 'item_synthesized'
+    event.type === 'item_synthesized' ||
+    // falas ambiente dos Nativos E dos Habitantes d'A Clareira (/habitar, D-34)
+    event.type === 'native_spoke'
   );
 }
 
@@ -113,6 +116,13 @@ export function renderMural(listEl: HTMLOListElement, world: World): void {
       author.textContent = `@${event.login}`;
       message.textContent = tradeSummary(event, world);
       message.classList.add('hud-mural-trade');
+      line.append(author, document.createTextNode(' '), message);
+    } else if (event.type === 'native_spoke') {
+      // Um Nativo ou Habitante falando na praça: "brasa · ferro bom não tem pressa."
+      const speakerName = getOwn(world.natives ?? {}, event.nativeId)?.name ?? event.nativeId;
+      author.textContent = speakerName;
+      author.classList.add('hud-mural-native');
+      message.textContent = event.message;
       line.append(author, document.createTextNode(' '), message);
     } else if (event.type === 'native_replied') {
       // A Native answering someone: "Gota → @alice: ..." (getOwn - the

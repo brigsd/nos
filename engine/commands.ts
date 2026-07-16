@@ -15,7 +15,7 @@ import { Rng } from './rng';
 
 export { ACTIONS_PER_TICK };
 
-export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer' | 'trocar' | 'conversar' | 'sintetizar';
+export type CommandType = 'entrar' | 'mover' | 'coletar' | 'dizer' | 'trocar' | 'conversar' | 'sintetizar' | 'habitar';
 
 export interface Command {
   id: number; // issue number
@@ -119,6 +119,32 @@ export function parseDizerMessage(body: string): string {
   return body.trim();
 }
 
+/**
+ * Habitantes (D-34): quem pode dirigir quais mentes via /habitar.
+ * A "mão" dos Habitantes é um PAT do guardião (brigsd/nos-mentes posta a
+ * issue com a conta dele) — allowlist DUPLA: o login precisa estar aqui, e
+ * só pode falar pelos habitantes listados. Mudar isto é um PR auditável.
+ */
+export const MENTES_GUARDIAS: Record<string, readonly string[]> = {
+  brigsd: ['brasa', 'broa', 'quilha'],
+};
+export const HABITAR_MAX_POR_TICK = 2;
+export const HABITAR_MAX_MENSAGEM = 240;
+
+/** Parser dos params de /habitar: aceita o formato de issue-form e o inline */
+export function parseHabitarParams(body: string): { habitante: string; mensagem: string } | null {
+  const hab = body.match(/(?:### )?Habitante\s*[\r\n]+\s*([a-z0-9_-]+)/i);
+  const msg = body.match(/(?:### )?Mensagem\s*[\r\n]+([\s\S]+)/i);
+  if (hab?.[1] && msg?.[1]) {
+    return { habitante: hab[1].trim().toLowerCase(), mensagem: msg[1].trim() };
+  }
+  const inline = body.trim().match(/^\/?habitar\s+([a-z0-9_-]+)\s+([\s\S]+)/i);
+  if (inline?.[1] && inline?.[2]) {
+    return { habitante: inline[1].toLowerCase(), mensagem: inline[2].trim() };
+  }
+  return null;
+}
+
 /** Parses raw issue objects from GitHub API into Command structures */
 export function parseRawIssues(rawIssues: any[]): Command[] {
   const commands: Command[] = [];
@@ -153,6 +179,9 @@ export function parseRawIssues(rawIssues: any[]): Command[] {
     } else if (title.toLowerCase().startsWith('comando: /sintetizar') || title.toLowerCase().includes('/sintetizar')) {
       type = 'sintetizar';
       params = parseSintetizarRecipe(body);
+    } else if (title.toLowerCase().startsWith('comando: /habitar') || title.toLowerCase().includes('/habitar')) {
+      type = 'habitar';
+      params = parseHabitarParams(body);
     }
 
     if (type) {
@@ -177,6 +206,60 @@ export function applyCommand(
   currentTick: number,
   currentWorldTime: number
 ): { world: World; result: CommandResult } {
+  // /habitar (Habitantes, D-34): a mente (brigsd/nos-mentes) dirige a FALA
+  // de um habitante d'A Clareira. Roda antes do gate de jogador: tem
+  // orçamento PRÓPRIO por habitante (não come as ações do guardião) e não
+  // exige avatar — o habitante não é um Nó, é gente da cidade.
+  if (cmd.type === 'habitar') {
+    const permitidos = getOwn(MENTES_GUARDIAS, cmd.login);
+    if (!permitidos) {
+      return {
+        world,
+        result: { id: cmd.id, login: cmd.login, success: false, message: 'Falha: este login não guarda nenhuma mente (allowlist MENTES_GUARDIAS).' },
+      };
+    }
+    const habitante = typeof cmd.params?.habitante === 'string' ? cmd.params.habitante.toLowerCase() : '';
+    const mensagem = typeof cmd.params?.mensagem === 'string' ? cmd.params.mensagem.trim() : '';
+    if (!permitidos.includes(habitante)) {
+      return {
+        world,
+        result: { id: cmd.id, login: cmd.login, success: false, message: `Falha: habitante desconhecido ou fora da sua guarda: "${habitante}".` },
+      };
+    }
+    if (!mensagem) {
+      return {
+        world,
+        result: { id: cmd.id, login: cmd.login, success: false, message: 'Falha: mensagem ausente ou vazia (### Habitante / ### Mensagem no corpo).' },
+      };
+    }
+    if (mensagem.length > HABITAR_MAX_MENSAGEM) {
+      return {
+        world,
+        result: { id: cmd.id, login: cmd.login, success: false, message: `Falha: mensagem excede ${HABITAR_MAX_MENSAGEM} caracteres (${mensagem.length}).` },
+      };
+    }
+    const budgetKey = `habitar:${habitante}`;
+    const usado = actionCounts.get(budgetKey) || 0;
+    if (usado >= HABITAR_MAX_POR_TICK) {
+      return {
+        world,
+        result: { id: cmd.id, login: cmd.login, success: false, message: `Falha: ${habitante} já falou o bastante nesta batida (${HABITAR_MAX_POR_TICK}).` },
+      };
+    }
+    actionCounts.set(budgetKey, usado + 1);
+    const falaEvent: WorldEvent = {
+      type: 'native_spoke',
+      tick: currentTick,
+      worldTime: currentWorldTime,
+      nativeId: habitante,
+      message: mensagem,
+    };
+    return {
+      world: { ...world, events: [...world.events, falaEvent] },
+      result: { id: cmd.id, login: cmd.login, success: true, message: `${habitante} falou n'A Clareira: "${mensagem}"` },
+    };
+  }
+
   const count = actionCounts.get(cmd.login) || 0;
   if (count >= ACTIONS_PER_TICK) {
     return {

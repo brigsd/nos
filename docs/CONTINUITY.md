@@ -2,6 +2,14 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 9) — fase 2 dos Habitantes: a mão (D-34)
+
+- **NOS_PAT criado pelo ideador** (fine-grained, issues:write só no nos). Sobre validade: >90 dias não dá problema técnico; expirou = mentes mudas pro mundo até trocar o secret, nada quebra.
+- **Motor**: comando `/habitar` novo (parse issue-form + inline, allowlist dupla `MENTES_GUARDIAS = { brigsd: [brasa, broa, quilha] }`, orçamento próprio 2/batida por habitante — roda ANTES do gate de jogador e não come as ações do guardião, sem exigir avatar). Fala vira `native_spoke`. 6 testes novos (368/368).
+- **Mural (2D)** agora exibe `native_spoke` — Nativos e Habitantes falam no painel oficial.
+- **nos-mentes**: `agir()` posta `Comando: /habitar <id>` com `### Habitante / ### Mensagem`; dedupe por `ultimaFalaPostada`; workflow passa o secret. Falha da mão = log + fala segue no falas.json.
+- Identidade: as issues saem autoradas pelo guardião (brigsd) — por isso a allowlist no motor, não identidade de bot. GitHub App com identidade própria = fase 3.
+
 ## Sessão 2026-07-16 (parte 8) — os Habitantes acordam (fase 1)
 
 - **brigsd/nos-mentes criado pelo ideador e populado**: brasa (ferreira), broa (cozinheira), quilha (mestre-estaleiro) — batismo do lore-writer, minúsculas de coisa concreta como gota/raiz/cinza. Cada mente = JSON com persona, objetivos, falasBase e MEMÓRIAS commitadas. `pensar.mjs` (cron horário `pensar.yml`, defasado do tick): lê o heart.json raw, pensa via GitHub Models (`models: read`, sem API key) com fallback determinístico, escreve memórias + `falas.json`.

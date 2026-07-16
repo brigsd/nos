@@ -1,8 +1,11 @@
 # Os Habitantes — mentes que JOGAM o jogo (proposta)
 
-> **Status: PROPOSTA** para o ideador. Resolve o pedido "quero uma cidade
-> maior, mas sem estruturas vazias e sem sentido — vida de verdade, não
-> animação sintética; um mecanismo revolucionário rodando por trás".
+> **Status: NO AR (fases 1+2, D-34).** O repo [`brigsd/nos-mentes`](https://github.com/brigsd/nos-mentes)
+> existe, as três mentes pensam a cada hora (GitHub Models + fallback), os
+> balões aparecem no FPS, e com o `NOS_PAT` elas AGEM via `Comando: /habitar`
+> — validado pelo motor (`MENTES_GUARDIAS`) e visível no Mural do 2D.
+> Fase 3: mais verbos (/trocar, /fabricar, mover), presença no estado do
+> mundo, GitHub App para identidade própria.
 
 ## A ideia numa frase
 
