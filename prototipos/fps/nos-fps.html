@@ -1203,6 +1203,14 @@ function glowAt(wx, wy) {
 
 /* ---------- render ---------- */
 const zbuf = new Float32Array(W);
+/* topo da parede por coluna: a oclusão da parede só vale DALI PRA BAIXO.
+   Sem isso, uma parede esconderia billboards até no céu acima dela (o
+   "campo que engole ilhas") — e copas atrás de muros nunca apareceriam. */
+const wallTop = new Int16Array(W);
+/* máscara do chão por pixel (1 = terreno/água sólidos da NOSSA ilha,
+   0 = vazio/mar de nuvens além da borda). Ilha-irmã abaixo do horizonte só
+   pode aparecer onde o chão é vazio — nunca furando o gramado. */
+const groundMask = new Uint8Array(W * H);
 
 function render(now) {
   pulse = 0.82 + 0.18 * Math.sin((now / 1400) * Math.PI * 2);
@@ -1257,9 +1265,11 @@ function render(now) {
           rr += (255 - rr) * k; gg += (255 - gg) * k; bb2 += (255 - bb2) * k;
         }
         px[y * W + x] = shade(rgb(rr | 0, gg | 0, bb2 | 0), f, 0);
+        groundMask[y * W + x] = 0; /* vazio: ilha de baixo pode aparecer aqui */
         fx += dxs; fy += dys;
         continue;
       }
+      groundMask[y * W + x] = 1; /* terreno/água sólidos da nossa ilha */
       const t = world.at(tx, ty);
       /* sombra de nuvem (rola) + sombra PROJETADA das árvores (estática) */
       const shadowed = CSHAD[(((fy * 2 + 5) & 127) * 128 + ((fx * 2 + cloudShadowT) & 127)) | 0] === 1;
@@ -1348,6 +1358,7 @@ function render(now) {
     const lineH = (H / dist) | 0;
     let y0 = clamp(HALF - (lineH >> 1), 0, H - 1);
     let y1 = clamp(HALF + (lineH >> 1), 0, H - 1);
+    wallTop[x] = y0; /* acima disto é céu aberto — a parede não oculta nada lá */
     let wallX = side === 0 ? cam.y + dist * rdy : cam.x + dist * rdx;
     wallX -= wallX | 0;
     const u = clamp((wallX * TEX) | 0, 0, TEX - 1);
@@ -1428,19 +1439,21 @@ function render(now) {
       // sombra de contato no chão (elipse escura sob a pedra)
       const shW = radX * 1.05, shH = Math.max(1.5, radY * 0.22);
       for (let x = Math.max(0, (cxr - shW) | 0); x <= Math.min(W - 1, (cxr + shW) | 0); x++) {
-        if (ty >= zbuf[x]) continue;
+        const occY = ty >= zbuf[x] ? wallTop[x] : H;
         for (let y = (y1c - shH) | 0; y <= Math.min(H - 1, (y1c + shH) | 0); y++) {
+          if (y >= occY) continue;
           const ex = (x - cxr) / shW, ey = (y - y1c) / shH;
           if (ex * ex + ey * ey > 1) continue;
           if ((BAYER[y & 3][x & 3] / 16) < 0.62 - ex * ex * 0.3) px[y * W + x] = shade(PAL_RGB_U32[30], f, 0);
         }
       }
       for (let x = x0; x <= x1; x++) {
-        if (ty >= zbuf[x]) continue;
+        const occY = ty >= zbuf[x] ? wallTop[x] : H;
         const nx = (x - cxr) / radX;
         if (nx < -1 || nx > 1) continue;
         const bearing0 = az + Math.asin(clamp(nx, -1, 1)); // rumo no mundo da coluna visível
         for (let y = y0; y <= y1; y++) {
+          if (y >= occY) continue;               // atrás de parede (só abaixo do topo dela)
           if (y > y1c) continue;                 // base plana
           const nyv = (y - cyr) / radY;
           const relief = (fbm(Math.cos(bearing0) * 2.4 + seed, nyv * 2.4 + Math.sin(bearing0) * 2.4 + seed, 3) - 0.5) * 0.55;
@@ -1475,8 +1488,9 @@ function render(now) {
       /* o Núcleo: esfera procedural pulsante — luz, não parede (D-22: o coração vivo) */
       const cx = (rx0 + rx1) / 2, cy = (y0c + y1c) / 2, rad = sh / 2;
       for (let x = x0; x <= x1; x++) {
-        if (ty >= zbuf[x]) continue;
+        const occY = ty >= zbuf[x] ? wallTop[x] : H;
         for (let y = y0; y <= y1; y++) {
+          if (y >= occY) continue;
           const nx = (x - cx) / rad, ny = (y - cy) / rad;
           const r2 = nx * nx + ny * ny;
           if (r2 > 1.15) continue;
@@ -1500,9 +1514,14 @@ function render(now) {
     }
     const selfGlow = b.tex === 'oficina' || b.tex === 'portal' ? 0.16 : 0;
     for (let x = x0; x <= x1; x++) {
-      if (ty >= zbuf[x]) continue;
+      /* parede mais perto? Ela oculta só do TOPO dela pra baixo — acima é
+         céu aberto (copas e ilhas atrás de muros aparecem por cima). */
+      const occY = ty >= zbuf[x] ? wallTop[x] : H;
       const u = clamp((((x - rx0) / sw) * tw) | 0, 0, tw - 1);
       for (let y = y0; y <= y1; y++) {
+        if (y >= occY) continue;
+        /* ilha-irmã abaixo do horizonte só aparece onde o chão é vazio */
+        if (b.sky && y > HALF && groundMask[y * W + x]) continue;
         const v = clamp((((y - y0c) / sh) * th) | 0, 0, th - 1);
         const c = genTex ? tex.data[v * tw + u] : texAt(tex, fIx, u, v);
         if (((c >> 24) & 255) < 40) continue; /* transparente */
