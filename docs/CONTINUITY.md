@@ -10,6 +10,7 @@
 - Primeiro uso já se auto-corrigiu: ponto "borda" nasceu mal (tronco no quadro, longe do rebordo), reposicionado lendo o screenshot — rebordo oeste agora prova o fix céu-vs-mar do D-33 em um comando.
 - Auditoria d'A Clareira (6 ângulos, batida #66) rendeu o diagnóstico do próximo passe de beleza: (1) o que destoa NÃO é a arquitetura, é o `tex:'avatar'` genérico dos 3 habitantes (mesmo sprite do 2D em pé, sem cara, idêntico pros três) — arte própria por habitante é o maior ganho; (2) alas são caixas — beiral/porta marcada/degrau dariam silhueta; (3) lampiões tímidos à noite. Hall de Portais está no nível certo.
 - `CLAUDE.md` ganhou o item 5 (aponta a bancada antes de trabalho visual).
+- **1ª batida autônoma das mentes (19:36, cron real): o cérebro FUNCIONOU, a mão não.** As três pensaram com o Models de verdade (falas frescas, memórias commitadas, falas.json publicado — balões do FPS já mostram), mas o `agir()` levou `403 Resource not accessible by personal access token` nas três: o `NOS_PAT` não alcança o `brigsd/nos`. **Pendência do ideador** (só ele edita o próprio token): Repository access → `brigsd/nos` (não o `nos-mentes`!) + Issues: Read and write — passo a passo na seção "A mão falhou?" do README do nos-mentes. Nada se perde: `ultimaFalaPostada` só grava com issue postada, então o próximo cron reposta sozinho após o conserto.
 
 ## Sessão 2026-07-16 (parte 10) — E2E dos Habitantes: o loop provado no pipeline real + o validador aprende a reconhecê-los
 
