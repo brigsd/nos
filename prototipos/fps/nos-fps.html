@@ -102,6 +102,31 @@
     white-space: normal;
   }
   #bubbles b { color: #fbb954; }
+  #worlds { /* painel dos mundos conectados: acende perto do Portal (D-37) */
+    position: absolute;
+    right: 12px;
+    top: 42px;
+    width: min(250px, 47%);
+    background: rgba(13, 16, 22, 0.88);
+    border: 1px solid rgba(48, 225, 185, 0.42);
+    border-radius: 10px;
+    padding: 10px 13px;
+    font: 500 11px/1.45 ui-monospace, monospace;
+    color: #d7e7e2;
+    opacity: 0;
+    transform: translateX(10px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
+    z-index: 4;
+  }
+  #worlds.on { opacity: 1; transform: none; pointer-events: auto; }
+  #worlds h3 { margin: 0 0 7px; font-size: 12px; letter-spacing: 0.14em; color: #30e1b9; }
+  #worlds .w { display: flex; gap: 7px; align-items: baseline; margin: 5px 0 1px; }
+  #worlds .st { font-size: 9px; padding: 0 5px; border-radius: 6px; border: 1px solid; white-space: nowrap; }
+  #worlds .aberto { color: #8ff8e2; border-color: rgba(48, 225, 185, 0.5); }
+  #worlds .breve { color: #9b93a8; border-color: rgba(155, 147, 168, 0.4); }
+  #worlds .desc { color: #9b93a8; font-size: 10px; margin: 0 0 3px; }
+  #worlds a { color: #a884f3; }
   #menu {
     position: absolute;
     inset: 0;
@@ -203,6 +228,7 @@
   <canvas id="bigmap" width="288" height="288"></canvas>
   <div id="tags"></div>
   <div id="bubbles"></div>
+  <div id="worlds"></div>
   <div id="menu">
     <div class="panel">
       <h2>N Ó S</h2>
@@ -1265,37 +1291,31 @@ function pathAt(fx, fy) {
    texturas geradas (pedra/madeira/cobre oxidado), arcos de portal e fumaça
    como billboards, veias de luz do Pulso no chão (emissivas à noite). */
 function genWallTex(kind, seed) {
-  const Wt = 16, Ht = kind === 'chimney' ? 64 : kind === 'stall' ? 24 : 48;
+  const Wt = 16, Ht = kind === 'chimney' ? 64 : 48;
   const rnd = mulberry32(seed * 60493 + 11);
   const buf = new Int16Array(Wt * Ht).fill(6);
-  const ROOF = kind === 'stall' ? 10 : 12; // faixa de telhado/toldo no topo
+  const ROOF = 12; // faixa de telhado no topo
   for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
     const i = y * Wt + x;
-    if (kind === 'stall') {
-      if (y < ROOF) { // toldo listrado (verdigris/branco), barra inferior escura
-        buf[i] = ((x >> 1) & 1) === 0 ? 41 : 9;
-        if (y === ROOF - 1) buf[i] = 40;
-        if (y === 0) buf[i] = 43;
-      } else { // corpo: balcão de madeira clara, postes nas bordas
-        buf[i] = 4;
-        if (vnoise(x * 0.8 + seed, y * 0.8) > 0.62) buf[i] = 3;
-        if (x < 2 || x > 13) buf[i] = 24;
-        if (y === ROOF) buf[i] = 22; // tampo do balcão
-        if (y > Ht - 3) buf[i] = 24;
-      }
-      continue;
-    }
-    if (kind !== 'chimney' && y < ROOF) { // TELHADO DE COBRE OXIDADO (decisão do ideador)
+    if (kind !== 'chimney' && y < ROOF) {
+      /* TELHADO DE COBRE OXIDADO em CHAPAS (v2): costuras verticais a cada
+         5px, pátina descendo (cume vivo, beira gasta) — chapa metálica,
+         não sebe (a v1 de puro noise lia como cerca-viva de longe) */
+      const seam = ((x + seed) % 5) === 0;
       const n = vnoise(x * 0.9 + seed * 3, y * 0.7 + seed);
-      buf[i] = n > 0.66 ? 42 : n < 0.3 ? 40 : 41;
-      if (y === 0 && ((x + 1) & 3) === 0) buf[i] = 43;         // brilho da cumeeira
-      if (y === ROOF - 1) buf[i] = 22;                          // pingadeira de cobre novo
+      buf[i] = seam ? 40 : y < 4 ? (n > 0.55 ? 42 : 41) : n > 0.78 ? 42 : n < 0.2 ? 40 : 41;
+      if (y === 0) buf[i] = ((x + 1) & 3) === 0 ? 43 : 42;      // cumeeira com brilho
+      if (y === ROOF - 2 && !seam) buf[i] = 40;                  // sombra sob a beira
+      if (y === ROOF - 1) buf[i] = 22;                           // pingadeira de cobre novo
       continue;
     }
     if (kind === 'stone' || kind === 'chimney') {
       const dark = kind === 'chimney';
-      const course = ((y / 5) | 0), off = (course & 1) * 4;
-      const mortarY = y % 5 === 0, mortarX = ((x + off) % 8) === 0;
+      /* soco de blocos GRANDES nas 8 fiadas de baixo — a parede "pesa" */
+      const plinth = !dark && y > Ht - 9;
+      const cH = plinth ? 8 : 5, cW = plinth ? 12 : 8;
+      const course = ((y / cH) | 0), off = (course & 1) * (cW >> 1);
+      const mortarY = y % cH === 0, mortarX = ((x + off) % cW) === 0;
       if (mortarY || mortarX) buf[i] = dark ? 1 : 2;
       else {
         const n = vnoise(x * 0.7 + seed, y * 0.6 + seed * 2);
@@ -1303,29 +1323,38 @@ function genWallTex(kind, seed) {
         if (!dark && n > 0.86) buf[i] = 8;
       }
       if (kind === 'chimney' && y < 7) buf[i] = ((x + y) & 1) === 0 ? 1 : 34; // fuligem da boca
-      if (!dark && y > Ht - 4 && rnd() < 0.3) buf[i] = 36;      // musgo no soco
-    } else { // 'wood': tábuas verticais quentes
-      const groove = (x & 3) === 0;
+      if (!dark && y === ROOF) buf[i] = 1;                       // BEIRAL: sombra funda sob o telhado
+      if (!dark && y > Ht - 4 && rnd() < 0.3) buf[i] = 36;       // musgo no soco
+    } else { // 'wood': tábuas quentes em meia-madeira
+      const groove = ((x + (seed & 3)) & 3) === 0;
       const n = vnoise(x * 1.1 + seed * 2, y * 0.5 + seed);
       buf[i] = groove ? 24 : n > 0.62 ? 22 : 21;
-      if (!groove && rnd() < 0.012) buf[i] = 24;                // nó da madeira
-      if (y === ROOF) buf[i] = 23;                              // viga sob o telhado
-      if (y > Ht - 3) buf[i] = 24;                              // soco escuro
+      if (!groove && rnd() < 0.012) buf[i] = 24;                 // nó da madeira
+      if (x < 1 || x > Wt - 2) buf[i] = 24;                      // prumos de canto
+      if (y === ROOF + 14) buf[i] = 24;                          // travessa de meia altura
+      if (y === ROOF) buf[i] = 1;                                // BEIRAL: sombra funda
+      else if (y === ROOF + 1) buf[i] = 24;                      // viga alta
+      if (y > Ht - 4) buf[i] = ((x + y) & 1) === 0 ? 24 : 34;    // soco de pedra escura
     }
   }
-  /* JANELINHA acesa no corpo (pedra e madeira): moldura escura + vidro
-     âmbar — o ritmo de janelas é o que faz parede virar construção */
+  /* JANELINHA acesa no corpo — posição varia com o seed (cada ala tem seu
+     ritmo; janela sempre no mesmo lugar era o que dava cara de repetição) */
   if (kind === 'stone' || kind === 'wood') {
-    for (let y = ROOF + 7; y < ROOF + 13; y++) for (let x = 5; x < 11; x++) {
-      const border = y === ROOF + 7 || y === ROOF + 12 || x === 5 || x === 10;
+    const wx0 = 3 + ((seed * 7) % 7);
+    for (let y = ROOF + 6; y < ROOF + 12; y++) for (let x = wx0; x < wx0 + 6; x++) {
+      const border = y === ROOF + 6 || y === ROOF + 11 || x === wx0 || x === wx0 + 5;
       buf[y * Wt + x] = border ? 1 : (x + y) % 3 === 0 ? 23 : 18;
     }
+    buf[(ROOF + 12) * Wt + wx0 + 1] = 7; buf[(ROOF + 12) * Wt + wx0 + 4] = 7; // peitoril
   }
   return bufToTex({ buf, W: Wt, H: Ht });
 }
+/* cada ala de madeira tem SEED próprio: padrão de tábuas, nós e janela em
+   posições diferentes — quebra a repetição sem custo novo */
 const CT = {
   stone: genWallTex('stone', 31), wood: genWallTex('wood', 47),
-  chimney: genWallTex('chimney', 53), stall: genWallTex('stall', 71),
+  woodBan: genWallTex('wood', 12), woodCoz: genWallTex('wood', 83),
+  chimney: genWallTex('chimney', 53),
 };
 /* ruínas NW ocultas SÓ no FPS (pedido do ideador): viravam blocos cinza sem
    leitura colados no spawn. O Registro continua com elas (o 2D as mostra);
@@ -1336,20 +1365,20 @@ for (let ty = 6; ty <= 12; ty++) for (let tx = 23; tx <= 29; tx++) {
 }
 const CITY = new Map();
 const cityWall = (tx, ty, kind, h, mm) => CITY.set(ty * world.w + tx, { tex: CT[kind], h, mm });
+/* v2 (pedido do ideador): BANCAS REMOVIDAS — eram objetos estranhos tapando
+   a vista e o caminho pro portal; as próprias alas SÃO as lojas. Telhados
+   com DESNÍVEL por tile: cumeeira mais alta num canto = silhueta viva. */
 /* Estaleiro (NW, madeira ALTA + anexo baixo — silhueta em degraus) */
-cityWall(43, 12, 'wood', 1.75, '#cd683d'); cityWall(44, 12, 'wood', 1.75, '#cd683d'); cityWall(43, 13, 'wood', 1.75, '#cd683d');
+cityWall(43, 12, 'wood', 1.88, '#cd683d'); cityWall(44, 12, 'wood', 1.68, '#cd683d'); cityWall(43, 13, 'wood', 1.75, '#cd683d');
 cityWall(42, 12, 'wood', 0.85, '#cd683d');
 /* Forja (NE, pedra + chaminé fumegando + depósito baixo) */
-cityWall(48, 12, 'stone', 1.35, '#7f708a'); cityWall(49, 12, 'chimney', 2.05, '#625565'); cityWall(49, 13, 'stone', 1.35, '#7f708a');
+cityWall(48, 12, 'stone', 1.42, '#7f708a'); cityWall(49, 12, 'chimney', 2.05, '#625565'); cityWall(49, 13, 'stone', 1.3, '#7f708a');
 cityWall(50, 12, 'stone', 0.8, '#7f708a');
 /* Bancada (SW, oficina baixa de madeira + telheiro) */
-cityWall(43, 19, 'wood', 0.95, '#cd683d'); cityWall(44, 19, 'wood', 0.95, '#cd683d'); cityWall(43, 18, 'wood', 0.95, '#cd683d');
-cityWall(42, 19, 'wood', 0.7, '#cd683d');
-/* Cozinha (SE, madeira + banquinha de toldo colada) */
-cityWall(48, 19, 'wood', 1.1, '#cd683d'); cityWall(49, 19, 'wood', 1.1, '#cd683d'); cityWall(49, 18, 'wood', 1.1, '#cd683d');
-cityWall(50, 19, 'stall', 0.6, '#30e1b9');
-/* bancas do mercado (toldos verdigris) — fileira norte + uma ao sul */
-cityWall(45, 12, 'stall', 0.62, '#30e1b9'); cityWall(47, 12, 'stall', 0.62, '#30e1b9'); cityWall(46, 19, 'stall', 0.62, '#30e1b9');
+cityWall(43, 19, 'woodBan', 1.02, '#cd683d'); cityWall(44, 19, 'woodBan', 0.9, '#cd683d'); cityWall(43, 18, 'woodBan', 0.95, '#cd683d');
+cityWall(42, 19, 'woodBan', 0.7, '#cd683d');
+/* Cozinha (SE, madeira quente) */
+cityWall(48, 19, 'woodCoz', 1.2, '#cd683d'); cityWall(49, 19, 'woodCoz', 1.05, '#cd683d'); cityWall(49, 18, 'woodCoz', 1.12, '#cd683d');
 
 /* o LARGO é calçado de pedra (decisão do ideador): lajotas irregulares
    assadas em 2 variantes 64px, mesmo esquema da grama — 1 lookup por pixel */
@@ -1766,21 +1795,16 @@ function genSmoke(fr) {
   }
   return bufToTex({ buf, W: Ws, H: Hs });
 }
+/* v2 (pedido do ideador): UM portal só — o Portal do Átrio, aceso, no fim
+   do calçamento. Os dois arcos apagados saíram (eram cenário morto); chegar
+   perto do portal abre o painel dos MUNDOS CONECTADOS (worlds/registry.json,
+   inlined pelo build como NOS_WORLDS — a travessia real vive no mapa 2D). */
+const PORTAL = { x: 51.1, y: 15.6 };
 {
-  const ARCHES = [
-    { x: 50.4, y: 13.4, lit: 0, seed: 5 },
-    { x: 51.1, y: 15.6, lit: 1, seed: 9 },  /* O Átrio — aceso */
-    { x: 50.4, y: 17.8, lit: 0, seed: 13 },
-  ];
-  for (const a of ARCHES) {
-    bills.push({ x: a.x, y: a.y, genFrames: [genArch(a.lit, a.seed)], label: 'arco', scale: 2.3, lift: 0 });
-    /* pilares tangentes ao semicírculo do hall — dá pra ATRAVESSAR o vão */
-    const ang = Math.atan2(a.y - PLAZA.y, a.x - 50.9);
-    const tvx = -Math.sin(ang), tvy = Math.cos(ang);
-    for (const s of [-0.62, 0.62]) {
-      const bx1 = a.x + tvx * s, by1 = a.y + tvy * s;
-      addTrunk(bx1 | 0, by1 | 0, bx1, by1, 0.2);
-    }
+  bills.push({ x: PORTAL.x, y: PORTAL.y, genFrames: [genArch(1, 9)], label: 'portal-atrio', scale: 2.45, lift: 0 });
+  /* pilares com colisão fina — dá pra ATRAVESSAR o vão */
+  for (const s of [-0.66, 0.66]) {
+    addTrunk(PORTAL.x | 0, (PORTAL.y + s) | 0, PORTAL.x, PORTAL.y + s, 0.2);
   }
   bills.push({ x: 49.5, y: 12.5, genFrames: [genSmoke(0), genSmoke(1), genSmoke(2)], loop: true, label: 'fumaca', scale: 1.2, lift: 2.1 });
 }
@@ -1834,6 +1858,22 @@ const HABITANTES = [];
   load();
   setInterval(load, 90000);
 })();
+
+/* ---------- O PORTAL MOSTRA OS MUNDOS (D-37, pedido do ideador) ----------
+   Chegando perto do Portal do Átrio, o painel acende listando os mundos
+   conectados — direto do worlds/registry.json (NOS_WORLDS, inlined no
+   build). Passivo por design: aproximou acende, afastou apaga (histerese);
+   a travessia real continua no mapa 2D (D-27). */
+const worldsEl = document.getElementById('worlds');
+const WORLDS = (typeof NOS_WORLDS !== 'undefined' && Array.isArray(NOS_WORLDS)) ? NOS_WORLDS : [];
+let worldsOn = false, lastWorldsCheck = 0;
+if (WORLDS.length) {
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  worldsEl.innerHTML = '<h3>◈ MUNDOS CONECTADOS</h3>' + WORLDS.map((w) => {
+    const open = w.status === 'aberto';
+    return `<div class="w"><b>${esc(w.name ?? w.id)}</b><span class="st ${open ? 'aberto' : 'breve'}">${open ? 'aberto' : 'em breve'}</span></div><p class="desc">${esc(w.descriptionPtBR)}</p>`;
+  }).join('') + '<p class="desc">a travessia acontece no <a href="../">mapa 2D ↗</a> — novos mundos entram por pull request</p>';
+}
 
 /* ---------- névoa baixa (pedido do ideador): fiapos rasteiros que respiram ----------
    3 frames por fiapo (quase nada -> leve -> cheio) percorridos pelo MESMO
@@ -2261,13 +2301,9 @@ function render(now) {
         if (fx > 41 && fx < 53.5 && fy > 10 && fy < 21.5) {
           const wob = (WAVE_B[(((fy * 5) & 63) * 64 + ((fx * 5) & 63)) | 0] / 255 - 0.5) * 0.5;
           let sd = Math.hypot(fx - PLAZA.x, fy - PLAZA.y) - (2.7 + wob);
-          if (fx > 47.4) { // braço leste: corredor + pátios dos arcos
-            sd = Math.min(sd, segDist(fx, fy, 48.4, 15.6, 50.9, 15.6) - (0.95 + wob * 0.4));
-            sd = Math.min(sd, Math.hypot(fx - 50.4, fy - 13.4) - 1.0);
-            sd = Math.min(sd, Math.hypot(fx - 51.1, fy - 15.6) - 1.1);
-            sd = Math.min(sd, Math.hypot(fx - 50.4, fy - 17.8) - 1.0);
-            sd = Math.min(sd, segDist(fx, fy, 50.1, 14.2, 50.4, 13.5) - 0.7);
-            sd = Math.min(sd, segDist(fx, fy, 50.1, 17.0, 50.4, 17.7) - 0.7);
+          if (fx > 47.4) { // braço leste: corredor até o Portal do Átrio + pátio
+            sd = Math.min(sd, segDist(fx, fy, 48.4, 15.6, 51.1, 15.6) - (0.95 + wob * 0.4));
+            sd = Math.min(sd, Math.hypot(fx - 51.1, fy - 15.6) - 1.2);
           }
           /* pátios dos vãos das alas (as portas das oficinas) */
           sd = Math.min(sd, Math.hypot(fx - 44.5, fy - 13.5) - 0.95);
@@ -2963,6 +2999,13 @@ function loop(now) {
     lastBubblePaint = now;
     if (mapMode === 2) { if (bubblesDiv.firstChild) bubblesDiv.textContent = ''; }
     else paintBubbles();
+  }
+  /* o painel dos mundos acende perto do Portal (D-37), com histerese */
+  if (WORLDS.length && now - lastWorldsCheck > 300) {
+    lastWorldsCheck = now;
+    const dP = Math.hypot(cam.x - PORTAL.x, cam.y - PORTAL.y);
+    const want = mapMode !== 2 && (dP < 2.4 || (worldsOn && dP < 3.2));
+    if (want !== worldsOn) { worldsOn = want; worldsEl.classList.toggle('on', worldsOn); }
   }
   requestAnimationFrame(loop);
 }

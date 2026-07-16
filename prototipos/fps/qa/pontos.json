@@ -7,7 +7,8 @@
   "forja": { "cam": "46.0,16.6,-1.00", "desc": "ala NE — Forja + chaminé fumegando (casa da brasa)" },
   "bancada": { "cam": "46.2,15.6,2.30", "desc": "ala SW — Bancada (casa de ninguém ainda)" },
   "cozinha": { "cam": "46.2,15.6,0.90", "desc": "ala SE — Cozinha (casa da broa)" },
-  "portais": { "cam": "47.4,15.6,0.00", "desc": "Hall de Portais — o Átrio aceso no arco do meio" },
+  "portais": { "cam": "47.4,15.6,0.00", "desc": "o Portal do Átrio — único, aceso, no fim do calçamento (D-37)" },
+  "portal-perto": { "cam": "49.7,15.6,0.00", "desc": "a 1.4 tiles do Portal — o painel MUNDOS CONECTADOS deve estar ACESO" },
   "largo-noite": { "cam": "44.0,14.6,0.45", "tod": 0.8, "desc": "o largo à noite — veias, lampiões e janelas acesas" },
   "borda": { "cam": "5.5,32.0,3.14", "tod": 0.3, "desc": "rebordo oeste da ilha — o mar de nuvens deve ler como CÉU, nunca como oceano" }
 }

@@ -2,6 +2,12 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-16 (parte 13) — A Clareira v2 (D-37): um portal, praça aberta, carpintaria
+
+- Direção do ideador: alas feias, bancas estranhas tapando o caminho, e "só um portal — quando a pessoa passa, mostra os mundos conectados". Feito: **Portal do Átrio único** (dois arcos mortos removidos, calçamento leva direto), painel **◈ MUNDOS CONECTADOS** por proximidade (<2.4 tiles, histerese, `NOS_WORLDS` = registry inline no build, passivo — zero clique), **4 bancas removidas**, texturas v2 (chapas de cobre com costura, beiral fundo, prumos/travessa, socos, janela+peitoril variando por seed, seeds próprios por ala), telhados com desnível por tile. Baker da GI sincronizado + re-assado.
+- Pontos canônicos: `portais` atualizado + `portal-perto` novo (verifica o painel ACESO). Verificado pelo olhar: portais/chegada/forja/largo-noite/painel — praça limpa, 59-60fps.
+- Limite anotado pra v3: textura 16px chapa quando a parede está COLADA na câmera (32px resolveria).
+
 ## Sessão 2026-07-16 (parte 12) — GI assada (D-36): o Actions vira render farm
 
 - Ideador pediu "gráficos realísticos que pesem pouco, que ninguém nunca pensou" e aprovou o passe A: **luz path-traced offline, cliente só consulta**. `bake-gi.mjs` (Node puro, ~2.5s, determinístico) → PNG 58KB (3 horários, 128×128, 128=neutro) → `build-fps` inline (assa se faltar: o deploy ganha GI sem tocar workflow).
