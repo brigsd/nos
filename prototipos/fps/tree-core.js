@@ -20,13 +20,25 @@ const BARK_RAMPS = {
   fria:   [1, 49, 54, 5, 6],     // casca fria/lilás (mística)
   conif:  [1, 24, 25, 5, 4],     // casca oliva (pinheiro)
   dia:    [1, 24, 3, 4, 63],     // marrom-acinzentado ao sol (ref. BotW)
+  betula: [1, 6, 7, 8, 9],       // bétula: casca branca (marcas escuras à parte)
 };
+const OUTLINE = 0; // contorno de tinta: o preto do jogo (#2e222f)
 
+/* rampas próprias de espécie (independem do humor) */
+const SPECIES_RAMPS = {
+  cereja:  [54, 55, 56, 57, 53],  // cerejeira: vinho -> rosa -> lavanda
+  betula:  [29, 30, 31, 32, 33],  // bétula: verde solto
+};
 const SPECIES = {
   carvalho:  { len: 22, lenDecay: 0.79, width: 8,  widthDecay: 0.70, spread: 0.54, jitter: 0.34, upBias: 0.06, droop: 0.02, depth: 8, apicalLen: 0.82, latLen: 0.72, lateralN: 2, leafFrom: 3, leafR: [7, 12], gnarl: 0,    bark: 'quente' },
   anciao:    { len: 19, lenDecay: 0.81, width: 12, widthDecay: 0.75, spread: 0.72, jitter: 0.52, upBias: 0.02, droop: 0.05, depth: 7, apicalLen: 0.80, latLen: 0.74, lateralN: 2, leafFrom: 2, leafR: [6, 11], gnarl: 0.55, bark: 'quente' },
   salgueiro: { len: 21, lenDecay: 0.82, width: 6,  widthDecay: 0.73, spread: 0.34, jitter: 0.30, upBias: -0.10, droop: 0.20, depth: 9, apicalLen: 0.84, latLen: 0.74, lateralN: 2, leafFrom: 4, leafR: [4, 7],  gnarl: 0.1,  bark: 'quente' },
-  pinheiro:  { len: 15, lenDecay: 0.87, width: 7,  widthDecay: 0.81, spread: 0.95, jitter: 0.20, upBias: 0.0,  droop: 0.30, depth: 9, apicalLen: 0.92, latLen: 0.52, lateralN: 2, leafFrom: 1, leafR: [3, 6],  gnarl: 0,    bark: 'conif' },
+  pinheiro:  { len: 15, lenDecay: 0.87, width: 7,  widthDecay: 0.81, spread: 0.95, jitter: 0.20, upBias: 0.0,  droop: 0.30, depth: 9, apicalLen: 0.92, latLen: 0.52, lateralN: 2, leafFrom: 1, leafR: [3, 6],  gnarl: 0,    bark: 'conif', tiers: 5 },
+  cerejeira: { len: 20, lenDecay: 0.80, width: 7,  widthDecay: 0.72, spread: 0.62, jitter: 0.40, upBias: 0.04, droop: 0.03, depth: 7, apicalLen: 0.80, latLen: 0.74, lateralN: 2, leafFrom: 3, leafR: [7, 11], gnarl: 0.2,  bark: 'quente', ramp: 'cereja' },
+  florida:   { len: 20, lenDecay: 0.80, width: 7,  widthDecay: 0.72, spread: 0.60, jitter: 0.38, upBias: 0.05, droop: 0.02, depth: 7, apicalLen: 0.81, latLen: 0.73, lateralN: 2, leafFrom: 3, leafR: [7, 11], gnarl: 0.1,  bark: 'quente', blossoms: true },
+  betula:    { len: 24, lenDecay: 0.80, width: 5,  widthDecay: 0.74, spread: 0.46, jitter: 0.34, upBias: 0.10, droop: 0.0,  depth: 7, apicalLen: 0.86, latLen: 0.70, lateralN: 2, leafFrom: 3, leafR: [5, 8],  gnarl: 0,    bark: 'betula', barkMarks: true },
+  seca:      { len: 21, lenDecay: 0.80, width: 9,  widthDecay: 0.78, spread: 0.74, jitter: 0.5,  upBias: 0.0,  droop: 0.04, depth: 6, apicalLen: 0.82, latLen: 0.76, lateralN: 2, leafFrom: 2, leafR: [4, 6],  gnarl: 0.7,  bark: 'quente', noLeaves: true },
+  arbusto:   { len: 8,  lenDecay: 0.78, width: 3,  widthDecay: 0.72, spread: 0.9,  jitter: 0.45, upBias: 0.0,  droop: 0.05, depth: 4, apicalLen: 0.78, latLen: 0.82, lateralN: 2, leafFrom: 3, leafR: [7, 10], gnarl: 0.2,  bark: 'quente' },
 };
 
 function mulberry32(a) {
@@ -62,8 +74,8 @@ function growTree(opts) {
   const W = opts.W || 104;
   const H = opts.H || 136;
   const rnd = mulberry32((opts.seed | 0) || 1);
-  const leafRamp = LEAF_RAMPS[opts.mood] || LEAF_RAMPS.verao;
-  const barkRamp = opts.mood === 'mistica' ? BARK_RAMPS.fria : opts.mood === 'dia' ? BARK_RAMPS.dia : BARK_RAMPS[S.bark];
+  const leafRamp = S.ramp ? SPECIES_RAMPS[S.ramp] : (LEAF_RAMPS[opts.mood] || LEAF_RAMPS.verao);
+  const barkRamp = S.bark === 'betula' ? BARK_RAMPS.betula : S.bark === 'conif' ? BARK_RAMPS.conif : opts.mood === 'mistica' ? BARK_RAMPS.fria : opts.mood === 'dia' ? BARK_RAMPS.dia : BARK_RAMPS[S.bark];
   const speck = LEAF_SPECK[opts.mood] ?? 28;
   const glow = opts.mood === 'mistica';
 
@@ -95,6 +107,51 @@ function growTree(opts) {
       if (S.gnarl) la += (rnd() - 0.5) * S.gnarl;
       grow(x2, y2, la, len * S.lenDecay * S.latLen, wid * S.widthDecay * 0.82, depth - 1);
     }
+  }
+  if (S.tiers) {
+    /* pinheiro da referência: tronco curto + camadas triangulares empilhadas,
+       borda serrilhada, luz na esquerda de cada camada, sombra por baixo */
+    const buf2 = new Int16Array(W * H).fill(-1);
+    const put2 = (x, y, idx) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < W && y < H) buf2[y * W + x] = idx; };
+    const ramp2 = S.ramp ? SPECIES_RAMPS[S.ramp] : (LEAF_RAMPS[opts.mood] || LEAF_RAMPS.verao);
+    const la = ramp2.length - 1;
+    const trunkW = Math.max(2, S.width * 0.6);
+    const treeH = H * 0.82, topY = H - 6 - treeH;
+    // tronco
+    for (let y = H - 4; y > H - 4 - treeH * 0.22; y--) for (let o = -trunkW / 2; o <= trunkW / 2; o += 0.5) {
+      const sfrac = o / (trunkW / 2);
+      put2(baseX + o, y, barkRamp[clamp(3 - Math.round((sfrac + 1) * 1.4), 0, 4)]);
+    }
+    const n = S.tiers;
+    for (let t = n - 1; t >= 0; t--) { // de baixo pra cima
+      const frac = t / (n - 1);
+      const yBase = H - 6 - treeH * (0.16 + 0.78 * frac);
+      const halfW2 = (W * 0.30) * (1 - frac * 0.72) * (0.92 + rnd() * 0.16);
+      const tierH = treeH * 0.30 * (1 - frac * 0.3);
+      for (let yy = 0; yy <= tierH; yy++) {
+        const rowFrac = yy / tierH;
+        let rowHalf = halfW2 * (1 - rowFrac);
+        rowHalf += (hash2((yy * 5) | 0, t * 17) - 0.5) * 3.4; // serrilha
+        if (rowHalf <= 0) continue;
+        for (let ox = -rowHalf; ox <= rowHalf; ox++) {
+          const nx = ox / halfW2;
+          let idx;
+          if (nx < -0.62 + rowFrac * 0.18) idx = la;          // filete de sol
+          else if (nx < 0.05) idx = la - 1;
+          else idx = Math.max(1, la - 2);                     // lado da sombra
+          if (yy < 2.2) idx = Math.max(0, la - 3);            // beirada de baixo funda
+          put2(baseX + ox, yBase - yy, ramp2[idx]);
+        }
+      }
+    }
+    // contorno de tinta
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = buf2[y * W + x];
+      if (v < 0 || v === OUTLINE) continue;
+      if ((x > 0 && buf2[y * W + x - 1] < 0) || (x < W - 1 && buf2[y * W + x + 1] < 0) ||
+          (y > 0 && buf2[(y - 1) * W + x] < 0) || (y < H - 1 && buf2[(y + 1) * W + x] < 0)) buf2[y * W + x] = OUTLINE;
+    }
+    return { buf: buf2, W, H, glow };
   }
   grow(baseX, baseY, UP + (rnd() - 0.5) * 0.1, S.len, S.width, S.depth);
 
@@ -144,82 +201,108 @@ function growTree(opts) {
     }
   }
 
-  /* ---- copa: campo de densidade -> massa coesa iluminada ---- */
-  const dens = new Float32Array(W * H);
-  let cx = 0, cy = 0, minY = H, maxY = 0;
-  for (const lf of leaves) {
-    cx += lf.x; cy += lf.y;
-    if (lf.y < minY) minY = lf.y;
-    if (lf.y > maxY) maxY = lf.y;
-    const sig = lf.r / 1.7;
-    const inv = 1 / (2 * sig * sig);
-    const r = Math.ceil(lf.r);
-    for (let oy = -r; oy <= r; oy++) {
-      const yy = (lf.y + oy) | 0;
-      if (yy < 0 || yy >= H) continue;
-      for (let ox = -r; ox <= r; ox++) {
-        const xx = (lf.x + ox) | 0;
-        if (xx < 0 || xx >= W) continue;
-        const d2 = ox * ox + oy * oy;
-        if (d2 > r * r) continue;
-        dens[yy * W + xx] += Math.exp(-d2 * inv);
-      }
-    }
+  /* ---- contorno de tinta no tronco/galhos (ref.: sprite clássico) ---- */
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const v = buf[y * W + x];
+    if (v < 0 || v === OUTLINE) continue;
+    if ((x > 0 && buf[y * W + x - 1] < 0) || (x < W - 1 && buf[y * W + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * W + x] < 0) || (y < H - 1 && buf[(y + 1) * W + x] < 0)) buf[y * W + x] = OUTLINE;
   }
-  cx /= leaves.length || 1; cy /= leaves.length || 1;
-  const canopyH = Math.max(8, maxY - minY);
-
-  // alguns "buracos" pra luz atravessar (profundidade)
-  const holes = 3 + (rnd() * 3 | 0);
-  for (let k = 0; k < holes; k++) {
-    const lf = leaves[(rnd() * leaves.length) | 0];
-    if (!lf) continue;
-    const hr = lf.r * (0.7 + rnd() * 0.5);
-    const sig = hr / 1.6, inv = 1 / (2 * sig * sig), r = Math.ceil(hr);
-    const hx = lf.x + (rnd() - 0.5) * lf.r, hy = lf.y + (rnd() - 0.5) * lf.r;
-    for (let oy = -r; oy <= r; oy++) {
-      const yy = (hy + oy) | 0; if (yy < 0 || yy >= H) continue;
-      for (let ox = -r; ox <= r; ox++) {
-        const xx = (hx + ox) | 0; if (xx < 0 || xx >= W) continue;
-        dens[yy * W + xx] -= 0.75 * Math.exp(-(ox * ox + oy * oy) * inv);
-      }
+  /* marcas de bétula: tracinhos escuros horizontais na casca branca */
+  if (S.barkMarks) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = buf[y * W + x];
+      if (v >= 6 && v <= 9 && hash2(x >> 1, y) < 0.05) { buf[y * W + x] = 1; if (x + 1 < W && buf[y * W + x + 1] >= 6) buf[y * W + x + 1] = 1; }
     }
   }
 
-  const THR = 0.42;
-  const isLeaf = (x, y) => x >= 0 && y >= 0 && x < W && y < H && dens[y * W + x] > THR;
+  if (S.noLeaves) return { buf, W, H, glow }; // árvore seca: só o esqueleto com contorno
+
+  /* ---- copa em LOBOS: cada aglomerado é uma bolota cel-shaded com contorno
+     próprio; lobos de baixo sobrepõem os de cima -> vincos escuros entre
+     eles (a linguagem da folha de referência, não massa lisa) ---- */
   const last = leafRamp.length - 1;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (dens[y * W + x] <= THR) continue;
-      const gx = (dens[y * W + Math.min(W - 1, x + 1)] - dens[y * W + Math.max(0, x - 1)]);
-      const gy = (dens[Math.min(H - 1, y + 1) * W + x] - dens[Math.max(0, y - 1) * W + x]);
-      const gm = Math.hypot(gx, gy) || 1e-4;
-      const ox = -gx / gm, oy = -gy / gm;   // normal apontando pra fora
-      const lam = ox * Lx + oy * Ly;         // -1 (sombra) .. 1 (luz)
-      const lift = (cy - y) / (canopyH * 0.6); // topo mais claro
-      const sunBoost = opts.mood === 'dia' ? 1.25 : 1;
-      let t = 0.46 + 0.42 * sunBoost * lam + 0.13 * lift + (hash2(x, y) - 0.5) * 0.10;
-      t += (BAYER[y & 3][x & 3] / 16 - 0.5) * 0.22; // dither ordenado
-      let idx = clamp(Math.round(t * last), 0, last);
+  let cyAll = 0, minY = H, maxY = 0;
+  for (const lf of leaves) { cyAll += lf.y; if (lf.y < minY) minY = lf.y; if (lf.y > maxY) maxY = lf.y; }
+  cyAll /= leaves.length || 1;
+  const canopyH = Math.max(8, maxY - minY);
+  /* seleção de LOBOS: poucos e grandes (referência tem 5-9 bolotas legíveis,
+     não dezenas) — gulosa por raio, com espaçamento mínimo */
+  const cand = leaves.slice().sort((a, b) => b.r - a.r);
+  const lobes = [];
+  for (const c of cand) {
+    if (lobes.length >= 9) break;
+    let ok = true;
+    for (const k of lobes) {
+      if (Math.hypot(c.x - k.x, c.y - k.y) < (c.r + k.r) * 0.42) { ok = false; break; }
+    }
+    if (ok) lobes.push({ x: c.x, y: c.y, r: c.r * 1.35 });
+  }
+  if (lobes.length === 0 && cand.length) lobes.push({ x: cand[0].x, y: cand[0].y, r: cand[0].r * 1.35 });
+  lobes.sort((a, b) => a.y - b.y); // topo primeiro; os de baixo pintam por cima
 
-      // rim: borda da silhueta
-      const boundary = !isLeaf(x - 1, y) || !isLeaf(x + 1, y) || !isLeaf(x, y - 1) || !isLeaf(x, y + 1);
-      if (boundary) {
-        if (lam < -0.05) buf[y * W + x] = leafRamp[0];         // contorno escuro contra o void
-        else if (lam > 0.45) buf[y * W + x] = leafRamp[last];  // aresta brilhando
-        else buf[y * W + x] = leafRamp[idx];
-        continue;
+  const Lx2 = -0.55, Ly2 = -0.83;
+  for (const lb of lobes) {
+    const R = lb.r * 1.12, Ry = R * 0.88;
+    const lift = clamp((cyAll - lb.y) / (canopyH * 0.7), -1, 1) * 0.28; // lobos do topo mais claros
+    // carimbo do contorno (1px maior)
+    const R1 = R + 1.2, Ry1 = Ry + 1.2;
+    for (let oy = -Ry1; oy <= Ry1; oy++) for (let ox = -R1; ox <= R1; ox++) {
+      if ((ox * ox) / (R1 * R1) + (oy * oy) / (Ry1 * Ry1) <= 1) put(lb.x + ox, lb.y + oy, OUTLINE);
+    }
+    // corpo cel-shaded: 4 bandas duras pela normal local (esfera)
+    for (let oy = -Ry; oy <= Ry; oy++) {
+      for (let ox = -R; ox <= R; ox++) {
+        const e = (ox * ox) / (R * R) + (oy * oy) / (Ry * Ry);
+        if (e > 1) continue;
+        const nx = ox / R, ny = oy / Ry;
+        let lam = nx * Lx2 + ny * Ly2 + lift;
+        lam += (hash2((lb.x + ox) | 0, (lb.y + oy) | 0) - 0.5) * 0.18; // grão orgânico
+        let idx;
+        if (lam > 0.42) idx = last;
+        else if (lam > 0.02) idx = last - 1;
+        else if (lam > -0.5) idx = Math.max(1, last - 2);
+        else idx = Math.max(0, last - 3);
+        // borda de baixo do lobo sempre funda (vinco)
+        if (e > 0.62 && ny > 0.35) idx = Math.max(0, idx - 1);
+        put(lb.x + ox, lb.y + oy, leafRamp[idx]);
       }
-      // textura de folhagem: marquinhas 1px subindo/descendo um tom
-      if (hash2(x * 3 + 1, y * 3 + 7) < 0.13) idx = clamp(idx + (hash2(x, y * 13) < 0.5 ? -1 : 1), 0, last);
-      // brilho pontual (folha pegando sol)
-      if (lam > 0.32 && hash2(x + 7, y + 13) < 0.045) idx = last;
-      buf[y * W + x] = leafRamp[Math.max(idx, 0)];
-      // glint místico (índice de brilho) esparso
-      if (glow && lam > 0.4 && hash2(x + 31, y + 17) < 0.03) buf[y * W + x] = speck;
+    }
+    // textura de folhinhas: marquinhas 1px
+    for (let oy = -Ry; oy <= Ry; oy++) for (let ox = -R; ox <= R; ox++) {
+      if ((ox * ox) / (R * R) + (oy * oy) / (Ry * Ry) > 0.9) continue;
+      const X = (lb.x + ox) | 0, Y = (lb.y + oy) | 0;
+      if (hash2(X * 3 + 1, Y * 3 + 7) < 0.10) {
+        const cur = buf[Y * W + X];
+        const ci = leafRamp.indexOf(cur);
+        if (ci >= 0) put(X, Y, leafRamp[clamp(ci + (hash2(X, Y * 13) < 0.5 ? -1 : 1), 0, last)]);
+      }
     }
   }
+  /* flores brancas salpicadas (espécie florida): buquês 2x2 nas zonas de luz */
+  if (S.blossoms) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = buf[y * W + x];
+      if ((v === leafRamp[last] || v === leafRamp[last - 1]) && hash2(x * 7 + 3, y * 11 + 5) < 0.05) {
+        put(x, y, 9); put(x + 1, y, 8); put(x, y + 1, 8);
+        if (hash2(x, y) < 0.4) put(x + 1, y + 1, 53);
+      }
+    }
+  }
+  /* glint místico */
+  if (glow) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (buf[y * W + x] === leafRamp[last] && hash2(x + 31, y + 17) < 0.05) buf[y * W + x] = speck;
+    }
+  }
+  /* contorno externo da copa (fecha a silhueta como na referência) */
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const v = buf[y * W + x];
+    if (v < 0 || v === OUTLINE) continue;
+    if ((x > 0 && buf[y * W + x - 1] < 0) || (x < W - 1 && buf[y * W + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * W + x] < 0) || (y < H - 1 && buf[(y + 1) * W + x] < 0)) buf[y * W + x] = OUTLINE;
+  }
+
   return { buf, W, H, glow };
 }
 

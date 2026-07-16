@@ -162,13 +162,25 @@ const BARK_RAMPS = {
   fria:   [1, 49, 54, 5, 6],     // casca fria/lilás (mística)
   conif:  [1, 24, 25, 5, 4],     // casca oliva (pinheiro)
   dia:    [1, 24, 3, 4, 63],     // marrom-acinzentado ao sol (ref. BotW)
+  betula: [1, 6, 7, 8, 9],       // bétula: casca branca (marcas escuras à parte)
 };
+const OUTLINE = 0; // contorno de tinta: o preto do jogo (#2e222f)
 
+/* rampas próprias de espécie (independem do humor) */
+const SPECIES_RAMPS = {
+  cereja:  [54, 55, 56, 57, 53],  // cerejeira: vinho -> rosa -> lavanda
+  betula:  [29, 30, 31, 32, 33],  // bétula: verde solto
+};
 const SPECIES = {
   carvalho:  { len: 22, lenDecay: 0.79, width: 8,  widthDecay: 0.70, spread: 0.54, jitter: 0.34, upBias: 0.06, droop: 0.02, depth: 8, apicalLen: 0.82, latLen: 0.72, lateralN: 2, leafFrom: 3, leafR: [7, 12], gnarl: 0,    bark: 'quente' },
   anciao:    { len: 19, lenDecay: 0.81, width: 12, widthDecay: 0.75, spread: 0.72, jitter: 0.52, upBias: 0.02, droop: 0.05, depth: 7, apicalLen: 0.80, latLen: 0.74, lateralN: 2, leafFrom: 2, leafR: [6, 11], gnarl: 0.55, bark: 'quente' },
   salgueiro: { len: 21, lenDecay: 0.82, width: 6,  widthDecay: 0.73, spread: 0.34, jitter: 0.30, upBias: -0.10, droop: 0.20, depth: 9, apicalLen: 0.84, latLen: 0.74, lateralN: 2, leafFrom: 4, leafR: [4, 7],  gnarl: 0.1,  bark: 'quente' },
-  pinheiro:  { len: 15, lenDecay: 0.87, width: 7,  widthDecay: 0.81, spread: 0.95, jitter: 0.20, upBias: 0.0,  droop: 0.30, depth: 9, apicalLen: 0.92, latLen: 0.52, lateralN: 2, leafFrom: 1, leafR: [3, 6],  gnarl: 0,    bark: 'conif' },
+  pinheiro:  { len: 15, lenDecay: 0.87, width: 7,  widthDecay: 0.81, spread: 0.95, jitter: 0.20, upBias: 0.0,  droop: 0.30, depth: 9, apicalLen: 0.92, latLen: 0.52, lateralN: 2, leafFrom: 1, leafR: [3, 6],  gnarl: 0,    bark: 'conif', tiers: 5 },
+  cerejeira: { len: 20, lenDecay: 0.80, width: 7,  widthDecay: 0.72, spread: 0.62, jitter: 0.40, upBias: 0.04, droop: 0.03, depth: 7, apicalLen: 0.80, latLen: 0.74, lateralN: 2, leafFrom: 3, leafR: [7, 11], gnarl: 0.2,  bark: 'quente', ramp: 'cereja' },
+  florida:   { len: 20, lenDecay: 0.80, width: 7,  widthDecay: 0.72, spread: 0.60, jitter: 0.38, upBias: 0.05, droop: 0.02, depth: 7, apicalLen: 0.81, latLen: 0.73, lateralN: 2, leafFrom: 3, leafR: [7, 11], gnarl: 0.1,  bark: 'quente', blossoms: true },
+  betula:    { len: 24, lenDecay: 0.80, width: 5,  widthDecay: 0.74, spread: 0.46, jitter: 0.34, upBias: 0.10, droop: 0.0,  depth: 7, apicalLen: 0.86, latLen: 0.70, lateralN: 2, leafFrom: 3, leafR: [5, 8],  gnarl: 0,    bark: 'betula', barkMarks: true },
+  seca:      { len: 21, lenDecay: 0.80, width: 9,  widthDecay: 0.78, spread: 0.74, jitter: 0.5,  upBias: 0.0,  droop: 0.04, depth: 6, apicalLen: 0.82, latLen: 0.76, lateralN: 2, leafFrom: 2, leafR: [4, 6],  gnarl: 0.7,  bark: 'quente', noLeaves: true },
+  arbusto:   { len: 8,  lenDecay: 0.78, width: 3,  widthDecay: 0.72, spread: 0.9,  jitter: 0.45, upBias: 0.0,  droop: 0.05, depth: 4, apicalLen: 0.78, latLen: 0.82, lateralN: 2, leafFrom: 3, leafR: [7, 10], gnarl: 0.2,  bark: 'quente' },
 };
 
 function mulberry32(a) {
@@ -204,8 +216,8 @@ function growTree(opts) {
   const W = opts.W || 104;
   const H = opts.H || 136;
   const rnd = mulberry32((opts.seed | 0) || 1);
-  const leafRamp = LEAF_RAMPS[opts.mood] || LEAF_RAMPS.verao;
-  const barkRamp = opts.mood === 'mistica' ? BARK_RAMPS.fria : opts.mood === 'dia' ? BARK_RAMPS.dia : BARK_RAMPS[S.bark];
+  const leafRamp = S.ramp ? SPECIES_RAMPS[S.ramp] : (LEAF_RAMPS[opts.mood] || LEAF_RAMPS.verao);
+  const barkRamp = S.bark === 'betula' ? BARK_RAMPS.betula : S.bark === 'conif' ? BARK_RAMPS.conif : opts.mood === 'mistica' ? BARK_RAMPS.fria : opts.mood === 'dia' ? BARK_RAMPS.dia : BARK_RAMPS[S.bark];
   const speck = LEAF_SPECK[opts.mood] ?? 28;
   const glow = opts.mood === 'mistica';
 
@@ -238,6 +250,51 @@ function growTree(opts) {
       grow(x2, y2, la, len * S.lenDecay * S.latLen, wid * S.widthDecay * 0.82, depth - 1);
     }
   }
+  if (S.tiers) {
+    /* pinheiro da referência: tronco curto + camadas triangulares empilhadas,
+       borda serrilhada, luz na esquerda de cada camada, sombra por baixo */
+    const buf2 = new Int16Array(W * H).fill(-1);
+    const put2 = (x, y, idx) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < W && y < H) buf2[y * W + x] = idx; };
+    const ramp2 = S.ramp ? SPECIES_RAMPS[S.ramp] : (LEAF_RAMPS[opts.mood] || LEAF_RAMPS.verao);
+    const la = ramp2.length - 1;
+    const trunkW = Math.max(2, S.width * 0.6);
+    const treeH = H * 0.82, topY = H - 6 - treeH;
+    // tronco
+    for (let y = H - 4; y > H - 4 - treeH * 0.22; y--) for (let o = -trunkW / 2; o <= trunkW / 2; o += 0.5) {
+      const sfrac = o / (trunkW / 2);
+      put2(baseX + o, y, barkRamp[clamp(3 - Math.round((sfrac + 1) * 1.4), 0, 4)]);
+    }
+    const n = S.tiers;
+    for (let t = n - 1; t >= 0; t--) { // de baixo pra cima
+      const frac = t / (n - 1);
+      const yBase = H - 6 - treeH * (0.16 + 0.78 * frac);
+      const halfW2 = (W * 0.30) * (1 - frac * 0.72) * (0.92 + rnd() * 0.16);
+      const tierH = treeH * 0.30 * (1 - frac * 0.3);
+      for (let yy = 0; yy <= tierH; yy++) {
+        const rowFrac = yy / tierH;
+        let rowHalf = halfW2 * (1 - rowFrac);
+        rowHalf += (hash2((yy * 5) | 0, t * 17) - 0.5) * 3.4; // serrilha
+        if (rowHalf <= 0) continue;
+        for (let ox = -rowHalf; ox <= rowHalf; ox++) {
+          const nx = ox / halfW2;
+          let idx;
+          if (nx < -0.62 + rowFrac * 0.18) idx = la;          // filete de sol
+          else if (nx < 0.05) idx = la - 1;
+          else idx = Math.max(1, la - 2);                     // lado da sombra
+          if (yy < 2.2) idx = Math.max(0, la - 3);            // beirada de baixo funda
+          put2(baseX + ox, yBase - yy, ramp2[idx]);
+        }
+      }
+    }
+    // contorno de tinta
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = buf2[y * W + x];
+      if (v < 0 || v === OUTLINE) continue;
+      if ((x > 0 && buf2[y * W + x - 1] < 0) || (x < W - 1 && buf2[y * W + x + 1] < 0) ||
+          (y > 0 && buf2[(y - 1) * W + x] < 0) || (y < H - 1 && buf2[(y + 1) * W + x] < 0)) buf2[y * W + x] = OUTLINE;
+    }
+    return { buf: buf2, W, H, glow };
+  }
   grow(baseX, baseY, UP + (rnd() - 0.5) * 0.1, S.len, S.width, S.depth);
 
   const buf = new Int16Array(W * H).fill(-1);
@@ -264,8 +321,7 @@ function growTree(opts) {
         // cilindro: claro perto da borda iluminada, escurecendo em curva até a sombra
         const sfrac = (o / halfW) * litSign; // -1 luz .. +1 sombra
         let b5 = clamp(4 - Math.round((sfrac + 1) * 2), 0, 4);
-        // estrias verticais da casca (colunas fixas ao longo do tronco)
-        const ridge = hash2(Math.round(o * 4) + 31, 0);
+        const ridge = hash2(Math.round(o * 4) + 31, 0); // estrias verticais da casca
         if (ridge < 0.24) b5 = clamp(b5 - 1, 0, 4);
         else if (ridge > 0.9) b5 = clamp(b5 + 1, 0, 4);
         put(cx + pxn * o, cy + pyn * o, barkRamp[b5]);
@@ -287,87 +343,112 @@ function growTree(opts) {
     }
   }
 
-  /* ---- copa: campo de densidade -> massa coesa iluminada ---- */
-  const dens = new Float32Array(W * H);
-  let cx = 0, cy = 0, minY = H, maxY = 0;
-  for (const lf of leaves) {
-    cx += lf.x; cy += lf.y;
-    if (lf.y < minY) minY = lf.y;
-    if (lf.y > maxY) maxY = lf.y;
-    const sig = lf.r / 1.7;
-    const inv = 1 / (2 * sig * sig);
-    const r = Math.ceil(lf.r);
-    for (let oy = -r; oy <= r; oy++) {
-      const yy = (lf.y + oy) | 0;
-      if (yy < 0 || yy >= H) continue;
-      for (let ox = -r; ox <= r; ox++) {
-        const xx = (lf.x + ox) | 0;
-        if (xx < 0 || xx >= W) continue;
-        const d2 = ox * ox + oy * oy;
-        if (d2 > r * r) continue;
-        dens[yy * W + xx] += Math.exp(-d2 * inv);
-      }
-    }
+  /* ---- contorno de tinta no tronco/galhos (ref.: sprite clássico) ---- */
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const v = buf[y * W + x];
+    if (v < 0 || v === OUTLINE) continue;
+    if ((x > 0 && buf[y * W + x - 1] < 0) || (x < W - 1 && buf[y * W + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * W + x] < 0) || (y < H - 1 && buf[(y + 1) * W + x] < 0)) buf[y * W + x] = OUTLINE;
   }
-  cx /= leaves.length || 1; cy /= leaves.length || 1;
-  const canopyH = Math.max(8, maxY - minY);
-
-  // alguns "buracos" pra luz atravessar (profundidade)
-  const holes = 3 + (rnd() * 3 | 0);
-  for (let k = 0; k < holes; k++) {
-    const lf = leaves[(rnd() * leaves.length) | 0];
-    if (!lf) continue;
-    const hr = lf.r * (0.7 + rnd() * 0.5);
-    const sig = hr / 1.6, inv = 1 / (2 * sig * sig), r = Math.ceil(hr);
-    const hx = lf.x + (rnd() - 0.5) * lf.r, hy = lf.y + (rnd() - 0.5) * lf.r;
-    for (let oy = -r; oy <= r; oy++) {
-      const yy = (hy + oy) | 0; if (yy < 0 || yy >= H) continue;
-      for (let ox = -r; ox <= r; ox++) {
-        const xx = (hx + ox) | 0; if (xx < 0 || xx >= W) continue;
-        dens[yy * W + xx] -= 0.75 * Math.exp(-(ox * ox + oy * oy) * inv);
-      }
+  /* marcas de bétula: tracinhos escuros horizontais na casca branca */
+  if (S.barkMarks) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = buf[y * W + x];
+      if (v >= 6 && v <= 9 && hash2(x >> 1, y) < 0.05) { buf[y * W + x] = 1; if (x + 1 < W && buf[y * W + x + 1] >= 6) buf[y * W + x + 1] = 1; }
     }
   }
 
-  const THR = 0.42;
-  const isLeaf = (x, y) => x >= 0 && y >= 0 && x < W && y < H && dens[y * W + x] > THR;
+  if (S.noLeaves) return { buf, W, H, glow }; // árvore seca: só o esqueleto com contorno
+
+  /* ---- copa em LOBOS: cada aglomerado é uma bolota cel-shaded com contorno
+     próprio; lobos de baixo sobrepõem os de cima -> vincos escuros entre
+     eles (a linguagem da folha de referência, não massa lisa) ---- */
   const last = leafRamp.length - 1;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (dens[y * W + x] <= THR) continue;
-      const gx = (dens[y * W + Math.min(W - 1, x + 1)] - dens[y * W + Math.max(0, x - 1)]);
-      const gy = (dens[Math.min(H - 1, y + 1) * W + x] - dens[Math.max(0, y - 1) * W + x]);
-      const gm = Math.hypot(gx, gy) || 1e-4;
-      const ox = -gx / gm, oy = -gy / gm;   // normal apontando pra fora
-      const lam = ox * Lx + oy * Ly;         // -1 (sombra) .. 1 (luz)
-      const lift = (cy - y) / (canopyH * 0.6); // topo mais claro
-      const sunBoost = opts.mood === 'dia' ? 1.25 : 1;
-      let t = 0.46 + 0.42 * sunBoost * lam + 0.13 * lift + (hash2(x, y) - 0.5) * 0.10;
-      t += (BAYER[y & 3][x & 3] / 16 - 0.5) * 0.22; // dither ordenado
-      let idx = clamp(Math.round(t * last), 0, last);
+  let cyAll = 0, minY = H, maxY = 0;
+  for (const lf of leaves) { cyAll += lf.y; if (lf.y < minY) minY = lf.y; if (lf.y > maxY) maxY = lf.y; }
+  cyAll /= leaves.length || 1;
+  const canopyH = Math.max(8, maxY - minY);
+  /* seleção de LOBOS: poucos e grandes (referência tem 5-9 bolotas legíveis,
+     não dezenas) — gulosa por raio, com espaçamento mínimo */
+  const cand = leaves.slice().sort((a, b) => b.r - a.r);
+  const lobes = [];
+  for (const c of cand) {
+    if (lobes.length >= 9) break;
+    let ok = true;
+    for (const k of lobes) {
+      if (Math.hypot(c.x - k.x, c.y - k.y) < (c.r + k.r) * 0.42) { ok = false; break; }
+    }
+    if (ok) lobes.push({ x: c.x, y: c.y, r: c.r * 1.35 });
+  }
+  if (lobes.length === 0 && cand.length) lobes.push({ x: cand[0].x, y: cand[0].y, r: cand[0].r * 1.35 });
+  lobes.sort((a, b) => a.y - b.y); // topo primeiro; os de baixo pintam por cima
 
-      // rim: borda da silhueta
-      const boundary = !isLeaf(x - 1, y) || !isLeaf(x + 1, y) || !isLeaf(x, y - 1) || !isLeaf(x, y + 1);
-      if (boundary) {
-        if (lam < -0.05) buf[y * W + x] = leafRamp[0];         // contorno escuro contra o void
-        else if (lam > 0.45) buf[y * W + x] = leafRamp[last];  // aresta brilhando
-        else buf[y * W + x] = leafRamp[idx];
-        continue;
+  const Lx2 = -0.55, Ly2 = -0.83;
+  for (const lb of lobes) {
+    const R = lb.r * 1.12, Ry = R * 0.88;
+    const lift = clamp((cyAll - lb.y) / (canopyH * 0.7), -1, 1) * 0.28; // lobos do topo mais claros
+    // carimbo do contorno (1px maior)
+    const R1 = R + 1.2, Ry1 = Ry + 1.2;
+    for (let oy = -Ry1; oy <= Ry1; oy++) for (let ox = -R1; ox <= R1; ox++) {
+      if ((ox * ox) / (R1 * R1) + (oy * oy) / (Ry1 * Ry1) <= 1) put(lb.x + ox, lb.y + oy, OUTLINE);
+    }
+    // corpo cel-shaded: 4 bandas duras pela normal local (esfera)
+    for (let oy = -Ry; oy <= Ry; oy++) {
+      for (let ox = -R; ox <= R; ox++) {
+        const e = (ox * ox) / (R * R) + (oy * oy) / (Ry * Ry);
+        if (e > 1) continue;
+        const nx = ox / R, ny = oy / Ry;
+        let lam = nx * Lx2 + ny * Ly2 + lift;
+        lam += (hash2((lb.x + ox) | 0, (lb.y + oy) | 0) - 0.5) * 0.18; // grão orgânico
+        let idx;
+        if (lam > 0.42) idx = last;
+        else if (lam > 0.02) idx = last - 1;
+        else if (lam > -0.5) idx = Math.max(1, last - 2);
+        else idx = Math.max(0, last - 3);
+        // borda de baixo do lobo sempre funda (vinco)
+        if (e > 0.62 && ny > 0.35) idx = Math.max(0, idx - 1);
+        put(lb.x + ox, lb.y + oy, leafRamp[idx]);
       }
-      // textura de folhagem: marquinhas 1px subindo/descendo um tom
-      if (hash2(x * 3 + 1, y * 3 + 7) < 0.13) idx = clamp(idx + (hash2(x, y * 13) < 0.5 ? -1 : 1), 0, last);
-      // brilho pontual (folha pegando sol)
-      if (lam > 0.32 && hash2(x + 7, y + 13) < 0.045) idx = last;
-      buf[y * W + x] = leafRamp[Math.max(idx, 0)];
-      // glint místico (índice de brilho) esparso
-      if (glow && lam > 0.4 && hash2(x + 31, y + 17) < 0.03) buf[y * W + x] = speck;
+    }
+    // textura de folhinhas: marquinhas 1px
+    for (let oy = -Ry; oy <= Ry; oy++) for (let ox = -R; ox <= R; ox++) {
+      if ((ox * ox) / (R * R) + (oy * oy) / (Ry * Ry) > 0.9) continue;
+      const X = (lb.x + ox) | 0, Y = (lb.y + oy) | 0;
+      if (hash2(X * 3 + 1, Y * 3 + 7) < 0.10) {
+        const cur = buf[Y * W + X];
+        const ci = leafRamp.indexOf(cur);
+        if (ci >= 0) put(X, Y, leafRamp[clamp(ci + (hash2(X, Y * 13) < 0.5 ? -1 : 1), 0, last)]);
+      }
     }
   }
+  /* flores brancas salpicadas (espécie florida): buquês 2x2 nas zonas de luz */
+  if (S.blossoms) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = buf[y * W + x];
+      if ((v === leafRamp[last] || v === leafRamp[last - 1]) && hash2(x * 7 + 3, y * 11 + 5) < 0.05) {
+        put(x, y, 9); put(x + 1, y, 8); put(x, y + 1, 8);
+        if (hash2(x, y) < 0.4) put(x + 1, y + 1, 53);
+      }
+    }
+  }
+  /* glint místico */
+  if (glow) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (buf[y * W + x] === leafRamp[last] && hash2(x + 31, y + 17) < 0.05) buf[y * W + x] = speck;
+    }
+  }
+  /* contorno externo da copa (fecha a silhueta como na referência) */
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const v = buf[y * W + x];
+    if (v < 0 || v === OUTLINE) continue;
+    if ((x > 0 && buf[y * W + x - 1] < 0) || (x < W - 1 && buf[y * W + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * W + x] < 0) || (y < H - 1 && buf[(y + 1) * W + x] < 0)) buf[y * W + x] = OUTLINE;
+  }
+
   return { buf, W, H, glow };
 }
 
 
-/* ================= CENA DIURNA (ref. BotW -> Resurrect 64) ================= */
 
 /* fBm 2D barato sobre hash2 (value noise) */
 function vnoise(x, y) {
@@ -383,151 +464,6 @@ function fbm(x, y, oct) {
   return v;
 }
 
-/* céu: gradiente azul + cúmulos com base achatada + montanha na bruma + linha de mata */
-function genSky(opts) {
-  const W = opts.W || 480, H = opts.H || 120;
-  const seed = (opts.seed | 0) || 1;
-  const rnd = mulberry32(seed);
-  const off = rnd() * 512;
-  const buf = new Int16Array(W * H);
-  // rampa vertical: skyBlue 47 -> paleBlue 48 -> paleMint 8 -> branco no horizonte
-  for (let y = 0; y < H; y++) {
-    const t = y / H;
-    for (let x = 0; x < W; x++) {
-      const dth = (BAYER[y & 3][x & 3] / 16 - 0.5) * 0.10;
-      const tt = t + dth;
-      buf[y * W + x] = tt < 0.42 ? 47 : tt < 0.74 ? 48 : tt < 0.92 ? 8 : 9;
-    }
-  }
-  // cúmulos: fBm + recorte, achatando a base (multiplica por rampa vertical local)
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const n = fbm(x / 46 + off, y / 26 + off * 2, 4);
-      const band = Math.sin((y / H) * Math.PI); // nuvens vivem no meio do céu
-      const v = n * (0.55 + 0.45 * band);
-      if (v > 0.56) {
-        const topLight = fbm(x / 46 + off, (y - 3) / 26 + off * 2, 4) < v;
-        buf[y * W + x] = v > 0.66 ? 9 : topLight ? 9 : y / H > 0.55 ? 7 : 48;
-      }
-    }
-  }
-  if (opts.mountain !== false) {
-    // maciço distante na bruma: 2 cristas assimétricas, sólido, base hazed
-    // crista de trás: fantasma na bruma
-    const back = { mx: W * (0.40 + rnd() * 0.06), mw: W * (0.16 + rnd() * 0.05), peak: H * (0.62 + rnd() * 0.06), skew: 0.7 + rnd() * 0.4 };
-    // maciço da frente: modesto, sólido
-    const front = { mx: W * (0.56 + rnd() * 0.08), mw: W * (0.20 + rnd() * 0.05), peak: H * (0.50 + rnd() * 0.08), skew: 0.6 + rnd() * 0.5 };
-    for (let x = 0; x < W; x++) {
-      let dxb = (x - back.mx) / back.mw;
-      dxb = dxb < 0 ? -dxb * back.skew : dxb;
-      if (dxb <= 1) {
-        const ridge = back.peak + (H - back.peak) * Math.pow(dxb, 1.7) + (fbm(x / 16 + off * 9, 3, 3) - 0.5) * 6;
-        for (let y = Math.max(0, ridge | 0); y < H; y++) {
-          const dth = BAYER[y & 3][x & 3] / 16;
-          buf[y * W + x] = dth < 0.45 ? 6 : dth < 0.8 ? 7 : 48; // silhueta afogada na bruma
-        }
-      }
-    }
-    for (let x = 0; x < W; x++) {
-      let dx = (x - front.mx) / front.mw;
-      dx = dx < 0 ? -dx * front.skew : dx;
-      if (dx > 1) continue;
-      const ridge = front.peak + (H - front.peak) * Math.pow(dx, 1.7) + (fbm(x / 13 + off * 3, 7, 3) - 0.5) * 8;
-      for (let y = Math.max(0, ridge | 0); y < H; y++) {
-        const depth = (y - ridge) / Math.max(1, H - ridge);
-        const dth = BAYER[y & 3][x & 3] / 16;
-        const nearBase = y > H - 7;
-        let idx;
-        if (depth < 0.2) idx = dth < 0.5 ? 3 : 19;          // cume pega sol
-        else idx = dth < 0.8 ? 19 : 5;                       // corpo vinho sólido
-        if (nearBase) idx = dth < 0.45 ? 5 : dth < 0.8 ? 6 : 48; // só a base afunda na bruma
-        buf[y * W + x] = idx;
-      }
-    }
-  }
-  // linha de mata ao fundo, hazed (últimas linhas)
-  for (let x = 0; x < W; x++) {
-    const h = 4 + fbm(x / 9 + off * 5, 7, 3) * 8;
-    for (let y = H - (h | 0); y < H; y++) {
-      buf[y * W + x] = (BAYER[y & 3][x & 3] / 16) < 0.55 ? 30 : 37;
-    }
-  }
-  return { buf, W, H };
-}
-
-/* rocha v2: blob deformado por ruído com FACETAS duras (platôs), rim light
-   no alto-esquerda, sombra dura embaixo, rachaduras e musgo ditherado.
-   `view` gira a MESMA pedra (0..3 = quartos de volta): 4 faces pré-rendidas
-   viram "rotações Doom" — a pedra lê como objeto, não adesivo. */
-function genRock(opts) {
-  const seed = (opts.seed | 0) || 1;
-  const view = opts.view || 0;
-  const rot = view * Math.PI / 2;
-  const rnd = mulberry32(seed * 33871 + 5);
-  const W = opts.W || 72, H = opts.H || 52;
-  const buf = new Int16Array(W * H).fill(-1);
-  const cx = W / 2, cy = H * 0.58;
-  const rx = W * (0.34 + rnd() * 0.09), ry = H * (0.32 + rnd() * 0.08);
-  const off = rnd() * 128;
-  const baseline = cy + ry * 0.72; // base ACHATADA: pedra sentada no chão, não oval flutuante
-  const rad = (ang) => 1 + 0.36 * (vnoise(Math.cos(ang + rot) * 1.4 + off, Math.sin(ang + rot) * 1.4 + off) - 0.5) * 2;
-  const inside = (x, y) => {
-    if (y > baseline) return -1;
-    const ang = Math.atan2((y - cy) / ry, (x - cx) / rx);
-    const rr = rad(ang);
-    const d = Math.hypot((x - cx) / (rx * rr), (y - cy) / (ry * rr));
-    return d <= 1 ? d : -1;
-  };
-  const cosR = Math.cos(rot), sinR = Math.sin(rot);
-  const RAMP = [1, 2, 6, 7, 8];
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const d = inside(x, y);
-      if (d < 0) continue;
-      const eps = 1.2;
-      const dl = inside(x - eps, y), dr = inside(x + eps, y);
-      const du = inside(x, y - eps), dd = inside(x, y + eps);
-      const nx = (dr < 0 ? 1.5 : dr) - (dl < 0 ? 1.5 : dl);
-      const ny = (dd < 0 ? 1.5 : dd) - (du < 0 ? 1.5 : du);
-      const nm = Math.hypot(nx, ny) || 1e-4;
-      const lam = (-nx / nm) * -0.55 + (-ny / nm) * -0.83;
-      const xr = cosR * (x - cx) - sinR * (y - cy), yr = sinR * (x - cx) + cosR * (y - cy);
-      const facet = Math.floor(fbm(xr / 8 + off, yr / 8 + off, 3) * 4) / 4;
-      let t = 0.52 + 0.40 * lam + (facet - 0.5) * 0.80;
-      const boundary = inside(x - 1, y) < 0 || inside(x + 1, y) < 0 || inside(x, y - 1) < 0 || inside(x, y + 1) < 0;
-      const upness = -ny / nm;
-      const mossV = fbm(xr / 5 + off * 2, yr / 5, 2);
-      if (upness > 0.45 && y < cy - ry * 0.22 && (mossV > 0.46 || (mossV > 0.40 && (BAYER[y & 3][x & 3] / 16) < 0.5))) {
-        buf[y * W + x] = t > 0.6 ? 37 : 36;
-        continue;
-      }
-      if (boundary) {
-        buf[y * W + x] = lam > 0.15 ? 8 : lam < -0.25 ? 1 : 2;
-        continue;
-      }
-      buf[y * W + x] = RAMP[clamp(Math.round(t * 4), 0, 4)];
-    }
-  }
-  // sombra de contato: elipse escura colada na base (por trás da pedra)
-  const shW = rx * 1.15, shH = Math.max(2.5, ry * 0.22);
-  for (let y = (baseline - shH) | 0; y <= Math.min(H - 1, (baseline + shH) | 0); y++) {
-    for (let x = 0; x < W; x++) {
-      const ex = (x - cx) / shW, ey = (y - baseline) / shH;
-      if (ex * ex + ey * ey > 1) continue;
-      if (buf[y * W + x] === -1 && (ex * ex + ey * ey < 0.72 || (BAYER[y & 3][x & 3] / 16) < 0.5)) buf[y * W + x] = 30; /* miolo sólido, só a borda dithera */
-    }
-  }
-  const cracks = 2 + (rnd() * 2) | 0;
-  for (let i = 0; i < cracks; i++) {
-    let x = cx + (rnd() - 0.5) * rx * 1.1, y = cy - ry * (0.4 + rnd() * 0.4);
-    const len = H * (0.25 + rnd() * 0.3);
-    for (let k = 0; k < len; k++) {
-      if (inside(x | 0, y | 0) >= 0 && buf[(y | 0) * W + (x | 0)] >= 1 && buf[(y | 0) * W + (x | 0)] <= 8) buf[(y | 0) * W + (x | 0)] = 1;
-      x += (rnd() - 0.5) * 1.6; y += 0.9;
-    }
-  }
-  return { buf, W, H };
-}
 
 'use strict';
 /* NÓS — protótipo "Visão da Intenção": raycaster clássico (DDA + floor casting
@@ -596,18 +532,19 @@ function bufToTex(gen) {
 /* espécies extras só do protótipo (variedade de silhueta) */
 SPECIES.copado = { ...SPECIES.carvalho, spread: 0.74, leafR: [9, 14], depth: 7, len: 20, upBias: 0.03 };
 SPECIES.jovem = { ...SPECIES.carvalho, len: 15, width: 5, leafR: [5, 8], depth: 6, jitter: 0.42 };
-/* 8 variantes x 3 frames de VENTO (folhas deslocam, tronco parado) */
-const TREE_SPECIES_SET = ['carvalho', 'carvalho', 'copado', 'copado', 'anciao', 'anciao', 'jovem', 'salgueiro'];
+/* mix da floresta: verdes na base, florida/bétula como tempero (8 x 3 frames de vento) */
+const TREE_SPECIES_SET = ['carvalho', 'carvalho', 'copado', 'copado', 'anciao', 'jovem', 'florida', 'betula'];
 const TREE_RES = 1.6; // fonte ~1.6x mais densa: tronco deixa de parecer chunky de perto
 const TREE_VARIANTS = TREE_SPECIES_SET.map((sp, i) =>
   [-1, 0, 1].map((w) => bufToTex(growTree({ species: sp, mood: 'dia', seed: 4021 + i * 977, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES, windAmt: w * TREE_RES })))
 );
-/* rochas: 4 variantes x 4 FACES (rotações de 90 graus escolhidas pelo ângulo de visão) */
-const ROCK_VARIANTS = [];
+/* raridades: cerejeira (bosques rosa) e árvore seca */
+const TREE_CEREJEIRA = [-1, 0, 1].map((w) => bufToTex(growTree({ species: 'cerejeira', mood: 'dia', seed: 777, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES, windAmt: w * TREE_RES })));
+const TREE_SECA = [bufToTex(growTree({ species: 'seca', mood: 'dia', seed: 313, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES }))];
+/* arbustos da campina */
+const BUSH_VARIANTS = [];
 for (let i = 0; i < 4; i++) {
-  const views = [];
-  for (let v = 0; v < 4; v++) views.push(bufToTex(genRock({ seed: 500 + i * 61, view: v, W: 72, H: 52 })));
-  ROCK_VARIANTS.push(views);
+  BUSH_VARIANTS.push([-1, 0, 1].map((w) => bufToTex(growTree({ species: 'arbusto', mood: 'dia', seed: 511 + i * 97, W: 64, H: 52, windAmt: w }))));
 }
 /* flor avulsa: haste em arco + cabeça de pétalas; 3 frames de inclinação */
 function genFlower(seed, lean) {
@@ -823,7 +760,10 @@ for (let ty = 0; ty < world.h; ty++) {
       const h = hash2(tx, ty);
       if (h > 0.62) continue; // desbaste: floresta com respiro
       const jx = (hash2(tx * 3, ty * 7) - 0.5) * 0.6, jy = (hash2(tx * 11, ty * 5) - 0.5) * 0.6;
-      const v = TREE_VARIANTS[(h * TREE_VARIANTS.length) | 0];
+      const hs = hash2(tx * 5, ty * 23);
+      let v = TREE_VARIANTS[(h * TREE_VARIANTS.length) | 0];
+      if (hs < 0.05) v = TREE_CEREJEIRA;            // bosquinho rosa raro
+      else if (hs > 0.975) v = TREE_SECA;           // seca solitária
       bills.push({ x: tx + 0.5 + jx, y: ty + 0.5 + jy, genFrames: v, label: 'arvore', scale: 2.3 + h * 0.7, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
     } else if (t === 'm') {
       const ht = hash2(tx * 29, ty * 31);
@@ -834,6 +774,16 @@ for (let ty = 0; ty < world.h; ty++) {
           y: ty + 0.5 + (hash2(tx * 47, ty * 53) - 0.5) * 0.7,
           genFrames: v, label: 'tufo', scale: 0.44 + ht * 1.6, lift: 0,
           phase: hash2(tx * 59, ty * 61) * Math.PI * 2, swaySpeed: 620,
+        });
+      }
+      const hb = hash2(tx * 103, ty * 107);
+      if (hb < 0.045) { // arbusto (não bloqueia)
+        const vb = BUSH_VARIANTS[(hb * 1201) % BUSH_VARIANTS.length | 0];
+        bills.push({
+          x: tx + 0.5 + (hash2(tx * 109, ty * 113) - 0.5) * 0.6,
+          y: ty + 0.5 + (hash2(tx * 127, ty * 131) - 0.5) * 0.6,
+          genFrames: vb, label: 'arbusto', scale: 0.5 + hb * 4, lift: 0,
+          phase: hash2(tx * 137, ty * 139) * Math.PI * 2, swaySpeed: 900,
         });
       }
       const hf = hash2(tx * 67, ty * 71);
