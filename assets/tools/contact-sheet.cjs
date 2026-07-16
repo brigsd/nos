@@ -16,6 +16,7 @@
  * Usage: node assets/tools/contact-sheet.cjs
  */
 
+const fs = require('node:fs');
 const path = require('path');
 const { loadPalette, matrixToCanvas, scaleNearest, createCanvas, fill, compositeOver, setPixel, savePNG } = require('./lib/canvas.cjs');
 const { loadSpriteSrc } = require('./lib/spritesrc.cjs');
@@ -23,7 +24,7 @@ const { drawText } = require('./lib/font3x5.cjs');
 const { PAL } = require('./lib/palette-names.cjs');
 const { ASSETS, SRC_DIR, PREVIEW_SCALE } = require('./render.cjs');
 
-const OUT_PATH = path.join(ASSETS, 'sprites', 'contact_sheet_8x.png');
+const OUT_PATH = path.join(ASSETS, 'preview', 'contact_sheet_8x.png');
 
 function loadFrameCanvas(name, frameIndex, palette) {
   const sprite = loadSpriteSrc(path.join(SRC_DIR, `${name}.json`));
@@ -84,6 +85,7 @@ function build() {
     drawText(sheet, setPixel, entry.label, cellX, cellY + cellArt + 4, white, 2);
   });
 
+  fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
   savePNG(OUT_PATH, sheet);
   console.log(`contact sheet -> ${path.relative(path.join(ASSETS, '..'), OUT_PATH)} (${sheetW}x${sheetH})`);
   return OUT_PATH;

@@ -24,6 +24,7 @@ const ROOT = path.resolve(__dirname, '..', '..'); // repo root (assets/tools/.. 
 const ASSETS = path.join(ROOT, 'assets');
 const SRC_DIR = path.join(ASSETS, 'sprites', 'src');
 const OUT_DIR = path.join(ASSETS, 'sprites');
+const PREVIEW_DIR = path.join(ASSETS, 'preview'); // artefato de build (gitignorado) — regenerado por npm run build:sprites
 const PALETTE_PATH = path.join(ASSETS, 'palette.json');
 const PREVIEW_SCALE = 8;
 
@@ -39,6 +40,7 @@ function renderAll() {
     process.exit(1);
   }
 
+  fs.mkdirSync(PREVIEW_DIR, { recursive: true });
   const rendered = [];
   for (const file of files) {
     const srcPath = path.join(SRC_DIR, file);
@@ -47,7 +49,7 @@ function renderAll() {
     const preview = scaleNearest(sheet, PREVIEW_SCALE);
 
     const outPath1x = path.join(OUT_DIR, `${sprite.name}.png`);
-    const outPath8x = path.join(OUT_DIR, `${sprite.name}_8x.png`);
+    const outPath8x = path.join(PREVIEW_DIR, `${sprite.name}_8x.png`);
     savePNG(outPath1x, sheet);
     savePNG(outPath8x, preview);
 
@@ -64,4 +66,4 @@ if (require.main === module) {
   renderAll();
 }
 
-module.exports = { renderAll, ROOT, ASSETS, SRC_DIR, OUT_DIR, PALETTE_PATH, PREVIEW_SCALE };
+module.exports = { renderAll, ROOT, ASSETS, SRC_DIR, OUT_DIR, PREVIEW_DIR, PALETTE_PATH, PREVIEW_SCALE };

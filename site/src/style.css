@@ -465,6 +465,17 @@ body {
   text-align: center;
 }
 
+.hud-fps-link {
+  color: var(--nos-accent);
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.hud-fps-link:hover,
+.hud-fps-link:focus-visible {
+  text-decoration: underline;
+}
+
 .status {
   position: absolute;
   inset: 0;

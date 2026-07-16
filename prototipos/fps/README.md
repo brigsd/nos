@@ -1,13 +1,20 @@
-# Protótipo — Visão da Intenção (O Coração em primeira pessoa)
+# O Coração em primeira pessoa — o cliente OFICIAL
 
-Raycaster clássico (DDA + floor casting + billboards, ~300 linhas, sem lib)
-lendo o MESMO `world/heart.json` e os MESMOS sprites 16px do jogo.
-O Núcleo vira um orbe de luz procedural pulsando sobre a praça; fog para o
-vazio, céu estrelado, 60fps a 320×180.
+Raycaster clássico (DDA + floor casting + billboards, sem lib) lendo o
+MESMO `world/heart.json` e os MESMOS sprites 16px do jogo. 60fps a
+320×180, tudo procedural (árvores L-system, água com shader, ilha
+flutuante, ciclo dia/noite).
 
-**Não é parte do site.** É um protótipo de discussão de direção (teto
-gráfico / câmera em primeira pessoa) — se aprovado, vira uma "janela"
-opt-in (D-26) integrada em `site/`.
+**Aprovado como visão oficial do jogo** (decisão do ideador): o botão
+JOGAR do README abre esta visão, publicada pelo Pages em **`/fps/`** —
+`site/scripts/build-fps.mjs` inline o mundo da batida atual dentro deste
+HTML a cada deploy (e o Pages redeploya a cada batida, então ela fica
+sincronizada com o mundo vivo). Este arquivo (`nos-fps.html`) segue
+sendo a fonte da verdade; `site/public/fps/` é só saída de build.
+O mapa 2D continua no ar na raiz do Pages como visão de cima + painéis.
+
+Screenshots de QA não ficam na main (peso) — evidência visual vive no
+branch de trabalho `claude/fps-prototipo` e é regenerável via Playwright.
 
 ## Rodar
 ```
@@ -16,9 +23,6 @@ node build-data.mjs   # regenera data.js a partir do mundo/sprites atuais
 ```
 Controles: WASD anda, ←/→ olha, M alterna o minimapa; no touch, arraste
 (esquerda anda, direita olha).
-
-Screenshots: `shot-spawn.png` (spawn: orbe + oficinas + rio) e
-`shot-core.png` (perto da forja).
 
 ## Modo dia (iteração 2 — direção BotW)
 
@@ -35,10 +39,8 @@ virou DIA e a floresta deixou de ser parede esticada:
 - **Bruma diurna** (paleMint) no lugar do breu — a distância derrete em luz.
 - Chão de grama gerado (base clara + salpicos + flores, ref. BotW).
 - `prototipos/estudio/tree-studio.html`: o Estúdio de Cena interativo
-  (árvores 4 espécies × 5 humores, rochas, céu, cena composta — exporta PNG).
-
-Screenshots: `shot-day-forest.png`, `shot-day-forest-close.png`,
-`shot-day-rock.png`; cena 2D de referência em `../estudio/cena-11.png`.
+  (árvores 9 espécies, rochas, céu, cena composta — exporta PNG; regenera
+  qualquer referência visual, por isso não commitamos os PNGs dele).
 
 ## Dia e noite (iteração 3)
 

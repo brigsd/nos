@@ -15,6 +15,7 @@
  * Usage: node assets/tools/map-mock.cjs
  */
 
+const fs = require('node:fs');
 const path = require('path');
 const { loadPalette, matrixToCanvas, scaleNearest, createCanvas, compositeOver, savePNG } = require('./lib/canvas.cjs');
 const { loadSpriteSrc } = require('./lib/spritesrc.cjs');
@@ -50,8 +51,8 @@ function isAgua(row, col) {
   return row >= 0 && row < GRID_H && col >= 0 && col < GRID_W && GRID[row][col] === 'agua';
 }
 
-const OUT_PATH_1X = path.join(ASSETS, 'sprites', 'mapa_mock_8x8.png');
-const OUT_PATH_8X = path.join(ASSETS, 'sprites', 'mapa_mock_8x8_8x.png');
+const OUT_PATH_1X = path.join(ASSETS, 'preview', 'mapa_mock_8x8.png');
+const OUT_PATH_8X = path.join(ASSETS, 'preview', 'mapa_mock_8x8_8x.png');
 
 function build() {
   const palette = loadPalette(path.join(ASSETS, 'palette.json'));
@@ -99,6 +100,8 @@ function build() {
     }
   }
   compositeOver(map, nucleoCanvas, NUCLEO_COL * TILE, NUCLEO_ROW * TILE);
+
+  fs.mkdirSync(path.dirname(OUT_PATH_1X), { recursive: true });
 
   savePNG(OUT_PATH_1X, map);
   const preview = scaleNearest(map, PREVIEW_SCALE);
