@@ -1351,8 +1351,8 @@ function genWallTex(kind, seed) {
         const mortarY = y % cH === 0, mortarX = ((x + off) % cW) === 0;
         const n = vnoise(x * 0.7 + seed * 2, y * 0.55 + seed);
         if (mortarY || mortarX) buf[i] = 2;
-        else if (hash2(blockIx * 131 + seed, course * 17) < 0.09) {
-          buf[i] = ((x + y) & 1) === 0 ? 1 : 0;                  // bloco FALTANDO: vão escuro
+        else if (hash2(blockIx * 131 + seed, course * 17) < 0.055) {
+          buf[i] = hash2(x * 3, y * 5 + seed) < 0.16 ? 0 : 1;    // bloco FALTANDO: vão escuro (miolo sólido — o xadrez lia pesado de perto)
         } else {
           buf[i] = n > 0.78 ? 8 : n > 0.42 ? 7 : 6;
           if (n > 0.9) buf[i] = 9;                               // cristal de quartzo raro
@@ -1499,6 +1499,14 @@ cityWall(46, 20, 'ruinB', 0.35, RU); cityWall(47, 20, 'ruin', 0.5, RU);
 cityWall(48, 20, 'ruinC', 0.28, RU); cityWall(50, 20, 'ruin', 0.55, RU);
 cityWall(47, 21, 'ruinB', 0.25, RU); cityWall(49, 21, 'ruinC', 0.42, RU);
 cityWall(49, 22, 'ruin', 0.3, RU); cityWall(50, 22, 'ruinB', 0.5, RU);
+/* sombra de CONTATO no chão ao longo de toda parede (achado do ideador:
+   "de lado parece plana") — o file:// roda sem GI assada, e sem isso a
+   base da parede era uma linha seca entre textura e grama. Comprida
+   conforme a altura; é ela que cola a ruína no terreno de qualquer lado. */
+for (const [k, cwv] of CITY) {
+  const tx = k % world.w, ty = (k / world.w) | 0;
+  stampTreeShadow(tx + 0.5, ty + 0.5, 0.62 + cwv.h * 0.3, 0.74, 0.34);
+}
 
 /* o LARGO é calçado de pedra (decisão do ideador): lajotas irregulares
    assadas em 2 variantes 64px, mesmo esquema da grama — 1 lookup por pixel */
@@ -2810,6 +2818,10 @@ function render(now) {
        ficava comprimido). Densidade: 32 texels/tile nos dois eixos. */
     const WALL_VSPAN = 2.0;
     const dvW = cw ? texH / (WALL_VSPAN * lineH) : 0;
+    /* AO da base: a parede escurece chegando no chão — a pedra "pesa" no
+       terreno em vez de terminar numa linha seca (leitura lateral) */
+    const yAO = yBase - 0.16 * lineH;
+    const aoDen = Math.max(1, yBase - yAO);
     for (let y = y0; y <= y1; y++) {
       let v;
       if (cw) {
@@ -2830,6 +2842,7 @@ function render(now) {
         let gr = (c & 255) * wR, gg2 = ((c >> 8) & 255) * wG, gb = ((c >> 16) & 255) * wB;
         c = rgb(gr > 255 ? 255 : gr | 0, gg2 > 255 ? 255 : gg2 | 0, gb > 255 ? 255 : gb | 0);
       }
+      if (cw && y > yAO) c = darkenU32(c, 1 - 0.26 * ((y - yAO) / aoDen)); // AO da base
       px[y * W + x] = !cw && tile === 'c'
         ? shade(c, clamp(f + 0.5, 0, 1), glow)  /* o Núcleo emite: quase sem fog */
         : shade(c, f, glow);
