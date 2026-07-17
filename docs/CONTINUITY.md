@@ -7,7 +7,7 @@
 - Pedido do ideador. Um agente auditou os dois repos (só-leitura). Diagnóstico: mais redondo que bagunçado — buracos de **descoberta e reconciliação**, nada ❌ quebrado.
 - **Consertado**: (1) os 3 revisores voltaram a **opus** (estavam sonnet, contra D-24) + `CLAUDE.md` explicita o split codador/revisor; (2) **`docs/RECURSOS.md`** — o índice único que faltava (scripts, art-mcp, bancadas, MCP, os 6 agentes com "como invocar"), linkado no `CLAUDE.md`; (3) **`olhar`/`ouvir` blindados** contra o dep oculto (Playwright vive em `site/node_modules` → avisam `cd site && npm ci`); (4) **`assets/tools/README.md`**; (5) referências mortas: criado `npm run build:sprites`, corrigido `render.ts`→`render.cjs` no `pixel-artist`; (6) **`nos-mentes` ganhou `CLAUDE.md`**.
 - **Deferido (proposto ao ideador)**: README de `site/qa/`; unificar caminho do Chromium; **skills/slash-commands** (`/feature`, `/olhar`, fim-de-sessão→CONTINUITY) — o maior nice-to-have.
-- **Decisão aberta pro ideador**: os revisores em opus custam mais que sonnet. Enforçei D-24 (que pede opus); se o sonnet era escolha deliberada de custo, é só dizer que eu inverto e atualizo D-24.
+- **Decisão do ideador: revisores em OPUS, confirmado** ("o melhor é opus mesmo"). D-24 segue valendo como está; a config já reflete.
 - 368/368; `build:sprites` determinístico (nenhum PNG mudou); bancadas seguem verdes.
 
 ## Sessão 2026-07-17 (parte 18) — o avatar da brasa (D-42): o pipeline de arte testado de verdade
