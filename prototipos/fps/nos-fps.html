@@ -1318,7 +1318,10 @@ function pathAt(fx, fy) {
    texturas geradas (pedra/madeira/cobre oxidado), arcos de portal e fumaça
    como billboards, veias de luz do Pulso no chão (emissivas à noite). */
 function genWallTex(kind, seed) {
-  const Wt = 16, Ht = kind === 'chimney' || kind === 'ruin' || kind === 'ruinDark' ? 64 : 48;
+  /* ruínas em 32×64 com V ancorado no mundo (2 tiles por textura, 32
+     texels/tile nos DOIS eixos — a de 16 lia esticada colada na câmera) */
+  const isRuin = kind === 'ruin' || kind === 'ruinDark';
+  const Wt = isRuin ? 32 : 16, Ht = kind === 'chimney' || isRuin ? 64 : 48;
   const rnd = mulberry32(seed * 60493 + 11);
   const buf = new Int16Array(Wt * Ht).fill(6);
   const ROOF = 12; // faixa de telhado no topo
@@ -1362,12 +1365,13 @@ function genWallTex(kind, seed) {
       if (y > Ht - 12 && hash2(x * 7 + seed, y * 3) < (y - (Ht - 12)) / 16) buf[i] = hash2(x, y + seed) < 0.5 ? 35 : 36;
     }
     if (dark) { /* glifos: coluna central de marcas lavanda, apagadas em trechos */
+      const mid = Wt >> 1;
       for (let y = 4; y < Ht - 8; y += 5) {
         if (hash2(y * 13, seed) < 0.3) continue; // trecho apagado pelo tempo
         const g = (hash2(y * 7, seed * 3) * 3) | 0;
-        buf[y * Wt + 7] = 52; buf[y * Wt + 8] = 52;
-        if (g > 0) { buf[(y + 1) * Wt + 7] = 52; }
-        if (g > 1) { buf[(y + 1) * Wt + 9] = 51; }
+        buf[y * Wt + mid - 1] = 52; buf[y * Wt + mid] = 52;
+        if (g > 0) { buf[(y + 1) * Wt + mid - 1] = 52; }
+        if (g > 1) { buf[(y + 1) * Wt + mid + 1] = 51; }
       }
     }
     return bufToTex({ buf, W: Wt, H: Ht });
@@ -2684,8 +2688,9 @@ function render(now) {
     wallTop[x] = y0; /* acima disto é céu aberto — a parede não oculta nada lá */
     let wallX = side === 0 ? cam.y + dist * rdy : cam.x + dist * rdx;
     wallX -= wallX | 0;
-    const u = clamp((wallX * TEX) | 0, 0, TEX - 1);
     const tex = cw ? cw.tex : tile === 'c' ? textures.nucleo : tile === 'r' ? textures.ruina : textures.floresta;
+    const twW = cw ? tex.w : TEX; // cidade usa a largura REAL (32) — u em TEX fixo lia esticado
+    const u = clamp((wallX * twW) | 0, 0, twW - 1);
     const fIx = !cw && tile === 'c' ? coreFrame : 0;
     const f = fogAt(dist) * (side === 1 ? 0.78 : 1);
     const hx = mapX + 0.5, hy = mapY + 0.5;
@@ -2701,14 +2706,28 @@ function render(now) {
     const texH = cw ? tex.h : TEX;
     const texStep = texH / fullH;
     let texPos = (y0 - y0r) * texStep;
+    /* cidade: V ancorado no MUNDO — a textura cobre 2.0 tiles e REPETE
+       subindo (a base com musgo só no 1º span), em vez de esticar pela
+       altura da parede (torre 3.1 ficava com blocos gigantes, muro 0.3
+       ficava comprimido). Densidade: 32 texels/tile nos dois eixos. */
+    const WALL_VSPAN = 2.0;
+    const dvW = cw ? texH / (WALL_VSPAN * lineH) : 0;
     for (let y = y0; y <= y1; y++) {
-      const v = clamp(texPos | 0, 0, texH - 1);
-      texPos += texStep;
+      let v;
+      if (cw) {
+        let vv = (texH - 1) - (yBase - y) * dvW;
+        if (vv < 0) { const zone = texH - 14; vv = ((vv % zone) + zone) % zone; } // repete SEM a faixa de musgo
+        v = vv | 0;
+      } else {
+        v = clamp(texPos | 0, 0, texH - 1);
+        texPos += texStep;
+      }
       let c = texAt(tex, fIx, u, v);
       if (gwR !== 1 || gwG !== 1 || gwB !== 1) {
-        /* a luz do chão morre subindo a parede: fator cheio na base, 35% no
-           topo — senão a poça do lampião acende até o telhado de cobre */
-        const kv = 0.35 + 0.65 * (v / texH);
+        /* a luz do chão morre subindo a parede: fator cheio na base, 35% a
+           1.5 tile de altura — senão a poça do lampião acende o topo todo */
+        const hAbove = (yBase - y) / lineH;
+        const kv = 0.35 + 0.65 * Math.max(0, 1 - hAbove / 1.5);
         const wR = 1 + (gwR - 1) * kv, wG = 1 + (gwG - 1) * kv, wB = 1 + (gwB - 1) * kv;
         let gr = (c & 255) * wR, gg2 = ((c >> 8) & 255) * wG, gb = ((c >> 16) & 255) * wB;
         c = rgb(gr > 255 ? 255 : gr | 0, gg2 > 255 ? 255 : gg2 | 0, gb > 255 ? 255 : gb | 0);
