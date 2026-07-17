@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 24) — segunda rodada de otimização (D-45 parte 3): os 4 presets medidos
+
+- Pedido: "ataca de novo pros níveis de gráfico". Perfil apontou o que faltava: vegetação/céu bloqueavam só COLUNAS (linhas rodavam cheias), e a pedra-3D (3 fbm/pixel) era a reserva anunciada.
+- Feito: vegetação e pedra em **blocos RS×RS de verdade** (colunas E linhas), céu com linhas em bloco, fumaça no time dos macios.
+- Presets medidos (VM, mata — pior caso): **Baixo 56.8 · Médio 57.1 · Alto 52.4 (era 42.6; início do D-45: 18.5) · Ultra 35.3**. Surpresa: no CPU÷4, **Médio > Baixo** (15.6 vs 13.8fps — RS=2 amostra o chão a 240×135). Visual idêntico (mata 640/960, fumaça, 320 byte a byte); 368/368.
+- **Aguardando o ideador**: sentir os presets no aparelho. Reserva restante se precisar: cauda dos billboards não-macios em res cheia (arquitetura/heróis — não mexer sem necessidade). Depois: arte (brasa martelo, broa, quilha).
+
 ## Sessão 2026-07-17 (parte 23) — menu de pausa + opções de gráfico (D-46)
 
 - Ideador: botão de pausa no celular com opções de gráfico, e a dúvida "pesaria ter 3 artes (16/32/64px)?".

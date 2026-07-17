@@ -34,10 +34,10 @@ const browser = await pw.chromium.launch();
 
 const CAM = process.env.CAM || '34.0,11.2,0.18'; // carreiro: fileiras de árvore dos 2 lados (billboard-pesado = onde o stutter mora)
 const TIERS = [
-  ['320x180', 'atual'],
-  ['640x360', '2x'],
-  ['1280x720', 'HD (16x pixels)'],
-  ['1920x1080', 'Full HD (36x pixels) — o teto do teto'],
+  ['320x180', 'Baixo (padrão)'],
+  ['480x270', 'Médio'],
+  ['640x360', 'Alto'],
+  ['960x540', 'Ultra'],
 ];
 
 async function medir(res, throttle) {

@@ -2279,7 +2279,7 @@ function giAt(fx, fy) {
 /* ---------- render ---------- */
 const NEARB = [], SKYB = [], ORDER = []; /* rascunho dos billboards, reusado por quadro (D-45) */
 const OCC = new Int32Array(8); /* oclusão por coluna do bloco de billboard (RS<=6) */
-const VEG = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'nevoa']); /* billboards MACIOS que aceitam bloco RS (heróis/prédios/portal/NPC/ilha ficam nítidos) */
+const VEG = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'nevoa', 'fumaca']); /* billboards MACIOS que aceitam bloco RS (heróis/prédios/portal/NPC/ilha ficam nítidos) */
 const zbuf = new Float32Array(W);
 /* topo da parede por coluna: a oclusão da parede só vale DALI PRA BAIXO.
    Sem isso, uma parede esconderia billboards até no céu acima dela (o
@@ -2365,7 +2365,7 @@ function render(now) {
     const dSun = wrapA(colAng - sunAz);
     const warmBias = wDusk * Math.exp(-((dSun / 1.05) ** 2));
     const dxSun = x - SKYST.sunSx, dxMoon = x - SKYST.moonSx;
-    for (let y = 0; y < HALF; y++) {
+    for (let y = 0; y < HALF; y += RS) {
       const t = y / SKY_H;
       /* gradiente vertical da fase + fusão pro quente perto do horizonte */
       let r, g, b;
@@ -2415,7 +2415,8 @@ function render(now) {
         if (wb > 0.05) { r = Math.min(255, r + 70 * wb); g = Math.min(255, g + 14 * wb); }
       }
       const skyC = rgb(r | 0, g | 0, b | 0);
-      for (let o = 0; o < xEnd; o++) px[y * W + x + o] = skyC;
+      const skyYEnd = Math.min(y + RS, HALF); /* bloco vertical também (densidade do 320) */
+      for (let yy = y; yy < skyYEnd; yy++) for (let o = 0; o < xEnd; o++) px[yy * W + x + o] = skyC;
     }
     /* raios crepusculares: hastes verticais suaves perto do sol no horizonte */
     if (wDusk > 0.12 && Math.abs(dxSun) < 60 && SKYST.sunSy > SKY_H * 0.45) {
@@ -2867,13 +2868,16 @@ function render(now) {
           if ((BAYER[y & 3][x & 3] / 16) < 0.62 - ex * ex * 0.3) px[y * W + x] = shade(PAL_RGB_U32[30], f, 0);
         }
       }
-      for (let x = x0r; x <= x1r; x++) {
-        const occY = ty >= zbuf[x] ? wallTop[x] : H;
+      /* pedra também em blocos RS na alta-res (D-45): 3 fbm por AMOSTRA — o
+         pixel mais caro do jogo; orgânico aceita bloco (a densidade do 320) */
+      const rStep = RS > 1 ? RS : 1;
+      for (let x = x0r; x <= x1r; x += rStep) {
+        const rSpan = Math.min(rStep, x1r - x + 1);
+        for (let o = 0; o < rSpan; o++) { const xn = x + o; OCC[o] = ty >= zbuf[xn] ? wallTop[xn] : H; }
         const nx = (x - cxr) / radX;
         if (nx < -1 || nx > 1) continue;
         const bearing0 = az + Math.asin(clamp(nx, -1, 1)); // rumo no mundo da coluna visível
-        for (let y = y0; y <= y1; y++) {
-          if (y >= occY) continue;               // atrás de parede (só abaixo do topo dela)
+        for (let y = y0; y <= y1; y += rStep) {
           if (y > y1c) continue;                 // base plana
           const nyv = (y - cyr) / radY;
           const relief = (fbm(Math.cos(bearing0) * 2.4 + seed, nyv * 2.4 + Math.sin(bearing0) * 2.4 + seed, 3) - 0.5) * 0.55;
@@ -2900,7 +2904,11 @@ function render(now) {
           } else {
             idx = ROCK[clamp(Math.round(tt * 4), 0, 4)];
           }
-          px[y * W + x] = shade(PAL_RGB_U32[idx], f, 0);
+          const rc = shade(PAL_RGB_U32[idx], f, 0);
+          const yEndR = Math.min(y + rStep - 1, y1, y1c | 0);
+          for (let yy = y; yy <= yEndR; yy++) {
+            for (let o = 0; o < rSpan; o++) { if (yy >= OCC[o]) continue; px[yy * W + x + o] = rc; }
+          }
         }
       }
       continue;
@@ -2935,9 +2943,10 @@ function render(now) {
     }
     const selfGlow = b.selfGlow ?? (b.tex === 'oficina' || b.tex === 'portal' ? 0.3 : 0); /* oficinas acesas no vão; lampiões via b.selfGlow */
     const shF = clamp(f + selfGlow, 0, 1), shG = glow + selfGlow * pulse;
-    /* vegetação em blocos RS na alta-res (D-45): copa/tufo/flor são macios, então
-       o shade() sai UMA vez por bloco e replica; heróis/prédios/portal/NPC/ilha
-       ficam nítidos (step 1). No 320×180 (RS=1) todo mundo é step 1 = igual antes. */
+    /* vegetação em blocos RS×RS na alta-res (D-45): copa/tufo/flor são macios,
+       então texel+shade() saem UMA vez por bloco e replicam em colunas E linhas
+       (a densidade do 320×180); heróis/prédios/portal/NPC/ilha ficam nítidos
+       (step 1). No 320×180 (RS=1) todo mundo é step 1 = igual antes. */
     const bStep = (RS > 1 && VEG.has(b.label)) ? RS : 1;
     for (let x = x0; x <= x1; x += bStep) {
       const span = Math.min(bStep, x1 - x + 1);
@@ -2945,17 +2954,20 @@ function render(now) {
          aberto (copas e ilhas atrás de muros aparecem por cima). Uma vez por coluna. */
       for (let o = 0; o < span; o++) { const xn = x + o; OCC[o] = ty >= zbuf[xn] ? wallTop[xn] : H; }
       const u = clamp((((x - rx0) / sw) * tw) | 0, 0, tw - 1);
-      for (let y = y0; y <= y1; y++) {
+      for (let y = y0; y <= y1; y += bStep) {
         const v = clamp((((y - y0c) / sh) * th) | 0, 0, th - 1);
         const c = genTex ? tex.data[v * tw + u] : texAt(tex, fIx, u, v);
         if (((c >> 24) & 255) < 40) continue; /* transparente */
         const sc = shade(c, shF, shG);
-        for (let o = 0; o < span; o++) {
-          if (y >= OCC[o]) continue;
-          const xn = x + o;
-          /* ilha-irmã abaixo do horizonte só aparece onde o chão é vazio */
-          if (b.sky && y > HALF && groundMask[y * W + xn]) continue;
-          px[y * W + xn] = sc;
+        const yEnd = Math.min(y + bStep - 1, y1);
+        for (let yy = y; yy <= yEnd; yy++) {
+          for (let o = 0; o < span; o++) {
+            if (yy >= OCC[o]) continue;
+            const xn = x + o;
+            /* ilha-irmã abaixo do horizonte só aparece onde o chão é vazio */
+            if (b.sky && yy > HALF && groundMask[yy * W + xn]) continue;
+            px[yy * W + xn] = sc;
+          }
         }
       }
     }
