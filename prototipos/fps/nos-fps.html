@@ -169,6 +169,33 @@
     cursor: pointer;
   }
   #menu button:hover { background: #c3a6ff; }
+  /* menu de gráficos (D-46): presets de resolução + toggles (essencial no celular, que não tem tecla) */
+  #menu .gset { text-align: left; margin: 4px 0 18px; display: flex; flex-direction: column; gap: 10px; }
+  #menu .grow { display: flex; align-items: center; gap: 8px; }
+  #menu .grow > span { flex: 1; font-size: 11px; color: #c7bcd8; letter-spacing: 0.04em; }
+  #menu .opt { background: rgba(168, 132, 243, 0.14); color: #c7bcd8; border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 10px; font: 600 11px ui-monospace, monospace; cursor: pointer; }
+  #menu .opt:hover { background: rgba(168, 132, 243, 0.28); }
+  #menu .opt.on { background: #a884f3; color: #171221; border-color: #a884f3; }
+  #menu .gnote { font-size: 9px; color: #6b6675; margin: -4px 0 0; }
+  #pauseBtn {
+    position: absolute;
+    top: 34px;
+    right: 48px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 28px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--ink);
+    background: rgba(16, 12, 21, 0.72);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    z-index: 6;
+    display: none; /* só em celular (pointer grosso): no PC o ESC já pausa */
+  }
   #tags span {
     position: absolute;
     transform: translate(-50%, -100%);
@@ -262,6 +289,7 @@
   @media (pointer: coarse) {
     .padzone { display: none; }
     .stick { display: block; }
+    #pauseBtn { display: block; }
   }
   footer {
     flex: none;
@@ -296,11 +324,22 @@
   <div id="menu">
     <div class="panel">
       <h2>N Ó S</h2>
-      <p>menu em construção — por enquanto, só a saída</p>
+      <div class="gset">
+        <div class="grow"><span>gráficos</span>
+          <button class="opt" data-res="">Baixo</button>
+          <button class="opt" data-res="480x270">Médio</button>
+          <button class="opt" data-res="640x360">Alto</button>
+          <button class="opt" data-res="960x540">Ultra</button>
+        </div>
+        <p class="gnote">mais nítido = mais pesado. No celular, comece no Baixo.</p>
+        <div class="grow"><span>luz global</span><button class="opt" id="mGi">—</button></div>
+        <div class="grow"><span>som</span><button class="opt" id="mSom">—</button></div>
+      </div>
       <button id="btnContinue">continuar ▶</button>
     </div>
   </div>
   <div id="hudTop"></div>
+  <button id="pauseBtn" title="pausa">⏸</button>
   <button id="somBtn" title="som (V)">🔊</button>
   <div id="padMove" class="padzone"></div>
   <div id="padLook" class="padzone"></div>
@@ -820,12 +859,13 @@ function fbm(x, y, oct) {
    MESMOS sprites 16px do jogo. Nada aqui é engine novo: é só mais uma
    "janela" (D-26) sobre o Registro. */
 
-/* ?res=LARGxALT (D-44): resolução INTERNA do render — alavanca de experimento.
-   320×180 é o padrão do jogo; ?res=640x360 (ou 1280x720, 1920x1080…) deixa
-   qualquer um SENTIR nitidez × custo no próprio aparelho. Todo o resto do
-   renderizador deriva de W/H, então a alavanca é só esta. Limites sãos. */
-let qResRaw = null;
-try { qResRaw = /^(\d{3,4})x(\d{3,4})$/.exec(new URLSearchParams(location.search).get('res') || ''); } catch { /* sem query */ }
+/* Resolução INTERNA do render — o único botão de "gráficos" (D-44/D-46).
+   Ordem: ?res=LARGxALT na URL (override, p/ a bancada) > preset salvo pelo menu
+   (localStorage nos_res) > padrão 320×180. Todo o resto do renderizador deriva
+   de W/H, então mudar aqui muda tudo. Limites sãos. */
+let qResStr = null;
+try { qResStr = new URLSearchParams(location.search).get('res') || (localStorage.getItem('nos_res') || ''); } catch { /* file:// */ }
+const qResRaw = /^(\d{3,4})x(\d{3,4})$/.exec(qResStr || '');
 const W = qResRaw ? Math.min(1920, Math.max(160, +qResRaw[1])) & ~1 : 320; // par (os blocos 2×2 e o HALF exigem)
 const H = qResRaw ? Math.min(1080, Math.max(90, +qResRaw[2])) & ~1 : 180;
 const HALF = H / 2;
@@ -3310,8 +3350,42 @@ stageEl.addEventListener('click', () => {
 menuEl.addEventListener('click', (e) => e.stopPropagation());
 document.getElementById('btnContinue').addEventListener('click', () => {
   menuEl.style.display = 'none';
-  stageEl.requestPointerLock?.();
+  stageEl.requestPointerLock?.(); // no-op no celular (sem lock)
 });
+
+/* ---------- MENU DE GRÁFICOS (D-46): pause + presets, essencial no celular ----------
+   O botão ⏸ abre o menu no celular (o PC usa ESC). Os presets salvam o nível
+   em localStorage e recarregam limpo — W/H são const no boot (mudar de verdade
+   em runtime exigiria re-alocar dezenas de buffers; recarregar é honesto e
+   robusto). Luz e som viram botões porque no celular não há tecla G/V. */
+function toggleGi() {
+  giOn = !giOn; giWK = -1; // força re-mistura ao religar
+  try { localStorage.setItem('nos_gi', giOn ? '1' : '0'); } catch { /* ok */ }
+  refreshMenu();
+}
+const curRes = W === 320 ? '' : W + 'x' + H; // o que está rodando de fato
+function refreshMenu() {
+  for (const b of menuEl.querySelectorAll('.opt[data-res]')) b.classList.toggle('on', (b.dataset.res || '') === curRes);
+  const gi = document.getElementById('mGi'), sm = document.getElementById('mSom');
+  if (gi) { gi.textContent = giOn ? 'ligada' : 'desligada'; gi.classList.toggle('on', giOn); }
+  if (sm) { sm.textContent = somOn ? 'ligado' : 'desligado'; sm.classList.toggle('on', somOn); }
+}
+for (const b of menuEl.querySelectorAll('.opt[data-res]')) {
+  b.addEventListener('click', () => {
+    try { localStorage.setItem('nos_res', b.dataset.res || ''); } catch { /* ok */ }
+    location.href = location.pathname; // recarrega sem query -> o preset salvo manda
+  });
+}
+document.getElementById('mGi')?.addEventListener('click', toggleGi);
+document.getElementById('mSom')?.addEventListener('click', () => { toggleSom(); refreshMenu(); });
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  clearInputs();
+  menuEl.style.display = 'flex';
+  refreshMenu();
+});
+refreshMenu();
 document.addEventListener('pointerlockchange', () => {
   if (isLocked()) { everLocked = true; menuEl.style.display = 'none'; }
   else if (everLocked) {
@@ -3319,14 +3393,14 @@ document.addEventListener('pointerlockchange', () => {
     /* soltou por causa do quiosque do Portal: cursor livre pra clicar os mundos,
        SEM abrir o menu; clicar na cena (fora do painel) re-trava e volta a andar */
     if (kioskRelease) kioskRelease = false;
-    else menuEl.style.display = 'flex'; // ESC soltou o mouse -> menu
+    else { menuEl.style.display = 'flex'; refreshMenu(); } // ESC soltou o mouse -> menu
   }
 });
 document.addEventListener('mousemove', (e) => { if (isLocked()) cam.a += e.movementX * 0.0032; });
 
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { // com pointer lock o navegador solta sozinho; sem, a gente alterna o menu
-    if (!isLocked()) menuEl.style.display = menuEl.style.display === 'flex' ? 'none' : 'flex';
+    if (!isLocked()) { const show = menuEl.style.display !== 'flex'; menuEl.style.display = show ? 'flex' : 'none'; if (show) refreshMenu(); }
     return;
   }
   if (menuEl.style.display === 'flex') return; // menu aberto: jogo não ouve teclas
@@ -3337,11 +3411,7 @@ addEventListener('keydown', (e) => {
     try { localStorage.setItem('nos_tags', tagsOn ? '1' : '0'); } catch { /* ok */ }
     if (!tagsOn) document.getElementById('tags').textContent = '';
   }
-  if (e.key.toLowerCase() === 'g') { // GI assada liga/desliga (D-36) — A/B honesto
-    giOn = !giOn;
-    giWK = -1; // força re-mistura ao religar
-    try { localStorage.setItem('nos_gi', giOn ? '1' : '0'); } catch { /* ok */ }
-  }
+  if (e.key.toLowerCase() === 'g') toggleGi(); // GI assada liga/desliga (D-36) — A/B honesto
   if (e.key.toLowerCase() === 'v') toggleSom(); // som liga/desliga (D-40)
   document.getElementById('hint').classList.add('gone');
 });

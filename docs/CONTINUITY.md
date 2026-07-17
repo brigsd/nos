@@ -2,6 +2,14 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 23) — menu de pausa + opções de gráfico (D-46)
+
+- Ideador: botão de pausa no celular com opções de gráfico, e a dúvida "pesaria ter 3 artes (16/32/64px)?".
+- **Resposta (D-44 na mão): não faça 3 artes.** Textura mais densa que o render é jogada fora no downsample; um herói 64px já serve em qualquer resolução. "Gráfico baixo/médio/alto" = **resolução interna** (`?res=`), uma alavanca só, zero arte duplicada.
+- Feito: botão ⏸ (só em `pointer:coarse`; no PC o ESC já pausa) abre o `#menu`, que ganhou seção de gráficos — presets **Baixo 320 · Médio 480 · Alto 640 · Ultra 960** + toggles de luz e som (no celular não há tecla G/V). Preset salvo em `localStorage nos_res` + recarga limpa (W/H são const no boot; live-resize seria refactor grande). Boot lê `?res=` > `nos_res` > 320.
+- Verificado com Pixel 5 emulado (⏸ visível, menu abre, presets aplicam e persistem); 368/368.
+- **Aguardando o ideador**: testar o menu no celular. Depois: **arte** — polir a brasa 64px (martelo) e fazer broa/quilha.
+
 ## Sessão 2026-07-17 (parte 22) — o stutter dos billboards (D-45 parte 2)
 
 - Ideador: "melhorou mas ainda engasga às vezes". Stutter *intermitente* ≠ lento — perfilei o PICO (novo `maxMs`/`slow` no `__nosPerf`) num ponto de MATA densa (carreiro). Vilão claro: **billboards** — bill saltava a **17-19ms no 640** só de virar pras árvores (102 quadros lentos/3s).
