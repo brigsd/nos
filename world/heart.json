@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 76,
-    "worldTime": 4560
+    "tickCount": 78,
+    "worldTime": 4680
   },
   "width": 64,
   "height": 64,
@@ -4614,6 +4614,37 @@
       "type": "core_pulse",
       "tick": 76,
       "worldTime": 4560
+    },
+    {
+      "type": "native_spoke",
+      "tick": 77,
+      "worldTime": 4620,
+      "nativeId": "brasa",
+      "message": "quem quer um pedaço de pão fresco? o calor é bom."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 77,
+      "worldTime": 4620,
+      "nativeId": "broa",
+      "message": "Temos pão quentinho e queijo! Quem vem experimentar?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 77,
+      "worldTime": 4620,
+      "nativeId": "quilha",
+      "message": "Quem vai se arriscar a pilotar algo que eu montar? O vazio aguarda."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 77,
+      "worldTime": 4620
+    },
+    {
+      "type": "core_pulse",
+      "tick": 78,
+      "worldTime": 4680
     }
   ],
   "natives": {
@@ -4622,7 +4653,7 @@
       "name": "Gota",
       "position": {
         "x": 0,
-        "y": 5
+        "y": 7
       },
       "behaviorTree": "wanderer",
       "behaviorState": "{}",
