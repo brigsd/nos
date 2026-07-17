@@ -2,6 +2,15 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 — árvores 3D com folhas detalhadas (branch `claude/tree3d-leaves`)
+
+- Pedido do ideador: branch separada, sombras de lado, **recriar árvores 3D com folhas detalhadas** — e disciplina de olhar honesto no processo (defeitos nomeados ANTES de qualquer elogio, a cada render).
+- **`prototipos/fps/tree3d-core.js` (novo, padrão tree-core: jogo via `<script src>`, Node via vm):** a árvore cresce UMA vez como esqueleto 3D real (ramificação recursiva com frames ortonormais, filotaxia por ângulo áureo) + copa em lobos 3D + **nuvem de folhas presa em 3D à superfície de cada lobo** (pinceladas de 2-4px que giram junto com a câmera — detalhe sem chuvisco). Rasterizada de **8 azimutes** ("rotações Doom") com z-buffer e **sol fixo no mundo** (mesma convenção do rock3d): circular a árvore mostra lados diferentes de verdade e o lado aceso fica parado. Linguagem preservada: cel 4 bandas + luz ambiente de céu (contraluz nunca vira breu), contorno de tinta, anel de tinta por lobo (o vinco entre bolotas), casca serpenteada, aterramento.
+- **Integração (`nos-fps.html`):** `TREE_VARIANTS` = 6 espécies × 8 vistas + cerejeira + seca; vista escolhida pelo azimute câmera→árvore; **load leve**: só a vista 0 assa síncrona (~0.4s), as outras 7 assam em `requestIdleCallback` (~36ms/vista, fila esvazia nos primeiros ~3s; até lá a vista mais próxima segura). **Vento por cisalhamento no desenho** (copa verga, base fica) substituiu os 3 frames assados — 8 vistas já pesam ~9MB. 58-60fps.
+- Iterações do olhar registradas: contraluz-breu → ambiente 0.66/0.24; bétula-palito → reproporção; couve-flor → anel de tinta por lobo; tronco laranja da cerejeira → rampa `dia`; poda de gravetos invisíveis (w<2.3) = 2.3× no assar sem mudar 1 pixel.
+- **Testes: 372/372** (4 novos em `prototipos/fps/tree3d-core.test.ts`, vitest agora inclui `prototipos/**`): determinismo byte a byte, paleta válida, vistas opostas diferem ≥5%, e o teste do sol-fixo (centroide do tom claro cruza a tela entre vistas opostas).
+- **Próximo:** review dos agentes (code + art) antes de considerar merge; avaliar 16 vistas se o "pulo" entre 8 incomodar em jogo; espécies restantes do 2D (salgueiro/pinheiro em 3D) se o ideador quiser.
+
 ## Sessão 2026-07-16 (parte 13) — A Clareira v2 (D-37): um portal, praça aberta, carpintaria
 
 - Direção do ideador: alas feias, bancas estranhas tapando o caminho, e "só um portal — quando a pessoa passa, mostra os mundos conectados". Feito: **Portal do Átrio único** (dois arcos mortos removidos, calçamento leva direto), painel **◈ MUNDOS CONECTADOS** por proximidade (<2.4 tiles, histerese, `NOS_WORLDS` = registry inline no build, passivo — zero clique), **4 bancas removidas**, texturas v2 (chapas de cobre com costura, beiral fundo, prumos/travessa, socos, janela+peitoril variando por seed, seeds próprios por ala), telhados com desnível por tile. Baker da GI sincronizado + re-assado.

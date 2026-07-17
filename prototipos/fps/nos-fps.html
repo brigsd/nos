@@ -248,6 +248,7 @@
 </footer>
 
 <script src="data.js"></script>
+<script src="tree3d-core.js"></script>
 <script>
 'use strict';
 /* NÓS — gerador de árvores (L-system / ramificação recursiva + copa por campo
@@ -814,15 +815,41 @@ function bufToTex(gen) {
 /* espécies extras só do protótipo (variedade de silhueta) */
 SPECIES.copado = { ...SPECIES.carvalho, spread: 0.74, leafR: [9, 14], depth: 7, len: 20, upBias: 0.03 };
 SPECIES.jovem = { ...SPECIES.carvalho, len: 15, width: 5, leafR: [5, 8], depth: 6, jitter: 0.42 };
-/* mix da floresta: verdes na base, florida/bétula como tempero (8 x 3 frames de vento) */
-const TREE_SPECIES_SET = ['carvalho', 'carvalho', 'copado', 'copado', 'anciao', 'jovem', 'florida', 'betula'];
+/* ÁRVORES 3D (tree3d-core.js): cada variante é UMA árvore 3D rasterizada
+   de 8 azimutes — circular mostra lados diferentes, o lado do sol fica
+   parado no mundo. No load só a vista 0 é assada (rápido); as outras 7
+   assam no tempo OCIOSO e entram conforme ficam prontas (até lá, a vista
+   mais próxima já assada segura o billboard). */
+const TREE_SPECIES_SET = ['carvalho', 'copado', 'anciao', 'jovem', 'florida', 'betula'];
 const TREE_RES = 1.6; // fonte ~1.6x mais densa: tronco deixa de parecer chunky de perto
-const TREE_VARIANTS = TREE_SPECIES_SET.map((sp, i) =>
-  [-1, 0, 1].map((w) => bufToTex(growTree({ species: sp, mood: 'dia', seed: 4021 + i * 977, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES, windAmt: w * TREE_RES })))
-);
+const T3_W = Math.round(104 * TREE_RES), T3_H = Math.round(136 * TREE_RES);
+const N_TREE_VIEWS = 8;
+const TREE3D_BAKE_Q = []; // {tree, views, vi} pendentes do idle-bake
+function makeTreeViews(species, seed) {
+  const tree = growTree3D({ species, seed, sizeMul: TREE_RES });
+  tree.seedTag = seed;
+  const views = new Array(N_TREE_VIEWS).fill(null);
+  views[0] = bufToTex(renderTreeView3D(tree, 0, { W: T3_W, H: T3_H }));
+  /* ordem de assadura: opostas primeiro (4), depois quadraturas (2,6), depois diagonais */
+  for (const vi of [4, 2, 6, 1, 3, 5, 7]) TREE3D_BAKE_Q.push({ tree, views, vi });
+  return views;
+}
+const TREE_VARIANTS = TREE_SPECIES_SET.map((sp, i) => makeTreeViews(sp, 4021 + i * 977));
 /* raridades: cerejeira (bosques rosa) e árvore seca */
-const TREE_CEREJEIRA = [-1, 0, 1].map((w) => bufToTex(growTree({ species: 'cerejeira', mood: 'dia', seed: 777, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES, windAmt: w * TREE_RES })));
-const TREE_SECA = [bufToTex(growTree({ species: 'seca', mood: 'dia', seed: 313, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES }))];
+const TREE_CEREJEIRA = makeTreeViews('cerejeira', 777);
+const TREE_SECA = makeTreeViews('seca', 313);
+/* assa 1 vista por chamada ociosa (~36ms) até esvaziar a fila */
+function bakeTreeViewsIdle() {
+  const job = TREE3D_BAKE_Q.shift();
+  if (!job) return;
+  job.views[job.vi] = bufToTex(renderTreeView3D(job.tree, (job.vi / N_TREE_VIEWS) * Math.PI * 2, { W: T3_W, H: T3_H }));
+  if (TREE3D_BAKE_Q.length) scheduleTreeBake();
+}
+function scheduleTreeBake() {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(bakeTreeViewsIdle, { timeout: 800 });
+  else setTimeout(bakeTreeViewsIdle, 60);
+}
+scheduleTreeBake();
 /* arbustos da campina */
 const BUSH_VARIANTS = [];
 for (let i = 0; i < 4; i++) {
@@ -1627,7 +1654,7 @@ for (let ty = 0; ty < world.h; ty++) {
       const treeScale = 4.3 + h * 1.4;
       const bx0 = tx + 0.5 + jx, by0 = ty + 0.5 + jy;
       if (pathAt(bx0, by0) < 1.05) continue; // O CARREIRO abre o corredor: tronco nunca no caminho, as copas dos lados emolduram
-      bills.push({ x: bx0, y: by0, genFrames: v, label: 'arvore', scale: treeScale, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
+      bills.push({ x: bx0, y: by0, treeViews: v, label: 'arvore', scale: treeScale, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
       stampTreeShadow(bx0, by0, 0.7 + treeScale * 0.34, 0.55 + treeScale * 0.075, 0.62);
       addTrunk(tx, ty, bx0, by0, v === TREE_SECA ? 0.26 : 0.22); // raio ~ meia-largura do tronco na base
     } else if (t === 'm') {
@@ -1723,7 +1750,7 @@ for (let ty = 0; ty < world.h; ty++) {
         let v = TREE_VARIANTS[(hv * TREE_VARIANTS.length) | 0];
         if (hash2(n * 37, salt + 16) < 0.16) v = TREE_CEREJEIRA; // cerejeiras pontuando o caminho
         const sc = 4.0 + hv * 1.3;
-        bills.push({ x: txp, y: typ, genFrames: v, label: 'arvore', scale: sc, lift: 0, phase: hash2(n * 41, salt + 20) * Math.PI * 2, swaySpeed: 1600 });
+        bills.push({ x: txp, y: typ, treeViews: v, label: 'arvore', scale: sc, lift: 0, phase: hash2(n * 41, salt + 20) * Math.PI * 2, swaySpeed: 1600 });
         stampTreeShadow(txp, typ, 0.7 + sc * 0.34, 0.55 + sc * 0.075, 0.62);
         addTrunk(txp | 0, typ | 0, txp, typ, 0.22);
       }
@@ -2477,6 +2504,15 @@ function render(now) {
       // "rotações Doom": a face muda conforme o ângulo de onde você olha
       const va = Math.atan2(b.y - cam.y, b.x - cam.x);
       genTex = b.genViews[((Math.round(va / (Math.PI / 2)) % 4) + 4) % 4];
+    } else if (b.treeViews) {
+      /* árvore 3D: 8 rotações Doom; vista ainda não assada -> a mais
+         próxima já pronta (o idle-bake completa o anel nos 1ºs segundos) */
+      const va = Math.atan2(b.y - cam.y, b.x - cam.x);
+      const vi = ((Math.round(va / (Math.PI * 2 / N_TREE_VIEWS)) % N_TREE_VIEWS) + N_TREE_VIEWS) % N_TREE_VIEWS;
+      genTex = b.treeViews[vi];
+      for (let o = 1; o < N_TREE_VIEWS && !genTex; o++) {
+        genTex = b.treeViews[(vi + o) % N_TREE_VIEWS] || b.treeViews[(vi - o + N_TREE_VIEWS) % N_TREE_VIEWS];
+      }
     }
     const tex = genTex ?? textures[b.tex];
     const tw = genTex ? genTex.w : TEX, th = genTex ? genTex.h : TEX;
@@ -2584,6 +2620,25 @@ function render(now) {
           /* dither retrô em anel */
           const band = ((x + y) & 1) === 0 ? 1 : 0.92;
           px[y * W + x] = rgb(clamp(r * dim * band | 0, 0, 255), clamp(g * dim * band | 0, 0, 255), clamp(bch * dim * band | 0, 0, 255));
+        }
+      }
+      continue;
+    }
+    if (b.treeViews) {
+      /* vento por CISALHAMENTO na hora do desenho (a copa verga, a base
+         fica): substitui os 3 frames assados — 8 vistas já pesam memória */
+      const swayK = Math.sin(now / (b.swaySpeed || 1600) + (b.phase || 0)) * TREE_RES * 2.2;
+      for (let x = x0; x <= x1; x++) {
+        const occY = ty >= zbuf[x] ? wallTop[x] : H;
+        const u0 = ((x - rx0) / sw) * tw;
+        for (let y = y0; y <= y1; y++) {
+          if (y >= occY) continue;
+          const v = clamp((((y - y0c) / sh) * th) | 0, 0, th - 1);
+          const hgt = 1 - v / th; // 1 topo .. 0 base
+          const u = clamp((u0 - swayK * hgt * hgt) | 0, 0, tw - 1);
+          const c = tex.data[v * tw + u];
+          if (((c >> 24) & 255) < 40) continue;
+          px[y * W + x] = shade(c, f, glow);
         }
       }
       continue;
