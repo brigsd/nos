@@ -199,6 +199,38 @@
   }
   #padMove { left: 0; }
   #padLook { right: 0; }
+  /* joysticks de celular (D-39): visíveis só em ponteiro grosso; as zonas de
+     arrasto antigas somem lá — um esquema de controle só, sem briga. Como são
+     ancorados por % nos cantos, GIRAR o celular os re-ancora sozinho. */
+  .stick {
+    position: absolute;
+    bottom: 6%;
+    width: 104px;
+    height: 104px;
+    border-radius: 50%;
+    background: rgba(23, 18, 33, 0.35);
+    border: 1px solid rgba(168, 132, 243, 0.35);
+    display: none;
+    touch-action: none;
+    z-index: 5;
+  }
+  #stickL { left: 5%; }
+  #stickR { right: 5%; }
+  .stick .knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: rgba(168, 132, 243, 0.5);
+    border: 1px solid rgba(234, 173, 237, 0.6);
+    transform: translate(-50%, -50%);
+  }
+  @media (pointer: coarse) {
+    .padzone { display: none; }
+    .stick { display: block; }
+  }
   footer {
     flex: none;
     display: flex;
@@ -239,6 +271,8 @@
   <div id="hudTop"></div>
   <div id="padMove" class="padzone"></div>
   <div id="padLook" class="padzone"></div>
+  <div id="stickL" class="stick"><div class="knob"></div></div>
+  <div id="stickR" class="stick"><div class="knob"></div></div>
   <div id="hint">clique: mirar com o mouse (ESC solta) · arraste: esquerda anda · direita olha</div>
 </div>
 
@@ -1356,11 +1390,12 @@ const CT = {
   woodBan: genWallTex('wood', 12), woodCoz: genWallTex('wood', 83),
   chimney: genWallTex('chimney', 53),
 };
-/* ruínas NW ocultas SÓ no FPS (pedido do ideador): viravam blocos cinza sem
-   leitura colados no spawn. O Registro continua com elas (o 2D as mostra);
-   quando ganharem arte de ruína de verdade (paredes quebradas, musgo), voltam. */
+/* TODAS as ruínas ocultas SÓ no FPS (D-39, pedido do ideador — 2x): viram
+   blocos cinza sem leitura, "paredes no meio do nada" (o aglomerado sul em
+   45-48,36-38 foi flagrado em jogo). O Registro continua com elas (o 2D as
+   mostra); quando ganharem arte de ruína de verdade (C3), voltam. */
 const HIDDEN_RUINS = new Set();
-for (let ty = 6; ty <= 12; ty++) for (let tx = 23; tx <= 29; tx++) {
+for (let ty = 0; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
   if (world.at(tx, ty) === 'r') HIDDEN_RUINS.add(ty * world.w + tx);
 }
 const CITY = new Map();
@@ -1370,13 +1405,13 @@ const cityWall = (tx, ty, kind, h, mm) => CITY.set(ty * world.w + tx, { tex: CT[
    com DESNÍVEL por tile: cumeeira mais alta num canto = silhueta viva. */
 /* Estaleiro (NW, madeira ALTA + anexo baixo — silhueta em degraus) */
 cityWall(43, 12, 'wood', 1.88, '#cd683d'); cityWall(44, 12, 'wood', 1.68, '#cd683d'); cityWall(43, 13, 'wood', 1.75, '#cd683d');
-cityWall(42, 12, 'wood', 0.85, '#cd683d');
+cityWall(43, 11, 'wood', 0.85, '#cd683d'); /* anexo movido pra TRÁS (D-39): em (42,12) tapava a chegada pelo carreiro */
 /* Forja (NE, pedra + chaminé fumegando + depósito baixo) */
 cityWall(48, 12, 'stone', 1.42, '#7f708a'); cityWall(49, 12, 'chimney', 2.05, '#625565'); cityWall(49, 13, 'stone', 1.3, '#7f708a');
 cityWall(50, 12, 'stone', 0.8, '#7f708a');
 /* Bancada (SW, oficina baixa de madeira + telheiro) */
 cityWall(43, 19, 'woodBan', 1.02, '#cd683d'); cityWall(44, 19, 'woodBan', 0.9, '#cd683d'); cityWall(43, 18, 'woodBan', 0.95, '#cd683d');
-cityWall(42, 19, 'woodBan', 0.7, '#cd683d');
+cityWall(43, 20, 'woodBan', 0.7, '#cd683d'); /* anexo movido pra TRÁS (D-39): idem */
 /* Cozinha (SE, madeira quente) */
 cityWall(48, 19, 'woodCoz', 1.2, '#cd683d'); cityWall(49, 19, 'woodCoz', 1.05, '#cd683d'); cityWall(49, 18, 'woodCoz', 1.12, '#cd683d');
 
@@ -1799,6 +1834,50 @@ function genSmoke(fr) {
    do calçamento. Os dois arcos apagados saíram (eram cenário morto); chegar
    perto do portal abre o painel dos MUNDOS CONECTADOS (worlds/registry.json,
    inlined pelo build como NOS_WORLDS — a travessia real vive no mapa 2D). */
+/* O ARCO DE ENTRADA (D-39, pedido do ideador): onde o carreiro acaba, um
+   arco LARGO de pedra dá as boas-vindas — mesma linguagem do portal (aduelas,
+   pedra-chave, verdigris escorrendo), mas SEM véu: é moldura, não portal. */
+function genGateArch() {
+  const Wg = 96, Hg = 72;
+  const rnd = mulberry32(50227);
+  const buf = new Int16Array(Wg * Hg).fill(-1);
+  const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < Wg && y < Hg) buf[y * Wg + x] = v; };
+  const stone = (x, y) => {
+    const m = (y % 6 === 0) || (((x + ((y / 6 | 0) & 1) * 3) % 7) === 0);
+    return m ? 2 : vnoise(x * 0.7 + 5, y * 0.6) > 0.6 ? 7 : 6;
+  };
+  /* pilares largos com plinto e capitel */
+  for (const px0 of [4, 80]) {
+    for (let y = 18; y < Hg; y++) for (let x = px0; x < px0 + 12; x++) put(x, y, stone(x, y));
+    for (let y = Hg - 7; y < Hg; y++) for (let x = px0 - 2; x < px0 + 14; x++) put(x, y, stone(x, y)); // plinto
+    for (let y = 16; y < 20; y++) for (let x = px0 - 1; x < px0 + 13; x++) put(x, y, 7);               // capitel
+    for (let y = 18; y < Hg; y++) { put(px0, y, 1); put(px0 + 11, y, 1); }                              // arestas
+  }
+  /* verga em arco abatido (aduelas) atravessando o vão + pedra-chave */
+  for (let x = 6; x < 90; x++) {
+    const t = (x - 48) / 44;                       // -1..1 pelo vão
+    const yc = 8 + t * t * 9;                      // arco abatido: sobe no meio
+    for (let k = 0; k < 8; k++) {
+      const seg = ((x / 7) | 0) & 1;
+      put(x, (yc + k) | 0, k === 0 || k === 7 ? 1 : seg === 0 ? 7 : 6);
+    }
+  }
+  for (let y = 4; y < 13; y++) for (let x = 44; x < 52; x++) put(x, y, y < 6 ? 8 : 7); // pedra-chave
+  for (let x = 8; x < 88; x++) if (rnd() < 0.35) { const yv = 8 + ((x - 48) / 44) ** 2 * 9 + 1; for (let k = 0; k < 3; k++) put(x, (yv + k) | 0, 41); } // verdigris
+  return bufToTex({ buf, W: Wg, H: Hg });
+}
+{
+  const GA = { x: 43.7, y: 14.7 };                 // onde o carreiro deságua no largo
+  bills.push({ x: GA.x, y: GA.y, genFrames: [genGateArch()], label: 'arco-entrada', scale: 1.5, lift: 0 });
+  /* pilares com colisão fina, perpendiculares à direção do carreiro */
+  const dx = 46.2 - 44.0, dy = 15.6 - 14.8;
+  const L = Math.hypot(dx, dy), pxn = -dy / L, pyn = dx / L;
+  for (const sgn of [-0.78, 0.78]) {
+    const bx1 = GA.x + pxn * sgn, by1 = GA.y + pyn * sgn;
+    addTrunk(bx1 | 0, by1 | 0, bx1, by1, 0.2);
+  }
+}
+
 const PORTAL = { x: 51.1, y: 15.6 };
 {
   bills.push({ x: PORTAL.x, y: PORTAL.y, genFrames: [genArch(1, 9)], label: 'portal-atrio', scale: 2.45, lift: 0 });
@@ -1981,48 +2060,12 @@ if (WORLDS.length) {
   }).join('') + '<p class="desc">a travessia acontece no <a href="../">mapa 2D ↗</a> — novos mundos entram por pull request</p>';
 }
 
-/* ---------- névoa baixa (pedido do ideador): fiapos rasteiros que respiram ----------
-   3 frames por fiapo (quase nada -> leve -> cheio) percorridos pelo MESMO
-   seno do vento das árvores (swaySpeed lento) — a névoa "aparece de vez em
-   quando" e some, cada fiapo no seu próprio ritmo/fase. Dither pesado faz
-   a translucidez; nasce de preferência perto d'água e em baixadas. */
-function genMist(fr, seed) {
-  /* fiapos = TRAÇOS horizontais contíguos (noise suave em x -> runs longos),
-     nunca pontos soltos (a curta distância cada texel vira um quadradão);
-     a translucidez vem dos vãos entre traços, não de dither picotado */
-  const Wm = 96, Hm = 14;
-  const rnd = mulberry32(seed * 3571 + fr * 977 + 17);
-  const buf = new Int16Array(Wm * Hm).fill(-1);
-  const thr = [0.8, 0.69, 0.6][fr]; // frame 0 quase some, frame 2 mais cheio
-  for (let y = 0; y < Hm; y++) {
-    if ((y + seed) % 3 === 2) continue; // linhas vazias entre fiapos
-    for (let x = 0; x < Wm; x++) {
-      const ex = (x - Wm / 2) / (Wm * 0.5), ey = (y - Hm * 0.6) / (Hm * 0.62);
-      if (ex * ex + ey * ey > 1) continue;
-      const n = vnoise(x * 0.09 + seed * 3 + fr * 0.7, y * 0.9 + seed);
-      if (n > thr) buf[y * Wm + x] = (x + y) % 17 === 0 ? 9 : 8;
-    }
-  }
-  return bufToTex({ buf, W: Wm, H: Hm });
-}
-{
-  let planted = 0;
-  for (let i = 0; planted < 14 && i < 400; i++) {
-    const mx = 3 + hash2(i * 37, 11) * 58, my = 3 + hash2(i * 41, 29) * 58;
-    if (rimAt(mx, my) < 1.2 || world.at(mx | 0, my | 0) === 'w') continue;
-    if (Math.hypot(mx - PLAZA.x, my - PLAZA.y) < 4.5) continue;    // o largo fica limpo
-    const nearWater = shoreAt(mx, my) > -3.2;
-    if (!nearWater && hash2(i * 53, 7) > 0.35) continue;           // maioria perto d'água
-    const h = hash2(i * 59, 13);
-    bills.push({
-      x: mx, y: my,
-      genFrames: [genMist(0, i), genMist(1, i), genMist(2, i)],
-      label: 'nevoa', scale: 0.5 + h * 0.35, lift: 0.03, /* rasteira: meio tile de altura, larga */
-      phase: hash2(i * 61, 17) * Math.PI * 2, swaySpeed: 5200 + h * 3400,
-    });
-    planted++;
-  }
-}
+/* ---------- névoa baixa: REMOVIDA (D-39) ----------
+   A v1 (fiapos-billboard horizontais) foi flagada DUAS vezes pelo ideador
+   como bug ("tiras horizontais flutuando no chão, se movem") — de dia perto
+   do rio e à noite lia como faixas d'água soltas, nunca como névoa. Uma v2
+   digna precisa ser efeito de CHÃO (banda de bruma no floor casting), não
+   billboard. Até lá: sem névoa. */
 
 /* ---------- IDENTIFICAÇÃO (D-33): IDs + setores, o vocabulário ideador<->coder ----------
    Ver docs/COMUNICACAO.md. Todo objeto ganha um ID determinístico e estável:
@@ -2528,6 +2571,44 @@ function render(now) {
         ? shade(c, clamp(f + 0.5, 0, 1), glow)  /* o Núcleo emite: quase sem fog */
         : shade(c, f, glow);
     }
+    /* SEGUNDO HIT (D-39, achado do ideador em jogo): o DDA clássico para na
+       1ª parede — um anexo BAIXO na frente "anulava" a parede ALTA atrás
+       (o topo dela nunca era desenhado; via-se céu no lugar do prédio). Se
+       o 1º hit é parede baixa da cidade, o raio SEGUE até a próxima parede
+       e desenha só a faixa visível por cima da baixa. Custo: 1 hit extra
+       apenas nessas colunas; zbuf continua o da parede mais próxima. */
+    if (cw && cw.h < 1.3 && y0 > 0) {
+      let cw2 = null, tile2 = 'f';
+      while (guard++ < 128) {
+        if (sdx < sdy) { sdx += ddx; mapX += stepX; side = 0; } else { sdy += ddy; mapY += stepY; side = 1; }
+        tile2 = world.at(mapX, mapY);
+        if (isWall(tile2) && !HIDDEN_RUINS.has(mapY * world.w + mapX)) break;
+        cw2 = CITY.get(mapY * world.w + mapX);
+        if (cw2) break;
+      }
+      const dist2 = side === 0 ? sdx - ddx : sdy - ddy;
+      const lineH2 = (H / dist2) | 0;
+      const fullH2 = cw2 ? Math.max(1, (lineH2 * cw2.h) | 0) : lineH2;
+      const y0r2 = (HALF + (lineH2 >> 1)) - fullH2;
+      const yTop2 = clamp(y0r2, 0, H - 1);
+      if (yTop2 < y0) {
+        let wallX2 = side === 0 ? cam.y + dist2 * rdy : cam.x + dist2 * rdx;
+        wallX2 -= wallX2 | 0;
+        const tex2 = cw2 ? cw2.tex : tile2 === 'c' ? textures.nucleo : tile2 === 'r' ? textures.ruina : textures.floresta;
+        const u2 = clamp((wallX2 * TEX) | 0, 0, TEX - 1);
+        const f2 = fogAt(dist2) * (side === 1 ? 0.78 : 1);
+        const glow2 = glowAt(mapX + 0.5, mapY + 0.5) * f2;
+        const texH2 = cw2 ? tex2.h : TEX;
+        const texStep2 = texH2 / fullH2;
+        let texPos2 = (yTop2 - y0r2) * texStep2;
+        for (let y = yTop2; y < y0; y++) {
+          const v = clamp(texPos2 | 0, 0, texH2 - 1);
+          texPos2 += texStep2;
+          px[y * W + x] = shade(texAt(tex2, 0, u2, v), f2, glow2);
+        }
+        wallTop[x] = yTop2;
+      }
+    }
   }
 
   /* pássaros: silhuetas batendo asa cruzando o panorama (atrás dos billboards,
@@ -2938,6 +3019,39 @@ function bindPad(el, isMove) {
 bindPad(document.getElementById('padMove'), true);
 bindPad(document.getElementById('padLook'), false);
 
+/* joysticks de celular (D-39, pedido do ideador): o ESQUERDO anda (frente/
+   trás + lados), o DIREITO olha. Pointer capture por alavanca — dois dedos
+   simultâneos funcionam; soltar re-centra o botão e zera o eixo. */
+const JOY = { lx: 0, ly: 0, rx: 0 };
+function bindStick(el, isLeft) {
+  const knob = el.firstElementChild;
+  let pid = null;
+  const setFrom = (e) => {
+    const r = el.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const m = Math.hypot(dx, dy), cap = r.width * 0.4;
+    if (m > cap) { dx = (dx / m) * cap; dy = (dy / m) * cap; }
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    const nx = dx / cap, ny = dy / cap;
+    if (isLeft) { JOY.lx = nx; JOY.ly = ny; } else { JOY.rx = nx; }
+  };
+  const reset = () => {
+    pid = null;
+    knob.style.transform = 'translate(-50%, -50%)';
+    if (isLeft) { JOY.lx = 0; JOY.ly = 0; } else { JOY.rx = 0; }
+  };
+  el.addEventListener('pointerdown', (e) => { pid = e.pointerId; el.setPointerCapture(pid); setFrom(e); e.preventDefault(); });
+  el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) setFrom(e); });
+  el.addEventListener('pointerup', (e) => { if (e.pointerId === pid) reset(); });
+  el.addEventListener('pointercancel', reset);
+  el.addEventListener('lostpointercapture', reset);
+}
+bindStick(document.getElementById('stickL'), true);
+bindStick(document.getElementById('stickR'), false);
+if (matchMedia('(pointer: coarse)').matches) {
+  document.getElementById('hint').textContent = 'alavanca esquerda: andar · direita: olhar · deite o celular pra ver mais';
+}
+
 /* INPUT NUNCA FICA PRESO: soltar o botão FORA da zona do pad, trocar de
    aba ou perder o foco da janela zera tudo — era o "personagem andando
    sozinho infinitamente" (o pointerup morria fora do elemento). */
@@ -2945,6 +3059,7 @@ function clearInputs() {
   for (const k of Object.keys(keys)) keys[k] = false;
   touchMove.on = false;
   touchLook.on = false;
+  JOY.lx = 0; JOY.ly = 0; JOY.rx = 0;
 }
 addEventListener('pointerup', () => { touchMove.on = false; touchLook.on = false; });
 addEventListener('pointercancel', () => { touchMove.on = false; touchLook.on = false; });
@@ -3085,6 +3200,11 @@ function loop(now) {
     mx += dirX * -touchMove.dy + dirY * -touchMove.dx;
     my += dirY * -touchMove.dy - dirX * -touchMove.dx;
   }
+  if (JOY.lx || JOY.ly) { /* joystick esquerdo (D-39): mesma álgebra do pad */
+    mx += dirX * -JOY.ly + dirY * -JOY.lx;
+    my += dirY * -JOY.ly - dirX * -JOY.lx;
+  }
+  if (JOY.rx) cam.a += JOY.rx * 2.6 * dt; /* joystick direito: girar a câmera */
   if (mx || my) {
     const n = Math.hypot(mx, my) || 1;
     tryMove(cam.x + (mx / n) * walk, cam.y + (my / n) * walk);

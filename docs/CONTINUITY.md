@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 15) — o playtest do ideador (D-39): 4 bugs + joysticks
+
+- Ideador jogou de verdade e reportou com coordenada (o vocabulário do D-33 pagando): (1) "estrutura menor corta/anula a maior" — diagnóstico DELE, confirmado: DDA de 1 hit; fix = segundo hit pra faixa visível acima de parede baixa. (2) "blocos no meio do nada" ao sul = 2º aglomerado de ruínas (45-48,36-38); TODAS as ruínas agora ocultas no FPS (Registro/2D intactos, C3 devolve com arte). (3) "tiras horizontais flutuando" = névoa-billboard, flagada 2x → REMOVIDA (v2 futura será efeito de chão). (4) entrada da vila tapada → anexos movidos pra trás das alas + ARCO de entrada (genGateArch, arco abatido com aduelas, sem véu) em (43.7,14.7) — a chegada virou enfiada carreiro→arco→chafariz→Portal.
+- **Joysticks de celular** (pedido): esq. anda / dir. olha, pointer capture por alavanca, re-centra ao soltar, só em pointer:coarse (pads antigos somem), re-ancoram ao deitar o celular — verificado com emulação Pixel 5 (portrait+landscape) pela bancada.
+- Baker sincronizado + rebake; `chegada` canônica re-mirada pro arco; 368/368; 60fps em todas as verificações.
+- Deploy: segue precisando de toque humano em site/** (batidas são do bot e não disparam workflow — documentado no build-fps). Pendência do ideador continua: `- 'prototipos/fps/**'` no pages.yml.
+
 ## Sessão 2026-07-16 (parte 14) — o chafariz (D-38, v1→v3 dirigido pelo ideador)
 
 - Pedido: chafariz ⛲ no centro da praça, água cristalina, animação de água jorrando. **Duas rodadas de direção do ideador até a forma certa**: v1 = água pintada no chão → "disco plano colado no calçamento"; v2 = corpo no sprite mas bacia estreita → "quero com um círculo/disco, mas ele precisa ser uma bacia, ser um degrau"; **v3 = o chafariz clássico de praça**: anel de pedra baixo e LARGO (altura de assento) + espelho d'água grande com ondas concêntricas expandindo por quadro + coluna/taça/jato/arcos com gotas que avançam e respingam.

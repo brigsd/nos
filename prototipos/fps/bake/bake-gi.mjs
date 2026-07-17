@@ -42,9 +42,9 @@ const at = (x, y) => (x >= 0 && y >= 0 && x < W && y < H) ? biome[y * W + x] : '
 const AL = { wood: [0.62, 0.42, 0.26], stone: [0.52, 0.5, 0.56], chimney: [0.3, 0.26, 0.3], arch: [0.5, 0.5, 0.55] };
 const box = (tx, ty, kind, h) => ({ x0: tx, y0: ty, x1: tx + 1, y1: ty + 1, z1: h, al: AL[kind] });
 const BOXES = [ // v2 (D-37): bancas removidas, telhados com desnível, portal ÚNICO
-  box(43, 12, 'wood', 1.88), box(44, 12, 'wood', 1.68), box(43, 13, 'wood', 1.75), box(42, 12, 'wood', 0.85),
+  box(43, 12, 'wood', 1.88), box(44, 12, 'wood', 1.68), box(43, 13, 'wood', 1.75), box(43, 11, 'wood', 0.85),
   box(48, 12, 'stone', 1.42), box(49, 12, 'chimney', 2.05), box(49, 13, 'stone', 1.3), box(50, 12, 'stone', 0.8),
-  box(43, 19, 'wood', 1.02), box(44, 19, 'wood', 0.9), box(43, 18, 'wood', 0.95), box(42, 19, 'wood', 0.7),
+  box(43, 19, 'wood', 1.02), box(44, 19, 'wood', 0.9), box(43, 18, 'wood', 0.95), box(43, 20, 'wood', 0.7),
   box(48, 19, 'wood', 1.2), box(49, 19, 'wood', 1.05), box(49, 18, 'wood', 1.12),
   /* o Portal do Átrio: lâmina fina de pedra */
   { x0: 50.98, y0: 15.2, x1: 51.22, y1: 16.0, z1: 1.7, al: AL.arch },

@@ -53,6 +53,7 @@
 - [ ] F9 · Gráficos passes B e C (D-36): horizonte matte-painting path-traced em camadas com paralaxe; "a quietude revela" (acumulação temporal parado = o quadro converge pra pintura — mecânica-metáfora do D-22)
 - [x] F10 · **A Clareira v2 (D-37)**: portal único que acende o painel MUNDOS CONECTADOS (registry inline), bancas removidas, texturas com carpintaria (chapas de cobre, beiral, prumos, socos, janelas por seed), telhados em desnível, GI re-assada
 - [x] F11 · **O chafariz (D-38)**: billboard 4 quadros (jato + arcos d'água com gotas avançando) + bacia de água cristalina no floor casting (ondas concêntricas, cáustica, espuma), colisão nos 4 tiles, brilho teal noturno via GI
+- [x] F12 · **Playtest do ideador (D-39)**: segundo hit no DDA (anexo baixo não anula mais parede alta), arco de entrada da vila, anexos fora da linha do carreiro, TODAS as ruínas ocultas no FPS, névoa-billboard removida, joysticks de celular (esq. anda / dir. olha, landscape ok)
 - [ ] F6 · Habitantes fase 3: mais verbos (/trocar, /fabricar, mover-se), presença no estado do mundo, GitHub App pra identidade própria de bot, mentes apadrinhadas pela comunidade (template)
 - [ ] C3 · A Clareira fase 3: doca do Estaleiro apontando pro vazio, letreiros/lampiões, interiores; arte de ruína de verdade pras ruínas NW (hoje ocultas no FPS)
 
