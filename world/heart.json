@@ -4732,6 +4732,20 @@
       "type": "core_pulse",
       "tick": 87,
       "worldTime": 5220
+    },
+    {
+      "type": "native_spoke",
+      "tick": 87,
+      "worldTime": 5220,
+      "nativeId": "brasa",
+      "message": "Quem quer pão fresco? Venham, venham! O calor da forja tá bom!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 87,
+      "worldTime": 5220,
+      "nativeId": "quilha",
+      "message": "Quem se anima a pilotar algo que atravessa o vazio? Venham, venham! O pão tá quentinho e a brasa tá acesa!"
     }
   ],
   "natives": {
