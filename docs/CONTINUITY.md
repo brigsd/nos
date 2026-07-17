@@ -2,6 +2,16 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 18) — o avatar da brasa (D-42): o pipeline de arte testado de verdade
+
+- Ideador pediu pra gerar a aparência de um NPC pra **descobrir meus limites testando**, não teorizando. Fiz a **brasa** (Habitante da Forja) pelo `art-mcp`.
+- Fluxo real: `turnaround` (vi que Habitante é billboard único → só a vista de frente importa) → **"programei o pintor"** (`assets/tools/author-brasa.cjs`) → `audit` → `view` (fundo escuro+claro) → `preview` in-engine → v1→v2. Fiada no jogo: `HAB_TEX` por id + `nativo_brasa.png` no atlas.
+- **O loop compensou meu ponto cego**: a v1 tinha 2 defeitos que eu não pegaria — o crítico apontou 12 órfãos (gradiente 1px = ruído) e o corpo escuro sumia no fog (visto no view escuro + preview). v2: pares de cor adjacentes + ferro rimado.
+- **Limites reais mapeados** (o ponto do exercício): (1) não tenho "é bonito" — faço legível/correto, charme é do ideador; (2) eu pinto por código, não à mão livre (o turnaround serviu menos que referência+paleta+crítica); (3) o crítico de órfãos molda a arte (cores têm que se tocar); (4) GI colorida desvia emissivo (rosto puxou magenta perto do Portal; na Forja fica quente/coerente).
+- **Veredito**: o que temos SERVE — carrega um NPC 16×16 de ponta a ponta. Gargalo é gosto, não ferramenta. broa/quilha pelo mesmo caminho.
+- **Pendente do ideador (próximo passo desta sessão)**: auditar e organizar skills/agentes/recursos ("deixar tudo redondo") pra facilitar o desenvolvimento — vou inventariar o que existe (art-mcp, olhar, ouvir, agentes em docs/, CLAUDE.md, .claude/) e propor a arrumação.
+- 368/368; deploy por toque em `build-fps.mjs`.
+
 ## Sessão 2026-07-17 (parte 17) — ajuste do playtest (D-41): manutenção do som + balões + acordeão dos Mundos
 
 - Ideador perguntou se "conserta o áudio da água" seria fácil de manter → tornei fácil: **centralizei todos os ajustes do som no objeto `SOM`** (`SOM.water.*`, `SOM.wind.*`, `SOM.master`) — antes espalhados entre `buildAudio` e o loop. Manutenção = um lugar só; `npm run ouvir` valida.

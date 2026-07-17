@@ -2053,6 +2053,7 @@ function genFountain(fr) {
    docs/HABITANTES.md) e publicam falas.json; aqui eles aparecem em casa,
    com balão de fala. Camada 100% opcional: sem rede, o mundo segue. */
 const HABITANTES = [];
+const HAB_TEX = { brasa: 'brasa' }; // avatar próprio por Habitante (D-42); o resto cai no 'avatar' genérico até ter arte
 (() => {
   const FALAS_URL = 'https://raw.githubusercontent.com/brigsd/nos-mentes/main/falas.json';
   const load = async () => {
@@ -2064,7 +2065,7 @@ const HABITANTES = [];
         if (typeof h.x !== 'number' || typeof h.y !== 'number') continue;
         let b = HABITANTES.find((q) => q.id === h.id);
         if (!b) {
-          b = { x: h.x, y: h.y, tex: 'avatar', frames: 1, label: String(h.id), id: String(h.id), scale: 1, lift: 0, selfGlow: 0.12 };
+          b = { x: h.x, y: h.y, tex: HAB_TEX[String(h.id)] || 'avatar', frames: 1, label: String(h.id), id: String(h.id), scale: 1, lift: 0, selfGlow: 0.12 };
           HABITANTES.push(b);
           bills.push(b);
         }
