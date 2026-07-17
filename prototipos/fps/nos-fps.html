@@ -1612,8 +1612,11 @@ function updateBirds(now, dayW) {
     for (let i = 0; i < n; i++) {
       BIRDS.push({
         az: az0 + (critRnd() - 0.5) * 0.14, y: 14 + critRnd() * 22 + i * 2.4,
-        spd: dir * (0.00016 + critRnd() * 0.00007), ph: critRnd() * Math.PI * 2,
+        /* v2: 0.00016 cruzava a TELA em ~1s — era isso que lia como "risco";
+           agora a travessia leva ~7s e a batida de asa dá pra ver */
+        spd: dir * (0.00003 + critRnd() * 0.000015), ph: critRnd() * Math.PI * 2,
         born: now, dies: now + 46000,
+        sc: critRnd() < 0.25 ? 2 : 1, // 1 em 4 passa mais perto (2x)
       });
     }
     nextFlock = now + 24000 + critRnd() * 30000; // bando a cada ~24-54s
@@ -2146,6 +2149,77 @@ for (const [i, [lx, ly]] of [[45.0, 14.1], [47.4, 14.1], [45.0, 17.1], [47.4, 17
   addTrunk(lx | 0, ly | 0, lx, ly, 0.1);
 }
 
+/* ---------- AVES-FAROL: criaturas grandes e LENTAS cruzando o céu ----------
+   (pedido do ideador) O casco tem fendas de luz do Pulso que PULSAM —
+   à noite queimam como faróis; de dia são vultos pálidos na bruma
+   (corpo em dither + fog cuidam disso sozinhos). Dizem que carregam
+   pedaços da Crônica de um ramo pro outro; ninguém confirmou. */
+function genFarol(fr) {
+  const Wf = 72, Hf = 40;
+  const buf = new Int16Array(Wf * Hf).fill(-1);
+  const put = (x, y, v) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < Wf && y < Hf) buf[y * Wf + x] = v; };
+  const cx = 36, cy = 24;
+  /* asas: arco por frame (erguidas/planando/baixas), membrana em dither
+     pálido, borda de ataque sólida, veias de luz a cada 7px */
+  const tip = [-13, -3, 7][fr];
+  for (const sgn of [-1, 1]) {
+    for (let k = 5; k <= 30; k++) {
+      const t = (k - 5) / 25;
+      const x = cx + sgn * k;
+      const yw = cy - 3 + tip * (t * t * 0.9 + t * 0.4) - (1 - t) * 3;
+      const th = 4.5 - t * 3;
+      for (let o = 0; o < th; o++) {
+        const y = yw + o;
+        if (o === 0) put(x, y, 1);                                   // borda de ataque
+        else if (((x + (y | 0)) & 1) === 0) put(x, y, o < 2 ? 44 : 34); // membrana dither
+      }
+      if (k % 7 === 3) { put(x, yw + 1, 43); put(x, yw + 2, 42); }   // veia de luz
+    }
+  }
+  /* corpo: casco escuro com FENDAS de luz no dorso (a luz pulsa aqui) */
+  for (let oy = -5; oy <= 5; oy++) for (let ox = -8; ox <= 8; ox++) {
+    if ((ox * ox) / 64 + (oy * oy) / 25 > 1) continue;
+    put(cx + ox, cy + oy, oy > 2 ? 1 : oy > 0 ? 44 : 34);
+  }
+  for (let ox = -6; ox <= 6; ox += 2) {
+    put(cx + ox, cy - 2 + ((ox & 3) === 0 ? 1 : 0), 43);
+    if ((ox & 3) === 0) put(cx + ox, cy - 3, 52);
+  }
+  /* cabeça à frente com olho-farol */
+  for (let oy = -3; oy <= 3; oy++) for (let ox = -3; ox <= 3; ox++) {
+    if (ox * ox + oy * oy > 10) continue;
+    put(cx - 11 + ox, cy - 1 + oy, 34);
+  }
+  put(cx - 12, cy - 2, 9); put(cx - 11, cy - 2, 43);
+  /* cauda: plumas caídas em dither */
+  for (let k = 0; k < 7; k++) {
+    const x = cx + 9 + k;
+    if ((k & 1) === 0) { put(x, cy + 2 + (k >> 1), 44); put(x, cy + 3 + (k >> 1), 34); }
+  }
+  return bufToTex({ buf, W: Wf, H: Hf });
+}
+const FAROIS = [];
+{
+  const frames = [genFarol(0), genFarol(1), genFarol(2)];
+  for (const [ph, r, h] of [[0, 13.5, 2.5], [2.6, 17.5, 3.2]]) {
+    const b = {
+      x: 32, y: 32, genFrames: frames, label: 'ave-farol', scale: 2.6,
+      lift: h, lift0: h, phase: ph, swaySpeed: 340, glowPulse: 0.55,
+      orbit: { r, w: (Math.PI * 2) / (260000 + ph * 30000), ph },
+    };
+    FAROIS.push(b);
+    bills.push(b);
+  }
+}
+function updateFarois(now) {
+  for (const b of FAROIS) {
+    const a = b.orbit.ph + now * b.orbit.w;
+    b.x = 32 + Math.cos(a) * b.orbit.r;
+    b.y = 32 + Math.sin(a) * b.orbit.r;
+    b.lift = b.lift0 + Math.sin(now / 5200 + b.orbit.ph) * 0.35; // respiração do voo
+  }
+}
+
 /* ---------- OS HABITANTES: mentes que vivem em brigsd/nos-mentes ----------
    NPCs que pensam FORA do motor (GitHub Models + memória commitada, ver
    docs/HABITANTES.md) e publicam falas.json; aqui eles aparecem em casa,
@@ -2243,7 +2317,7 @@ function genMist(fr, seed) {
      jogadores): o próprio nome.
    O mapa (tecla M, 2º toque) divide a ilha em SETORES 8x8 tiles: A1 (NW) a
    H8 (SE) — "área C2" localiza sem precisar descrever a paisagem. */
-const GENERIC_IDS = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'rocha', 'arco', 'fumaca', 'nevoa', 'coluna', 'obelisco']);
+const GENERIC_IDS = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'rocha', 'arco', 'fumaca', 'nevoa', 'coluna', 'obelisco', 'ave-farol']);
 {
   const seen = new Set();
   for (const b of bills) {
@@ -2675,6 +2749,7 @@ function render(now) {
   }
 
   /* paredes (DDA) */
+  let prevSideW = -1, prevDistW = 1e9, prevWallW = false;
   for (let x = 0; x < W; x++) {
     const camX = (2 * x) / W - 1;
     const rdx = dirX + plX * camX, rdy = dirY + plY * camX;
@@ -2707,7 +2782,15 @@ function render(now) {
     const twW = cw ? tex.w : TEX; // cidade usa a largura REAL (32) — u em TEX fixo lia esticado
     const u = clamp((wallX * twW) | 0, 0, twW - 1);
     const fIx = !cw && tile === 'c' ? coreFrame : 0;
-    const f = fogAt(dist) * (side === 1 ? 0.78 : 1);
+    /* luz por FACE (achado do ideador: "de lado parece plano"): cada
+       orientação N/S/L/O recebe o sol FIXO do mundo (az -2.2, a mesma
+       convenção dos sprites/rock3d) — canto vira contraste real */
+    let faceK = side === 1 ? 0.78 : 1;
+    if (cw) {
+      const fnx = side === 0 ? -stepX : 0, fny = side === 1 ? -stepY : 0;
+      faceK = 0.8 + 0.2 * (fnx * -0.5885 + fny * -0.8085);
+    }
+    const f = fogAt(dist) * faceK;
     const hx = mapX + 0.5, hy = mapY + 0.5;
     const glow = !cw && tile === 'c' ? 0.45 * pulse : glowAt(hx, hy) * f;
     /* GI ASSADA (D-36) nas paredes da cidade: amostra o chão logo à frente
@@ -2751,6 +2834,13 @@ function render(now) {
         ? shade(c, clamp(f + 0.5, 0, 1), glow)  /* o Núcleo emite: quase sem fog */
         : shade(c, f, glow);
     }
+    /* tinta no CANTO vertical: virada de face ou salto de profundidade
+       entre colunas vizinhas — o fio escuro que vende a aresta de lado */
+    const isWcol = !!cw;
+    if (isWcol && prevWallW && (side !== prevSideW || Math.abs(dist - prevDistW) > 0.4)) {
+      for (let y = y0; y <= y1; y++) px[y * W + x] = darkenU32(px[y * W + x], 0.72);
+    }
+    prevSideW = side; prevDistW = dist; prevWallW = isWcol;
     /* TAMPA das paredes baixas (achado do ideador na v3): parede abaixo do
        olho mostra o TOPO — plano a (0.5 - h) do olho, projetado como o
        floor casting; sem isso o muro lia como plano de papelão. A aresta
@@ -2774,28 +2864,39 @@ function render(now) {
     }
   }
 
-  /* pássaros: silhuetas batendo asa cruzando o panorama (atrás dos billboards,
-     na frente do céu; parede oculta via wallTop) */
+  /* pássaros: SPRITES batendo asa cruzando o panorama (atrás dos billboards,
+     na frente do céu; parede oculta via wallTop). v2 do ideador: os 3
+     pixels antigos liam como "riscos pretos" — agora é gaivota de 7×4 com
+     2 frames, barriga clara e alguns indivíduos maiores (mais perto). */
   for (const bd of BIRDS) {
     const az = bd.az + bd.spd * (now - bd.born) * Math.PI * 2;
     const rel = wrapA(az - cam.a);
     if (Math.abs(rel) > 0.62) continue;
     const sx = ((Math.tan(rel) / FOV_PLANE + 1) * (W / 2)) | 0;
     const sy = (bd.y + Math.sin(now / 2200 + bd.ph) * 2.5) | 0;
-    if (sx < 1 || sx >= W - 1 || sy < 1 || sy >= HALF - 1 || sy >= wallTop[sx]) continue;
-    const up = Math.sin(now / 130 + bd.ph) > 0;
-    const putB = (X, Y) => {
-      const i = Y * W + X;
-      const b0 = px[i];
-      px[i] = rgb(
-        ((b0 & 255) * 0.25 + 40 * 0.75) | 0,
-        (((b0 >> 8) & 255) * 0.25 + 46 * 0.75) | 0,
-        (((b0 >> 16) & 255) * 0.25 + 62 * 0.75) | 0,
-      );
-    };
-    putB(sx, sy);
-    if (up) { putB(sx - 1, sy - 1); putB(sx + 1, sy - 1); } // asas em ^
-    else { putB(sx - 1, sy); putB(sx + 1, sy); }            // asas abertas
+    const sc = bd.sc || 1;
+    if (sx < 8 || sx >= W - 8 || sy < 5 || sy >= HALF - 5 || sy >= wallTop[sx]) continue;
+    const up = Math.sin(now / 150 + bd.ph) > 0;
+    const rows = up
+      ? ['.#...#.', '.#...#.', '..#.#..', '..#@#..']   // asas ERGUIDAS
+      : ['.......', '#.....#', '.##.##.', '..#@#..'];  // asas ABERTAS
+    for (let ry = 0; ry < 4; ry++) for (let rx2 = 0; rx2 < 7; rx2++) {
+      const ch = rows[ry][rx2];
+      if (ch === '.') continue;
+      const light = ch === '@'; // barriga pega o céu
+      for (let oy = 0; oy < sc; oy++) for (let ox = 0; ox < sc; ox++) {
+        const X = sx + (rx2 - 3) * sc + ox, Y = sy + (ry - 2) * sc + oy;
+        if (X < 0 || X >= W || Y < 1 || Y >= wallTop[X]) continue;
+        const i = Y * W + X;
+        const b0 = px[i];
+        const tr = light ? 148 : 40, tg = light ? 156 : 46, tb = light ? 176 : 62;
+        px[i] = rgb(
+          ((b0 & 255) * 0.25 + tr * 0.75) | 0,
+          (((b0 >> 8) & 255) * 0.25 + tg * 0.75) | 0,
+          (((b0 >> 16) & 255) * 0.25 + tb * 0.75) | 0,
+        );
+      }
+    }
   }
 
   /* billboards (longe -> perto), cull por distância — a bruma esconde o pop-in */
@@ -2971,7 +3072,9 @@ function render(now) {
       }
       continue;
     }
-    const selfGlow = b.selfGlow ?? (b.tex === 'oficina' || b.tex === 'portal' ? 0.3 : 0); /* oficinas acesas no vão; lampiões via b.selfGlow */
+    let selfGlow = b.selfGlow ?? (b.tex === 'oficina' || b.tex === 'portal' ? 0.3 : 0); /* oficinas acesas no vão; lampiões via b.selfGlow */
+    /* ave-farol: o casco PULSA — forte à noite, quase nada de dia */
+    if (b.glowPulse) selfGlow = b.glowPulse * (0.12 + 0.88 * SKYST.wNight) * (0.55 + 0.45 * Math.sin(now / 640 + (b.phase || 0)));
     for (let x = x0; x <= x1; x++) {
       /* parede mais perto? Ela oculta só do TOPO dela pra baixo — acima é
          céu aberto (copas e ilhas atrás de muros aparecem por cima). */
@@ -3363,6 +3466,7 @@ function loop(now) {
   }
   if (keys.t) timeOffset += dt * 40000; // segure T: o dia voa (~1 ciclo/6s)
   updateBirds(now, SKYST.wDay);
+  updateFarois(now);
   updateCritters(now);
   render(now);
   fpsAcc += 1 / Math.max(dt, 1e-3); fpsN++;
