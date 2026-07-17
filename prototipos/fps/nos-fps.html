@@ -2278,6 +2278,7 @@ function giAt(fx, fy) {
 
 /* ---------- render ---------- */
 const NEARB = [], SKYB = [], ORDER = []; /* rascunho dos billboards, reusado por quadro (D-45) */
+let mmTick = 0; /* minimapa desenha quadro sim, quadro não (D-47) */
 const OCC = new Int32Array(8); /* oclusão por coluna do bloco de billboard (RS<=6) */
 const VEG = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'nevoa', 'fumaca']); /* billboards MACIOS que aceitam bloco RS (heróis/prédios/portal/NPC/ilha ficam nítidos) */
 const zbuf = new Float32Array(W);
@@ -2310,7 +2311,6 @@ function render(now) {
   const __t0 = performance.now();
   pulse = 0.82 + 0.18 * Math.sin((now / 1400) * Math.PI * 2);
   const coreFrame = ((now / 350) | 0) % 4;
-  const waterFrame = ((now / 1000) | 0) % 2;
   const dirX = Math.cos(cam.a), dirY = Math.sin(cam.a);
   const plX = -dirY * FOV_PLANE, plY = dirX * FOV_PLANE;
 
@@ -2464,7 +2464,6 @@ function render(now) {
   for (let y = HALF + 1; y < H; y += RS) {
     const rowDist = posZ / (y - HALF);
     const f = fogAt(rowDist);
-    const stepX = rowDist * (2 * FOV_PLANE * dirY) / W * (dirX ? 1 : 1);
     /* pontos extremos do raio esquerdo/direito nessa linha */
     let fx = cam.x + rowDist * (dirX - plX);
     let fy = cam.y + rowDist * (dirY - plY);
@@ -2514,7 +2513,6 @@ function render(now) {
       }
       /* terreno/água sólidos da nossa ilha */
       for (let o = 0, bl = Math.min(RS, W - x); o < bl; o++) groundMask[y * W + x + o] = 1;
-      const t = world.at(tx, ty);
       /* sombra de nuvem (rola) + sombra PROJETADA das árvores (estática) */
       const shadowed = CSHAD[(((fy * 2 + 5) & 127) * 128 + ((fx * 2 + cloudShadowT) & 127)) | 0] === 1;
       const shGx = (fx * SH_RES) | 0, shGy = (fy * SH_RES) | 0;
@@ -3059,7 +3057,7 @@ function render(now) {
   }
 
   vctx.putImageData(frame, 0, 0);
-  drawMinimap();
+  if ((mmTick++ & 1) === 0) drawMinimap(); /* minimapa a 30fps basta — ~0.4ms de volta por quadro (D-47) */
   const __t4 = performance.now();
   const __tot = __t4 - __t0;
   PERF.sky += __t1 - __t0; PERF.floor += __t2 - __t1; PERF.walls += __t3 - __t2; PERF.bill += __t3b - __t3; PERF.resto += __t4 - __t3b; PERF.frames++;
@@ -3204,6 +3202,7 @@ bindPad(document.getElementById('padLook'), false);
    trás + lados), o DIREITO olha. Pointer capture por alavanca — dois dedos
    simultâneos funcionam; soltar re-centra o botão e zera o eixo. */
 const JOY = { lx: 0, ly: 0, rx: 0 };
+const STICKS = []; /* registro p/ a rede global de segurança (fix do "cravado", D-47) */
 function bindStick(el, isLeft) {
   const knob = el.firstElementChild;
   let pid = null;
@@ -3221,11 +3220,19 @@ function bindStick(el, isLeft) {
     knob.style.transform = 'translate(-50%, -50%)';
     if (isLeft) { JOY.lx = 0; JOY.ly = 0; } else { JOY.rx = 0; }
   };
-  el.addEventListener('pointerdown', (e) => { pid = e.pointerId; el.setPointerCapture(pid); setFrom(e); e.preventDefault(); });
+  el.addEventListener('pointerdown', (e) => {
+    if (pid !== null) return; /* o 1º dedo é o dono — 2º toque não rouba o stick (roubar deixava o up do 1º sem par = cravado) */
+    pid = e.pointerId;
+    /* capture pode FALHAR (toque que já morreu, Android apressado) — sem ela o
+       up fora do círculo não chega aqui; a rede global abaixo cobre o caso */
+    try { el.setPointerCapture(pid); } catch { /* segue sem captura */ }
+    setFrom(e); e.preventDefault();
+  });
   el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) setFrom(e); });
   el.addEventListener('pointerup', (e) => { if (e.pointerId === pid) reset(); });
   el.addEventListener('pointercancel', reset);
   el.addEventListener('lostpointercapture', reset);
+  STICKS.push({ owns: (id) => pid === id, reset });
 }
 bindStick(document.getElementById('stickL'), true);
 bindStick(document.getElementById('stickR'), false);
@@ -3242,8 +3249,10 @@ function clearInputs() {
   touchLook.on = false;
   JOY.lx = 0; JOY.ly = 0; JOY.rx = 0;
 }
-addEventListener('pointerup', () => { touchMove.on = false; touchLook.on = false; });
-addEventListener('pointercancel', () => { touchMove.on = false; touchLook.on = false; });
+/* rede global: QUALQUER up/cancel do ponteiro dono zera o stick dele, mesmo
+   que a captura tenha falhado e o evento não passe pelo elemento (D-47) */
+addEventListener('pointerup', (e) => { touchMove.on = false; touchLook.on = false; for (const s of STICKS) if (s.owns(e.pointerId)) s.reset(); });
+addEventListener('pointercancel', (e) => { touchMove.on = false; touchLook.on = false; for (const s of STICKS) if (s.owns(e.pointerId)) s.reset(); });
 addEventListener('blur', clearInputs);
 document.addEventListener('visibilitychange', () => { if (document.hidden) clearInputs(); });
 

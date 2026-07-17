@@ -2,6 +2,12 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 25) — joystick cravado + 3ª rodada de otimização (D-47)
+
+- Bug do ideador: joystick "cravado numa direção". Dois buracos no `bindStick`: (1) `setPointerCapture` pode falhar → up fora do círculo nunca chega, e a rede global não zerava o JOY; (2) segundo dedo roubava o `pid`. Fix: dono único por stick, try/catch na captura, **rede global** que zera o stick cujo pid solta em qualquer lugar. Provado com eventos sintéticos (up-fora zera; invasor não rouba).
+- Otimização: código morto no chão (`world.at` POR PIXEL sem leitor + `stepX`/`waterFrame`) e **minimapa a 30fps**. Medido: **Alto 52.4→58.7fps (pior 40→25ms), Ultra 35.3→42.4 (engasgos 97→22), Médio 59.5**. Curva achatando — o que resta em alta-res é custo legítimo de nitidez; a única alavanca grande restante é assar o chão estático (refactor grande, risco visual — só se precisar).
+- **Aguardando o ideador**: joystick + presets no aparelho. Depois: arte (martelo da brasa, broa, quilha 64px).
+
 ## Sessão 2026-07-17 (parte 24) — segunda rodada de otimização (D-45 parte 3): os 4 presets medidos
 
 - Pedido: "ataca de novo pros níveis de gráfico". Perfil apontou o que faltava: vegetação/céu bloqueavam só COLUNAS (linhas rodavam cheias), e a pedra-3D (3 fbm/pixel) era a reserva anunciada.
