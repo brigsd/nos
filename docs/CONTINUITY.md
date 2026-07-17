@@ -2,6 +2,14 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 28) — profundidade nos arcos + A PRANCHETA + skill /estruturas (D-50)
+
+- Pedidos: arcos com faces 3D; docs em dia; ferramenta de criação/auditoria de estruturas ("câmera de topo, blueprint, colisão").
+- **`b.depth`**: extrusão em fatias adaptativas no billboard orientado (K fixo virava "pente"; AO 0.66 pesava → 0.82). Arco e portal com espessura real.
+- **A PRANCHETA** (`npm run prancheta`): planta técnica viva via novo `window.__nosMapa()` (colisões exatas, paredes+alturas, planos orientados — fonte única, zero duplicação). **Skill `/estruturas`** formaliza o ciclo prancheta→construir→prancheta→olhar.
+- Docs: RECURSOS (prancheta/res-bench), CODER (Otimização + Estruturas). **F17 planejado: formato PLANTA** (blueprint declarativo que o motor sobe sozinho).
+- 368/368. **Aguardando o ideador**: profundidade dos arcos no aparelho. Pendências dele: joystick/preset (D-48/49) ainda sem veredito. Depois: broa/quilha 64px ou F17.
+
 ## Sessão 2026-07-17 (parte 27) — billboards orientados + preset sem teleporte + gesto blindado (D-49)
 
 - Ideador: (1) "objetos ficam me encarando" (chafariz/arco/portal); (2) trocar gráfico respawnava e resetava pra dia; (3) joystick quebrando "geralmente depois de trocar de gráfico".

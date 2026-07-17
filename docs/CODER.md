@@ -65,6 +65,30 @@ npm run ouvir -- 46.2,15.6       # um ?cam= avulso
 - 100% local (mesma tese do `olhar`): mundo inline, server efêmero, Chromium
   do sandbox. Chromium lançado com `--autoplay-policy=no-user-gesture-required`.
 
+## Otimização — perfilar antes, medir depois (D-45→D-48)
+
+*Atrito de origem: "640×360 engasga" (17/07) — três rodadas provaram o método.*
+
+- **Nunca otimize sem perfil.** `window.__nosPerf()` acumula ms por fase
+  (céu/chão/paredes/billboards/resto) + `maxMs`/`slow` (pior quadro, engasgos);
+  a bancada `res-bench.mjs` lê tudo nos 4 presets, com CPU÷4 como proxy de
+  celular e `CAM=` pra escolher o ponto (mata = pior caso de billboards).
+- **Engasgo ≠ lento**: stutter intermitente é pico (GC, vista pesada) — meça o
+  PIOR quadro, não a média. Alocação por quadro é veneno (arrays de rascunho
+  reusados nos billboards).
+- **Blocos RS**: conteúdo macio (céu, chão, vegetação, fumaça, pedra) renderiza
+  na densidade do 320×180 em qualquer preset; nitidez fica em paredes/heróis/
+  arquitetura. RS=1 no 320 = caminho antigo byte a byte.
+- Alavanca grande restante (se precisar um dia): assar o chão estático num
+  atlas — refactor grande, risco visual; só com dados na mão.
+
+## Estruturas — prancheta e peças do motor
+
+Fluxo completo na skill **`/estruturas`**: `npm run prancheta` (planta baixa
+viva: colisões, alturas, planos), construir (`cityWall`/billboard `orient`+
+`depth`/`addTrunk`), prancheta de novo, `olhar` em 3 ângulos. Fonte única:
+`window.__nosMapa()`.
+
 ## Navegar no `nos-fps.html` (o arquivo grande)
 
 *Atrito de origem: um edit às cegas na região do loop pendurou um `else` no
