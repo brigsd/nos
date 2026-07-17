@@ -2,11 +2,11 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
-## Sessão 2026-07-16 (parte 14) — o chafariz (D-38)
+## Sessão 2026-07-16 (parte 14) — o chafariz (D-38, v1→v3 dirigido pelo ideador)
 
-- Pedido do ideador: chafariz ⛲ no centro da praça, água cristalina, animação bonita. Feito em duas camadas: **billboard 4 quadros** (pedestal+taça+jato com jitter+coroa+2 arcos de gotas que avançam e respingam) + **bacia no chão** (ondas concêntricas do pedestal, cáustica fina, espuma nas cristas, anel de pedra com lábio aceso).
-- Calibração pelo olhar (3 rodadas + achado do ideador \"tá colado no chão, precisa ser um degrau, uma bacia, não um disco plano\"): o corpo inteiro subiu pro SPRITE — degrau/parede/lábio/água dentro da taça com sombreamento de curvatura; o chão virou só laje + sombra de contato. Pedestal e taça lisos (argamassa lia como janelinhas). \"Lajes escuras\" no ângulo leste eram os pilares do portal atrás, vistos pelos vãos — paralaxe, não bug. Colisão r0.62 nos 4 tiles tocados.
-- À noite a água **brilha** (selfGlow + luz teal na GI): o largo agora tem três presenças de luz — lampiões âmbar, véu do portal, chafariz teal. Ponto canônico `chafariz` no olhar. 59-60fps.
+- Pedido: chafariz ⛲ no centro da praça, água cristalina, animação de água jorrando. **Duas rodadas de direção do ideador até a forma certa**: v1 = água pintada no chão → "disco plano colado no calçamento"; v2 = corpo no sprite mas bacia estreita → "quero com um círculo/disco, mas ele precisa ser uma bacia, ser um degrau"; **v3 = o chafariz clássico de praça**: anel de pedra baixo e LARGO (altura de assento) + espelho d'água grande com ondas concêntricas expandindo por quadro + coluna/taça/jato/arcos com gotas que avançam e respingam.
+- Lições permanentes gravadas no D-38: (1) água/laje pintada no CHÃO sob um billboard sempre vaza maior que a base (perspectiva do chão cresce mais rápido) — chão limpo, o contorno do sprite ancora; (2) argamassa em colunas finas lê como "janelinhas" — cilindro liso; (3) objeto de revolução = billboard largo funciona de qualquer ângulo.
+- À noite a água BRILHA (selfGlow + luz teal na GI): anel luminoso no centro do largo, entre lampiões e o véu do portal. Colisão r1.0 nos 9 tiles. Ponto canônico `chafariz` (cam recuada). 60fps.
 
 ## Sessão 2026-07-16 (parte 13) — A Clareira v2 (D-37): um portal, praça aberta, carpintaria
 

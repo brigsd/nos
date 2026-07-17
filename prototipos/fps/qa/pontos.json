@@ -1,15 +1,53 @@
 {
   "_": "Pontos de vista canônicos do cliente oficial (D-35). Cada um é um ?cam=x,y,a — os mesmos links do docs/COMUNICACAO.md. Auditar = node prototipos/fps/qa/olhar.mjs --todos e LER os PNGs. Ao criar/mudar uma área, adicione o ponto dela aqui: a auditoria de amanhã custa uma linha hoje.",
-  "spawn": { "cam": "27.0,12.0,-0.22", "desc": "o primeiro quadro do jogador — a estrada convidando" },
-  "carreiro": { "cam": "34.0,11.2,0.18", "desc": "meio do carreiro, fileiras de árvores dos dois lados" },
-  "chegada": { "cam": "42.5,14.0,0.30", "desc": "chegada n'A Clareira — largo + cidade ao fundo" },
-  "estaleiro": { "cam": "46.2,16.2,-2.15", "desc": "ala NW — Estaleiro (madeira alta, casa da quilha)" },
-  "forja": { "cam": "46.0,16.6,-1.00", "desc": "ala NE — Forja + chaminé fumegando (casa da brasa)" },
-  "bancada": { "cam": "46.2,15.6,2.30", "desc": "ala SW — Bancada (casa de ninguém ainda)" },
-  "cozinha": { "cam": "46.2,15.6,0.90", "desc": "ala SE — Cozinha (casa da broa)" },
-  "chafariz": { "cam": "44.6,15.6,0.00", "desc": "o chafariz no coração do largo (D-38) — água do Pulso, portal ao fundo" },
-  "portais": { "cam": "47.4,16.4,-0.35", "desc": "o Portal do Átrio — único, aceso, no fim do calçamento (D-37)" },
-  "portal-perto": { "cam": "49.7,15.6,0.00", "desc": "a 1.4 tiles do Portal — o painel MUNDOS CONECTADOS deve estar ACESO" },
-  "largo-noite": { "cam": "44.0,14.6,0.45", "tod": 0.8, "desc": "o largo à noite — veias, lampiões e janelas acesas" },
-  "borda": { "cam": "5.5,32.0,3.14", "tod": 0.3, "desc": "rebordo oeste da ilha — o mar de nuvens deve ler como CÉU, nunca como oceano" }
+  "spawn": {
+    "cam": "27.0,12.0,-0.22",
+    "desc": "o primeiro quadro do jogador — a estrada convidando"
+  },
+  "carreiro": {
+    "cam": "34.0,11.2,0.18",
+    "desc": "meio do carreiro, fileiras de árvores dos dois lados"
+  },
+  "chegada": {
+    "cam": "42.5,14.0,0.30",
+    "desc": "chegada n'A Clareira — largo + cidade ao fundo"
+  },
+  "estaleiro": {
+    "cam": "46.2,16.2,-2.15",
+    "desc": "ala NW — Estaleiro (madeira alta, casa da quilha)"
+  },
+  "forja": {
+    "cam": "46.0,16.6,-1.00",
+    "desc": "ala NE — Forja + chaminé fumegando (casa da brasa)"
+  },
+  "bancada": {
+    "cam": "46.2,15.6,2.30",
+    "desc": "ala SW — Bancada (casa de ninguém ainda)"
+  },
+  "cozinha": {
+    "cam": "46.2,15.6,0.90",
+    "desc": "ala SE — Cozinha (casa da broa)"
+  },
+  "chafariz": {
+    "cam": "43.8,15.6,0.00",
+    "desc": "o chafariz no coração do largo (D-38) — água do Pulso, portal ao fundo"
+  },
+  "portais": {
+    "cam": "47.4,16.4,-0.35",
+    "desc": "o Portal do Átrio — único, aceso, no fim do calçamento (D-37)"
+  },
+  "portal-perto": {
+    "cam": "49.7,15.6,0.00",
+    "desc": "a 1.4 tiles do Portal — o painel MUNDOS CONECTADOS deve estar ACESO"
+  },
+  "largo-noite": {
+    "cam": "44.0,14.6,0.45",
+    "tod": 0.8,
+    "desc": "o largo à noite — veias, lampiões e janelas acesas"
+  },
+  "borda": {
+    "cam": "5.5,32.0,3.14",
+    "tod": 0.3,
+    "desc": "rebordo oeste da ilha — o mar de nuvens deve ler como CÉU, nunca como oceano"
+  }
 }
