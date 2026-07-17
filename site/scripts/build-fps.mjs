@@ -20,7 +20,7 @@
  * of the trigger paths (e.g. editing this file). Permanent fix is adding
  * 'prototipos/fps/**' to pages.yml — needs the ideador (workflow edits are
  * gated for the coder session). Until then: touch site/** to publish.
- * Published rounds: D-36/37/38 (2026-07-17), D-39, D-40 (som), D-41, D-42 (brasa), D-44 (?res=), D-45 (render em camadas + billboards), D-46 (menu de gráficos), D-45p3 (blocos linha+pedra), D-47 (joystick + 3ª otim), D-48 (joystick 4 camadas), D-49 (billboards orientados), D-50 (profundidade + prancheta), D-50b (espessura fina), D-51 (PLANTA v1 + Santuário), D-53 (motor de setor/portal: a primeira casa enterável), D-54 (protótipo GPU/WebGL em /fps/gpu.html), D-54c (beleza: madeira+tesoura+janelas-abertura), D-54d (casa de TORAS), D-54f (madeira castanho-mel + toras verticais + abas + telha de barro — this touch).
+ * Published rounds: D-36/37/38 (2026-07-17), D-39, D-40 (som), D-41, D-42 (brasa), D-44 (?res=), D-45 (render em camadas + billboards), D-46 (menu de gráficos), D-45p3 (blocos linha+pedra), D-47 (joystick + 3ª otim), D-48 (joystick 4 camadas), D-49 (billboards orientados), D-50 (profundidade + prancheta), D-50b (espessura fina), D-51 (PLANTA v1 + Santuário), D-53 (motor de setor/portal: a primeira casa enterável), D-54 (protótipo GPU/WebGL em /fps/gpu.html), D-54c (beleza: madeira+tesoura+janelas-abertura), D-54d (casa de TORAS), D-54f (madeira castanho-mel + toras verticais + abas + telha de barro), D-55 (v3 + A OFICINA em /fps/v3/ — this touch).
  *
  * prototipos/fps/nos-fps.html stays the single source of truth for the
  * prototype; site/public/fps/ is pure build output, regenerated before
@@ -29,7 +29,7 @@
  * No dependencies — Node built-ins only, mirroring scripts/copy-data.mjs.
  */
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -127,4 +127,15 @@ for (const [src, dst] of [['gpu-proto.html', 'gpu.html'], ['gpu-beauty.html', 'g
   const f = path.join(outDir, dst);
   writeFileSync(f, readFileSync(p, 'utf8'));
   console.log(`build-fps: + ${dst} (protótipo WebGL, ${Math.round(statSync(f).size / 1024)}KB)`);
+}
+
+/* v3 + A OFICINA (D-55): motor GPU modular + visor de peças. Copiado inteiro
+   (ES modules) pra /fps/v3/ — visor.html?peca=casa-toras abre qualquer peça
+   no ambiente padrão. O v2 (cliente CPU) segue intocado em /fps/. */
+const v3Src = path.join(REPO_ROOT, 'prototipos', 'fps', 'v3');
+if (existsSync(v3Src)) {
+  const v3Dst = path.join(outDir, 'v3');
+  rmSync(v3Dst, { recursive: true, force: true });
+  cpSync(v3Src, v3Dst, { recursive: true });
+  console.log('build-fps: + v3/ (OFICINA: motor + visor + pecas)');
 }

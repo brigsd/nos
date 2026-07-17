@@ -9,12 +9,17 @@ tools/
                preview in-engine → turnaround. Paleta Resurrect 64. README próprio.
   bancadas/    As BANCADAS de auditoria do cliente FPS (Playwright headless, offline):
                olhar.mjs     — screenshot de pontos de vista canônicos (pontos.json)
+               olhar-peca.mjs— screenshot de PEÇA da Oficina v3 em 3 ângulos (npm run peca)
                ouvir.mjs     — mede o som (estado/ganho/RMS), barra a regressão muda
                prancheta.mjs — câmera de TOPO: planta técnica viva (colisões, alturas,
                                planos) via window.__nosMapa() — auditar/criar estrutura
                res-bench.mjs — desempenho por fase (window.__nosPerf) nos 4 presets
                out/          — PNGs de saída (gitignorado; evidência é regenerável, D-30)
 ```
+
+**A OFICINA (v3, D-55)** — o ambiente padrão de CRIAÇÃO (objetos/texturas/animações)
+mora em `prototipos/fps/v3/` (motor + pecas + visor), porque o motor é compartilhado
+com o futuro cliente GPU. Manual: `prototipos/fps/v3/README.md`. Bancada: `npm run peca`.
 
 **Pré-requisito das bancadas:** `cd site && npm ci` uma vez (o Playwright/Chromium
 vive em `site/node_modules`; as bancadas avisam se faltar).

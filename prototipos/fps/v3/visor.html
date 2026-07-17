@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>NÓS · Oficina — visor de peças (v3)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0f16; overflow: hidden; }
+  #c { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; image-rendering: crisp-edges; }
+  #hud { position: fixed; top: 8px; left: 10px; font: 12px/1.4 ui-monospace, Menlo, monospace; color: #cddf6c; text-shadow: 0 1px 2px #000; pointer-events: none; }
+  #hud b { color: #fbff86; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">NÓS · OFICINA — <span id="nome">…</span><br><b id="fps">— fps</b> · <span id="dev">—</span></div>
+<script type="module">
+/* O VISOR da OFICINA (D-55): abre qualquer peça de pecas/ no ambiente padrão
+   do motor v3 (sol+sombra, céu, grama, partículas, ?res=). É o MESMO motor
+   que o cliente v3 usará — o que fica bom aqui, fica bom no jogo.
+     ?peca=casa-toras       qual peça (padrão: casa-toras)
+     ?res=640 &ts=4         resolução interna / escala de textura
+     ?a=38 &e=1.15 &r=5.4   câmera fixa (senão: órbita lenta)                */
+import { criarVisor } from './motor/render.js';
+import { m4 } from './motor/mat4.js';
+import * as tex from './motor/tex.js';
+import * as geo from './motor/geo.js';
+
+const P = new URLSearchParams(location.search);
+const nome = (P.get('peca') || 'casa-toras').replace(/[^a-z0-9_-]/gi, '');
+const TS = Math.max(1, (parseInt(P.get('ts')) || 4) | 0);
+const res = Math.max(160, (parseInt(P.get('res')) || 640) | 0);
+const camOrbita = !P.has('a');
+const cam = { a: parseFloat(P.get('a')) * Math.PI / 180, e: P.has('e') ? parseFloat(P.get('e')) : undefined, r: P.has('r') ? parseFloat(P.get('r')) : undefined };
+
+const hudNome = document.getElementById('nome'), hudFps = document.getElementById('fps'), hudDev = document.getElementById('dev');
+try {
+  const mod = await import(`./pecas/${nome}.js`);
+  hudNome.textContent = `${mod.meta.nome} (${mod.meta.tipo}) — ${mod.meta.desc}`;
+  const visor = criarVisor({ canvas: document.getElementById('c'), res, camOrbita, cam });
+  visor.carregar(mod.construir({ TS, tex, geo, m4 }));
+  hudDev.textContent = `${visor.info} · tex ${16*TS}px · ${visor.renderer}`;
+  visor.rodar((fps) => { hudFps.textContent = fps + ' fps'; });
+  window.__ready = true;
+} catch (e) {
+  hudNome.textContent = 'ERRO: ' + e.message;
+  hudDev.textContent = `peça "${nome}" não abriu — veja pecas/ e o console`;
+  throw e;
+}
+</script>
+</body>
+</html>

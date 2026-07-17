@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 32) — GPU provada (D-54) + rumo v2/v3 + A OFICINA (D-55)
+
+- **GPU**: "pixel art lindo, rodando terrível" → WebGL com framebuffer fixo (?res) + upscale NEAREST = custo independente da tela. Protótipos `/fps/gpu.html` e `/fps/gpu-beauty.html` (sombra direcional shadow-map+PCF, luz de céu, 64px, partículas). Beleza iterada COM o ideador até aprovar: toras verticais castanho-mel (tons RGB reais fora da paleta — aprovado, a Resurrect64 não tem castanho), janelas-ABERTURA com 2 abas, porta estreita/alta com batente, telha de barro. Pegas: POT p/ REPEAT no WebGL1; swiftshader não mede celular.
+- **Rumo (ideador)**: branch **v2** = jogo atual congelado (rollback/manutenção); **main** = port v3 GPU, publicado em `/fps/v3/` até paridade (o `/fps/` v2 segue no ar).
+- **A OFICINA (D-55)**: ambiente padrão de criação em `prototipos/fps/v3/` — motor modular (mat4/tex/geo/render) + contrato de peça (`construir(ctx) -> {lotes, animar?}`) + `visor.html?peca=nome` + bancada `npm run peca`. Peças: `casa-toras` (migrada fiel) e `_modelo` (cubo animado = template). Regra de ouro: MESMO motor do futuro cliente.
+- **PRÓXIMO (o grande)**: o PORT em si — mundo do v2 (terreno/água/árvores/cidade/heróis) camada a camada no motor v3, medindo no aparelho; oficina ganha som/reflexo/câmera andável no caminho.
+
 ## Sessão 2026-07-17 (parte 31) — o motor de SETOR/PORTAL: a primeira casa DE VERDADE, com interior (D-53)
 
 - Mandato: caminho A (segmentos/sectors) + "seja crítico, não aceite resultado ruim". Construído o **núcleo do renderizador de segmentos** e provado com uma casa enterável.
