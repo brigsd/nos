@@ -68,6 +68,27 @@ npm run olhar -- largo-noite --tod=0.8   # hora do dia forçada
 | **Sessão/scratchpad são efêmeros** | Tudo que importa: commitado ou regenerável por comando (D-30). Ferramenta boa no scratchpad = ferramenta que devia estar no repo |
 | Vejo **quadros, não vídeo**; gosto final é do ideador | Pares de frames para movimento; **antes/depois** para decisões estéticas |
 
+## Git como infraestrutura — `docs/GIT.md`
+
+*Atrito de origem: o repo É o banco e 1 batida = 1 commit, mas usávamos o
+git como só controle de versão. E rodar instâncias paralelas fazia as
+sessões brigarem pelo checkout (16-17/07).*
+
+Três comandos prontos, cada um com o caveat honesto em `docs/GIT.md`:
+
+```
+npm run git:forensics -- <batida-boa>   # que batida quebrou o mundo? (bisect + validador)
+npm run git:worktree -- <branch>         # instância paralela sem brigar pelo checkout
+npm run git:maintenance                   # mantém a Crônica rápida de ler (commit-graph)
+```
+
+- **Rode instâncias paralelas via worktree**, não via `checkout` no mesmo
+  diretório — cada worktree tem índice/checkout próprios (some a briga de
+  stash). É o jeito oficial.
+- Mundo quebrou e não sei qual batida? `git:forensics` acha em log2(n) testes.
+- `git:maintenance` é cache de leitura puro (não toca história nem o jogo);
+  entra no workflow do tick só depois de ~5.000 batidas (D-39).
+
 ## Replicar num mundo novo (o kit)
 
 Um repo-mundo novo nasce copiando daqui:
@@ -79,6 +100,8 @@ Um repo-mundo novo nasce copiando daqui:
 3. O padrão de build do cliente (`site/scripts/build-fps.mjs`: mundo inline
    → auditável offline) e a bancada (`qa/olhar.mjs` + `pontos.json` novos).
 4. As convenções do arquivo grande (marcadores de seção, campos assados).
+5. O ferramental de git (`scripts/git-*.mjs` + `docs/GIT.md`): autocontido,
+   só reaponta o validador padrão da forense para o do mundo novo.
 
 O que NÃO copiar: o diário (`CONTINUITY`) e as decisões — cada mundo escreve
 os seus. O método, sim: registrar atrito, destilar ferramenta.

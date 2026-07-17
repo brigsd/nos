@@ -2,6 +2,15 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 — Git como infraestrutura (D-39, branch `claude/git-power-tools`)
+
+- O ideador pediu para achar recursos poderosos do git parados e implementá-los bem documentados/reutilizáveis. Entregue: 3 scripts autocontidos + `docs/GIT.md` central.
+- **`npm run git:forensics -- <batida-boa>`**: `git bisect run` embrulhado — acha a batida que quebrou o mundo em log2(n) testes (validador padrão `validate-world`). Guarda de árvore suja + `bisect reset` garantido. Testado com predicado sintético (tickCount) contra a história real: aponta o commit exato.
+- **`npm run git:worktree -- <branch>`**: oficializa worktrees como o jeito de rodar instâncias paralelas sem brigar por checkout/stash (atrito real de 16-17/07).
+- **`npm run git:maintenance`**: escreve o commit-graph (cache de leitura da Crônica; não altera história nem o jogo). Limiar pra ligar no `tick.yml`: ~5.000 batidas (YAML pronto no GIT.md; edição de workflow é pendência do ideador).
+- Prateleira documentada pro futuro: `git notes`, `git bundle`, `git rerere`, partial clone.
+- **Nota de numeração/merge**: esta branch saiu de `origin/main` (não empilha nas ruínas). D-38 = ruínas v3 (`claude/tree3d-leaves`); D-39 = este. Duas branches paralelas desta sessão — ao mesclar, ordem livre; se git-tools entrar antes, D-38 chega depois e a sequência cicatriza.
+
 ## Sessão 2026-07-16 (parte 13) — A Clareira v2 (D-37): um portal, praça aberta, carpintaria
 
 - Direção do ideador: alas feias, bancas estranhas tapando o caminho, e "só um portal — quando a pessoa passa, mostra os mundos conectados". Feito: **Portal do Átrio único** (dois arcos mortos removidos, calçamento leva direto), painel **◈ MUNDOS CONECTADOS** por proximidade (<2.4 tiles, histerese, `NOS_WORLDS` = registry inline no build, passivo — zero clique), **4 bancas removidas**, texturas v2 (chapas de cobre com costura, beiral fundo, prumos/travessa, socos, janela+peitoril variando por seed, seeds próprios por ala), telhados com desnível por tile. Baker da GI sincronizado + re-assado.
