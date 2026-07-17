@@ -2,6 +2,12 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 2) — A Clareira v3: AS RUÍNAS (D-38, branch `claude/tree3d-leaves`)
+
+- Pedido do ideador: ruínas ousadas, mais quantidade, sem forjas/bancadas, vila bem maior, remetendo a lore. Feito (ver D-38): **Torre da Crônica**, **Ala do Átrio**, **O Arquivo**, **Anel da Primeira Batida** (monólitos + veias fortes), **Quarteirão Afundado**, colunata quebrada, obelisco torto e **A CABEÇA** (colosso afundado até os olhos — o gancho do Detached Head). Clareira 8.2, calçamento erodido, escombros com colisão, GI sincronizada. 59-60fps, 372/372.
+- Detalhe de processo pro futuro: a Cabeça levou 5 versões DE OLHAR (perfil deitado nunca leu nesta resolução; frontal enterrada leu na primeira) — o registro completo do que cada versão errou está no README do protótipo.
+- **Próximo:** review dos agentes antes de merge. GI: o baker foi sincronizado com a geometria v3 e o artefato (`bake/out/gi.png`) NÃO é committado — todo deploy em checkout fresco re-assa sozinho, nada a fazer. O `build-fps.mjs` agora também inline o `tree3d-core.js` (o Pages publica um html único; sem isso as árvores 3D quebravam no `/fps/` publicado).
+
 ## Sessão 2026-07-17 — árvores 3D com folhas detalhadas (branch `claude/tree3d-leaves`)
 
 - Pedido do ideador: branch separada, sombras de lado, **recriar árvores 3D com folhas detalhadas** — e disciplina de olhar honesto no processo (defeitos nomeados ANTES de qualquer elogio, a cada render).

@@ -54,6 +54,70 @@ Limite conhecido e honesto: com 8 vistas há um "pulo" perceptível ao
 cruzar o limite de vista MUITO perto da árvore. Se incomodar em jogo,
 os caminhos são 16 vistas (2× memória) ou um fade curto na troca.
 
+## AS RUÍNAS — A Clareira v3 (esta branch, D-38)
+
+A vila deixou de ser vila: **A Clareira é o que restou de quem veio
+antes** (quem fez o Commit Primordial? — LORE.md). As oficinas saíram;
+o que há são ruínas que afundam um pouco a cada pulso, lore literal.
+
+### O que existe agora (nomes canônicos)
+
+| Estrutura | Onde | O que é |
+|---|---|---|
+| **Torre da Crônica** | NE do largo | lasca de 3.1 tiles com degraus de desabamento e escombros na base |
+| **Ala do Átrio** | em volta do portal | o Portal do Átrio é o ÚNICO arco de pé do salão; fragmentos altos e tocos marcam o resto |
+| **O Arquivo** | SW | salão sem teto (dizem que a Crônica era guardada ali); um canto de 2.1 sobreviveu, uma coluna caída dorme dentro |
+| **Anel da Primeira Batida** | NW | 7 monólitos de basalto com glifos lavanda; as veias do Pulso correm mais fortes por baixo — à noite é o lugar mais bonito do mundo |
+| **Quarteirão Afundado** | S | muros engolidos até a cintura (h 0.25–0.55) — o chão cobra as ruínas de volta |
+| **Colunata quebrada** | chegada oeste | pares de colunas partidas em alturas diferentes; uma já está deitada na grama |
+| **Obelisco torto** | S | afundou de um lado e aponta errado; glifos descendo a face |
+| **A CABEÇA** (`a-cabeca`) | S | colosso de pedra afundado até os olhos. De quem era? Ninguém liga em voz alta ao "horror sem cabeça" (Detached Head, LORE.md) |
+
+Ficaram: o Portal do Átrio + painel ◈ MUNDOS CONECTADOS (D-37), os 4
+lampiões (o toque dos Nativos entre as pedras), o calçamento — agora
+ERODIDO onde a grama venceu.
+
+### Como foi feito (pra quem for mexer)
+
+- **Paredes**: o mesmo `CITY` map do D-32 (DDA client-side com altura por
+  tile) — "quebrado" é composição de ALTURAS (degraus de desabamento),
+  porque raycaster não tem topo recortado. ~40 tiles em 6 conjuntos.
+- **Texturas novas** (`genWallTex`): `ruin` = fiadas ciclópicas tortas
+  com blocos FALTANDO (vãos escuros por hash), rachadura serpenteante e
+  musgo subindo da base, em 3 seeds pra variar; `ruinDark` = monólito
+  SEM argamassa (pedra única: grão vertical alongado, arestas fundas,
+  glifos lavanda com trechos apagados). Lição do olhar: monólito com
+  fiada lia como muro de tijolo.
+- **Billboards novos**: `genColumn` (fuste canelado partido em altura
+  sorteada), `genFallenColumn` (deitada, face do corte visível, grama
+  por cima), `genObelisk` (inclinação no desenho, ponta lascada),
+  `genHead` (domo frontal enterrado: arcada pesada, olhos fechados,
+  nariz mergulhando na terra, musgo em manchas, faixa de terra em
+  dither + franja de grama POR CIMA pra assentar).
+- **A Cabeça levou 5 versões de olhar** — registro honesto: v1 deitada
+  de perfil = ovo; v2 feições maiores = baleia dormindo; v3 perfil
+  esculpido na silhueta = bico de chaleira + "portinha" (orelha); v4 sem
+  orelha ainda não lia; v5 FRONTAL E ENTERRADA leu na hora. Moral pra
+  próxima arte: nesta resolução, rosto lê de frente e simétrico.
+- **Escombros**: os pedregulhos 3D grandes (`rock3d` scale 0.42–0.6)
+  voltaram como entulho com colisão (`rockTiles`) — exatamente o uso
+  previsto quando viraram pedrinhas ("pra ressuscitar os grandes em
+  outro cenário: ruínas?").
+- **Chão**: clareira sem árvores cresceu de r5→8.2; calçamento ganhou
+  manchas novas (Anel/Arquivo/colunata) com EROSÃO por noise (buracos
+  onde a grama venceu — sem isso lia como estacionamento); as veias do
+  Pulso ganharam 3 nascentes (largo, Anel mais forte, vazamento fraco
+  em volta da Cabeça).
+- **GI (D-36)**: `bake-gi.mjs` re-sincronizado com a geometria v3 +
+  luzes de veia novas no Anel e na Cabeça; o artefato não é committado,
+  todo deploy re-assa. `build-fps.mjs` agora inline `tree3d-core.js`
+  no html único do Pages.
+
+Roteiro de teste: entre pelo carreiro (oeste) — colunata → largo →
+portal; suba ao Anel (NW) DE NOITE (`window.__setTod(0.97)`); desça ao
+Quarteirão Afundado (S) e encare A Cabeça; `?cam=46.3,20.3,1.15` cai
+direto nela.
+
 ## Modo dia (iteração 2 — direção BotW)
 
 A pedido do ideador (referência: campos de Breath of the Wild), o protótipo

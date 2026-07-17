@@ -39,13 +39,26 @@ for (let i = 0; i < world.tiles.length; i++) biome[i] = world.tiles[i].biome;
 const at = (x, y) => (x >= 0 && y >= 0 && x < W && y < H) ? biome[y * W + x] : 'void';
 
 /* ---------- cena: A Clareira (duplicado de nos-fps.html §A CLAREIRA) ---------- */
-const AL = { wood: [0.62, 0.42, 0.26], stone: [0.52, 0.5, 0.56], chimney: [0.3, 0.26, 0.3], arch: [0.5, 0.5, 0.55] };
+const AL = { ruin: [0.55, 0.54, 0.58], ruinDark: [0.28, 0.28, 0.36], arch: [0.5, 0.5, 0.55] };
 const box = (tx, ty, kind, h) => ({ x0: tx, y0: ty, x1: tx + 1, y1: ty + 1, z1: h, al: AL[kind] });
-const BOXES = [ // v2 (D-37): bancas removidas, telhados com desnível, portal ÚNICO
-  box(43, 12, 'wood', 1.88), box(44, 12, 'wood', 1.68), box(43, 13, 'wood', 1.75), box(42, 12, 'wood', 0.85),
-  box(48, 12, 'stone', 1.42), box(49, 12, 'chimney', 2.05), box(49, 13, 'stone', 1.3), box(50, 12, 'stone', 0.8),
-  box(43, 19, 'wood', 1.02), box(44, 19, 'wood', 0.9), box(43, 18, 'wood', 0.95), box(42, 19, 'wood', 0.7),
-  box(48, 19, 'wood', 1.2), box(49, 19, 'wood', 1.05), box(49, 18, 'wood', 1.12),
+const BOXES = [ // v3 RUÍNAS (2026-07-17): sincronizado com nos-fps.html §v3 — AS RUÍNAS
+  /* Torre da Crônica */
+  box(49, 10, 'ruin', 3.1), box(50, 10, 'ruin', 1.7), box(49, 11, 'ruin', 1.5), box(50, 11, 'ruin', 0.7), box(48, 10, 'ruin', 0.55),
+  box(49, 9, 'ruin', 0.8), box(48, 11, 'ruin', 0.4),
+  /* Ala do Átrio */
+  box(51, 13, 'ruin', 0.85), box(52, 13, 'ruin', 1.7), box(52, 14, 'ruin', 0.5),
+  box(51, 18, 'ruin', 0.9), box(52, 18, 'ruin', 1.55), box(52, 17, 'ruin', 0.45),
+  /* O Arquivo */
+  box(41, 18, 'ruin', 0.6), box(42, 18, 'ruin', 1.05), box(44, 18, 'ruin', 0.5), box(45, 18, 'ruin', 1.35),
+  box(41, 19, 'ruin', 0.4), box(41, 20, 'ruin', 0.9), box(41, 21, 'ruin', 0.5), box(41, 22, 'ruin', 2.1),
+  box(42, 22, 'ruin', 0.45), box(43, 22, 'ruin', 1.1), box(45, 22, 'ruin', 0.6),
+  box(45, 19, 'ruin', 0.5), box(45, 21, 'ruin', 0.85),
+  /* Anel da Primeira Batida (monólitos) */
+  box(41, 9, 'ruinDark', 1.7), box(43, 9, 'ruinDark', 1.4), box(44, 10, 'ruinDark', 1.85), box(45, 12, 'ruinDark', 1.5),
+  box(43, 13, 'ruinDark', 1.45), box(41, 13, 'ruinDark', 1.6), box(40, 11, 'ruinDark', 1.75),
+  /* Quarteirão Afundado */
+  box(46, 20, 'ruin', 0.35), box(47, 20, 'ruin', 0.5), box(48, 20, 'ruin', 0.28), box(50, 20, 'ruin', 0.55),
+  box(47, 21, 'ruin', 0.25), box(49, 21, 'ruin', 0.42), box(49, 22, 'ruin', 0.3), box(50, 22, 'ruin', 0.5),
   /* o Portal do Átrio: lâmina fina de pedra */
   { x0: 50.98, y0: 15.2, x1: 51.22, y1: 16.0, z1: 1.7, al: AL.arch },
 ];
@@ -68,6 +81,17 @@ for (let i = 0; i < 26; i++) { // veias: anel semeado ao redor do largo (fios, n
   const blue = rnd() > 0.5;
   LIGHTS.push([PLAZA.x + Math.cos(a) * r, PLAZA.y + Math.sin(a) * r * 0.9, 0.05,
     blue ? 0.3 : 0.66, blue ? 0.61 : 0.52, blue ? 0.9 : 0.95, 0.03, 0.12, 0.3, 10.0]);
+}
+for (let i = 0; i < 14; i++) { // v3: as veias correm mais fortes sob o Anel da Primeira Batida
+  const a = rnd() * Math.PI * 2, r = 0.8 + rnd() * 2.4;
+  const blue = rnd() > 0.4;
+  LIGHTS.push([42.5 + Math.cos(a) * r, 11.5 + Math.sin(a) * r, 0.05,
+    blue ? 0.3 : 0.66, blue ? 0.61 : 0.52, blue ? 0.9 : 0.95, 0.03, 0.16, 0.4, 9.0]);
+}
+for (let i = 0; i < 6; i++) { // v3: vazamento fraco em volta d'A Cabeça
+  const a = rnd() * Math.PI * 2, r = 0.6 + rnd() * 1.6;
+  LIGHTS.push([47.5 + Math.cos(a) * r, 22.4 + Math.sin(a) * r, 0.05,
+    0.45, 0.55, 0.92, 0.02, 0.1, 0.24, 11.0]);
 }
 
 /* ---------- horários ----------

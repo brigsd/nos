@@ -1278,7 +1278,7 @@ function rimAt(fx, fy) {
    guarda de tufos/flores/seixos e minimapa. */
 const PATH_PTS = [[27.0, 12.0], [30.6, 11.2], [34.2, 10.9], [38.5, 12.2], [41.4, 13.4], [44.0, 14.8], [46.2, 15.6]];
 const PLAZA = { x: 46.2, y: 15.6, r: 2.3 }; // largo de terra onde o carreiro deságua
-const CLEAR_R = 5.0;                        // raio sem árvores: a clareira da cidade
+const CLEAR_R = 8.2;                        // raio sem árvores: as Ruínas pedem céu aberto (v3)
 function segDist(qx, qy, ax, ay, bx, by) {
   const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
   let t = ((qx - ax) * dx + (qy - ay) * dy) / L2;
@@ -1318,10 +1318,60 @@ function pathAt(fx, fy) {
    texturas geradas (pedra/madeira/cobre oxidado), arcos de portal e fumaça
    como billboards, veias de luz do Pulso no chão (emissivas à noite). */
 function genWallTex(kind, seed) {
-  const Wt = 16, Ht = kind === 'chimney' ? 64 : 48;
+  const Wt = 16, Ht = kind === 'chimney' || kind === 'ruin' || kind === 'ruinDark' ? 64 : 48;
   const rnd = mulberry32(seed * 60493 + 11);
   const buf = new Int16Array(Wt * Ht).fill(6);
   const ROOF = 12; // faixa de telhado no topo
+  if (kind === 'ruin' || kind === 'ruinDark') {
+    /* PEDRA DOS ANTIGOS: fiadas ciclópicas irregulares, blocos FALTANDO
+       (buracos escuros), rachaduras serpenteando, musgo subindo da base.
+       Sem telhado — o topo quebrado quem faz é a ALTURA por tile.
+       'ruinDark' = monólito basáltico com glifos lavanda (as marcas de
+       quem fez o Commit Primordial — ninguém leu até hoje). */
+    const dark = kind === 'ruinDark';
+    const cH = 8, cW = 11;
+    for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+      const i = y * Wt + x;
+      if (dark) {
+        /* MONÓLITO: pedra ÚNICA — sem fiada, sem argamassa (a v1 com
+           fiadas lia como muro de tijolo escuro). Grão vertical alongado,
+           arestas fundas, uma fratura horizontal rara. */
+        const n = vnoise(x * 0.4 + seed, y * 0.16 + seed * 2);
+        buf[i] = n > 0.76 ? 44 : n > 0.34 ? 34 : 1;
+        if (x < 1 || x > Wt - 2) buf[i] = 0;                     // aresta funda
+        if (hash2((y / 3) | 0, seed * 5) < 0.05 && (y % 3) < 1) buf[i] = 0; // fratura rara
+      } else {
+        const course = (y / cH) | 0;
+        const wob = ((vnoise(course * 3.3 + seed, 7) - 0.5) * 4) | 0; // fiada torta
+        const off = ((course & 1) * (cW >> 1) + wob + cW * 8) % cW;
+        const blockIx = (((x + off) / cW) | 0) + course * 7;
+        const mortarY = y % cH === 0, mortarX = ((x + off) % cW) === 0;
+        const n = vnoise(x * 0.7 + seed * 2, y * 0.55 + seed);
+        if (mortarY || mortarX) buf[i] = 2;
+        else if (hash2(blockIx * 131 + seed, course * 17) < 0.09) {
+          buf[i] = ((x + y) & 1) === 0 ? 1 : 0;                  // bloco FALTANDO: vão escuro
+        } else {
+          buf[i] = n > 0.78 ? 8 : n > 0.42 ? 7 : 6;
+          if (n > 0.9) buf[i] = 9;                               // cristal de quartzo raro
+        }
+        /* rachadura: linha escura que serpenteia descendo */
+        const crx = 4 + ((vnoise(y * 0.23 + seed * 5, 3) - 0.5) * 7) | 0;
+        if (x === ((crx + seed) % (Wt - 2)) + 1 && hash2(y, seed * 7) < 0.75) buf[i] = 2;
+      }
+      /* musgo: sobe da base, mais denso embaixo */
+      if (y > Ht - 12 && hash2(x * 7 + seed, y * 3) < (y - (Ht - 12)) / 16) buf[i] = hash2(x, y + seed) < 0.5 ? 35 : 36;
+    }
+    if (dark) { /* glifos: coluna central de marcas lavanda, apagadas em trechos */
+      for (let y = 4; y < Ht - 8; y += 5) {
+        if (hash2(y * 13, seed) < 0.3) continue; // trecho apagado pelo tempo
+        const g = (hash2(y * 7, seed * 3) * 3) | 0;
+        buf[y * Wt + 7] = 52; buf[y * Wt + 8] = 52;
+        if (g > 0) { buf[(y + 1) * Wt + 7] = 52; }
+        if (g > 1) { buf[(y + 1) * Wt + 9] = 51; }
+      }
+    }
+    return bufToTex({ buf, W: Wt, H: Ht });
+  }
   for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
     const i = y * Wt + x;
     if (kind !== 'chimney' && y < ROOF) {
@@ -1379,9 +1429,8 @@ function genWallTex(kind, seed) {
 /* cada ala de madeira tem SEED próprio: padrão de tábuas, nós e janela em
    posições diferentes — quebra a repetição sem custo novo */
 const CT = {
-  stone: genWallTex('stone', 31), wood: genWallTex('wood', 47),
-  woodBan: genWallTex('wood', 12), woodCoz: genWallTex('wood', 83),
-  chimney: genWallTex('chimney', 53),
+  ruin: genWallTex('ruin', 31), ruinB: genWallTex('ruin', 67), ruinC: genWallTex('ruin', 104),
+  ruinDark: genWallTex('ruinDark', 53),
 };
 /* ruínas NW ocultas SÓ no FPS (pedido do ideador): viravam blocos cinza sem
    leitura colados no spawn. O Registro continua com elas (o 2D as mostra);
@@ -1392,20 +1441,45 @@ for (let ty = 6; ty <= 12; ty++) for (let tx = 23; tx <= 29; tx++) {
 }
 const CITY = new Map();
 const cityWall = (tx, ty, kind, h, mm) => CITY.set(ty * world.w + tx, { tex: CT[kind], h, mm });
-/* v2 (pedido do ideador): BANCAS REMOVIDAS — eram objetos estranhos tapando
-   a vista e o caminho pro portal; as próprias alas SÃO as lojas. Telhados
-   com DESNÍVEL por tile: cumeeira mais alta num canto = silhueta viva. */
-/* Estaleiro (NW, madeira ALTA + anexo baixo — silhueta em degraus) */
-cityWall(43, 12, 'wood', 1.88, '#cd683d'); cityWall(44, 12, 'wood', 1.68, '#cd683d'); cityWall(43, 13, 'wood', 1.75, '#cd683d');
-cityWall(42, 12, 'wood', 0.85, '#cd683d');
-/* Forja (NE, pedra + chaminé fumegando + depósito baixo) */
-cityWall(48, 12, 'stone', 1.42, '#7f708a'); cityWall(49, 12, 'chimney', 2.05, '#625565'); cityWall(49, 13, 'stone', 1.3, '#7f708a');
-cityWall(50, 12, 'stone', 0.8, '#7f708a');
-/* Bancada (SW, oficina baixa de madeira + telheiro) */
-cityWall(43, 19, 'woodBan', 1.02, '#cd683d'); cityWall(44, 19, 'woodBan', 0.9, '#cd683d'); cityWall(43, 18, 'woodBan', 0.95, '#cd683d');
-cityWall(42, 19, 'woodBan', 0.7, '#cd683d');
-/* Cozinha (SE, madeira quente) */
-cityWall(48, 19, 'woodCoz', 1.2, '#cd683d'); cityWall(49, 19, 'woodCoz', 1.05, '#cd683d'); cityWall(49, 18, 'woodCoz', 1.12, '#cd683d');
+/* v3 — AS RUÍNAS (pedido do ideador, 2026-07-17): a Clareira não é uma
+   vila que os Nativos construíram — é o que RESTOU de quem veio antes
+   (quem fez o Commit Primordial? ninguém sabe — LORE.md). As oficinas
+   (estaleiro/forja/bancada/cozinha) saíram; entraram ruínas maiores e
+   mais ousadas. A cada pulso elas afundam um pouco mais — lore literal:
+   o Quarteirão Afundado já está pela metade. */
+const RU = '#7f708a', RD = '#484a77';
+/* A TORRE DA CRÔNICA (NE): a lasca mais alta do mundo — degraus de
+   desabamento descendo dela (3.1 -> 0.55) */
+cityWall(49, 10, 'ruin', 3.1, RU); cityWall(50, 10, 'ruinB', 1.7, RU);
+cityWall(49, 11, 'ruinC', 1.5, RU); cityWall(50, 11, 'ruin', 0.7, RU);
+cityWall(48, 10, 'ruinB', 0.55, RU); cityWall(49, 9, 'ruinC', 0.8, RU);
+cityWall(48, 11, 'ruin', 0.4, RU);
+/* ALA DO ÁTRIO: o portal é o único arco que ficou de pé do salão inteiro —
+   fragmentos altos dos dois lados, tocos marcando onde havia parede */
+cityWall(51, 13, 'ruinC', 0.85, RU); cityWall(52, 13, 'ruin', 1.7, RU);
+cityWall(52, 14, 'ruinB', 0.5, RU);
+cityWall(51, 18, 'ruin', 0.9, RU); cityWall(52, 18, 'ruinB', 1.55, RU);
+cityWall(52, 17, 'ruinC', 0.45, RU);
+/* O ARQUIVO (SW): salão sem teto onde dizem que a Crônica era guardada —
+   perímetro de tocos com dois vãos de porta e dois cantos sobreviventes */
+cityWall(41, 18, 'ruinB', 0.6, RU); cityWall(42, 18, 'ruin', 1.05, RU);
+cityWall(44, 18, 'ruinC', 0.5, RU); cityWall(45, 18, 'ruin', 1.35, RU);
+cityWall(41, 19, 'ruinC', 0.4, RU); cityWall(41, 20, 'ruin', 0.9, RU); cityWall(41, 21, 'ruinB', 0.5, RU);
+cityWall(41, 22, 'ruin', 2.1, RU);  /* o canto que não caiu */
+cityWall(42, 22, 'ruinB', 0.45, RU); cityWall(43, 22, 'ruinC', 1.1, RU); cityWall(45, 22, 'ruin', 0.6, RU);
+cityWall(45, 19, 'ruinB', 0.5, RU); cityWall(45, 21, 'ruinC', 0.85, RU);
+/* O ANEL DA PRIMEIRA BATIDA (NW): círculo de monólitos com glifos — as
+   veias do Pulso correm mais fortes por baixo dele */
+cityWall(41, 9, 'ruinDark', 1.7, RD); cityWall(43, 9, 'ruinDark', 1.4, RD);
+cityWall(44, 10, 'ruinDark', 1.85, RD); cityWall(45, 12, 'ruinDark', 1.5, RD);
+cityWall(43, 13, 'ruinDark', 1.45, RD); cityWall(41, 13, 'ruinDark', 1.6, RD);
+cityWall(40, 11, 'ruinDark', 1.75, RD);
+/* O QUARTEIRÃO AFUNDADO (S): muros engolidos até a cintura — o chão
+   cobra as ruínas de volta, um pulso por vez */
+cityWall(46, 20, 'ruinB', 0.35, RU); cityWall(47, 20, 'ruin', 0.5, RU);
+cityWall(48, 20, 'ruinC', 0.28, RU); cityWall(50, 20, 'ruin', 0.55, RU);
+cityWall(47, 21, 'ruinB', 0.25, RU); cityWall(49, 21, 'ruinC', 0.42, RU);
+cityWall(49, 22, 'ruin', 0.3, RU); cityWall(50, 22, 'ruinB', 0.5, RU);
 
 /* o LARGO é calçado de pedra (decisão do ideador): lajotas irregulares
    assadas em 2 variantes 64px, mesmo esquema da grama — 1 lookup por pixel */
@@ -1444,17 +1518,23 @@ const STONE_TILES = [genStoneTile(3), genStoneTile(11)];
 
 /* veias de luz do Pulso (decisão do ideador): campo de cristas assado sobre
    a bbox da Clareira, mais forte perto do largo, derretendo até r~4.8 */
-const VEIN_X0 = 40, VEIN_Y0 = 9, VEIN_RES = 8, VEIN_N = 14 * VEIN_RES;
+const VEIN_X0 = 38, VEIN_Y0 = 7, VEIN_RES = 8, VEIN_SPAN = 18, VEIN_N = VEIN_SPAN * VEIN_RES;
 const VEINF = new Float32Array(VEIN_N * VEIN_N);
 for (let gy = 0; gy < VEIN_N; gy++) for (let gx = 0; gx < VEIN_N; gx++) {
   const fx = VEIN_X0 + gx / VEIN_RES, fy = VEIN_Y0 + gy / VEIN_RES;
-  const r = Math.hypot(fx - PLAZA.x, fy - PLAZA.y);
   const ridge = Math.abs(fbm(fx * 1.05 + 91, fy * 1.05 + 47, 2) - 0.5);
-  const v = Math.max(0, 1 - ridge / 0.05) * Math.max(0, 1 - r / 4.8);
+  /* três nascentes do Pulso (v3 Ruínas): o largo, o Anel da Primeira
+     Batida (mais forte — é pra lá que as veias correm) e um vazamento
+     fraco em volta d'A Cabeça (ninguém explica esse também) */
+  const rP = Math.hypot(fx - PLAZA.x, fy - PLAZA.y);
+  const rA = Math.hypot(fx - 42.5, fy - 11.5);
+  const rC = Math.hypot(fx - 47.5, fy - 22.4);
+  const src = Math.max(1 - rP / 4.8, (1 - rA / 3.6) * 1.1, (1 - rC / 2.4) * 0.75);
+  const v = Math.max(0, 1 - ridge / 0.05) * Math.max(0, src);
   VEINF[gy * VEIN_N + gx] = v * v;
 }
 function veinAt(fx, fy) {
-  if (fx <= VEIN_X0 || fy <= VEIN_Y0 || fx >= VEIN_X0 + 13.8 || fy >= VEIN_Y0 + 13.8) return 0;
+  if (fx <= VEIN_X0 || fy <= VEIN_Y0 || fx >= VEIN_X0 + VEIN_SPAN - 0.2 || fy >= VEIN_Y0 + VEIN_SPAN - 0.2) return 0;
   const gx = (fx - VEIN_X0) * VEIN_RES, gy = (fy - VEIN_Y0) * VEIN_RES;
   const x0 = gx | 0, y0 = gy | 0, sx = gx - x0, sy = gy - y0;
   const i = y0 * VEIN_N + x0;
@@ -1745,7 +1825,7 @@ for (let ty = 0; ty < world.h; ty++) {
         const typ = cyp + ux * off * sg + (hash2(n * 31, salt + 8) - 0.5) * 0.5;
         if (world.at(txp | 0, typ | 0) !== 'm') continue;      // só na campina
         if (rimAt(txp, typ) < 0.9 || pathAt(txp, typ) < 0.85) continue;
-        if (Math.hypot(txp - PLAZA.x, typ - PLAZA.y) < 4.9) continue; // dentro d'A Clareira quem emoldura é a cidade
+        if (Math.hypot(txp - PLAZA.x, typ - PLAZA.y) < 8.8) continue; // dentro das Ruínas quem emoldura são elas
         const hv = hash2(n * 7, salt + 12);
         let v = TREE_VARIANTS[(hv * TREE_VARIANTS.length) | 0];
         if (hash2(n * 37, salt + 16) < 0.16) v = TREE_CEREJEIRA; // cerejeiras pontuando o caminho
@@ -1804,24 +1884,188 @@ function genArch(lit, seed) {
   }
   return bufToTex({ buf, W: Wa, H: Ha });
 }
-function genSmoke(fr) {
-  const Ws = 26, Hs = 40;
-  const rnd = mulberry32(fr * 7643 + 29);
-  const buf = new Int16Array(Ws * Hs).fill(-1);
-  /* 3 novelos subindo, deriva pra leste; frame desloca a fase */
-  for (let p = 0; p < 3; p++) {
-    const t = (p + fr / 3) % 3;
-    const cy = 34 - t * 12, cx = 13 + Math.sin((t + fr) * 2.1) * 3 + t * 2.2, r = 3 + t * 2.4;
-    for (let y = 0; y < Hs; y++) for (let x = 0; x < Ws; x++) {
-      const d = Math.hypot(x - cx, y - cy);
-      if (d < r && rnd() < 0.82 - (d / r) * 0.5) {
-        const i = y * Ws + x;
-        if (buf[i] === -1) buf[i] = d < r * 0.5 ? 8 : 7;
-      }
+/* (genSmoke saiu com a chaminé da Forja — v3 Ruínas, D-38; histórico no git) */
+/* ---------- adereços das Ruínas: colunas, obelisco, A Cabeça ---------- */
+/* coluna dos antigos: plinto + fuste canelado + topo QUEBRADO em degraus
+   (o capitel de quase todas caiu — está no chão em algum lugar) */
+function genColumn(seed) {
+  const Wc = 20, Hc = 72;
+  const rnd = mulberry32(seed * 5527 + 13);
+  const buf = new Int16Array(Wc * Hc).fill(-1);
+  const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < Wc && y < Hc) buf[y * Wc + x] = v; };
+  const topY = 6 + (rnd() * 26) | 0; // altura da quebra: cada coluna partiu num ponto
+  for (let y = topY; y < Hc; y++) {
+    let hw = 4.2;
+    if (y > Hc - 8) hw = 5.6;                       // plinto
+    else if (y > Hc - 10) hw = 4.9;                 // filete
+    const jag = y < topY + 4 ? (hash2(y * 7, seed) * 3.5) | 0 : 0; // borda da quebra
+    for (let x = Math.round(10 - hw) + (y < topY + 4 && hash2(y, seed * 3) < 0.5 ? jag : 0); x <= Math.round(9 + hw) - (y < topY + 4 ? jag : 0); x++) {
+      const fl = ((x + ((seed & 3))) % 4);          // caneluras: claro/escuro alternado
+      let v = fl === 0 ? 2 : fl === 2 ? 8 : x < 10 ? 7 : 6;
+      if (y > Hc - 8) v = fl === 0 ? 2 : 7;         // plinto liso
+      if (y < topY + 3) v = hash2(x, y + seed) < 0.5 ? 2 : 6; // miolo exposto na quebra
+      if (y > Hc - 13 && hash2(x * 3, y + seed) < 0.3) v = 35; // musgo na base
+      put(x, y, v);
     }
   }
-  return bufToTex({ buf, W: Ws, H: Hs });
+  /* contorno de tinta */
+  for (let y = 0; y < Hc; y++) for (let x = 0; x < Wc; x++) {
+    const v = buf[y * Wc + x];
+    if (v < 0 || v === 0) continue;
+    if ((x > 0 && buf[y * Wc + x - 1] < 0) || (x < Wc - 1 && buf[y * Wc + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * Wc + x] < 0) || (y < Hc - 1 && buf[(y + 1) * Wc + x] < 0)) buf[y * Wc + x] = 0;
+  }
+  return bufToTex({ buf, W: Wc, H: Hc });
 }
+/* coluna CAÍDA: o fuste deitado na grama, canelura em arcos, face do
+   corte visível — a grama já cresce por cima */
+function genFallenColumn(seed) {
+  const Wf = 56, Hf = 20;
+  const buf = new Int16Array(Wf * Hf).fill(-1);
+  const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < Wf && y < Hf) buf[y * Wf + x] = v; };
+  const cy = 11, R = 5.2;
+  for (let x = 4; x < Wf - 6; x++) {
+    for (let y = cy - R | 0; y <= cy + R * 0.7; y++) {
+      const ny = (y - cy) / R;
+      if (Math.abs(ny) > 1) continue;
+      const fl = ((x + 2) % 5);
+      let v = ny < -0.55 ? 8 : ny < 0.1 ? (fl === 0 ? 2 : 7) : fl === 0 ? 1 : 6;
+      if (hash2(x * 3, y * 7 + seed) < 0.08) v = 35;             // musgo
+      put(x, y, v);
+    }
+  }
+  for (let y = cy - R | 0; y <= cy + R * 0.7; y++) { // face do corte (elipse na ponta)
+    const ny = (y - cy) / R;
+    if (Math.abs(ny) > 1) continue;
+    const half = Math.sqrt(1 - ny * ny) * 2.4;
+    for (let x = Wf - 6 - half | 0; x < Wf - 6 + half; x++) put(x, y, hash2(x, y + seed) < 0.4 ? 2 : 6);
+  }
+  for (let i = 0; i < 12; i++) { // grama crescendo por cima da base
+    const gx = 5 + hash2(i * 37, seed) * (Wf - 12), gh = 2 + hash2(i * 53, seed) * 3;
+    for (let k = 0; k <= gh; k++) put(gx, cy + R * 0.7 - k + 2, k === gh ? 32 : 30);
+  }
+  for (let y = 0; y < Hf; y++) for (let x = 0; x < Wf; x++) {
+    const v = buf[y * Wf + x];
+    if (v <= 0) continue;
+    if ((x > 0 && buf[y * Wf + x - 1] < 0) || (x < Wf - 1 && buf[y * Wf + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * Wf + x] < 0) || (y < Hf - 1 && buf[(y + 1) * Wf + x] < 0)) buf[y * Wf + x] = 0;
+  }
+  return bufToTex({ buf, W: Wf, H: Hf });
+}
+/* obelisco TORTO: afundou de um lado e ficou apontando errado — glifos
+   lavanda descendo a face, ponta lascada */
+function genObelisk(seed) {
+  const Wo = 26, Ho = 80;
+  const buf = new Int16Array(Wo * Ho).fill(-1);
+  const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < Wo && y < Ho) buf[y * Wo + x] = v; };
+  const lean = 7; // px de inclinação do topo
+  for (let y = 4; y < Ho; y++) {
+    const t = 1 - y / Ho;                       // 1 topo .. 0 base
+    const cx = 13 + lean * t * t;
+    const hw = 2.2 + (1 - t) * 4.2;
+    for (let x = Math.round(cx - hw); x <= Math.round(cx + hw); x++) {
+      const sfrac = (x - cx) / hw;
+      let v = sfrac < -0.35 ? 6 : sfrac < 0.35 ? 34 : 1; // basalto com lado aceso (a v1 lia como pilar preto)
+      if (y < 9 && hash2(x * 5, y * 3 + seed) < 0.4) v = -1;     // ponta lascada
+      if (v >= 0) put(x, y, v);
+    }
+    if (y % 4 === 1 && y > 12 && y < Ho - 6 && hash2(y * 11, seed) > 0.25) {
+      put(Math.round(cx) - 1, y, 52); put(Math.round(cx), y, 52); // glifos
+      if (hash2(y, seed * 3) < 0.4) put(Math.round(cx) + 1, y + 1, 51);
+    }
+  }
+  for (let y = 0; y < Ho; y++) for (let x = 0; x < Wo; x++) {
+    const v = buf[y * Wo + x];
+    if (v < 0) continue;
+    if ((x > 0 && buf[y * Wo + x - 1] < 0) || (x < Wo - 1 && buf[y * Wo + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * Wo + x] < 0)) { if (v !== 0) buf[y * Wo + x] = 0; }
+  }
+  return bufToTex({ buf, W: Wo, H: Ho });
+}
+/* A CABEÇA: uma cabeça colossal de pedra, DE PÉ e afundada até os olhos
+   — a cada pulso ela desce mais um nada (lore literal: "ruínas afundam um
+   pouco mais"). De quem era? "Nas profundezas vive um horror sem cabeça"
+   — os antigos o chamavam de Detached Head (LORE.md). Ninguém liga uma
+   coisa à outra em voz alta.
+   v5 do olhar: frontal e enterrada lê na hora; as v1-v4 deitadas de
+   perfil liam como ovo/baleia/bico de chaleira nesta resolução. */
+function genHead(seed) {
+  const Wh = 60, Hh = 44;
+  const rnd = mulberry32(seed * 8887 + 5);
+  const buf = new Int16Array(Wh * Hh).fill(-1);
+  const put = (x, y, v) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < Wh && y < Hh) buf[y * Wh + x] = v; };
+  const groundY = Hh - 8;                 // linha da grama
+  const cx = 30, cyd = groundY + 10, Rx = 25, Ry = 32; // domo: centro ABAIXO do chao
+  for (let y = 2; y < groundY; y++) {
+    const ny = (y - cyd) / Ry;
+    if (ny < -1) continue;
+    const half = Math.sqrt(Math.max(0, 1 - ny * ny)) * Rx;
+    /* lasca no cranio: mordida na silhueta esquerda-alta */
+    const chip = y > 6 && y < 13 ? (13 - y) * 1.6 : 0;
+    for (let x = Math.round(cx - half + chip * (y < 13 ? 1 : 0)); x <= Math.round(cx + half); x++) {
+      const nx = (x - cx) / Rx;
+      const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+      let lam = -nx * 0.5 - ny * 0.72 + nz * 0.2;
+      lam += (BAYER[y & 3][x & 3] / 16 - 0.5) * 0.18; // dither em TODA borda de banda
+      const v = lam > 0.55 ? 8 : lam > 0.2 ? 7 : lam > -0.2 ? 6 : 2;
+      put(x, y, hash2(x * 3 + seed, y * 5) < 0.05 ? Math.max(2, v - 1) : v);
+    }
+  }
+  /* ARCADA: viga pesada de sombra atravessando o rosto (o T de moai) */
+  const browY = groundY - 12;
+  for (let k = -16; k <= 16; k++) {
+    const dip = Math.abs(k) < 3 ? 1 : 0;  // desce no meio (raiz do nariz)
+    if (buf[(browY + dip) * Wh + cx + k] >= 0) { put(cx + k, browY + dip, 1); put(cx + k, browY + 1 + dip, 2); }
+  }
+  /* OLHOS fechados: dois arcos caidos, simetricos, logo acima da grama */
+  for (const s of [-1, 1]) {
+    const ex = cx + s * 10;
+    for (let k = -4; k <= 4; k++) {
+      const drop = Math.abs(k) > 2 ? 1 : 0;
+      put(ex + k, browY + 5 + drop, 1);
+      put(ex + k, browY + 6 + drop, 2);   // palpebra
+    }
+  }
+  /* NARIZ: ponte LARGA e clara com arestas de tinta dos dois lados,
+     descendo da arcada e MERGULHANDO na terra (v5.1: a v5 pintava tons
+     médios sem aresta e o nariz sumia no rosto) */
+  for (let y = browY + 1; y < groundY + 1; y++) {
+    const w = 3 + ((y - browY) / 6 | 0);
+    put(cx - w, y, 1); put(cx + w, y, 1);             // arestas de tinta
+    put(cx + w + 1, y, 2);                            // sombra projetada à direita
+    for (let k = -w + 1; k <= w - 1; k++) put(cx + k, y, k < 0 ? 8 : 7); // dorso aceso
+  }
+  /* rachadura descendo o lado ESQUERDO do domo (à direita ela fechava um
+     "painel" com a borda da banda de sombra) + musgo em manchas */
+  for (let y = 4; y < browY - 1; y++) { const rx2 = cx - 14 + ((vnoise(y * 0.37, seed) - 0.5) * 6) | 0; if (buf[y * Wh + rx2] >= 2) put(rx2, y, 1); }
+  for (let c = 0; c < 5; c++) {
+    const mx0 = cx - Rx * 0.5 + rnd() * Rx, my0 = 3 + rnd() * 9, mr = 2 + rnd() * 2.6;
+    for (let oy = -mr; oy <= mr; oy++) for (let ox = -mr * 1.6; ox <= mr * 1.6; ox++) {
+      if ((ox * ox) / (mr * mr * 2.56) + (oy * oy) / (mr * mr) > 1) continue;
+      if (buf[((my0 + oy) | 0) * Wh + ((mx0 + ox) | 0)] >= 6 && rnd() < 0.85) put(mx0 + ox, my0 + oy, rnd() < 0.6 ? 35 : 36);
+    }
+  }
+  /* contorno de tinta ANTES do enterro (base fica sem contorno = assentada) */
+  for (let y = 0; y < Hh; y++) for (let x = 0; x < Wh; x++) {
+    const v = buf[y * Wh + x];
+    if (v <= 0) continue;
+    if ((x > 0 && buf[y * Wh + x - 1] < 0) || (x < Wh - 1 && buf[y * Wh + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * Wh + x] < 0) || (y < Hh - 1 && buf[(y + 1) * Wh + x] < 0)) buf[y * Wh + x] = 0;
+  }
+  /* ENTERRO: faixa de terra em dither + grama crescendo POR CIMA */
+  for (let x = 0; x < Wh; x++) {
+    if (buf[(groundY - 1) * Wh + x] < 0 && buf[(groundY - 2) * Wh + x] < 0) continue;
+    for (let y = groundY - 2; y < groundY + 2 && y < Hh; y++) {
+      if ((BAYER[y & 3][x & 3] / 16) < 0.7) put(x, y, y < groundY ? 1 : 34);
+    }
+    if (hash2(x * 13, seed) < 0.62) {
+      const gh = 2 + hash2(x * 7, seed * 3) * 4;
+      for (let k = 0; k <= gh; k++) put(x + (k > gh - 1 ? 1 : 0), groundY + 1 - k, k >= gh - 1 ? 32 : 30);
+    }
+  }
+  return bufToTex({ buf, W: Wh, H: Hh });
+}
+
 /* v2 (pedido do ideador): UM portal só — o Portal do Átrio, aceso, no fim
    do calçamento. Os dois arcos apagados saíram (eram cenário morto); chegar
    perto do portal abre o painel dos MUNDOS CONECTADOS (worlds/registry.json,
@@ -1833,7 +2077,33 @@ const PORTAL = { x: 51.1, y: 15.6 };
   for (const s of [-0.66, 0.66]) {
     addTrunk(PORTAL.x | 0, (PORTAL.y + s) | 0, PORTAL.x, PORTAL.y + s, 0.2);
   }
-  bills.push({ x: 49.5, y: 12.5, genFrames: [genSmoke(0), genSmoke(1), genSmoke(2)], loop: true, label: 'fumaca', scale: 1.2, lift: 2.1 });
+  /* fumaça saiu com a Forja (v3 Ruínas): ninguém fabrica nada aqui há eras */
+
+  /* COLUNATA QUEBRADA: pares ladeando o carreiro na chegada oeste — cada
+     uma partida numa altura, uma já está no chão */
+  for (const [cxp, cyp, sc] of [[43.1, 14.25, 1.5], [44.6, 14.3, 1.62], [43.1, 16.95, 1.58], [44.6, 16.9, 1.44]]) {
+    bills.push({ x: cxp, y: cyp, genFrames: [genColumn((cxp * 31 + cyp * 7) | 0)], label: 'coluna', scale: sc, lift: 0 });
+    addTrunk(cxp | 0, cyp | 0, cxp, cyp, 0.18);
+  }
+  bills.push({ x: 42.2, y: 16.7, genFrames: [genFallenColumn(21)], label: 'coluna', scale: 0.5, lift: 0 });
+  bills.push({ x: 43.6, y: 20.3, genFrames: [genFallenColumn(87)], label: 'coluna', scale: 0.44, lift: 0 }); // dentro do Arquivo
+
+  /* OBELISCO TORTO no Quarteirão Afundado */
+  bills.push({ x: 49.4, y: 22.9, genFrames: [genObelisk(3)], label: 'obelisco', scale: 1.9, lift: 0 });
+  addTrunk(49, 22, 49.4, 22.9, 0.22);
+
+  /* A CABEÇA — a peça que ninguém explica */
+  bills.push({ x: 47.5, y: 22.4, genFrames: [genHead(11)], label: 'a-cabeca', scale: 1.35, lift: 0 });
+  addTrunk(47, 22, 47.5, 22.4, 0.55);
+  stampTreeShadow(47.5, 22.4, 1.5, 1.1, 0.5); // assenta a Cabeça no chão
+
+  /* ESCOMBROS: os pedregulhos grandes voltam (guardados desde a decisão
+     das pedrinhas EXATAMENTE pra isso — "ruínas?") com colisão por tile */
+  for (const [rxp, ryp, rs] of [[48.3, 12.4, 0.55], [51.4, 11.3, 0.48], [42.6, 19.4, 0.52], [46.2, 21.1, 0.6], [50.6, 21.4, 0.45], [44.9, 12.1, 0.42]]) {
+    bills.push({ x: rxp, y: ryp, rock3d: true, seed: (rxp * 733 + ryp * 197) | 0, label: 'rocha', scale: rs, lift: 0 });
+    rockTiles.add((ryp | 0) * world.w + (rxp | 0));
+    stampTreeShadow(rxp, ryp, 0.34 + rs * 1.6, 0.26 + rs * 1.2, 0.4);
+  }
 }
 
 /* lampiões do largo: postes com lanterna âmbar, emissivos (brilham à noite
@@ -1931,7 +2201,7 @@ function genMist(fr, seed) {
   for (let i = 0; planted < 14 && i < 400; i++) {
     const mx = 3 + hash2(i * 37, 11) * 58, my = 3 + hash2(i * 41, 29) * 58;
     if (rimAt(mx, my) < 1.2 || world.at(mx | 0, my | 0) === 'w') continue;
-    if (Math.hypot(mx - PLAZA.x, my - PLAZA.y) < 4.5) continue;    // o largo fica limpo
+    if (Math.hypot(mx - PLAZA.x, my - PLAZA.y) < 8.5) continue;    // as Ruínas ficam limpas (névoa só fora)
     const nearWater = shoreAt(mx, my) > -3.2;
     if (!nearWater && hash2(i * 53, 7) > 0.35) continue;           // maioria perto d'água
     const h = hash2(i * 59, 13);
@@ -1954,7 +2224,7 @@ function genMist(fr, seed) {
      jogadores): o próprio nome.
    O mapa (tecla M, 2º toque) divide a ilha em SETORES 8x8 tiles: A1 (NW) a
    H8 (SE) — "área C2" localiza sem precisar descrever a paisagem. */
-const GENERIC_IDS = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'rocha', 'arco', 'fumaca', 'nevoa']);
+const GENERIC_IDS = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'rocha', 'arco', 'fumaca', 'nevoa', 'coluna', 'obelisco']);
 {
   const seen = new Set();
   for (const b of bills) {
@@ -2325,18 +2595,21 @@ function render(now) {
            sobre o barro, com borda em dither — as veias correm por cima.
            A calçada continua: corredor até o Hall de Portais com pátio sob
            cada arco, e um pátio no vão de cada ala (pedido do ideador). */
-        if (fx > 41 && fx < 53.5 && fy > 10 && fy < 21.5) {
+        if (fx > 38.5 && fx < 54 && fy > 8 && fy < 24) {
           const wob = (WAVE_B[(((fy * 5) & 63) * 64 + ((fx * 5) & 63)) | 0] / 255 - 0.5) * 0.5;
           let sd = Math.hypot(fx - PLAZA.x, fy - PLAZA.y) - (2.7 + wob);
           if (fx > 47.4) { // braço leste: corredor até o Portal do Átrio + pátio
             sd = Math.min(sd, segDist(fx, fy, 48.4, 15.6, 51.1, 15.6) - (0.95 + wob * 0.4));
             sd = Math.min(sd, Math.hypot(fx - 51.1, fy - 15.6) - 1.2);
           }
-          /* pátios dos vãos das alas (as portas das oficinas) */
-          sd = Math.min(sd, Math.hypot(fx - 44.5, fy - 13.5) - 0.95);
-          sd = Math.min(sd, Math.hypot(fx - 48.5, fy - 13.5) - 0.95);
-          sd = Math.min(sd, Math.hypot(fx - 44.5, fy - 18.5) - 0.95);
-          sd = Math.min(sd, Math.hypot(fx - 48.5, fy - 18.5) - 0.95);
+          /* v3 Ruínas: piso do Anel da Primeira Batida, do Arquivo e da
+             colunata — calçamento antigo, ERODIDO: a grama já venceu
+             pedaços dele (buracos por noise; o largo/corredor ficam inteiros) */
+          let sdOld = Math.hypot(fx - 42.5, fy - 11.4) - (1.95 + wob * 0.6);
+          sdOld = Math.min(sdOld, Math.hypot(fx - 43.2, fy - 20.2) - (1.55 + wob * 0.5));
+          sdOld = Math.min(sdOld, segDist(fx, fy, 42.9, 15.6, 44.8, 15.6) - (0.95 + wob * 0.4));
+          const eaten = (WAVE_A[(((fy * 3.1) & 63) * 64 + ((fx * 3.1) & 63)) | 0] / 255) > 0.62;
+          if (!(sdOld < 0 && eaten)) sd = Math.min(sd, sdOld);
           if (sd < 0 || (sd < 0.3 && (BAYER[y & 3][x & 3] / 16) < (1 - sd / 0.3) * 0.8)) {
             const st = STONE_TILES[(tx + ty) & 1];
             c = st.data[((((fy - ty) * GTEX) | 0) * GTEX + (((fx - tx) * GTEX) | 0))];
