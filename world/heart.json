@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 73,
-    "worldTime": 4380
+    "tickCount": 75,
+    "worldTime": 4500
   },
   "width": 64,
   "height": 64,
@@ -4585,6 +4585,30 @@
       "type": "core_pulse",
       "tick": 73,
       "worldTime": 4380
+    },
+    {
+      "type": "native_spoke",
+      "tick": 74,
+      "worldTime": 4440,
+      "nativeId": "brasa",
+      "message": "O queijo traz calor, mas pão fresco é sempre melhor. Quem vai querer um pedaço?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 74,
+      "worldTime": 4440,
+      "nativeId": "quilha",
+      "message": "Um queijo traz alegria, mas quem se arrisca a atravessar o vazio?"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 74,
+      "worldTime": 4440
+    },
+    {
+      "type": "core_pulse",
+      "tick": 75,
+      "worldTime": 4500
     }
   ],
   "natives": {
