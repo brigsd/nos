@@ -2,6 +2,15 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 16) — o som chega (D-40): ambiência sintetizada + a bancada `ouvir`
+
+- Ideador: "você consegue fazer sons?" → sim, e encaixa na tese: **áudio 100% gerado por código** (Web Audio — ruído filtrado + osciladores), **zero .mp3/.wav** no repo (dieta D-30). Escopo desta 1ª rodada (pedido dele): **ambiência = vento + água do chafariz por proximidade**.
+- Grafo: `masterG` → vento (ruído lowpass ~430Hz + 2 LFOs lentas = rajada) + água (ruído highpass+bandpass ~1.6kHz + borbulho, ganho SOBE por proximidade da `PLAZA` no loop, glide `setTargetAtTime` — mesma ideia do painel Mundos perto do Portal).
+- Restrições encaradas: **autoplay** (o contexto só nasce no 1º clique/tecla/toque — `ensureAudio`); **controle** dual (tecla `V` no desktop + botão `🔊/🔇` no canto que também é o gesto que destrava no celular), persistido em `nos_som`.
+- **O buraco de auditoria é maior que no gráfico: eu não escuto.** Então construí o par do `olhar`: **`npm run ouvir`** (Playwright headless destrava o som, lê `window.__nosAudio()` + RMS num AnalyserNode no master). Mede, não confia. 1ª medição mostrou água sutil demais vs vento (RMS perto≈longe) → dei mais presença (highpass 640, peak 0.24); agora perto do chafariz RMS≈0.013 vs 0.008 no spawn (~60% mais alto, proximidade clara). Porteiro barra regressão muda; o "soa bonito?" é do ideador.
+- 368/368; só `prototipos/fps/**` + `package.json` + `qa/ouvir.mjs` tocados (engine intacta). Deploy forçado por toque no `build-fps.mjs` (a batida do bot não dispara Pages — pendência `prototipos/fps/**` no pages.yml segue com o ideador).
+- Próximos sons (mesma bancada valida): passos por bioma, forja batendo, harpa ao atravessar o Portal, água do lago por proximidade.
+
 ## Sessão 2026-07-17 (parte 15) — o playtest do ideador (D-39): 4 bugs + joysticks
 
 - Ideador jogou de verdade e reportou com coordenada (o vocabulário do D-33 pagando): (1) "estrutura menor corta/anula a maior" — diagnóstico DELE, confirmado: DDA de 1 hit; fix = segundo hit pra faixa visível acima de parede baixa. (2) "blocos no meio do nada" ao sul = 2º aglomerado de ruínas (45-48,36-38); TODAS as ruínas agora ocultas no FPS (Registro/2D intactos, C3 devolve com arte). (3) "tiras horizontais flutuando" = névoa-billboard, flagada 2x → REMOVIDA (v2 futura será efeito de chão). (4) entrada da vila tapada → anexos movidos pra trás das alas + ARCO de entrada (genGateArch, arco abatido com aduelas, sem véu) em (43.7,14.7) — a chegada virou enfiada carreiro→arco→chafariz→Portal.

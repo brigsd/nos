@@ -44,6 +44,27 @@ npm run olhar -- largo-noite --tod=0.8   # hora do dia forçada
   espaçadas (`page.waitForTimeout` entre elas) e comparar.
 - Tags de ID (tecla I), setores e mapa grande (M): `docs/COMUNICACAO.md`.
 
+## Os ouvidos — auditoria de som sem escutar (D-40)
+
+*Atrito de origem: o áudio (D-40) tem um buraco pior que o visual — no gráfico
+eu ao menos LEIO o PNG; som eu não escuto de jeito nenhum. Confiar que "soa
+bem" é chute. Então mede-se.*
+
+```
+npm run ouvir                    # chafariz (perto) vs spawn (longe)
+npm run ouvir -- chafariz forja  # pontos nomeados do pontos.json
+npm run ouvir -- 46.2,15.6       # um ?cam= avulso
+```
+
+- Playwright headless destrava o `AudioContext` com um gesto sintético, lê
+  `window.__nosAudio()` (estado + ganhos de vento/água/master) **e o RMS real**
+  do sinal num `AnalyserNode` ligado ao master.
+- **Porteiro anti-regressão** (sai ≠0): o contexto acorda? a água **sobe por
+  proximidade** (perto > longe)? tem sinal e **sem clip**? Barra o mundo mudo;
+  o "soa bonito?" continua sendo do ideador — como a arte.
+- 100% local (mesma tese do `olhar`): mundo inline, server efêmero, Chromium
+  do sandbox. Chromium lançado com `--autoplay-policy=no-user-gesture-required`.
+
 ## Navegar no `nos-fps.html` (o arquivo grande)
 
 *Atrito de origem: um edit às cegas na região do loop pendurou um `else` no
@@ -67,6 +88,7 @@ npm run olhar -- largo-noite --tod=0.8   # hora do dia forçada
 | **Sem `gh` CLI**; token não dispara workflow nem deleta branch remota | Tools MCP do GitHub para issues/PRs/actions; deleção de branch e dispatch manual ficam com o ideador |
 | **Sessão/scratchpad são efêmeros** | Tudo que importa: commitado ou regenerável por comando (D-30). Ferramenta boa no scratchpad = ferramenta que devia estar no repo |
 | Vejo **quadros, não vídeo**; gosto final é do ideador | Pares de frames para movimento; **antes/depois** para decisões estéticas |
+| **Não escuto** (buraco maior que o visual) | `npm run ouvir` mede estado/ganho/RMS e barra a regressão muda; o "soa bonito?" é do ideador |
 
 ## Replicar num mundo novo (o kit)
 

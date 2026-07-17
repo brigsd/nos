@@ -190,6 +190,25 @@
     transition: opacity 0.6s ease;
   }
   #hint.gone { opacity: 0; }
+  #somBtn {
+    position: absolute;
+    top: 34px;
+    right: 12px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 28px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--ink);
+    background: rgba(16, 12, 21, 0.72);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    z-index: 6;
+    user-select: none;
+  }
+  #somBtn.off { opacity: 0.5; }
   .padzone {
     position: absolute;
     bottom: 0;
@@ -269,6 +288,7 @@
     </div>
   </div>
   <div id="hudTop"></div>
+  <button id="somBtn" title="som (V)">🔊</button>
   <div id="padMove" class="padzone"></div>
   <div id="padLook" class="padzone"></div>
   <div id="stickL" class="stick"><div class="knob"></div></div>
@@ -277,7 +297,7 @@
 </div>
 
 <footer>
-  <span><span class="k">W A S D</span> andar · <span class="k">← →</span> olhar · <span class="k">M</span> mapa/setores · <span class="k">I</span> tags · <span class="k">G</span> luz</span>
+  <span><span class="k">W A S D</span> andar · <span class="k">← →</span> olhar · <span class="k">M</span> mapa/setores · <span class="k">I</span> tags · <span class="k">G</span> luz · <span class="k">V</span> som</span>
   <span>a mesma world/heart.json — nada além do Registro · <a href="../" style="color:#a884f3;text-decoration:none">mapa 2D ↗</a></span>
 </footer>
 
@@ -3066,6 +3086,97 @@ addEventListener('pointercancel', () => { touchMove.on = false; touchLook.on = f
 addEventListener('blur', clearInputs);
 document.addEventListener('visibilitychange', () => { if (document.hidden) clearInputs(); });
 
+/* ---------- SOM (D-40): áudio 100% sintetizado, zero arquivo ----------
+   Web Audio pura — ruído filtrado e osciladores, do mesmo jeito que a arte é
+   desenhada por código e a luz é assada: nada de .mp3/.wav no repo (dieta D-30).
+   O navegador BLOQUEIA áudio até um gesto do jogador (política de autoplay),
+   então o AudioContext só NASCE no 1º clique/tecla/toque. Buraco de auditoria
+   honesto (docs/CODER.md): eu não escuto — verifico estado/ganho pela bancada
+   `npm run ouvir` (Playwright lê window.__nosAudio); o "soa bonito?" é do ideador.
+   Mixagem por proximidade no loop: a água do chafariz sobe ao chegar perto. */
+let AC = null;                          // AudioContext — nasce no 1º gesto
+let masterG = null, windG = null, waterG = null;
+let lastAudioCheck = 0;
+let somOn = true;
+try { somOn = localStorage.getItem('nos_som') !== '0'; } catch { /* file:// sem storage */ }
+
+const somBtn = document.getElementById('somBtn');
+function updateSomBtn() {
+  if (!somBtn) return;
+  somBtn.textContent = somOn ? '🔊' : '🔇';
+  somBtn.classList.toggle('off', !somOn);
+}
+updateSomBtn();
+
+function makeNoise(secs) { // ruído meio-rosa: uma média móvel tira o "chiado" branco
+  const n = Math.floor(AC.sampleRate * secs);
+  const buf = AC.createBuffer(1, n, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.2; }
+  return buf;
+}
+
+function buildAudio() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;                     // navegador sem Web Audio — silêncio, sem erro
+  AC = new Ctx();
+  const noise = makeNoise(3);
+
+  masterG = AC.createGain();
+  masterG.gain.value = somOn ? 0.9 : 0; // headroom + respeita o mudo salvo
+  masterG.connect(AC.destination);
+
+  /* vento: ruído grave (lowpass) com rajada lenta — a "sala" do mundo */
+  const wSrc = AC.createBufferSource(); wSrc.buffer = noise; wSrc.loop = true;
+  const wLP = AC.createBiquadFilter(); wLP.type = 'lowpass'; wLP.frequency.value = 430; wLP.Q.value = 0.5;
+  windG = AC.createGain(); windG.gain.value = 0.045; // cama constante e suave
+  wSrc.connect(wLP).connect(windG).connect(masterG);
+  const gust = AC.createOscillator(); gust.type = 'sine'; gust.frequency.value = 0.08;
+  const gustAmt = AC.createGain(); gustAmt.gain.value = 0.025;
+  gust.connect(gustAmt).connect(windG.gain);          // respira: sobe/desce devagar
+  const gust2 = AC.createOscillator(); gust2.type = 'sine'; gust2.frequency.value = 0.043;
+  const gust2Amt = AC.createGain(); gust2Amt.gain.value = 130;
+  gust2.connect(gust2Amt).connect(wLP.frequency);     // e move o corte pra não travar
+
+  /* água do chafariz: ruído agudo (highpass+bandpass) com borbulho; o ganho
+     começa em 0 e SOBE por proximidade no loop (mesma ideia do painel Mundos). */
+  const aSrc = AC.createBufferSource(); aSrc.buffer = noise; aSrc.loop = true;
+  const aHP = AC.createBiquadFilter(); aHP.type = 'highpass'; aHP.frequency.value = 640;
+  const aBP = AC.createBiquadFilter(); aBP.type = 'bandpass'; aBP.frequency.value = 1600; aBP.Q.value = 0.6;
+  waterG = AC.createGain(); waterG.gain.value = 0;
+  aSrc.connect(aHP).connect(aBP).connect(waterG).connect(masterG);
+  const burb = AC.createOscillator(); burb.type = 'sine'; burb.frequency.value = 5.5;
+  const burbAmt = AC.createGain(); burbAmt.gain.value = 240;
+  burb.connect(burbAmt).connect(aBP.frequency);       // borbulho: o bandpass oscila
+
+  wSrc.start(); aSrc.start(); gust.start(); gust2.start(); burb.start();
+}
+
+function ensureAudio() {                 // 1º gesto: nasce/acorda o contexto
+  if (!AC) buildAudio();
+  else if (AC.state === 'suspended') AC.resume();
+}
+function toggleSom() {
+  somOn = !somOn;
+  try { localStorage.setItem('nos_som', somOn ? '1' : '0'); } catch { /* ok */ }
+  ensureAudio();
+  if (masterG && AC) masterG.gain.setTargetAtTime(somOn ? 0.9 : 0, AC.currentTime, 0.05);
+  updateSomBtn();
+}
+addEventListener('pointerdown', ensureAudio);
+addEventListener('keydown', ensureAudio);
+addEventListener('touchstart', ensureAudio, { passive: true });
+if (somBtn) somBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleSom(); });
+
+/* hook de auditoria (igual ao window.__setTod): a bancada `ouvir` lê daqui */
+window.__nosAudio = () => ({
+  state: AC ? AC.state : 'none',
+  master: masterG ? +masterG.gain.value.toFixed(3) : 0,
+  wind: windG ? +windG.gain.value.toFixed(3) : 0,
+  water: waterG ? +waterG.gain.value.toFixed(3) : 0,
+});
+
 /* mouse-look (pointer lock) + menu no ESC — desktop */
 const stageEl = document.getElementById('stage');
 const menuEl = document.getElementById('menu');
@@ -3105,6 +3216,7 @@ addEventListener('keydown', (e) => {
     giWK = -1; // força re-mistura ao religar
     try { localStorage.setItem('nos_gi', giOn ? '1' : '0'); } catch { /* ok */ }
   }
+  if (e.key.toLowerCase() === 'v') toggleSom(); // som liga/desliga (D-40)
   document.getElementById('hint').classList.add('gone');
 });
 addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
@@ -3237,6 +3349,13 @@ function loop(now) {
     const dP = Math.hypot(cam.x - PORTAL.x, cam.y - PORTAL.y);
     const want = mapMode !== 2 && (dP < 2.4 || (worldsOn && dP < 3.2));
     if (want !== worldsOn) { worldsOn = want; worldsEl.classList.toggle('on', worldsOn); }
+  }
+  /* água do chafariz sobe por proximidade (D-40) — glide suave via setTargetAtTime */
+  if (AC && waterG && now - lastAudioCheck > 110) {
+    lastAudioCheck = now;
+    const dF = Math.hypot(cam.x - PLAZA.x, cam.y - PLAZA.y);
+    const wv = Math.max(0, Math.min(1, (7.5 - dF) / 6.0)) * 0.24; // audível ~7.5 tiles, cheio na borda
+    waterG.gain.setTargetAtTime(wv, AC.currentTime, 0.14);
   }
   requestAnimationFrame(loop);
 }

@@ -19,7 +19,8 @@
     "lint:sprites": "node assets/tools/lint-sprites.js",
     "respond-issues": "tsx scripts/respond-issues.ts",
     "art": "node tools/art-mcp/cli.cjs",
-    "olhar": "node prototipos/fps/qa/olhar.mjs"
+    "olhar": "node prototipos/fps/qa/olhar.mjs",
+    "ouvir": "node prototipos/fps/qa/ouvir.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0"
