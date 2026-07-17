@@ -41,37 +41,40 @@ function texCanvas(W, H, fn) {
     if (idx < 0) { d[o+3] = 0; continue; } const [r,g,b] = RGB[idx]; d[o]=r; d[o+1]=g; d[o+2]=b; d[o+3]=255; }
   ctx.putImageData(img, 0, 0); return cv;
 }
-/* parede: soco de pedra (blocos+argamassa+musgo), reboco com grão e trincas,
-   prumos de madeira com veio, janela emoldurada e acesa */
+/* parede: TÁBUAS DE MADEIRA verticais com veio, frestas e nós (pedido do
+   ideador — "não parece madeira"). Tons quentes 20/21/22, fresta/nó 24. */
 const WALL_TEX = texCanvas(16*TS, 32*TS, (x, y) => {
   const bx = x/TS, by = y/TS;
-  let i, n = fbm(bx*0.7+3, by*0.5+6);
-  i = n > 0.62 ? 8 : n < 0.36 ? 4 : 38;                                 // reboco LIMPO: claro/tan/sage
-  if (by > 21) {                                                        // soco de pedra (cinza-azulado)
-    const cH = 5, bW = 8, course = (by/cH)|0, off = (course&1)*(bW/2);
-    const mort = (by % cH) < 0.7 || ((bx+off) % bW) < 0.7;
-    const s = fbm(bx*0.8+course, by*0.8);
-    i = mort ? 2 : (s > 0.62 ? 7 : s < 0.34 ? 2 : 6);
-    if (!mort && hash2(x*3, y*3) < 0.03) i = 36;                        // musgo raro
+  const plankW = 4, plank = (bx/plankW)|0, inP = bx - plank*plankW;
+  const tone = hash2(plank*13, 1);                                     // cada tábua, um tom
+  let g = fbm(bx*0.45 + plank*17, by*0.22);                             // veio na vertical
+  let i = g > 0.64 ? 22 : g < 0.30 ? 21 : 4;                            // base TAN (4), âmbar/laranja de tempero
+  if (tone < 0.35) i = (i === 4 ? 38 : 4);                              // tábua mais clara/fria
+  if (fbm(bx*0.9 + plank*7, by*0.13) > 0.74) i = 24;                    // fibra escura (esparsa)
+  if (inP < 0.35 || inP > plankW - 0.35) i = 24;                        // fresta entre tábuas
+  if (hash2(plank*131, ((by/6)|0)) < 0.12) {                           // nó ocasional
+    const ky = ((by/6)|0)*6 + 3, kd = Math.hypot((bx-(plank*plankW+2))*1.3, by-ky);
+    if (kd < 1.0) i = 24; else if (kd < 1.7) i = 21;
   }
-  const post = bx < 0.7 || bx > 15.3 || Math.abs(bx-8) < 0.4 || by < 0.7 || Math.abs(by-8) < 0.45 || Math.abs(by-21.3) < 0.45;
-  if (post && by < 22) i = 24;                                         // prumos FINOS, marrom escuro (sem vermelho)
-  if (by >= 11 && by < 19 && bx >= 4.6 && bx < 11.4) {                 // janela emoldurada
-    const inx = bx > 5.3 && bx < 10.7 && by > 11.7 && by < 18.3;
-    const mull = Math.abs(bx-8) < 0.3 || Math.abs(by-15) < 0.3;
-    i = !inx ? 24 : mull ? 24 : (fbm(bx*2, by*2) > 0.5 ? 23 : 18);     // vidro aceso
-  }
+  if (Math.abs(by-8) < 0.45 || by < 0.6) i = 24;                        // travessa/viga
   return i;
 });
-/* empena: reboco + travamento em X com veio */
-const GABLE_TEX = texCanvas(16*TS, 16*TS, (x, y) => {
-  const bx = x/TS, by = y/TS; let i, n = fbm(bx*0.9+9, by*0.7+2);
-  i = n > 0.66 ? 8 : n < 0.3 ? 5 : 4;
-  const fx = bx/15, fy = by/15;
-  const brace = Math.abs(fx - fy) < 0.075 || Math.abs(fx - (1 - fy)) < 0.075 || bx < 1 || bx > 15 || by < 1 || by > 15;
-  if (brace) i = fbm(bx*3, by*3) > 0.5 ? 24 : 20;
+/* distância ponto→segmento (p/ desenhar a tesoura) */
+function segD(px, py, ax, ay, bx, by) { const ex=bx-ax, ey=by-ay, l2=ex*ex+ey*ey||1; let t=((px-ax)*ex+(py-ay)*ey)/l2; t=t<0?0:t>1?1:t; return Math.hypot(px-(ax+t*ex), py-(ay+t*ey)); }
+/* EMPENA: a TESOURA (treliça) simétrica sobre o eixo — pendural central,
+   tirante e duas escoras seguindo o telhado. Mapeada uv 0..1 = centralizada. */
+const TRUSS_TEX = texCanvas(16*TS, 16*TS, (x, y) => {
+  const u = x/(16*TS), v = y/(16*TS);
+  let g = fbm(u*7, v*3+2); let i = g>0.6?8:g<0.4?4:38;                  // fundo de tábua clara
+  if ((y/TS % 3) < 0.4) i = 38;                                        // linha entre tábuas
+  const th = 0.05;
+  if (segD(u,v, 0.5,0.12, 0.5,0.80) < th || segD(u,v, 0.18,0.14, 0.82,0.14) < th ||
+      segD(u,v, 0.5,0.76, 0.16,0.14) < th || segD(u,v, 0.5,0.76, 0.84,0.14) < th) i = 24; // pendural+tirante+escoras
   return i;
 });
+/* trim claro (verga da porta, fundo interno) e moldura escura das janelas */
+const TRIM_TEX = texCanvas(16*TS, 16*TS, (x, y) => { const bx=x/TS,by=y/TS; const g=fbm(bx*0.5+9, by*0.25); let i=g>0.6?8:g<0.4?4:38; if ((bx%4)<0.35) i=24; return i; });
+const FRAME_TEX = texCanvas(8*TS, 8*TS, (x, y) => (fbm(x/TS*0.6, y/TS*0.6) > 0.55 ? 24 : 20));
 /* telha: fiadas de telhas sobrepostas, cada uma com brilho no topo e sombra
    embaixo (terracota) */
 const ROOF_TEX = texCanvas(16*TS, 16*TS, (x, y) => {
@@ -96,7 +99,7 @@ const GRASS_TEX = texCanvas(16*TS, 16*TS, (x, y) => {
 /* assoalho: tábuas com veio, juntas e nós */
 const FLOOR_TEX = texCanvas(16*TS, 16*TS, (x, y) => {
   const bx = x/TS, by = y/TS; const board = (by/4)|0; const n = fbm(bx*2.2+board*5, board*1.7+by*0.3);
-  let i = n > 0.62 ? 22 : n < 0.34 ? 20 : 21;
+  let i = n > 0.62 ? 22 : n < 0.34 ? 4 : 21;
   if ((by % 4) < 0.5) i = 24;                            // junta
   if (hash2((board*97+ (bx*3|0)), board) < 0.05 && (by%4) > 1) i = 24; // nó
   return i;
@@ -117,21 +120,43 @@ const m4 = {
 function Mesh() { return { v: [] }; }
 function quad(m, p0, p1, p2, p3, uS, vS, nrm) { const push = (p,u,v) => m.v.push(p[0],p[1],p[2], u,v, nrm[0],nrm[1],nrm[2]);
   push(p0,0,vS); push(p1,uS,vS); push(p2,uS,0); push(p0,0,vS); push(p2,uS,0); push(p3,0,0); }
+function quadUV(m, p0, p1, p2, p3, a, b, c, d, nrm) { const push = (p,uv) => m.v.push(p[0],p[1],p[2], uv[0],uv[1], nrm[0],nrm[1],nrm[2]);
+  push(p0,a); push(p1,b); push(p2,c); push(p0,a); push(p2,c); push(p3,d); }
 function tri(m, p0, p1, p2, uv0, uv1, uv2, nrm) { const push = (p,uv) => m.v.push(p[0],p[1],p[2], uv[0],uv[1], nrm[0],nrm[1],nrm[2]);
   push(p0,uv0); push(p1,uv1); push(p2,uv2); }
 const HW = 1.5, WALLH = 1.1, RIDGE = 1.85, DOORW = 0.5, DOORH = 0.8, OV = 0.22;
-const walls = Mesh(), gables = Mesh(), roof = Mesh(), floor = Mesh(), planks = Mesh();
+const walls = Mesh(), truss = Mesh(), trim = Mesh(), fram = Mesh(), roof = Mesh(), floor = Mesh(), planks = Mesh();
+/* PAREDE COM VÃO real (janela = abertura): base (o,R,U,N) + tamanho (w,h) +
+   furo (hx,hy,hw,hh). Emite 4 tiras ao redor (madeira contínua), moldura escura
+   e cruzeta fina; o vão fica ABERTO — vê-se o interior através. */
+function panelHole(o, R, U, N, w, h, hx, hy, hw, hh, uS, vS) {
+  const pt = (lu,lv) => [o[0]+R[0]*lu+U[0]*lv, o[1]+R[1]*lu+U[1]*lv, o[2]+R[2]*lu+U[2]*lv];
+  const uv = (lu,lv) => [lu/w*uS, (1-lv/h)*vS];
+  const strip = (a,b,c,d) => quadUV(walls, pt(a,b),pt(c,b),pt(c,d),pt(a,d), uv(a,b),uv(c,b),uv(c,d),uv(a,d), N);
+  strip(0,0, w,hy); strip(0,hy+hh, w,h); strip(0,hy, hx,hy+hh); strip(hx+hw,hy, w,hy+hh);
+  const off = [N[0]*0.01, N[1]*0.01, N[2]*0.01];
+  const P = (lu,lv) => { const p = pt(lu,lv); return [p[0]+off[0], p[1]+off[1], p[2]+off[2]]; };
+  const bar = (a,b,c,d) => quadUV(fram, P(a,b),P(c,b),P(c,d),P(a,d), [0,1],[1,1],[1,0],[0,0], N);
+  const fw = 0.05;
+  bar(hx-fw,hy-fw, hx+hw+fw,hy); bar(hx-fw,hy+hh, hx+hw+fw,hy+hh+fw);   // moldura baixo/topo
+  bar(hx-fw,hy, hx,hy+hh); bar(hx+hw,hy, hx+hw+fw,hy+hh);               // moldura esq/dir
+  const mx = hx+hw/2, my = hy+hh/2, mt = 0.022;
+  bar(mx-mt,hy, mx+mt,hy+hh); bar(hx,my-mt, hx+hw,my+mt);              // cruzeta
+}
 quad(floor, [-18,0,18],[18,0,18],[18,0,-18],[-18,0,-18], 36,36, [0,1,0]);
 quad(planks, [-HW,0.01,HW],[HW,0.01,HW],[HW,0.01,-HW],[-HW,0.01,-HW], 3,3, [0,1,0]);
-quad(walls, [HW,0,HW],[HW,0,-HW],[HW,WALLH,-HW],[HW,WALLH,HW], 3,1, [1,0,0]);
-quad(walls, [-HW,0,-HW],[-HW,0,HW],[-HW,WALLH,HW],[-HW,WALLH,-HW], 3,1, [-1,0,0]);
+// paredes E/O do beiral, com UMA janela-abertura centrada
+panelHole([HW,0,HW], [0,0,-1], [0,1,0], [1,0,0], 2*HW, WALLH, 1.15, 0.40, 0.7, 0.42, 3, 1);
+panelHole([-HW,0,-HW], [0,0,1], [0,1,0], [-1,0,0], 2*HW, WALLH, 1.15, 0.40, 0.7, 0.42, 3, 1);
+// parede N (fundo, sólida) + empena-tesoura
 quad(walls, [-HW,0,-HW],[HW,0,-HW],[HW,WALLH,-HW],[-HW,WALLH,-HW], 3,1, [0,0,-1]);
-tri(gables, [-HW,WALLH,-HW],[HW,WALLH,-HW],[0,RIDGE,-HW], [0,0],[1.6,0],[0.8,1], [0,0,-1]);
-quad(walls, [-HW,0,HW],[-DOORW,0,HW],[-DOORW,WALLH,HW],[-HW,WALLH,HW], 1,1, [0,0,1]);
-quad(walls, [DOORW,0,HW],[HW,0,HW],[HW,WALLH,HW],[DOORW,WALLH,HW], 1,1, [0,0,1]);
-quad(gables, [-DOORW,DOORH,HW],[DOORW,DOORH,HW],[DOORW,WALLH,HW],[-DOORW,WALLH,HW], 1,0.3, [0,0,1]);
-tri(gables, [-HW,WALLH,HW],[HW,WALLH,HW],[0,RIDGE,HW], [0,0],[1.6,0],[0.8,1], [0,0,1]);
-quad(gables, [-DOORW,0,-HW+0.02],[DOORW,0,-HW+0.02],[DOORW,DOORH,-HW+0.02],[-DOORW,DOORH,-HW+0.02], 1,1, [0,0,1]);
+tri(truss, [-HW,WALLH,-HW],[HW,WALLH,-HW],[0,RIDGE,-HW], [0,0],[1,0],[0.5,1], [0,0,-1]);
+// parede S (frente): jambas com janela-abertura, verga, empena-tesoura, fundo do vão
+panelHole([-HW,0,HW], [1,0,0], [0,1,0], [0,0,1], HW-DOORW, WALLH, 0.28, 0.44, 0.44, 0.36, 1, 1);
+panelHole([DOORW,0,HW], [1,0,0], [0,1,0], [0,0,1], HW-DOORW, WALLH, 0.28, 0.44, 0.44, 0.36, 1, 1);
+quad(trim, [-DOORW,DOORH,HW],[DOORW,DOORH,HW],[DOORW,WALLH,HW],[-DOORW,WALLH,HW], 1,0.3, [0,0,1]);      // verga
+tri(truss, [-HW,WALLH,HW],[HW,WALLH,HW],[0,RIDGE,HW], [0,0],[1,0],[0.5,1], [0,0,1]);
+quad(trim, [-DOORW,0,-HW+0.02],[DOORW,0,-HW+0.02],[DOORW,DOORH,-HW+0.02],[-DOORW,DOORH,-HW+0.02], 1,1, [0,0,1]); // fundo do vão
 const EZ = HW + OV, EX = HW + OV;
 quad(roof, [0,RIDGE,-EZ],[0,RIDGE,EZ],[-EX,WALLH,EZ],[-EX,WALLH,-EZ], 3.4,1.6, [-0.7,0.7,0]);
 quad(roof, [0,RIDGE,EZ],[0,RIDGE,-EZ],[EX,WALLH,-EZ],[EX,WALLH,EZ], 3.4,1.6, [0.7,0.7,0]);
@@ -223,7 +248,8 @@ function glTex(cv) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,
 function glMesh(m) { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(m.v), gl.STATIC_DRAW); return { buf: b, n: m.v.length/8 }; }
 const BATCH = [
   { m: glMesh(floor), t: glTex(GRASS_TEX) }, { m: glMesh(planks), t: glTex(FLOOR_TEX) },
-  { m: glMesh(walls), t: glTex(WALL_TEX) }, { m: glMesh(gables), t: glTex(GABLE_TEX) }, { m: glMesh(roof), t: glTex(ROOF_TEX) },
+  { m: glMesh(walls), t: glTex(WALL_TEX) }, { m: glMesh(truss), t: glTex(TRUSS_TEX) },
+  { m: glMesh(trim), t: glTex(TRIM_TEX) }, { m: glMesh(fram), t: glTex(FRAME_TEX) }, { m: glMesh(roof), t: glTex(ROOF_TEX) },
 ];
 
 /* FBO da CENA (?res) + FBO de SOMBRA (SM×SM, cor empacotada) */
