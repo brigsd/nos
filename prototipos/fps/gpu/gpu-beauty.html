@@ -29,6 +29,10 @@ const TS = Math.max(1, (parseInt(P.get('ts')) || 4) | 0);   // escala das textur
 
 const PALETTE = ["#2e222f","#3e3546","#625565","#966c6c","#ab947a","#694f62","#7f708a","#9babb2","#c7dcd0","#ffffff","#6e2727","#b33831","#ea4f36","#f57d4a","#ae2334","#e83b3b","#fb6b1d","#f79617","#f9c22b","#7a3045","#9e4539","#cd683d","#e6904e","#fbb954","#4c3e24","#676633","#a2a947","#d5e04b","#fbff86","#165a4c","#239063","#1ebc73","#91db69","#cddf6c","#313638","#374e4a","#547e64","#92a984","#b2ba90","#0b5e65","#0b8a8f","#0eaf9b","#30e1b9","#8ff8e2","#323353","#484a77","#4d65b4","#4d9be6","#8fd3ff","#45293f","#6b3e75","#905ea9","#a884f3","#eaaded","#753c54","#a24b6f","#cf657f","#ed8099","#831c5d","#c32454","#f04f78","#f68181","#fca790","#fdcbb0"];
 const RGB = PALETTE.map(h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]);
+/* dithering ordenado (Bayer 4×4): mescla 2 índices da paleta no pixel p/ COMPOR
+   cores que a Resurrect64 não tem — ex.: castanho-sela = laranja+marrom-escuro */
+const BAYER4 = [0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5];
+function dth(x, y, a, b, t) { return (BAYER4[(y & 3) * 4 + (x & 3)] / 16) < t ? a : b; }
 function hash2(x, y) { let h = (x * 374761393 + y * 668265263) >>> 0; h = (h ^ (h >> 13)) * 1274126177; return ((h ^ (h >> 16)) >>> 0) / 4294967295; }
 function vnoise(x, y) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi; const u = xf*xf*(3-2*xf), v = yf*yf*(3-2*yf); const a=hash2(xi,yi),b=hash2(xi+1,yi),c=hash2(xi,yi+1),d=hash2(xi+1,yi+1); return a*(1-u)*(1-v)+b*u*(1-v)+c*(1-u)*v+d*u*v; }
 function fbm(x, y) { return vnoise(x, y) * 0.6 + vnoise(x * 2.1 + 5, y * 2.1 + 9) * 0.3 + vnoise(x * 4.3, y * 4.3) * 0.1; }
@@ -37,23 +41,31 @@ function fbm(x, y) { return vnoise(x, y) * 0.6 + vnoise(x * 2.1 + 5, y * 2.1 + 9
 function texCanvas(W, H, fn) {
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d'); const img = ctx.createImageData(W, H); const d = img.data;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const idx = fn(x, y); const o = (y*W+x)*4;
-    if (idx < 0) { d[o+3] = 0; continue; } const [r,g,b] = RGB[idx]; d[o]=r; d[o+1]=g; d[o+2]=b; d[o+3]=255; }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const v = fn(x, y); const o = (y*W+x)*4;
+    if (Array.isArray(v)) { d[o]=v[0]; d[o+1]=v[1]; d[o+2]=v[2]; d[o+3]=255; } // cor RGB direta (fora da paleta)
+    else if (v < 0) { d[o+3] = 0; }                                            // transparente
+    else { const [r,g,b] = RGB[v]; d[o]=r; d[o+1]=g; d[o+2]=b; d[o+3]=255; }   // índice da paleta
+  }
   ctx.putImageData(img, 0, 0); return cv;
 }
-/* TORA VERTICAL UNIFORME (de pé), MARROM cor de árvore — nem quase-preto nem
-   laranja. Toda tora IGUAL. Cilindro suave: crista clara (tan) -> corpo marrom
-   médio -> borda escura. Detalhe = RANHURINHAS finas verticais, um tom mais
-   escuras. Paleta 4/3/24 (tan/marrom/marrom-escuro), sem laranja, sem amarelo. */
-function logIdx(bx, by) {
-  const logW = 3.2, li = Math.floor(bx / logW), inLog = bx / logW - li;  // toras de pé
-  if (inLog < 0.06 || inLog > 0.94) return 24;                          // junta marrom-escura entre toras
-  const r = Math.abs(inLog - 0.5);                                       // 0 meio .. 0.5 borda
-  let i = r < 0.20 ? 4 : r < 0.44 ? 3 : 24;                              // crista tan -> corpo marrom -> borda escura
-  if (((inLog * 26) % 8) < 0.5 && i !== 24) i = (i === 4 ? 3 : 24);      // ranhurinha fina (vertical, sutil)
-  return i;
+/* TORA VERTICAL UNIFORME (de pé) em CASTANHO QUENTE (mel/castanheira) como a
+   referência do ideador. O castanho-sela não existe na paleta -> COMPOSTO por
+   dithering (laranja 21 + marrom-escuro 24 = ~#865129). Cilindro: crista clara
+   -> corpo castanho -> borda escura. Grão = estrias verticais um tom +escuras. */
+/* madeira em tons REAIS (a Resurrect64 não tem castanho quente) — mel na crista
+   -> castanho no corpo -> sombra na borda, + 2 grãos finos. Liso, como a ref. */
+const W_CREST=[190,138,80], W_BODY=[150,98,52], W_MID=[122,80,44], W_EDGE=[92,60,32], W_GRAIN=[70,45,24], W_JUNTA=[54,35,19];
+function logIdx(x, y) {
+  const bx = x / TS, by = y / TS;
+  const logW = 3.4, li = Math.floor(bx / logW), inLog = bx / logW - li;  // toras de pé
+  if (inLog < 0.05 || inLog > 0.95) return W_JUNTA;                      // junta entre toras
+  const r = Math.abs(inLog - 0.5);                                       // 0 meio .. 0.5 borda (cilindro)
+  let c = r < 0.14 ? W_CREST : r < 0.30 ? W_BODY : r < 0.42 ? W_MID : W_EDGE;
+  if (Math.abs(inLog - 0.30) < 0.02 || Math.abs(inLog - 0.70) < 0.02) c = W_GRAIN; // 2 grãos finos
+  return c;
 }
-const WALL_TEX = texCanvas(16*TS, 32*TS, (x, y) => logIdx(x/TS, y/TS));
+const WALL_TEX = texCanvas(16*TS, 32*TS, (x, y) => logIdx(x, y));
 /* distância ponto→segmento (p/ desenhar a tesoura) */
 function segD(px, py, ax, ay, bx, by) { const ex=bx-ax, ey=by-ay, l2=ex*ex+ey*ey||1; let t=((px-ax)*ex+(py-ay)*ey)/l2; t=t<0?0:t>1?1:t; return Math.hypot(px-(ax+t*ex), py-(ay+t*ey)); }
 /* EMPENA: a TESOURA (treliça) simétrica sobre o eixo — pendural central,
@@ -61,9 +73,9 @@ function segD(px, py, ax, ay, bx, by) { const ex=bx-ax, ey=by-ay, l2=ex*ex+ey*ey
 /* EMPENA = toras horizontais (log gable), coerente com a parede. A "tesoura"
    pintada ficava chapada/estranha; um log cabin de verdade tem empena de
    toras. Uma treliça DE VERDADE (vigas em 3D) fica pra um próximo passo. */
-const TRUSS_TEX = texCanvas(16*TS, 16*TS, (x, y) => logIdx(x/TS, y/TS));
+const TRUSS_TEX = texCanvas(16*TS, 16*TS, (x, y) => logIdx(x, y));
 /* verga da porta + fundo interno do vão: também toras (coerência total) */
-const TRIM_TEX = texCanvas(16*TS, 16*TS, (x, y) => logIdx(x/TS, y/TS));
+const TRIM_TEX = texCanvas(16*TS, 16*TS, (x, y) => logIdx(x, y));
 const FRAME_TEX = texCanvas(8*TS, 8*TS, (x, y) => (fbm(x/TS*0.6, y/TS*0.6) > 0.55 ? 24 : 20));
 /* ABA (folha da janela) — venezianas: ripas horizontais, com moldura */
 const SHUTTER_TEX = texCanvas(8*TS, 16*TS, (x, y) => {
