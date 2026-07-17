@@ -1993,6 +1993,44 @@ for (const [i, [lx, ly]] of [[45.0, 14.1], [47.4, 14.1], [45.0, 17.1], [47.4, 17
   addTrunk(lx | 0, ly | 0, lx, ly, 0.1);
 }
 
+/* ---------- PLANTA (F17/D-51): estrutura como BLUEPRINT declarativo ----------
+   Uma estrutura inteira num objeto só — paredes (tile+kind+altura), colisões
+   finas, billboards (com orient/depth) — e o motor SOBE tudo com as mesmas
+   primitivas de sempre. Criar/mover um prédio = editar dados, não código.
+   A prancheta audita de graça (lê as estruturas vivas); o passo seguinte da
+   PLANTA v2 é exportar as caixas/luzes pro bake-gi (mata a duplicação). */
+const PLANTAS = [];
+function plantar(p) {
+  for (const w of p.paredes || []) cityWall(w.tx, w.ty, w.kind, w.h, w.mm || '#7f708a');
+  for (const c of p.colisoes || []) addTrunk(c.x | 0, c.y | 0, c.x, c.y, c.r);
+  for (const b of p.billboards || []) bills.push({ ...b });
+  PLANTAS.push(p.nome);
+  return p;
+}
+
+/* O SANTUÁRIO DO PULSO — a PROVA da PLANTA (D-51): capela aberta ao sul do
+   largo, no eixo do chafariz. Três paredes de pedra (fundo mais alto), boca
+   pro norte, dois lampiões na entrada e um relicário: um mini-Núcleo pulsando
+   sobre um pedestal (o mesmo sprite canônico, escala menor). */
+plantar({
+  nome: 'santuario-pulso',
+  /* deslocado +1 tile a leste após a 1ª prancheta: a árvore em (46.6,20.2)
+     tapava a boca — agora as DUAS árvores (46.6 e 48.2) emolduram a entrada */
+  paredes: [
+    { tx: 46, ty: 21, kind: 'stone', h: 0.55 }, { tx: 48, ty: 21, kind: 'stone', h: 0.55 },
+    { tx: 46, ty: 22, kind: 'stone', h: 0.78 }, { tx: 47, ty: 22, kind: 'stone', h: 0.95 }, { tx: 48, ty: 22, kind: 'stone', h: 0.78 },
+  ],
+  colisoes: [
+    { x: 46.7, y: 20.9, r: 0.1 }, { x: 48.3, y: 20.9, r: 0.1 }, /* postes dos lampiões */
+    { x: 47.5, y: 21.75, r: 0.28 },                              /* pedestal do relicário */
+  ],
+  billboards: [
+    { x: 46.7, y: 20.9, genFrames: [genLamp(11)], label: 'lampiao', scale: 1.05, lift: 0, selfGlow: 0.5 },
+    { x: 48.3, y: 20.9, genFrames: [genLamp(12)], label: 'lampiao', scale: 1.05, lift: 0, selfGlow: 0.5 },
+    { x: 47.5, y: 21.75, tex: 'nucleo', frames: 4, label: 'relicario', scale: 0.42, lift: 0.22, selfGlow: 0.45 },
+  ],
+});
+
 /* O CHAFARIZ (D-38, pedido do ideador): a água do Pulso aflora no coração
    do largo. O corpo vertical vive aqui (pedestal, taça, JATO subindo e dois
    arcos d'água caindo, 4 quadros a 150ms); a bacia rasa com água cristalina

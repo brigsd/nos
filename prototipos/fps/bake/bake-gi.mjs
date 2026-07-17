@@ -46,6 +46,9 @@ const BOXES = [ // v2 (D-37): bancas removidas, telhados com desnível, portal �
   box(48, 12, 'stone', 1.42), box(49, 12, 'chimney', 2.05), box(49, 13, 'stone', 1.3), box(50, 12, 'stone', 0.8),
   box(43, 19, 'wood', 1.02), box(44, 19, 'wood', 0.9), box(43, 18, 'wood', 0.95), box(43, 20, 'wood', 0.7),
   box(48, 19, 'wood', 1.2), box(49, 19, 'wood', 1.05), box(49, 18, 'wood', 1.12),
+  /* Santuário do Pulso (D-51, via PLANTA) */
+  box(46, 21, 'stone', 0.55), box(48, 21, 'stone', 0.55),
+  box(46, 22, 'stone', 0.78), box(47, 22, 'stone', 0.95), box(48, 22, 'stone', 0.78),
   /* o Portal do Átrio: lâmina fina de pedra */
   { x0: 50.98, y0: 15.2, x1: 51.22, y1: 16.0, z1: 1.7, al: AL.arch },
 ];
@@ -63,6 +66,9 @@ const LIGHTS = [
   [51.1, 15.6, 0.7, 0.35, 1.0, 0.85, 0.25, 0.7, 1.2, 2.4], // véu do Átrio
   [33.5, 33.5, 0.6, 0.75, 0.45, 1.0, 1.1, 1.1, 1.1, 0.9],  // o Núcleo, sempre
   [46.2, 15.6, 0.35, 0.4, 0.95, 0.85, 0.1, 0.42, 0.95, 3.2], // o chafariz: água do Pulso aflorando (D-38)
+  [47.5, 21.75, 0.45, 0.75, 0.45, 1.0, 0.15, 0.5, 1.0, 3.0], // relicário do Santuário (D-51): mini-Núcleo violeta
+  [46.7, 20.9, 0.95, 1.0, 0.72, 0.35, 0, 1.0, 1.7, 4.2],     // lampiões da entrada do Santuário
+  [48.3, 20.9, 0.95, 1.0, 0.72, 0.35, 0, 1.0, 1.7, 4.2],
 ];
 for (let i = 0; i < 26; i++) { // veias: anel semeado ao redor do largo (fios, não lavagem)
   const a = rnd() * Math.PI * 2, r = 1.6 + rnd() * 3.0;

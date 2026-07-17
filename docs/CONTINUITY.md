@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 29) — PLANTA v1 provada: o Santuário do Pulso (D-51)
+
+- "Podemos testar a geração de estruturas" → `plantar(planta)` no cliente: estrutura = objeto declarativo (paredes/colisões/billboards), o motor sobe tudo. Prova: **Santuário do Pulso** (capela em U ao sul do largo, relicário mini-Núcleo violeta pulsando, 2 lampiões).
+- O ciclo /estruturas PEGOU erro real: 1ª posição tinha árvore tapando a entrada (estava na prancheta, li mal) → +1 tile a leste, árvores viraram moldura. Baker sync + rebake; noite linda.
+- Refinos p/ v2 (anotados em D-51): parede sem janela, `limpar` scatter, export automático pro baker, origem+rotação.
+- 368/368. **Aguardando ideador**: visitar o Santuário (sul do chafariz, entre as árvores) + vereditos pendentes (joystick D-48/49, arcos finos D-50b).
+
 ## Sessão 2026-07-17 (parte 28) — profundidade nos arcos + A PRANCHETA + skill /estruturas (D-50)
 
 - Pedidos: arcos com faces 3D; docs em dia; ferramenta de criação/auditoria de estruturas ("câmera de topo, blueprint, colisão").
