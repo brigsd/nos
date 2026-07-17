@@ -17,6 +17,7 @@
     "validate-world": "tsx engine/scripts/validate-world.ts",
     "validate-worlds": "tsx scripts/validate-worlds.ts",
     "lint:sprites": "node assets/tools/lint-sprites.js",
+    "build:sprites": "node assets/tools/build.cjs",
     "respond-issues": "tsx scripts/respond-issues.ts",
     "art": "node tools/art-mcp/cli.cjs",
     "olhar": "node prototipos/fps/qa/olhar.mjs",

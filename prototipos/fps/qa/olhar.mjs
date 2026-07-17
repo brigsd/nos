@@ -58,8 +58,12 @@ const server = createServer((req, res) => { res.writeHead(200, { 'content-type':
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
-/* 4 · Chromium via o Playwright do site (CommonJS — daí o default import) */
-const pw = (await import(join(REPO, 'site/node_modules/playwright/index.js'))).default;
+/* 4 · Chromium via o Playwright do site (CommonJS — daí o default import).
+   Dependência oculta: o Playwright vive em site/node_modules, não na raiz —
+   rode `cd site && npm ci` uma vez antes de usar a bancada. */
+const PW = join(REPO, 'site/node_modules/playwright/index.js');
+if (!existsSync(PW)) { console.error('olhar: Playwright não encontrado. Rode uma vez: cd site && npm ci   (a bancada usa o Playwright/Chromium do site).'); process.exit(1); }
+const pw = (await import(PW)).default;
 const browser = await pw.chromium.launch();
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 mkdirSync(OUT, { recursive: true });

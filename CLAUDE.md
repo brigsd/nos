@@ -13,6 +13,7 @@ Tiago (`brigsd`) é o **ideador**: dono da visão, do rumo e do escopo. Você (C
 3. Decisões já tomadas estão em `docs/DECISIONS.md` — não as re-discuta sem fato novo.
 4. Textos de jogo seguem `docs/LORE.md` — consistência narrativa é inegociável.
 5. Trabalho visual/no cliente oficial? `docs/CODER.md` é a sua bancada: `npm run olhar` (auditoria por screenshot, `?cam=`/`?tod=`), navegação no arquivo grande e os limites reais do ambiente com as mitigações que funcionam.
+6. Não sabe qual ferramenta/script/agente usar? `docs/RECURSOS.md` é o índice único de tudo (npm scripts, art-mcp, bancadas, MCP, os 6 agentes) com *como invocar*.
 
 ## Regras invioláveis
 
@@ -29,7 +30,7 @@ construir → `code-reviewer` (+ `art-reviewer` se houver arte) → `qa-tester` 
 
 ## Agentes
 
-Definições em `.claude/agents/` (modelo padrão: sonnet). Despache-os em paralelo para arte, código, lore e QA; o orquestrador integra e decide. Divergências entre agentes: quem decide é o orquestrador, registrando em `docs/DECISIONS.md`.
+Definições em `.claude/agents/` — **codadores (engine-dev/pixel-artist/lore-writer) em sonnet, revisores (code-reviewer/art-reviewer/qa-tester) em opus** (D-24). Tabela com "quando despachar cada um" em `docs/RECURSOS.md`. Despache-os em paralelo para arte, código, lore e QA; o orquestrador integra e decide. Divergências entre agentes: quem decide é o orquestrador, registrando em `docs/DECISIONS.md`.
 
 ## Ao encerrar qualquer sessão
 
