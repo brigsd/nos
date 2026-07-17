@@ -4691,6 +4691,13 @@
       "type": "core_pulse",
       "tick": 83,
       "worldTime": 4980
+    },
+    {
+      "type": "native_spoke",
+      "tick": 83,
+      "worldTime": 4980,
+      "nativeId": "brasa",
+      "message": "Quem quer pão fresco? O calor da forja tá bom!"
     }
   ],
   "natives": {
