@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 71,
-    "worldTime": 4260
+    "tickCount": 72,
+    "worldTime": 4320
   },
   "width": 64,
   "height": 64,
@@ -4554,6 +4554,32 @@
       "type": "core_pulse",
       "tick": 71,
       "worldTime": 4260
+    },
+    {
+      "type": "native_spoke",
+      "tick": 72,
+      "worldTime": 4320,
+      "nativeId": "brasa",
+      "message": "Queijo traz calor e alegria. Alguém se arrisca?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 72,
+      "worldTime": 4320,
+      "nativeId": "broa",
+      "message": "Oi, Nó! Tem pão quentinho aqui. Quer um pedaço?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 72,
+      "worldTime": 4320,
+      "nativeId": "quilha",
+      "message": "Queijos são bons, mas o que atravessa o vazio é melhor. Vamos nos preparar para a travessia."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 72,
+      "worldTime": 4320
     }
   ],
   "natives": {
@@ -4562,7 +4588,7 @@
       "name": "Gota",
       "position": {
         "x": 0,
-        "y": 4
+        "y": 5
       },
       "behaviorTree": "wanderer",
       "behaviorState": "{}",
