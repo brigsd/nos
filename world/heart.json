@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 92,
-    "worldTime": 5520
+    "tickCount": 93,
+    "worldTime": 5580
   },
   "width": 64,
   "height": 64,
@@ -4806,6 +4806,25 @@
       "type": "core_pulse",
       "tick": 92,
       "worldTime": 5520
+    },
+    {
+      "type": "native_spoke",
+      "tick": 93,
+      "worldTime": 5580,
+      "nativeId": "broa",
+      "message": "Quem quer pão fresco? A brasa tá boa e o cheiro tá no ar! Venham se aquecer!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 93,
+      "worldTime": 5580,
+      "nativeId": "quilha",
+      "message": "O aroma do pão avisa que novas travessias estão por vir. Alguém se atreve?"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 93,
+      "worldTime": 5580
     }
   ],
   "natives": {
@@ -4813,7 +4832,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 1,
+        "x": 0,
         "y": 6
       },
       "behaviorTree": "wanderer",
