@@ -1856,20 +1856,40 @@ function genFountain(fr) {
     const n = vnoise(x * 0.5 + fr * 2.3, y * 0.85);
     put(x, y, (x * 7 + y * 3 + fr) % 29 === 0 ? 9 : rr < 1.4 ? 43 : n > 0.72 ? 43 : n > 0.34 ? 42 : 41);
   }
-  /* 2 · pedestal central + taça de cima — colunas LISAS (cilindro) */
-  for (let y = 22; y < 40; y++) for (let x = CX - 4; x <= CX + 4; x++) {
+  /* 2 · coluna de BAIXO (nasce da piscina e segura a bacia do meio) */
+  for (let y = 31; y < 42; y++) for (let x = CX - 4; x <= CX + 4; x++) {
     const kk = Math.abs(x - CX) / 4.5;
     put(x, y, kk > 0.88 ? 1 : kk > 0.55 ? 2 : kk > 0.3 ? 6 : 7);
   }
-  for (let y = 17; y < 23; y++) for (let x = 0; x < Wf; x++) {
-    if (inEll(x, y, CX, 20, 11, 3)) {
-      const kk = Math.abs(x - CX) / 11;
+  /* 3 · a BACIA INTERMEDIÁRIA (pedido do ideador: "no meio do cilindro,
+     onde não tem nada") — água em cima, lábio de pedra, parede curva */
+  for (let y = 23; y < 28; y++) for (let x = 0; x < Wf; x++) { // água do meio
+    if (inEll(x, y, CX, 26, 16, 2.9)) {
+      const n = vnoise(x * 0.6 + fr * 2.4, y * 0.9);
+      put(x, y, (x * 5 + y * 3 + fr) % 19 === 0 ? 9 : n > 0.7 ? 43 : n > 0.36 ? 42 : 41);
+    }
+  }
+  for (let y = 25; y < 33; y++) for (let x = 0; x < Wf; x++) { // pedra do meio
+    if (inEll(x, y, CX, 29, 18, 3.6) && !inEll(x, y, CX, 26.4, 14.5, 2.3)) {
+      const kk = Math.abs(x - CX) / 18;
+      put(x, y, y < 28 ? ((x + y) & 1) === 0 ? 8 : 7 : kk > 0.72 ? 2 : y % 3 === 0 ? 2 : kk > 0.4 ? 6 : 7);
+      if (!inEll(x, y, CX, 29, 17.2, 3.1)) put(x, y, 1); // aresta
+    }
+  }
+  /* 4 · coluna de CIMA (da bacia do meio até a taça) + taça */
+  for (let y = 19; y < 25; y++) for (let x = CX - 3; x <= CX + 3; x++) {
+    const kk = Math.abs(x - CX) / 3.5;
+    put(x, y, kk > 0.86 ? 1 : kk > 0.5 ? 2 : 6);
+  }
+  for (let y = 14; y < 20; y++) for (let x = 0; x < Wf; x++) {
+    if (inEll(x, y, CX, 17, 9, 2.7)) {
+      const kk = Math.abs(x - CX) / 9;
       put(x, y, kk > 0.9 ? 1 : kk > 0.62 ? 2 : kk > 0.32 ? 6 : 7);
     }
   }
-  for (let x = CX - 9; x <= CX + 9; x++) if (inEll(x, 18, CX, 18.5, 9, 1.6)) put(x, 18, (x + fr) % 3 === 0 ? 43 : 42); // água na taça
-  /* 3 · o JATO com jitter + coroa aberta */
-  for (let y = 3; y < 18; y++) {
+  for (let x = CX - 7; x <= CX + 7; x++) if (inEll(x, 15, CX, 15.5, 7, 1.4)) put(x, 15, (x + fr) % 3 === 0 ? 43 : 42); // água na taça
+  /* 5 · o JATO com jitter + coroa aberta */
+  for (let y = 3; y < 15; y++) {
     const j = ((y * 7 + fr * 5) % 3) - 1;
     put(CX - 1 + j, y, 43); put(CX + j, y, y < 7 ? 9 : 42);
   }
@@ -1877,12 +1897,27 @@ function genFountain(fr) {
     const a = -0.9 + k * 0.3;
     put((CX + Math.cos(a + fr) * 3.4) | 0, (2 + Math.abs(Math.sin(a * 2 + fr)) * 2.6) | 0, (k & 1) ? 9 : 43);
   }
-  /* 4 · dois ARCOS d'água — as gotas avançam e POUSAM no espelho d'água */
-  for (const s of [-1, 1]) for (let k = 0; k < 6; k++) {
-    const t = ((fr / 4) + k / 6) % 1;
-    const xa = (CX + s * 27 * t) | 0, ya = (4 + 34 * t * t) | 0;
-    put(xa, ya, (k & 1) ? 43 : 9); put(xa - s, ya + 1, 42);
-    if (t > 0.84) { put(xa, 37, 9); put(xa - s, 38, 43); if ((fr & 1) === 0) put(xa + s, 36, 43); } // respingo
+  /* 6 · a CASCATA, nível a nível:
+     taça → bacia do meio: dois arcos curtos de gotas que avançam */
+  for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {
+    const t = ((fr / 4) + k / 4) % 1;
+    const xa = (CX + s * (7 + 6 * t)) | 0, ya = (16 + 8 * t * t) | 0;
+    put(xa, ya, (k & 1) ? 43 : 9);
+    if (t > 0.8) put(xa, 24, 9); // respinguinho na água do meio
+  }
+  /* bacia do meio → piscina: CORTININHAS escorrendo do lábio (tracinhos
+     descendo por quadro) + dois arcos externos de gotas */
+  for (const s of [-1, 1]) for (const lx of [10, 15]) {
+    for (let y = 30; y < 39; y++) {
+      if ((y + fr * 2) % 4 < 2) put(CX + s * lx, y, (y + fr) % 3 === 0 ? 9 : 42);
+    }
+    put(CX + s * lx, 38 + (fr & 1), 9); // borbulha onde toca a piscina
+  }
+  for (const s of [-1, 1]) for (let k = 0; k < 5; k++) {
+    const t = ((fr / 4) + k / 5) % 1;
+    const xa = (CX + s * (17 + 12 * t)) | 0, ya = (29 + 11 * t * t) | 0;
+    put(xa, ya, (k & 1) ? 43 : 9);
+    if (t > 0.82) { put(xa, 38, 9); if ((fr & 1) === 0) put(xa + s, 37, 43); } // respingo
   }
   /* 5 · o ANEL de pedra (o degrau-bacia, altura de assento): face de topo
      iluminada + parede externa com curvatura, contendo a água na frente */

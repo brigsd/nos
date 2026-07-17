@@ -6,7 +6,7 @@
 
 - Pedido: chafariz ⛲ no centro da praça, água cristalina, animação de água jorrando. **Duas rodadas de direção do ideador até a forma certa**: v1 = água pintada no chão → "disco plano colado no calçamento"; v2 = corpo no sprite mas bacia estreita → "quero com um círculo/disco, mas ele precisa ser uma bacia, ser um degrau"; **v3 = o chafariz clássico de praça**: anel de pedra baixo e LARGO (altura de assento) + espelho d'água grande com ondas concêntricas expandindo por quadro + coluna/taça/jato/arcos com gotas que avançam e respingam.
 - Lições permanentes gravadas no D-38: (1) água/laje pintada no CHÃO sob um billboard sempre vaza maior que a base (perspectiva do chão cresce mais rápido) — chão limpo, o contorno do sprite ancora; (2) argamassa em colunas finas lê como "janelinhas" — cilindro liso; (3) objeto de revolução = billboard largo funciona de qualquer ângulo.
-- À noite a água BRILHA (selfGlow + luz teal na GI): anel luminoso no centro do largo, entre lampiões e o véu do portal. Colisão r1.0 nos 9 tiles. Ponto canônico `chafariz` (cam recuada). 60fps.
+- **v4 (aprovada a v3, ideador pediu +1 nível)**: bacia INTERMEDIÁRIA no meio da coluna → chafariz de TRÊS NÍVEIS com cascata: arcos taça→meio, cortininhas pontilhadas meio→piscina (borbulhando onde tocam), arcos externos. À noite os três níveis BRILHAM (selfGlow + luz teal na GI). Colisão r1.0 nos 9 tiles. Ponto canônico `chafariz` (cam recuada). 60fps.
 
 ## Sessão 2026-07-16 (parte 13) — A Clareira v2 (D-37): um portal, praça aberta, carpintaria
 
