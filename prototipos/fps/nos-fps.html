@@ -820,11 +820,20 @@ function fbm(x, y, oct) {
    MESMOS sprites 16px do jogo. Nada aqui é engine novo: é só mais uma
    "janela" (D-26) sobre o Registro. */
 
-const W = 320, H = 180, HALF = H / 2;
+/* ?res=LARGxALT (D-44): resolução INTERNA do render — alavanca de experimento.
+   320×180 é o padrão do jogo; ?res=640x360 (ou 1280x720, 1920x1080…) deixa
+   qualquer um SENTIR nitidez × custo no próprio aparelho. Todo o resto do
+   renderizador deriva de W/H, então a alavanca é só esta. Limites sãos. */
+let qResRaw = null;
+try { qResRaw = /^(\d{3,4})x(\d{3,4})$/.exec(new URLSearchParams(location.search).get('res') || ''); } catch { /* sem query */ }
+const W = qResRaw ? Math.min(1920, Math.max(160, +qResRaw[1])) : 320;
+const H = qResRaw ? Math.min(1080, Math.max(90, +qResRaw[2])) : 180;
+const HALF = H / 2;
 const FOV_PLANE = 0.66;
 const TEX = 16;
 
 const view = document.getElementById('view');
+view.width = W; view.height = H; // o atributo do HTML é só o padrão
 const vctx = view.getContext('2d');
 const frame = vctx.createImageData(W, H);
 const px = new Uint32Array(frame.data.buffer);

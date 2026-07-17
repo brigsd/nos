@@ -2,6 +2,14 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 20) — experimentos de resolução (D-44): medido, não teorizado
+
+- Ideador perguntou se "128px pra tudo" ficaria bonito → respondi com 2 experimentos (A: textura, B: render interno), dados em D-44.
+- **A**: mesma árvore em 16/64/128 (`author-tree-res.cjs`) no preview in-engine → 16→64 melhora de perto; **64→128 invisível** (o 320×180 descarta). **B**: alavanca `?res=` no cliente + `res-bench.mjs` → 320×180=56fps · 640×360=18.5 · 1280×720=4.4 · **1920×1080=2fps** (VM; CPU÷4 ainda pior). Custo ~linear nos pixels; ganho satura acima de 640×360 (texturas 16px viram gargalo).
+- Recomendação registrada: **resolução por papel** (heróis 64, estruturas 32–64, cenário 16–32, render 320×180). `?res=` publicado — o ideador pode sentir `?res=640x360` no próprio aparelho.
+- **Aguardando o ideador**: (1) estilo/resolução dos Habitantes (rascunhos brasa-pessoa 16px e 64px prontos em `tools/art-mcp/qa/`); (2) reação aos dados de resolução.
+- 368/368; default 320×180 verificado intacto; bancadas verdes.
+
 ## Sessão 2026-07-17 (parte 19) — arrumação do tooling (D-43): "deixar tudo redondo"
 
 - Pedido do ideador. Um agente auditou os dois repos (só-leitura). Diagnóstico: mais redondo que bagunçado — buracos de **descoberta e reconciliação**, nada ❌ quebrado.
