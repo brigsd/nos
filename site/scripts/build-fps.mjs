@@ -121,9 +121,10 @@ console.log(
    de dados). Publicado em /fps/gpu.html pro ideador SENTIR a perf no celular —
    o render é fixo em 320×180 e a GPU faz o upscale, então o custo independe da
    tela (o conserto do "roda terrível no celular"). Não toca o cliente oficial. */
-const gpuProtoPath = path.join(REPO_ROOT, 'prototipos', 'fps', 'gpu', 'gpu-proto.html');
-if (existsSync(gpuProtoPath)) {
-  const gpuFile = path.join(outDir, 'gpu.html');
-  writeFileSync(gpuFile, readFileSync(gpuProtoPath, 'utf8'));
-  console.log(`build-fps: + gpu.html (protótipo WebGL, ${Math.round(statSync(gpuFile).size / 1024)}KB)`);
+for (const [src, dst] of [['gpu-proto.html', 'gpu.html'], ['gpu-beauty.html', 'gpu-beauty.html']]) {
+  const p = path.join(REPO_ROOT, 'prototipos', 'fps', 'gpu', src);
+  if (!existsSync(p)) continue;
+  const f = path.join(outDir, dst);
+  writeFileSync(f, readFileSync(p, 'utf8'));
+  console.log(`build-fps: + ${dst} (protótipo WebGL, ${Math.round(statSync(f).size / 1024)}KB)`);
 }

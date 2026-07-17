@@ -198,9 +198,12 @@ const BATCHES = [
   { mesh: glMesh(roof), tex: glTex(ROOF_TEX) },
 ];
 
-/* framebuffer INTERNO 320×180 — todo o render acontece aqui; a GPU faz o
-   upscale nítido. Custo de render = função de 320×180, NÃO da tela. */
-const IW = 320, IH = 180;
+/* framebuffer INTERNO — todo o render acontece aqui; a GPU faz o upscale
+   nítido. Custo = função DESTE tamanho, NÃO da tela. ?res=<largura> (320
+   padrão = pixel art; 640/960 = mais nítido) — na GPU o custo mal muda. */
+const IW = Math.max(160, (parseInt(new URLSearchParams(location.search).get('res')) || 320)) | 0;
+const IH = Math.round(IW * 9 / 16);
+dev.textContent = `${IW}×${IH} interno · ` + dev.textContent;
 const fbTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, fbTex);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, IW, IH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
