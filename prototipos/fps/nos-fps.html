@@ -102,15 +102,17 @@
     white-space: normal;
   }
   #bubbles b { color: #fbb954; }
-  #worlds { /* painel dos mundos conectados: acende perto do Portal (D-37) */
+  #worlds { /* painel dos mundos conectados: acende perto do Portal (D-37, acordeão D-41) */
     position: absolute;
     right: 12px;
     top: 42px;
-    width: min(250px, 47%);
-    background: rgba(13, 16, 22, 0.88);
+    width: min(264px, 52%);
+    max-height: 72%;
+    overflow-y: auto;
+    background: rgba(13, 16, 22, 0.9);
     border: 1px solid rgba(48, 225, 185, 0.42);
     border-radius: 10px;
-    padding: 10px 13px;
+    padding: 9px 12px 8px;
     font: 500 11px/1.45 ui-monospace, monospace;
     color: #d7e7e2;
     opacity: 0;
@@ -120,12 +122,23 @@
     z-index: 4;
   }
   #worlds.on { opacity: 1; transform: none; pointer-events: auto; }
-  #worlds h3 { margin: 0 0 7px; font-size: 12px; letter-spacing: 0.14em; color: #30e1b9; }
-  #worlds .w { display: flex; gap: 7px; align-items: baseline; margin: 5px 0 1px; }
+  #worlds h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.14em; color: #30e1b9; }
+  #worlds .w { border-top: 1px solid rgba(48, 225, 185, 0.14); padding: 5px 0 3px; }
+  #worlds .w:first-of-type { border-top: none; }
+  #worlds .wh { display: flex; gap: 7px; align-items: center; cursor: pointer; } /* cabeçalho: clica pra abrir/fechar */
+  #worlds .nm { flex: 1; font-weight: 700; color: #d7e7e2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #worlds .nm::before { content: '▸'; color: #30e1b9; margin-right: 5px; display: inline-block; transition: transform 0.2s ease; }
+  #worlds .w.open .nm::before { transform: rotate(90deg); }
   #worlds .st { font-size: 9px; padding: 0 5px; border-radius: 6px; border: 1px solid; white-space: nowrap; }
   #worlds .aberto { color: #8ff8e2; border-color: rgba(48, 225, 185, 0.5); }
   #worlds .breve { color: #9b93a8; border-color: rgba(155, 147, 168, 0.4); }
-  #worlds .desc { color: #9b93a8; font-size: 10px; margin: 0 0 3px; }
+  #worlds .go { font: inherit; font-size: 9px; padding: 2px 8px; border-radius: 6px; white-space: nowrap; cursor: pointer;
+    color: #8ff8e2; background: rgba(48, 225, 185, 0.16); border: 1px solid rgba(48, 225, 185, 0.5); }
+  #worlds .go[disabled] { color: #6b6675; background: transparent; border-color: rgba(155, 147, 168, 0.3); cursor: default; }
+  #worlds .desc { color: #9b93a8; font-size: 10px; max-height: 0; opacity: 0; margin: 0; overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.25s ease, margin 0.25s ease; }
+  #worlds .w.open .desc { max-height: 140px; opacity: 1; margin: 4px 0 2px; }
+  #worlds .foot { color: #6b6675; font-size: 9px; margin: 8px 0 0; padding-top: 6px; border-top: 1px solid rgba(48, 225, 185, 0.14); }
   #worlds a { color: #a884f3; }
   #menu {
     position: absolute;
@@ -2074,10 +2087,27 @@ const WORLDS = (typeof NOS_WORLDS !== 'undefined' && Array.isArray(NOS_WORLDS)) 
 let worldsOn = false, lastWorldsCheck = 0;
 if (WORLDS.length) {
   const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const CUR = 'coracao'; // o FPS renderiza O Coração; muda aqui se um dia ele servir outro mundo
+  /* acordeão (D-41, pedido do ideador): por padrão só o NOME + status; clica no
+     cabeçalho pra abrir a descrição, clica de novo pra recolher. Cada mundo tem
+     um botão de ENTRAR: 'aqui' (o atual), 'atravessar' (aberto → mapa 2D, onde o
+     Salão de Portais faz a travessia real, D-27) ou 'em breve' (não fundado). */
   worldsEl.innerHTML = '<h3>◈ MUNDOS CONECTADOS</h3>' + WORLDS.map((w) => {
     const open = w.status === 'aberto';
-    return `<div class="w"><b>${esc(w.name ?? w.id)}</b><span class="st ${open ? 'aberto' : 'breve'}">${open ? 'aberto' : 'em breve'}</span></div><p class="desc">${esc(w.descriptionPtBR)}</p>`;
-  }).join('') + '<p class="desc">a travessia acontece no <a href="../">mapa 2D ↗</a> — novos mundos entram por pull request</p>';
+    const here = w.id === CUR;
+    const btn = here ? '<button class="go" disabled>aqui</button>'
+      : open ? '<button class="go" data-go="../">atravessar ↗</button>'
+      : '<button class="go" disabled>em breve</button>';
+    return `<div class="w"><div class="wh"><span class="nm">${esc(w.name ?? w.id)}</span><span class="st ${open ? 'aberto' : 'breve'}">${open ? 'aberto' : 'em breve'}</span>${btn}</div><p class="desc">${esc(w.descriptionPtBR)}</p></div>`;
+  }).join('') + '<p class="foot">a travessia acontece no <a href="../">mapa 2D ↗</a> — novos mundos entram por pull request</p>';
+
+  worldsEl.addEventListener('click', (e) => {
+    e.stopPropagation(); // não deixa o clique no painel re-travar o mouse no stage
+    const go = e.target.closest('.go');
+    if (go && go.dataset.go) { location.href = go.dataset.go; return; } // atravessar → mapa 2D
+    const wh = e.target.closest('.wh');
+    if (wh) wh.parentElement.classList.toggle('open'); // acordeão
+  });
 }
 
 /* ---------- névoa baixa: REMOVIDA (D-39) ----------
@@ -3100,6 +3130,16 @@ let lastAudioCheck = 0;
 let somOn = true;
 try { somOn = localStorage.getItem('nos_som') !== '0'; } catch { /* file:// sem storage */ }
 
+/* TODOS os botões de ajuste do som num lugar só — manutenção óbvia:
+   "conserta/ajusta o áudio da água" = mexa em SOM.water.*; vento = SOM.wind.*.
+   Ganhos são frações do master (0..1); freqs em Hz; distâncias em tiles. */
+const SOM = {
+  master: 0.9,                                                   // teto geral (headroom)
+  wind: { gain: 0.045, lp: 430, gustHz: 0.08, gustAmt: 0.025, sweepHz: 0.043, sweepAmt: 130 },
+  water: { hp: 640, bp: 1600, q: 0.6, burbHz: 5.5, burbAmt: 240, // timbre
+           peak: 0.24, from: 7.5, range: 6.0 },                  // audível a ≤from tiles, cheio na borda; sobe em `range` tiles
+};
+
 const somBtn = document.getElementById('somBtn');
 function updateSomBtn() {
   if (!somBtn) return;
@@ -3124,30 +3164,30 @@ function buildAudio() {
   const noise = makeNoise(3);
 
   masterG = AC.createGain();
-  masterG.gain.value = somOn ? 0.9 : 0; // headroom + respeita o mudo salvo
+  masterG.gain.value = somOn ? SOM.master : 0; // headroom + respeita o mudo salvo
   masterG.connect(AC.destination);
 
   /* vento: ruído grave (lowpass) com rajada lenta — a "sala" do mundo */
   const wSrc = AC.createBufferSource(); wSrc.buffer = noise; wSrc.loop = true;
-  const wLP = AC.createBiquadFilter(); wLP.type = 'lowpass'; wLP.frequency.value = 430; wLP.Q.value = 0.5;
-  windG = AC.createGain(); windG.gain.value = 0.045; // cama constante e suave
+  const wLP = AC.createBiquadFilter(); wLP.type = 'lowpass'; wLP.frequency.value = SOM.wind.lp; wLP.Q.value = 0.5;
+  windG = AC.createGain(); windG.gain.value = SOM.wind.gain; // cama constante e suave
   wSrc.connect(wLP).connect(windG).connect(masterG);
-  const gust = AC.createOscillator(); gust.type = 'sine'; gust.frequency.value = 0.08;
-  const gustAmt = AC.createGain(); gustAmt.gain.value = 0.025;
+  const gust = AC.createOscillator(); gust.type = 'sine'; gust.frequency.value = SOM.wind.gustHz;
+  const gustAmt = AC.createGain(); gustAmt.gain.value = SOM.wind.gustAmt;
   gust.connect(gustAmt).connect(windG.gain);          // respira: sobe/desce devagar
-  const gust2 = AC.createOscillator(); gust2.type = 'sine'; gust2.frequency.value = 0.043;
-  const gust2Amt = AC.createGain(); gust2Amt.gain.value = 130;
+  const gust2 = AC.createOscillator(); gust2.type = 'sine'; gust2.frequency.value = SOM.wind.sweepHz;
+  const gust2Amt = AC.createGain(); gust2Amt.gain.value = SOM.wind.sweepAmt;
   gust2.connect(gust2Amt).connect(wLP.frequency);     // e move o corte pra não travar
 
   /* água do chafariz: ruído agudo (highpass+bandpass) com borbulho; o ganho
      começa em 0 e SOBE por proximidade no loop (mesma ideia do painel Mundos). */
   const aSrc = AC.createBufferSource(); aSrc.buffer = noise; aSrc.loop = true;
-  const aHP = AC.createBiquadFilter(); aHP.type = 'highpass'; aHP.frequency.value = 640;
-  const aBP = AC.createBiquadFilter(); aBP.type = 'bandpass'; aBP.frequency.value = 1600; aBP.Q.value = 0.6;
+  const aHP = AC.createBiquadFilter(); aHP.type = 'highpass'; aHP.frequency.value = SOM.water.hp;
+  const aBP = AC.createBiquadFilter(); aBP.type = 'bandpass'; aBP.frequency.value = SOM.water.bp; aBP.Q.value = SOM.water.q;
   waterG = AC.createGain(); waterG.gain.value = 0;
   aSrc.connect(aHP).connect(aBP).connect(waterG).connect(masterG);
-  const burb = AC.createOscillator(); burb.type = 'sine'; burb.frequency.value = 5.5;
-  const burbAmt = AC.createGain(); burbAmt.gain.value = 240;
+  const burb = AC.createOscillator(); burb.type = 'sine'; burb.frequency.value = SOM.water.burbHz;
+  const burbAmt = AC.createGain(); burbAmt.gain.value = SOM.water.burbAmt;
   burb.connect(burbAmt).connect(aBP.frequency);       // borbulho: o bandpass oscila
 
   wSrc.start(); aSrc.start(); gust.start(); gust2.start(); burb.start();
@@ -3161,7 +3201,7 @@ function toggleSom() {
   somOn = !somOn;
   try { localStorage.setItem('nos_som', somOn ? '1' : '0'); } catch { /* ok */ }
   ensureAudio();
-  if (masterG && AC) masterG.gain.setTargetAtTime(somOn ? 0.9 : 0, AC.currentTime, 0.05);
+  if (masterG && AC) masterG.gain.setTargetAtTime(somOn ? SOM.master : 0, AC.currentTime, 0.05);
   updateSomBtn();
 }
 addEventListener('pointerdown', ensureAudio);
@@ -3181,6 +3221,7 @@ window.__nosAudio = () => ({
 const stageEl = document.getElementById('stage');
 const menuEl = document.getElementById('menu');
 let everLocked = false;
+let kioskRelease = false; // true quando o cursor foi solto pra usar o painel do Portal (D-41), não pelo ESC
 const isLocked = () => document.pointerLockElement === stageEl;
 stageEl.addEventListener('click', () => {
   if (!isLocked() && menuEl.style.display !== 'flex' && matchMedia('(pointer:fine)').matches) {
@@ -3194,7 +3235,13 @@ document.getElementById('btnContinue').addEventListener('click', () => {
 });
 document.addEventListener('pointerlockchange', () => {
   if (isLocked()) { everLocked = true; menuEl.style.display = 'none'; }
-  else if (everLocked) { menuEl.style.display = 'flex'; clearInputs(); } // ESC soltou o mouse -> menu
+  else if (everLocked) {
+    clearInputs();
+    /* soltou por causa do quiosque do Portal: cursor livre pra clicar os mundos,
+       SEM abrir o menu; clicar na cena (fora do painel) re-trava e volta a andar */
+    if (kioskRelease) kioskRelease = false;
+    else menuEl.style.display = 'flex'; // ESC soltou o mouse -> menu
+  }
 });
 document.addEventListener('mousemove', (e) => { if (isLocked()) cam.a += e.movementX * 0.0032; });
 
@@ -3270,11 +3317,11 @@ function paintBubbles() {
     const dist = Math.hypot(dx, dy);
     if (dist < 0.55 || dist > 6.5) continue;
     const rel = wrapAng(Math.atan2(dy, dx) - cam.a);
-    if (Math.abs(rel) > 0.55) continue;
+    if (Math.abs(rel) > 0.22) continue; // só quando o jogador olha PRA o NPC (pedido D-41), não a visão periférica
     const sx = (Math.tan(rel) / FOV_PLANE + 1) * (W / 2);
     const col = sx | 0;
     if (col < 0 || col >= W || zbuf[col] < dist - 0.25) continue;
-    const sy = clamp(HALF + (H / dist) * (0.5 - 1.18), 7, H - 12);
+    const sy = clamp(HALF + (H / dist) * (0.5 - 0.85), 7, H - 12); // logo acima da cabeça VISÍVEL (o avatar ocupa ~76% do billboard, cabeça em ~hTag 0.77), não flutuando alto
     html += `<span style="left:${((sx / W) * 100).toFixed(1)}%;top:${((sy / H) * 100).toFixed(1)}%"><b>${h.id}</b> ${h.fala}</span>`;
   }
   bubblesDiv.innerHTML = html;
@@ -3348,13 +3395,20 @@ function loop(now) {
     lastWorldsCheck = now;
     const dP = Math.hypot(cam.x - PORTAL.x, cam.y - PORTAL.y);
     const want = mapMode !== 2 && (dP < 2.4 || (worldsOn && dP < 3.2));
-    if (want !== worldsOn) { worldsOn = want; worldsEl.classList.toggle('on', worldsOn); }
+    if (want !== worldsOn) {
+      worldsOn = want; worldsEl.classList.toggle('on', worldsOn);
+      if (worldsOn) { // chegou: solta o cursor pro "quiosque" (desktop travado), pra clicar o painel
+        if (isLocked()) { kioskRelease = true; document.exitPointerLock?.(); }
+      } else { // saiu: recolhe as descrições abertas pra não voltar bagunçado
+        worldsEl.querySelectorAll('.w.open').forEach((el) => el.classList.remove('open'));
+      }
+    }
   }
   /* água do chafariz sobe por proximidade (D-40) — glide suave via setTargetAtTime */
   if (AC && waterG && now - lastAudioCheck > 110) {
     lastAudioCheck = now;
     const dF = Math.hypot(cam.x - PLAZA.x, cam.y - PLAZA.y);
-    const wv = Math.max(0, Math.min(1, (7.5 - dF) / 6.0)) * 0.24; // audível ~7.5 tiles, cheio na borda
+    const wv = Math.max(0, Math.min(1, (SOM.water.from - dF) / SOM.water.range)) * SOM.water.peak;
     waterG.gain.setTargetAtTime(wv, AC.currentTime, 0.14);
   }
   requestAnimationFrame(loop);

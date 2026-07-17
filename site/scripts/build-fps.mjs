@@ -20,7 +20,7 @@
  * of the trigger paths (e.g. editing this file). Permanent fix is adding
  * 'prototipos/fps/**' to pages.yml — needs the ideador (workflow edits are
  * gated for the coder session). Until then: touch site/** to publish.
- * Published rounds: D-36/37/38 (2026-07-17), D-39, D-40 (som — this touch).
+ * Published rounds: D-36/37/38 (2026-07-17), D-39, D-40 (som), D-41 (this touch).
  *
  * prototipos/fps/nos-fps.html stays the single source of truth for the
  * prototype; site/public/fps/ is pure build output, regenerated before

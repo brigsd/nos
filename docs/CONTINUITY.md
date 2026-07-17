@@ -2,6 +2,14 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 17) — ajuste do playtest (D-41): manutenção do som + balões + acordeão dos Mundos
+
+- Ideador perguntou se "conserta o áudio da água" seria fácil de manter → tornei fácil: **centralizei todos os ajustes do som no objeto `SOM`** (`SOM.water.*`, `SOM.wind.*`, `SOM.master`) — antes espalhados entre `buildAudio` e o loop. Manutenção = um lugar só; `npm run ouvir` valida.
+- **Balões dos NPCs** (2 queixas): (1) só aparecem **olhando de frente** (cone `0.55`→`0.22` rad); (2) estavam **flutuando alto** — o `no_avatar.png` ocupa ~76% do billboard (cabeça em ~hTag 0.77), então ancorar no topo geométrico do billboard errava; ancorei na **cabeça visível** (`hTag 1.18`→`0.85`). Verificado injetando um Habitante com fala e lendo o PNG.
+- **Painel MUNDOS CONECTADOS em acordeão** (pedido): por padrão só nome+status; clica no cabeçalho abre/recolhe a descrição; botão de **entrar** por mundo (`aqui` / `atravessar ↗`→mapa 2D onde o Salão de Portais faz a travessia real / `em breve`). No desktop, pointer lock prendia o cursor → ao chegar no Portal o cursor é solto num "quiosque" (sem abrir menu; clicar na cena re-trava). Celular: toque já funciona. Verificado via Playwright (DOM + acordeão + gate de frente).
+- Regras que ficam: sprite com topo transparente → ancorar no conteúdo, não na geometria; UI clicável no FPS desktop tem que resolver o pointer lock.
+- 368/368; engine intacta; deploy por toque em `build-fps.mjs`.
+
 ## Sessão 2026-07-17 (parte 16) — o som chega (D-40): ambiência sintetizada + a bancada `ouvir`
 
 - Ideador: "você consegue fazer sons?" → sim, e encaixa na tese: **áudio 100% gerado por código** (Web Audio — ruído filtrado + osciladores), **zero .mp3/.wav** no repo (dieta D-30). Escopo desta 1ª rodada (pedido dele): **ambiência = vento + água do chafariz por proximidade**.
