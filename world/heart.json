@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 87,
-    "worldTime": 5220
+    "tickCount": 88,
+    "worldTime": 5280
   },
   "width": 64,
   "height": 64,
@@ -4746,6 +4746,11 @@
       "worldTime": 5220,
       "nativeId": "quilha",
       "message": "Quem se anima a pilotar algo que atravessa o vazio? Venham, venham! O pão tá quentinho e a brasa tá acesa!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 88,
+      "worldTime": 5280
     }
   ],
   "natives": {
@@ -4753,7 +4758,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 2,
+        "x": 1,
         "y": 4
       },
       "behaviorTree": "wanderer",
