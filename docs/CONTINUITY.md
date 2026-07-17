@@ -2,6 +2,15 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 31) — o motor de SETOR/PORTAL: a primeira casa DE VERDADE, com interior (D-53)
+
+- Mandato: caminho A (segmentos/sectors) + "seja crítico, não aceite resultado ruim". Construído o **núcleo do renderizador de segmentos** e provado com uma casa enterável.
+- **Como funciona**: parede = SEGMENTO fino (`b`=pé, `ta`/`tb`=topo inclinável p/ empena). Cada coluna coleta TODOS os hits raio×segmento, ordena longe→perto e compõe (compositor de portal) — **porta = verga com vão livre embaixo**, o raio passa e vê o interior. **Telhado** = roof-cast por coluna (slab do AABB, duas águas) que fecha o topo por fora E vira o forro por dentro. Colisão ponto-segmento (verga/empena não colidem: passa por baixo).
+- **A casa**: cabana de duas águas no descampado oeste (~38–41×12–15, porta ao sul), soco de pedra + reboco + meia-madeira, 2 janelas acesas, piso de tábuas, telhado de terracota, cume N–S. Exterior lê como casa de todos os ângulos; interior é sala FECHADA (forro + janela + piso). Definitivamente NÃO é Wolfenstein.
+- **Ser crítico pegou 3 defeitos reais (todos corrigidos)**: (1) telhado virava LEQUE radial do cume end-on (fiadas 50/50 aliavam) → gradiente liso + passo fino; (2) árvore atrás VAZAVA por cima da porta vista de dentro (billboard só oculta pra baixo) → **oclusor SUPERIOR** `occHiZ`/`occHiY`+`OCCH` (a 1ª tentativa `nearAny` matava o forro visto da porta — revertida); (3) proporções de fortaleza → beiral 1.02/cume 1.66/porta 0.72.
+- 368/368; chafariz (cena densa) sem regressão; **48–58fps** nos 4 presets. Pontos `casa`/`casa-porta`/`casa-dentro` no `pontos.json`.
+- **PRÓXIMOS PASSOS do motor de setor** (limites honestos anotados em D-53): z por-pixel p/ ver sprite ATRÁS de abertura (NPC dentro de casa visto pela porta); SEGS na prancheta/`__nosMapa`; casa no bake de GI (bounce interno); janela derramando luz no chão. Pendências antigas do ideador ainda sem veredito no aparelho: joystick D-48/49, arcos finos D-50b, Santuário D-51.
+
 ## Sessão 2026-07-17 (parte 30) — lar unificado das ferramentas (D-52) + rumo travado: motor de segmentos
 
 - Ideador escolheu **caminho A** (evoluir o raycaster de tiles → segmentos/sectors estilo Doom, pra casas realistas com interior). Antes do trabalho grande, pediu organizar as ferramentas.

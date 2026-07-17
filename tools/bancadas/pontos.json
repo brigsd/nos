@@ -12,6 +12,18 @@
     "cam": "41.0,14.2,0.25",
     "desc": "a chegada pelo carreiro — o ARCO de entrada emoldurando chafariz e portal (D-39)"
   },
+  "casa": {
+    "cam": "41.6,16.6,-2.30",
+    "desc": "a CASA-protótipo (D-53) — cabana de duas águas com telhado, porta e janelas acesas; a prova do motor de SETOR/PORTAL"
+  },
+  "casa-porta": {
+    "cam": "39.5,16.8,-1.57",
+    "desc": "a porta da casa (D-53) — verga por cima do vão, interior e assoalho de tábuas visíveis através dela"
+  },
+  "casa-dentro": {
+    "cam": "39.5,13.6,-2.40",
+    "desc": "o interior da casa (D-53) — sala fechada, forro em duas águas com cume, janela acesa, piso de madeira"
+  },
   "estaleiro": {
     "cam": "46.2,16.2,-2.15",
     "desc": "ala NW — Estaleiro (madeira alta, casa da quilha)"

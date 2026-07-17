@@ -1467,6 +1467,48 @@ function genWallTex(kind, seed) {
   }
   return bufToTex({ buf, W: Wt, H: Ht });
 }
+
+/* parede de CASA (D-53): reboco quente sobre soco de pedra, meia-madeira,
+   SEM faixa de telhado (é uma parede-segmento, não uma fachada de tile). */
+function genHouseWall(seed, win) {
+  const Wt = 16, Ht = 48;
+  const rnd = mulberry32(seed * 97 + 5);
+  const buf = new Int16Array(Wt * Ht);
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+    const i = y * Wt + x;
+    const n = vnoise(x * 0.8 + seed, y * 0.55 + seed * 2);   // reboco quente
+    buf[i] = n > 0.72 ? 8 : n < 0.24 ? 5 : 4;
+    if (y > Ht - 12) {                                        // soco de pedra
+      const cH = 5, cW = 8, course = (y / cH) | 0, off = (course & 1) * (cW >> 1);
+      buf[i] = (y % cH === 0 || (x + off) % cW === 0) ? 2 : (vnoise(x * 0.7 + seed, y * 0.6) > 0.6 ? 7 : 6);
+      if (rnd() < 0.05) buf[i] = 36;                          // musgo raro
+    }
+    if (x === 0 || x === Wt - 1 || y === 0 || y === 13 || y === Ht - 13) buf[i] = 24; // prumos + travessas (meia-madeira)
+  }
+  if (win) for (let y = 18; y < 28; y++) for (let x = 5; x < 11; x++) {  // janelinha acesa
+    const b = x === 5 || x === 10 || y === 18 || y === 27 || x === 7 || x === 9 || y === 22;
+    buf[y * Wt + x] = b ? 24 : (x + y) % 3 === 0 ? 23 : 18;
+  }
+  return bufToTex({ buf, W: Wt, H: Ht });
+}
+
+/* EMPENA/verga (D-53): reboco com travamento de madeira — fica ACIMA do
+   beiral (empena triangular) ou SOBRE a porta (verga). Sem soco de pedra:
+   nunca toca o chão, então a pedra ficaria flutuando. */
+function genGable(seed) {
+  const Wt = 16, Ht = 32;
+  const buf = new Int16Array(Wt * Ht);
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+    const i = y * Wt + x;
+    const n = vnoise(x * 0.9 + seed, y * 0.7 + seed * 2);
+    buf[i] = n > 0.7 ? 8 : n < 0.26 ? 5 : 4;                        // reboco quente
+    const fx2 = x / (Wt - 1), fy2 = y / (Ht - 1);
+    if (Math.abs(fx2 - fy2) < 0.08 || Math.abs(fx2 - (1 - fy2)) < 0.08) buf[i] = 24; // braçadeira em X
+    if (x === 0 || x === Wt - 1 || y === 0 || y === Ht - 1) buf[i] = 24; // moldura de madeira
+  }
+  return bufToTex({ buf, W: Wt, H: Ht });
+}
+
 /* cada ala de madeira tem SEED próprio: padrão de tábuas, nós e janela em
    posições diferentes — quebra a repetição sem custo novo */
 const CT = {
@@ -2008,6 +2050,45 @@ function plantar(p) {
   return p;
 }
 
+/* ---------- PAREDES-SEGMENTO: o motor de SETOR/PORTAL (D-53) ----------
+   Casa REALISTA com interior. Parede = SEGMENTO fino em qualquer ângulo, com
+   base `b` (altura do pé — 0 no chão, >0 é uma VERGA/abertura por baixo) e
+   topo INCLINÁVEL (ta no ponto A, tb no ponto B — é o que forma a EMPENA). O
+   loop de coluna coleta TODOS os hits, ordena longe→perto e pinta a faixa de
+   cada um sobre o fundo: porta = verga com vão livre embaixo (o raio passa e
+   enxerga o interior). O TELHADO é um passo à parte (roof-cast, duas águas).
+   Colisão: distância ponto-segmento, ignorando o que está acima da cabeça. */
+const SEGS = [];
+const HOUSES = [];
+function wallSeg(ax, ay, bx, by, b, ta, tb, tex) {
+  SEGS.push({ ax, ay, bx, by, b, ta, tb, tex, len: Math.hypot(bx - ax, by - ay) });
+}
+
+/* A CASA-PROTÓTIPO (D-53): cabana de reboco no descampado oeste da clareira,
+   porta ao sul (de frente pro carreiro), duas águas com cume N–S. Terreno
+   auditado pela prancheta. eaveH = beiral · ridgeH = cume · doorTop = verga. */
+{
+  const x0 = 38.3, y0 = 12.3, x1 = 40.7, y1 = 14.7;
+  const xr = (x0 + x1) / 2, ov = 0.22;                 // cume no eixo · beiral saliente
+  const eaveH = 1.02, ridgeH = 1.66, doorTop = 0.72;
+  const dL = 39.05, dR = 39.95;                          // vão da porta (centrado no cume)
+  const wPlain = genHouseWall(1, false), wWin = genHouseWall(2, true), wGab = genGable(4);
+  /* topo da empena: eaveH nas pontas subindo até ridgeH sobre o cume (linear em x) */
+  const gTop = (x) => eaveH + (ridgeH - eaveH) * (1 - Math.abs(x - xr) / ((x1 - x0) / 2));
+  // N — empena cheia (fundo): duas rampas até o cume
+  wallSeg(x0, y0, xr, y0, 0, gTop(x0), gTop(xr), wPlain);
+  wallSeg(xr, y0, x1, y0, 0, gTop(xr), gTop(x1), wPlain);
+  // E / O — laterais do beiral (janela acesa), topo reto no beiral
+  wallSeg(x1, y0, x1, y1, 0, eaveH, eaveH, wWin);
+  wallSeg(x0, y1, x0, y0, 0, eaveH, eaveH, wWin);
+  // S — empena com PORTA: jambas até a rampa, verga sobre o vão, tudo fechado
+  wallSeg(x0, y1, dL, y1, 0, gTop(x0), gTop(dL), wPlain);       // jamba esquerda (+ empena)
+  wallSeg(dR, y1, x1, y1, 0, gTop(dR), gTop(x1), wPlain);       // jamba direita (+ empena)
+  wallSeg(dL, y1, xr, y1, doorTop, gTop(dL), gTop(xr), wGab);   // verga esquerda
+  wallSeg(xr, y1, dR, y1, doorTop, gTop(xr), gTop(dR), wGab);   // verga direita
+  HOUSES.push({ x0, y0, x1, y1, xr, ov, eaveH, ridgeH });
+}
+
 /* O SANTUÁRIO DO PULSO — a PROVA da PLANTA (D-51): capela aberta ao sul do
    largo, no eixo do chafariz. Três paredes de pedra (fundo mais alto), boca
    pro norte, dois lampiões na entrada e um relicário: um mini-Núcleo pulsando
@@ -2338,8 +2419,15 @@ window.__nosMapa = () => {
 const NEARB = [], SKYB = [], ORDER = []; /* rascunho dos billboards, reusado por quadro (D-45) */
 let mmTick = 0; /* minimapa desenha quadro sim, quadro não (D-47) */
 const OCC = new Int32Array(8); /* oclusão por coluna do bloco de billboard (RS<=6) */
+const OCCH = new Int32Array(8); /* oclusor SUPERIOR do bloco (verga/beiral), D-53 */
 const VEG = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'nevoa', 'fumaca']); /* billboards MACIOS que aceitam bloco RS (heróis/prédios/portal/NPC/ilha ficam nítidos) */
 const zbuf = new Float32Array(W);
+/* rascunho dos hits de segmento por coluna (ordenados longe→perto), D-53 */
+const SEG_T = new Float64Array(32), SEG_U = new Float64Array(32), SEG_I = new Int32Array(32);
+/* oclusor SUPERIOR por coluna (D-53): a verga/beiral esconde sprites ATRÁS por
+   CIMA da abertura — o wallTop só oculta pra baixo (parede que sobe do chão).
+   Sem isto, uma árvore atrás da porta vaza por cima da verga vista de dentro. */
+const occHiZ = new Float32Array(W), occHiY = new Int16Array(W);
 /* topo da parede por coluna: a oclusão da parede só vale DALI PRA BAIXO.
    Sem isso, uma parede esconderia billboards até no céu acima dela (o
    "campo que engole ilhas") — e copas atrás de muros nunca apareceriam. */
@@ -2690,6 +2778,24 @@ function render(now) {
         }
         vvGlow = vv; /* o glow inline reusa a veia já amostrada (D-45: glowAt refazia o veinAt por pixel) */
       }
+      /* ASSOALHO do interior (D-53): tábuas quentes dentro das paredes da casa.
+         Sobrepõe grama/carreiro; some sob as paredes (o loop de coluna desenha
+         por cima). Mesma paleta de madeira das oficinas — identidade coesa. */
+      for (let hi = 0; hi < HOUSES.length; hi++) {
+        const ho = HOUSES[hi];
+        if (fx > ho.x0 && fx < ho.x1 && fy > ho.y0 && fy < ho.y1) {
+          const board = (fy * 2.3) | 0;                              // tábuas correndo no eixo X
+          const grn = vnoise(fx * 2.6 + board * 5.1, board * 1.7);
+          let idx = grn > 0.64 ? 22 : grn < 0.32 ? 20 : 21;
+          if ((fy * 2.3 - board) < 0.10) idx = 24;                    // junta entre tábuas
+          else if (vnoise(fx * 3.0 + board * 9.0, fy * 0.5) > 0.93) idx = 24; // nó
+          const wp = PAL_RGB[idx];
+          c = (255 << 24) | (wp[2] << 16) | (wp[1] << 8) | wp[0];
+          if (GI_CUR && giOn) { giAt(fx, fy); const gr = (c & 255) * GI_R, gg2 = ((c >> 8) & 255) * GI_G, gb = ((c >> 16) & 255) * GI_Bv; c = rgb(gr > 255 ? 255 : gr | 0, gg2 > 255 ? 255 : gg2 | 0, gb > 255 ? 255 : gb | 0); }
+          vvGlow = 0;
+          break;
+        }
+      }
       let darkK = shadowed ? 0.86 : 1;
       if (treeSh > 0) darkK *= 1 - treeSh * 0.5;
       if (darkK < 0.999) c = darkenU32(c, darkK);
@@ -2715,6 +2821,7 @@ function render(now) {
 
   /* paredes (DDA) */
   for (let x = 0; x < W; x++) {
+    occHiZ[x] = Infinity; occHiY[x] = 0;                 // limpa o oclusor superior (D-53)
     const camX = (2 * x) / W - 1;
     const rdx = dirX + plX * camX, rdy = dirY + plY * camX;
     let mapX = cam.x | 0, mapY = cam.y | 0;
@@ -2812,6 +2919,99 @@ function render(now) {
         }
         wallTop[x] = yTop2;
       }
+    }
+    /* PAREDES-SEGMENTO (D-53) — o compositor de SETOR/PORTAL. Coleta todos os
+       hits raio×segmento nesta coluna (t já é a distância PERPENDICULAR, pois
+       rd = dir+plane*camX), ordena longe→perto e pinta a faixa de cada um
+       SOBRE o fundo (chão/DDA já desenhados). Base b>0 = verga: o vão embaixo
+       fica livre e mostra o interior. zbuf/oclusão adotam o hit sólido (b≈0)
+       mais próximo — o que fecha do chão. */
+    if (SEGS.length) {
+      let ns = 0;
+      for (let si = 0; si < SEGS.length; si++) {
+        const s = SEGS[si];
+        const ex = s.bx - s.ax, ey = s.by - s.ay;
+        const den = ex * rdy - ey * rdx;
+        if (den < 1e-9 && den > -1e-9) continue;
+        const acx = s.ax - cam.x, acy = s.ay - cam.y;
+        const t = (ex * acy - ey * acx) / den;
+        if (t <= 0.02) continue;
+        const uu = (rdx * acy - rdy * acx) / den;
+        if (uu < 0 || uu > 1) continue;
+        let j = ns++;                                    // insere ordenado por t DECRESCENTE
+        while (j > 0 && SEG_T[j - 1] < t) { SEG_T[j] = SEG_T[j - 1]; SEG_U[j] = SEG_U[j - 1]; SEG_I[j] = SEG_I[j - 1]; j--; }
+        SEG_T[j] = t; SEG_U[j] = uu; SEG_I[j] = si;
+      }
+      let nearSolid = Infinity, nearTop = wallTop[x];
+      for (let k = 0; k < ns; k++) {
+        const s = SEGS[SEG_I[k]], t = SEG_T[k], uu = SEG_U[k];
+        const topH = s.ta + (s.tb - s.ta) * uu;          // topo inclinado (empena)
+        const lh = H / t;
+        const yTopf = HALF - lh * (topH - 0.5);
+        const yBotf = HALF - lh * (s.b - 0.5);
+        const span = yBotf - yTopf;
+        if (span < 0.5) continue;
+        const sy0 = clamp(yTopf | 0, 0, H - 1), sy1 = clamp(yBotf | 0, 0, H - 1);
+        const along = uu * s.len;
+        const su = clamp(((along - (along | 0)) * TEX) | 0, 0, TEX - 1);
+        const ex = s.bx - s.ax, ey = s.by - s.ay;
+        const sf = fogAt(t) * (Math.abs(ex) >= Math.abs(ey) ? 0.82 : 1); // beiral vs empena
+        const sglow = glowAt(cam.x + rdx * t, cam.y + rdy * t) * sf;
+        const stex = s.tex, stexH = stex.h, stexStep = stexH / span;
+        let stexPos = (sy0 - yTopf) * stexStep;
+        for (let y = sy0; y <= sy1; y++) {
+          const v = clamp(stexPos | 0, 0, stexH - 1);
+          stexPos += stexStep;
+          px[y * W + x] = shade(texAt(stex, 0, su, v), sf, sglow);
+        }
+        if (s.b < 0.05 && t < nearSolid) { nearSolid = t; nearTop = sy0; }   // sólido do chão: zbuf/oclusão-por-baixo
+        else if (s.b >= 0.05 && t < occHiZ[x]) { occHiZ[x] = t; occHiY[x] = sy1; } // verga: oclusor SUPERIOR (esconde sprite atrás por CIMA da abertura)
+      }
+      if (nearSolid < Infinity) { zbuf[x] = nearSolid; if (nearTop < wallTop[x]) wallTop[x] = nearTop; }
+    }
+  }
+
+  /* TELHADO (D-53): duas águas caindo do cume (N–S) pros beirais (E/O). Roof-
+     cast por coluna — acha o trecho de distância em que o raio cruza a pegada
+     do teto (slab do AABB), marcha só ele e projeta a superfície inclinada.
+     Fecha o topo POR FORA e vira o FORRO por dentro; sem isto a casa é caixa
+     aberta. Só pinta acima do topo da parede (wallTop) — nunca a sobrepõe. */
+  for (let hi = 0; hi < HOUSES.length; hi++) {
+    const ho = HOUSES[hi];
+    const rx0 = ho.x0 - ho.ov, rx1 = ho.x1 + ho.ov, ry0 = ho.y0 - ho.ov, ry1 = ho.y1 + ho.ov;
+    const xr = ho.xr, invHalf = 1 / ((ho.x1 - ho.x0) / 2 + ho.ov), dH = ho.ridgeH - ho.eaveH;
+    const inside = cam.x > ho.x0 && cam.x < ho.x1 && cam.y > ho.y0 && cam.y < ho.y1;
+    const under = inside ? 0.52 : 1; // forro por dentro = telha na sombra (vigas)
+    for (let x = 0; x < W; x++) {
+      const camX = (2 * x) / W - 1;
+      const rdx = dirX + plX * camX, rdy = dirY + plY * camX;
+      let dIn = 0.04, dOut = 40;                          // slab AABB: [dIn,dOut]
+      if (rdx > 1e-9 || rdx < -1e-9) { let a = (rx0 - cam.x) / rdx, b = (rx1 - cam.x) / rdx; if (a > b) { const s = a; a = b; b = s; } if (a > dIn) dIn = a; if (b < dOut) dOut = b; }
+      else if (cam.x < rx0 || cam.x > rx1) continue;
+      if (rdy > 1e-9 || rdy < -1e-9) { let a = (ry0 - cam.y) / rdy, b = (ry1 - cam.y) / rdy; if (a > b) { const s = a; a = b; b = s; } if (a > dIn) dIn = a; if (b < dOut) dOut = b; }
+      else if (cam.y < ry0 || cam.y > ry1) continue;
+      if (dOut <= dIn) continue;
+      const wt = wallTop[x];
+      let prevY = -1, minY = H;
+      const step = Math.max(0.015, (dOut - dIn) / 96);
+      for (let d = dIn; d <= dOut; d += step) {
+        const wx = cam.x + rdx * d, wy = cam.y + rdy * d;
+        const rh = ho.ridgeH - dH * Math.min(1, Math.abs(wx - xr) * invHalf);
+        const ys = (HALF - (H / d) * (rh - 0.5)) | 0;
+        if (ys >= wt) { prevY = ys; continue; }           // teto abaixo do topo da parede aqui → oculto
+        /* telha LISA (D-53): sem fiadas alternadas — do cume end-on elas viravam
+           um leque radial. Gradiente suave (beiral na sombra, cume claro), água
+           oeste levemente escura, grão discreto em tons vizinhos de terracota. */
+        const up = dH > 0 ? (rh - ho.eaveH) / dH : 0;     // 0 beiral .. 1 cume
+        const rp = PAL_RGB[vnoise(wx * 2.7, wy * 2.7) > 0.7 ? 21 : 20];
+        const lightK = (0.72 + 0.28 * up) * (wx < xr ? 0.86 : 1) * under;
+        const rc = shade((255 << 24) | (rp[2] << 16) | (rp[1] << 8) | rp[0], fogAt(d) * lightK, 0);
+        const yA = prevY < 0 ? ys : (prevY < ys ? prevY : ys), yB = prevY < 0 ? ys : (prevY < ys ? ys : prevY);
+        for (let y = yA < 0 ? 0 : yA; y <= yB && y < wt; y++) px[y * W + x] = rc;
+        if (ys < minY) minY = ys;
+        prevY = ys;
+      }
+      if (minY < wt) wallTop[x] = minY;                    // oclui billboards atrás até o cume
     }
   }
 
@@ -2931,6 +3131,7 @@ function render(now) {
           const qi = qA + (qB - qA) * kf;
           const tyc = 1 / qi;
           const occY = tyc >= zbuf[x] ? wallTop[x] : H; /* parede mais perto oculta do topo dela pra baixo */
+          const occHi = tyc >= occHiZ[x] ? occHiY[x] : 0; /* verga oculta por cima da abertura (D-53) */
           const uT = clamp((((sA + (sB - sA) * kf) * tyc) * tw) | 0, 0, tw - 1);
           const unitC = H / tyc;
           const shC = unitC * (b.scale || 1);
@@ -2938,7 +3139,7 @@ function render(now) {
           const yTop = Math.max(0, y0f | 0), yBot = Math.min(H - 1, (y0f + shC) | 0);
           const fC = fogAt(tyc), gC = glowO * fC;
           for (let yy = yTop; yy <= yBot; yy++) {
-            if (yy >= occY) continue;
+            if (yy >= occY || yy < occHi) continue;
             const v = clamp((((yy - y0f) / shC) * th) | 0, 0, th - 1);
             let c = genTex ? tex.data[v * tw + uT] : texAt(tex, fIxO, uT, v);
             if (((c >> 24) & 255) < 40) continue;
@@ -3075,7 +3276,7 @@ function render(now) {
       const span = Math.min(bStep, x1 - x + 1);
       /* parede mais perto? Ela oculta só do TOPO dela pra baixo — acima é céu
          aberto (copas e ilhas atrás de muros aparecem por cima). Uma vez por coluna. */
-      for (let o = 0; o < span; o++) { const xn = x + o; OCC[o] = ty >= zbuf[xn] ? wallTop[xn] : H; }
+      for (let o = 0; o < span; o++) { const xn = x + o; OCC[o] = ty >= zbuf[xn] ? wallTop[xn] : H; OCCH[o] = ty >= occHiZ[xn] ? occHiY[xn] : 0; }
       const u = clamp((((x - rx0) / sw) * tw) | 0, 0, tw - 1);
       for (let y = y0; y <= y1; y += bStep) {
         const v = clamp((((y - y0c) / sh) * th) | 0, 0, th - 1);
@@ -3085,7 +3286,7 @@ function render(now) {
         const yEnd = Math.min(y + bStep - 1, y1);
         for (let yy = y; yy <= yEnd; yy++) {
           for (let o = 0; o < span; o++) {
-            if (yy >= OCC[o]) continue;
+            if (yy >= OCC[o] || yy < OCCH[o]) continue;
             const xn = x + o;
             /* ilha-irmã abaixo do horizonte só aparece onde o chão é vazio */
             if (b.sky && yy > HALF && groundMask[yy * W + xn]) continue;
@@ -3290,9 +3491,25 @@ function trunkHit(px, py) {
   }
   return false;
 }
+/* colisão com PAREDES-SEGMENTO (D-53): distância ponto→segmento < raio.
+   Verga e empena (base b acima da cintura) NÃO colidem — passa-se por baixo;
+   a porta é o vão livre entre as jambas, então o corpo entra de graça. */
+function segHit(px, py) {
+  const r2 = PLAYER_R * PLAYER_R;
+  for (let i = 0; i < SEGS.length; i++) {
+    const s = SEGS[i];
+    if (s.b > 0.4) continue;                       // passa por baixo da verga/empena
+    const ex = s.bx - s.ax, ey = s.by - s.ay, l2 = ex * ex + ey * ey;
+    let tt = l2 > 0 ? ((px - s.ax) * ex + (py - s.ay) * ey) / l2 : 0;
+    tt = tt < 0 ? 0 : tt > 1 ? 1 : tt;
+    const dx = px - (s.ax + tt * ex), dy = py - (s.ay + tt * ey);
+    if (dx * dx + dy * dy < r2) return true;
+  }
+  return false;
+}
 function tryMove(nx, ny) {
-  if (!tileSolid(nx + PLAYER_R, cam.y) && !tileSolid(nx - PLAYER_R, cam.y) && !trunkHit(nx, cam.y)) cam.x = nx;
-  if (!tileSolid(cam.x, ny + PLAYER_R) && !tileSolid(cam.x, ny - PLAYER_R) && !trunkHit(cam.x, ny)) cam.y = ny;
+  if (!tileSolid(nx + PLAYER_R, cam.y) && !tileSolid(nx - PLAYER_R, cam.y) && !trunkHit(nx, cam.y) && !segHit(nx, cam.y)) cam.x = nx;
+  if (!tileSolid(cam.x, ny + PLAYER_R) && !tileSolid(cam.x, ny - PLAYER_R) && !trunkHit(cam.x, ny) && !segHit(cam.x, ny)) cam.y = ny;
 }
 
 let touchMove = { on: false, dx: 0, dy: 0 };
