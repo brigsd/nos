@@ -2237,6 +2237,9 @@ function giAt(fx, fy) {
 }
 
 /* ---------- render ---------- */
+const NEARB = [], SKYB = [], ORDER = []; /* rascunho dos billboards, reusado por quadro (D-45) */
+const OCC = new Int32Array(8); /* oclusão por coluna do bloco de billboard (RS<=6) */
+const VEG = new Set(['arvore', 'tufo', 'flor', 'arbusto', 'nevoa']); /* billboards MACIOS que aceitam bloco RS (heróis/prédios/portal/NPC/ilha ficam nítidos) */
 const zbuf = new Float32Array(W);
 /* topo da parede por coluna: a oclusão da parede só vale DALI PRA BAIXO.
    Sem isso, uma parede esconderia billboards até no céu acima dela (o
@@ -2249,11 +2252,11 @@ const groundMask = new Uint8Array(W * H);
 
 /* perfil por fase (D-45): 5 performance.now() por quadro, custo nulo — a
    bancada lê window.__nosPerf() pra saber ONDE os ms moram antes de otimizar */
-const PERF = { sky: 0, floor: 0, walls: 0, bill: 0, resto: 0, frames: 0 };
+const PERF = { sky: 0, floor: 0, walls: 0, bill: 0, resto: 0, frames: 0, maxMs: 0, slow: 0 };
 window.__nosPerf = () => {
   const f = PERF.frames || 1;
-  const o = { frames: PERF.frames, sky: +(PERF.sky / f).toFixed(2), floor: +(PERF.floor / f).toFixed(2), walls: +(PERF.walls / f).toFixed(2), bill: +(PERF.bill / f).toFixed(2), resto: +(PERF.resto / f).toFixed(2) };
-  PERF.sky = PERF.floor = PERF.walls = PERF.bill = PERF.resto = PERF.frames = 0;
+  const o = { frames: PERF.frames, sky: +(PERF.sky / f).toFixed(2), floor: +(PERF.floor / f).toFixed(2), walls: +(PERF.walls / f).toFixed(2), bill: +(PERF.bill / f).toFixed(2), resto: +(PERF.resto / f).toFixed(2), maxMs: +PERF.maxMs.toFixed(2), slow: PERF.slow };
+  PERF.sky = PERF.floor = PERF.walls = PERF.bill = PERF.resto = PERF.frames = 0; PERF.maxMs = 0; PERF.slow = 0;
   return o;
 };
 /* blocos RS×RS no céu/chão em alta-res (D-45): céu e chão são conteúdo MACIO
@@ -2740,20 +2743,25 @@ function render(now) {
     else { putB(sx - 1, sy); putB(sx + 1, sy); }            // asas abertas
   }
 
-  /* billboards (longe -> perto), cull por distância — a bruma esconde o pop-in */
+  /* billboards (longe -> perto), cull por distância — a bruma esconde o pop-in.
+     D-45: arrays de rascunho REUSADOS (antes alocava ~200 objetos {b,d}/quadro
+     = pressão de GC = engasgo). A distância mora em b._d; sem concat/slice. */
   const CULL2 = 34 * 34;
-  const near = [];
-  const skyArr = [];
+  NEARB.length = 0; SKYB.length = 0;
   for (const b of bills) {
     const d = (b.x - cam.x) ** 2 + (b.y - cam.y) ** 2;
-    if (b.sky) skyArr.push({ b, d });
-    else if (d < CULL2) near.push({ b, d });
+    b._d = d;
+    if (b.sky) SKYB.push(b);
+    else if (d < CULL2) NEARB.push(b);
   }
-  near.sort((a, z) => a.d - z.d);
-  skyArr.sort((a, z) => z.d - a.d);
-  const order = skyArr.concat(near.slice(0, 190).sort((a, z) => z.d - a.d)); // ilhas (longe) primeiro
+  NEARB.sort((a, z) => a._d - z._d); // mais perto primeiro
+  SKYB.sort((a, z) => z._d - a._d);
+  ORDER.length = 0;
+  for (let i = 0; i < SKYB.length; i++) ORDER.push(SKYB[i]);          // ilhas (longe) primeiro
+  for (let i = Math.min(NEARB.length, 190) - 1; i >= 0; i--) ORDER.push(NEARB[i]); // dos 190 mais perto, o mais longe primeiro
   const inv = 1 / (plX * dirY - dirX * plY);
-  for (const { b } of order) {
+  for (let __i = 0; __i < ORDER.length; __i++) {
+    const b = ORDER[__i];
     const rx = b.x - cam.x, ry = b.y - cam.y;
     const tx = inv * (dirY * rx - dirX * ry);
     const ty = inv * (-plY * rx + plX * ry);
@@ -2886,19 +2894,29 @@ function render(now) {
       continue;
     }
     const selfGlow = b.selfGlow ?? (b.tex === 'oficina' || b.tex === 'portal' ? 0.3 : 0); /* oficinas acesas no vão; lampiões via b.selfGlow */
-    for (let x = x0; x <= x1; x++) {
-      /* parede mais perto? Ela oculta só do TOPO dela pra baixo — acima é
-         céu aberto (copas e ilhas atrás de muros aparecem por cima). */
-      const occY = ty >= zbuf[x] ? wallTop[x] : H;
+    const shF = clamp(f + selfGlow, 0, 1), shG = glow + selfGlow * pulse;
+    /* vegetação em blocos RS na alta-res (D-45): copa/tufo/flor são macios, então
+       o shade() sai UMA vez por bloco e replica; heróis/prédios/portal/NPC/ilha
+       ficam nítidos (step 1). No 320×180 (RS=1) todo mundo é step 1 = igual antes. */
+    const bStep = (RS > 1 && VEG.has(b.label)) ? RS : 1;
+    for (let x = x0; x <= x1; x += bStep) {
+      const span = Math.min(bStep, x1 - x + 1);
+      /* parede mais perto? Ela oculta só do TOPO dela pra baixo — acima é céu
+         aberto (copas e ilhas atrás de muros aparecem por cima). Uma vez por coluna. */
+      for (let o = 0; o < span; o++) { const xn = x + o; OCC[o] = ty >= zbuf[xn] ? wallTop[xn] : H; }
       const u = clamp((((x - rx0) / sw) * tw) | 0, 0, tw - 1);
       for (let y = y0; y <= y1; y++) {
-        if (y >= occY) continue;
-        /* ilha-irmã abaixo do horizonte só aparece onde o chão é vazio */
-        if (b.sky && y > HALF && groundMask[y * W + x]) continue;
         const v = clamp((((y - y0c) / sh) * th) | 0, 0, th - 1);
         const c = genTex ? tex.data[v * tw + u] : texAt(tex, fIx, u, v);
         if (((c >> 24) & 255) < 40) continue; /* transparente */
-        px[y * W + x] = shade(c, clamp(f + selfGlow, 0, 1), glow + selfGlow * pulse);
+        const sc = shade(c, shF, shG);
+        for (let o = 0; o < span; o++) {
+          if (y >= OCC[o]) continue;
+          const xn = x + o;
+          /* ilha-irmã abaixo do horizonte só aparece onde o chão é vazio */
+          if (b.sky && y > HALF && groundMask[y * W + xn]) continue;
+          px[y * W + xn] = sc;
+        }
       }
     }
   }
@@ -2991,7 +3009,10 @@ function render(now) {
   vctx.putImageData(frame, 0, 0);
   drawMinimap();
   const __t4 = performance.now();
+  const __tot = __t4 - __t0;
   PERF.sky += __t1 - __t0; PERF.floor += __t2 - __t1; PERF.walls += __t3 - __t2; PERF.bill += __t3b - __t3; PERF.resto += __t4 - __t3b; PERF.frames++;
+  if (__tot > PERF.maxMs) PERF.maxMs = __tot;
+  if (__tot > 22) PERF.slow++; /* quadro < ~45fps = engasgo perceptível */
 }
 
 /* ---------- minimapa ---------- */

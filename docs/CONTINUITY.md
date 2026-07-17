@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 22) — o stutter dos billboards (D-45 parte 2)
+
+- Ideador: "melhorou mas ainda engasga às vezes". Stutter *intermitente* ≠ lento — perfilei o PICO (novo `maxMs`/`slow` no `__nosPerf`) num ponto de MATA densa (carreiro). Vilão claro: **billboards** — bill saltava a **17-19ms no 640** só de virar pras árvores (102 quadros lentos/3s).
+- Dois golpes: **(1) vegetação em blocos RS** (shade uma vez por bloco, replica; heróis/prédios/portal/NPC nítidos em step 1; 320 intocado) + **(2) sort dos billboards sem alocar** (arrays reusados, `b._d`, sem concat/slice — mata a pressão de GC).
+- **640×360: engasgos 102 → 12 (‑88%), 33 → 43fps**; o **320 também**: engasgos 9 → 3 (o fim do GC vale em toda res). Mata em bloco lê como mata; chegada com arco/chafariz/portal nítidos; 368/368.
+- **Aguardando o ideador**: re-testar `?res=640x360` (deve estar liso agora). Depois: polir a brasa 64px (martelo) e fazer broa/quilha. Alavanca extra na reserva se precisar: rocha-3D (fbm por pixel) também em blocos.
+
 ## Sessão 2026-07-17 (parte 21) — render em camadas (D-45): 640×360 ~2× mais rápido
 
 - Ideador decidiu sobre o D-44: **(a) Habitantes 64px "pessoa" aprovado; (b) 640×360 precisa rodar liso** (engasgava no aparelho dele).

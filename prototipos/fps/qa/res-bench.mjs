@@ -32,7 +32,7 @@ if (!existsSync(PW)) { console.error('res-bench: rode `cd site && npm ci` primei
 const pw = (await import(PW)).default;
 const browser = await pw.chromium.launch();
 
-const CAM = '41.0,14.2,0.25'; // a chegada: arco + chafariz + portal (cena cheia)
+const CAM = process.env.CAM || '34.0,11.2,0.18'; // carreiro: fileiras de árvore dos 2 lados (billboard-pesado = onde o stutter mora)
 const TIERS = [
   ['320x180', 'atual'],
   ['640x360', '2x'],
@@ -74,7 +74,7 @@ for (const [res, label] of TIERS) {
   const desk = await medir(res, 1);
   const mob = await medir(res, 4);
   rows.push({ res, label, fpsDesktop: desk.fps, fpsThrottled4x: mob.fps, shot: desk.shot, errs: [...desk.errs, ...mob.errs] });
-  const ph = desk.perf ? `  fases(ms): céu=${desk.perf.sky} chão=${desk.perf.floor} paredes=${desk.perf.walls} bill=${desk.perf.bill ?? '-'} resto=${desk.perf.resto}` : '';
+  const ph = desk.perf ? `  fases(ms): céu=${desk.perf.sky} chão=${desk.perf.floor} paredes=${desk.perf.walls} bill=${desk.perf.bill ?? '-'} resto=${desk.perf.resto} · pior=${desk.perf.maxMs}ms lentos=${desk.perf.slow}` : '';
   console.log(`${res.padEnd(9)} (${label})  desktop=${desk.fps}fps  cpu/4=${mob.fps}fps${ph}${desk.errs.length || mob.errs.length ? '  ⚠ ' + [...desk.errs, ...mob.errs][0] : ''}`);
 }
 
