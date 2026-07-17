@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 83,
-    "worldTime": 4980
+    "tickCount": 85,
+    "worldTime": 5100
   },
   "width": 64,
   "height": 64,
@@ -4698,6 +4698,16 @@
       "worldTime": 4980,
       "nativeId": "brasa",
       "message": "Quem quer pão fresco? O calor da forja tá bom!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 84,
+      "worldTime": 5040
+    },
+    {
+      "type": "core_pulse",
+      "tick": 85,
+      "worldTime": 5100
     }
   ],
   "natives": {
