@@ -826,8 +826,8 @@ function fbm(x, y, oct) {
    renderizador deriva de W/H, então a alavanca é só esta. Limites sãos. */
 let qResRaw = null;
 try { qResRaw = /^(\d{3,4})x(\d{3,4})$/.exec(new URLSearchParams(location.search).get('res') || ''); } catch { /* sem query */ }
-const W = qResRaw ? Math.min(1920, Math.max(160, +qResRaw[1])) : 320;
-const H = qResRaw ? Math.min(1080, Math.max(90, +qResRaw[2])) : 180;
+const W = qResRaw ? Math.min(1920, Math.max(160, +qResRaw[1])) & ~1 : 320; // par (os blocos 2×2 e o HALF exigem)
+const H = qResRaw ? Math.min(1080, Math.max(90, +qResRaw[2])) & ~1 : 180;
 const HALF = H / 2;
 const FOV_PLANE = 0.66;
 const TEX = 16;
@@ -2247,7 +2247,24 @@ const wallTop = new Int16Array(W);
    pode aparecer onde o chão é vazio — nunca furando o gramado. */
 const groundMask = new Uint8Array(W * H);
 
+/* perfil por fase (D-45): 5 performance.now() por quadro, custo nulo — a
+   bancada lê window.__nosPerf() pra saber ONDE os ms moram antes de otimizar */
+const PERF = { sky: 0, floor: 0, walls: 0, bill: 0, resto: 0, frames: 0 };
+window.__nosPerf = () => {
+  const f = PERF.frames || 1;
+  const o = { frames: PERF.frames, sky: +(PERF.sky / f).toFixed(2), floor: +(PERF.floor / f).toFixed(2), walls: +(PERF.walls / f).toFixed(2), bill: +(PERF.bill / f).toFixed(2), resto: +(PERF.resto / f).toFixed(2) };
+  PERF.sky = PERF.floor = PERF.walls = PERF.bill = PERF.resto = PERF.frames = 0;
+  return o;
+};
+/* blocos RS×RS no céu/chão em alta-res (D-45): céu e chão são conteúdo MACIO
+   (gradiente, grama, água) — em ?res= alto, renderizá-los SEMPRE na densidade
+   do 320×180 é invisível; a nitidez extra fica onde o olho percebe: paredes,
+   billboards, sprites. RS=1 no 320×180 = caminho antigo, byte a byte;
+   RS=2 no 640×360, 4 no 1280×720, 6 no 1920×1080. */
+const RS = Math.max(1, Math.round(W / 320));
+
 function render(now) {
+  const __t0 = performance.now();
   pulse = 0.82 + 0.18 * Math.sin((now / 1400) * Math.PI * 2);
   const coreFrame = ((now / 350) | 0) % 4;
   const waterFrame = ((now / 1000) | 0) % 2;
@@ -2292,10 +2309,12 @@ function render(now) {
   const clR = 1 * wDay + 1.12 * wDusk + 0.30 * wNight;
   const clG = 1 * wDay + 0.78 * wDusk + 0.34 * wNight;
   const clB = 1 * wDay + 0.72 * wDusk + 0.52 * wNight;
-  for (let x = 0; x < W; x++) {
+  for (let x = 0; x < W; x += RS) {
     const colAng = cam.a + Math.atan(((2 * x) / W - 1) * FOV_PLANE);
     const u = ((colAng / (Math.PI * 2)) % 1 + 1) % 1;
     COL_U[x] = u;
+    const xEnd = Math.min(RS, W - x); // bloco: as colunas vizinhas copiam esta
+    for (let o = 1; o < xEnd; o++) COL_U[x + o] = u;
     const sxB = (u * SKY_W) | 0;
     const sxF = ((u * SKY_W + driftFar) | 0) % SKY_W;
     const sxN = ((u * SKY_W + driftNear) | 0) % SKY_W;
@@ -2352,7 +2371,8 @@ function render(now) {
         /* crepúsculo: barriga das nuvens acesa perto do sol */
         if (wb > 0.05) { r = Math.min(255, r + 70 * wb); g = Math.min(255, g + 14 * wb); }
       }
-      px[y * W + x] = rgb(r | 0, g | 0, b | 0);
+      const skyC = rgb(r | 0, g | 0, b | 0);
+      for (let o = 0; o < xEnd; o++) px[y * W + x + o] = skyC;
     }
     /* raios crepusculares: hastes verticais suaves perto do sol no horizonte */
     if (wDusk > 0.12 && Math.abs(dxSun) < 60 && SKYST.sunSy > SKY_H * 0.45) {
@@ -2366,11 +2386,12 @@ function render(now) {
           const i = y * W + x;
           const b0 = px[i];
           const k = rayK * fall * 0.34;
-          px[i] = rgb(
+          const rc = rgb(
             Math.min(255, (b0 & 255) + 200 * k) | 0,
             Math.min(255, ((b0 >> 8) & 255) + 120 * k) | 0,
             Math.min(255, ((b0 >> 16) & 255) + 40 * k) | 0,
           );
+          for (let o = 0; o < xEnd; o++) px[i + o] = rc;
         }
       }
     }
@@ -2380,21 +2401,23 @@ function render(now) {
       for (let y = Math.max(0, (SKYST.moonSy + 6) | 0); y < HALF; y++) {
         const i = y * W + x;
         const b0 = px[i];
-        px[i] = rgb(
+        const mc = rgb(
           Math.min(255, (b0 & 255) + 140 * pk) | 0,
           Math.min(255, ((b0 >> 8) & 255) + 160 * pk) | 0,
           Math.min(255, ((b0 >> 16) & 255) + 220 * pk) | 0,
         );
+        for (let o = 0; o < xEnd; o++) px[i + o] = mc;
       }
     }
   }
+  const __t1 = performance.now();
 
   /* chão (floor casting) */
   const waveT = ((now / 90) | 0);          // ondulação ~11 passos/s
   const cloudShadowT = ((now / 240) | 0);  // sombras de nuvem à deriva
   const seaT = ((now / 130) | 0);          // mar de nuvens sob a ilha
   const posZ = HALF;
-  for (let y = HALF + 1; y < H; y++) {
+  for (let y = HALF + 1; y < H; y += RS) {
     const rowDist = posZ / (y - HALF);
     const f = fogAt(rowDist);
     const stepX = rowDist * (2 * FOV_PLANE * dirY) / W * (dirX ? 1 : 1);
@@ -2403,7 +2426,8 @@ function render(now) {
     let fy = cam.y + rowDist * (dirY - plY);
     const dxs = (rowDist * 2 * plX) / W;
     const dys = (rowDist * 2 * plY) / W;
-    for (let x = 0; x < W; x++) {
+    const dxsB = dxs * RS, dysB = dys * RS;
+    for (let x = 0; x < W; x += RS) {
       const tx = fx | 0, ty = fy | 0;
       /* ALÉM DA BORDA DA ILHA: céu profundo + mar de nuvens à deriva */
       const rim = rimAt(fx, fy);
@@ -2438,12 +2462,14 @@ function render(now) {
           if (d2m < 30) { rr = 224; gg = 230; bb2 = 246; }
           else { const mg = Math.exp(-d2m / 1800) * SKYST.wNight * 0.42; rr += (200 - rr) * mg; gg += (215 - gg) * mg; bb2 += (255 - bb2) * mg; }
         }
-        px[y * W + x] = shade(rgb(rr | 0, gg | 0, bb2 | 0), f, 0);
-        groundMask[y * W + x] = 0; /* vazio: ilha de baixo pode aparecer aqui */
-        fx += dxs; fy += dys;
+        const vc = shade(rgb(rr | 0, gg | 0, bb2 | 0), f, 0);
+        /* vazio: ilha de baixo pode aparecer aqui */
+        for (let o = 0, bl = Math.min(RS, W - x); o < bl; o++) { px[y * W + x + o] = vc; groundMask[y * W + x + o] = 0; }
+        fx += dxsB; fy += dysB;
         continue;
       }
-      groundMask[y * W + x] = 1; /* terreno/água sólidos da nossa ilha */
+      /* terreno/água sólidos da nossa ilha */
+      for (let o = 0, bl = Math.min(RS, W - x); o < bl; o++) groundMask[y * W + x + o] = 1;
       const t = world.at(tx, ty);
       /* sombra de nuvem (rola) + sombra PROJETADA das árvores (estática) */
       const shadowed = CSHAD[(((fy * 2 + 5) & 127) * 128 + ((fx * 2 + cloudShadowT) & 127)) | 0] === 1;
@@ -2454,6 +2480,7 @@ function render(now) {
       const lapWv = (WAVE_A[((fy * 5) & 63) * 64 + ((fx * 5 + waveT) & 63)]) / 255 - 0.5;
       const sSigned = shoreAt(fx, fy) + lapWv * 0.16;
       let c;
+      let vvGlow = 0; /* veia p/ o glow inline (grama reusa vv; água re-amostra c/ saída rápida) */
       if (sSigned > 0) {
         /* ÁGUA CRISTALINA (shader por pixel, tudo lookup):
            raso -> fundo de areia visível tingido de ciano; fundo -> teal
@@ -2486,6 +2513,7 @@ function render(now) {
         if (wv > 0.38 && ((x + y) & 1) === 0) c = (255 << 24) | (0xe2 << 16) | (0xf8 << 8) | 0x8f;
         // espuma na margem (pulsa com a onda)
         if (sd < 0.085 + wv * 0.03 && (BAYER[y & 3][x & 3] / 16) < 0.85) c = FOAM_U32;
+        vvGlow = veinAt(fx, fy); /* fora da caixa das veias retorna 0 em 4 comparações */
       } else {
         const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
         const g = GRASS_TILES[h % GRASS_TILES.length];
@@ -2560,14 +2588,30 @@ function render(now) {
           let gr = (c & 255) * GI_R, gg2 = ((c >> 8) & 255) * GI_G, gb = ((c >> 16) & 255) * GI_Bv;
           c = rgb(gr > 255 ? 255 : gr | 0, gg2 > 255 ? 255 : gg2 | 0, gb > 255 ? 255 : gb | 0);
         }
+        vvGlow = vv; /* o glow inline reusa a veia já amostrada (D-45: glowAt refazia o veinAt por pixel) */
       }
       let darkK = shadowed ? 0.86 : 1;
       if (treeSh > 0) darkK *= 1 - treeSh * 0.5;
       if (darkK < 0.999) c = darkenU32(c, darkK);
-      px[y * W + x] = shade(c, f, glowAt(fx, fy) * f);
-      fx += dxs; fy += dys;
+      /* glow inline (== glowAt, sem re-amostrar a veia): Núcleo + veias + Átrio */
+      const gdx = fx - CORE.x, gdy = fy - CORE.y;
+      let gfl = (pulse * 0.6) / (1 + 0.32 * (gdx * gdx + gdy * gdy));
+      if (vvGlow > 0) gfl += vvGlow * (0.1 + 0.62 * SKYST.wNight) * pulse * giDamp;
+      if (fx > 48.6 && fx < 53.4 && fy > 13.4 && fy < 17.8) {
+        const dA = (fx - 51.1) * (fx - 51.1) + (fy - 15.6) * (fy - 15.6);
+        gfl += (0.2 + 0.25 * SKYST.wNight) * pulse / (1 + 1.6 * dA) * giDamp;
+      }
+      const fc = shade(c, f, gfl * f);
+      for (let o = 0, bl = Math.min(RS, W - x); o < bl; o++) px[y * W + x + o] = fc;
+      fx += dxsB; fy += dysB;
+    }
+    /* bloco vertical: as linhas de baixo copiam esta (o visual do 320×180) */
+    for (let o = 1; o < RS && y + o < H; o++) {
+      px.copyWithin((y + o) * W, y * W, (y + 1) * W);
+      groundMask.copyWithin((y + o) * W, y * W, (y + 1) * W);
     }
   }
+  const __t2 = performance.now();
 
   /* paredes (DDA) */
   for (let x = 0; x < W; x++) {
@@ -2671,6 +2715,7 @@ function render(now) {
     }
   }
 
+  const __t3 = performance.now();
   /* pássaros: silhuetas batendo asa cruzando o panorama (atrás dos billboards,
      na frente do céu; parede oculta via wallTop) */
   for (const bd of BIRDS) {
@@ -2858,6 +2903,7 @@ function render(now) {
     }
   }
 
+  const __t3b = performance.now();
   /* ---------- grilos e sapinhos: visitas raras pulando por aí ---------- */
   for (const c of CRITTERS) {
     const rx = c.x - cam.x, ry = c.y - cam.y;
@@ -2944,6 +2990,8 @@ function render(now) {
 
   vctx.putImageData(frame, 0, 0);
   drawMinimap();
+  const __t4 = performance.now();
+  PERF.sky += __t1 - __t0; PERF.floor += __t2 - __t1; PERF.walls += __t3 - __t2; PERF.bill += __t3b - __t3; PERF.resto += __t4 - __t3b; PERF.frames++;
 }
 
 /* ---------- minimapa ---------- */

@@ -50,11 +50,13 @@ async function medir(res, throttle) {
   }
   await page.goto(`${base}?cam=${CAM}&tod=0.3&res=${res}`, { waitUntil: 'load' });
   await page.waitForTimeout(2600); // texturas + assentamento
+  await page.evaluate(() => { window.__nosPerf && window.__nosPerf(); }); // zera o acumulador
   const fps = await page.evaluate(() => new Promise((done) => {
     let n = 0; const t0 = performance.now();
     const tick = () => { n++; const dt = performance.now() - t0; if (dt >= 3000) done(+(n / (dt / 1000)).toFixed(1)); else requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
   }));
+  const perf = await page.evaluate(() => (window.__nosPerf ? window.__nosPerf() : null)); // ms médios por fase
   let shot = null;
   if (throttle === 1) {
     const bb = await page.locator('#view').boundingBox();
@@ -64,7 +66,7 @@ async function medir(res, throttle) {
     await page.screenshot({ path: shot, clip });
   }
   await page.close();
-  return { fps, shot, errs };
+  return { fps, perf, shot, errs };
 }
 
 const rows = [];
@@ -72,7 +74,8 @@ for (const [res, label] of TIERS) {
   const desk = await medir(res, 1);
   const mob = await medir(res, 4);
   rows.push({ res, label, fpsDesktop: desk.fps, fpsThrottled4x: mob.fps, shot: desk.shot, errs: [...desk.errs, ...mob.errs] });
-  console.log(`${res.padEnd(9)} (${label})  desktop=${desk.fps}fps  cpu/4=${mob.fps}fps${desk.errs.length || mob.errs.length ? '  ⚠ ' + [...desk.errs, ...mob.errs][0] : ''}`);
+  const ph = desk.perf ? `  fases(ms): céu=${desk.perf.sky} chão=${desk.perf.floor} paredes=${desk.perf.walls} bill=${desk.perf.bill ?? '-'} resto=${desk.perf.resto}` : '';
+  console.log(`${res.padEnd(9)} (${label})  desktop=${desk.fps}fps  cpu/4=${mob.fps}fps${ph}${desk.errs.length || mob.errs.length ? '  ⚠ ' + [...desk.errs, ...mob.errs][0] : ''}`);
 }
 
 /* compõe a comparação de nitidez numa página só (recortes + FPS) */

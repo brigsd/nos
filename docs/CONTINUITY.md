@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 21) — render em camadas (D-45): 640×360 ~2× mais rápido
+
+- Ideador decidiu sobre o D-44: **(a) Habitantes 64px "pessoa" aprovado; (b) 640×360 precisa rodar liso** (engasgava no aparelho dele).
+- Perfilei antes de otimizar (sondas `window.__nosPerf` por fase, lidas pela `res-bench`): **o chão era o vilão em QUALQUER resolução** (~10ms já no 320) e o `glowAt` re-amostrava a veia já calculada.
+- Fix: **blocos RS×RS no céu+chão** (sempre na densidade do 320×180 — RS=round(W/320); macio é invisível em bloco, nitidez fica em paredes/billboards/sprites; RS=1 no 320 = caminho antigo byte a byte) + **glow inline** no chão. **640×360: 18.5 → ~34-39fps (~2×)**; 720p 4.4→14.6; 1080p 2→9.1. Antes/depois idênticos no olho; largo-noite (teste ácido do glow) intacto; 368/368.
+- Publicado. **Aguardando o ideador**: re-testar `?res=640x360` no aparelho dele. Se ainda engasgar, próxima alavanca documentada: billboards de vegetação em blocos (personagens sempre nítidos). Depois: polir a brasa 64px (martelo) e fazer broa/quilha.
+
 ## Sessão 2026-07-17 (parte 20) — experimentos de resolução (D-44): medido, não teorizado
 
 - Ideador perguntou se "128px pra tudo" ficaria bonito → respondi com 2 experimentos (A: textura, B: render interno), dados em D-44.
