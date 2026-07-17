@@ -1,5 +1,5 @@
 {
-  "_": "Pontos de vista canônicos do cliente oficial (D-35). Cada um é um ?cam=x,y,a — os mesmos links do docs/COMUNICACAO.md. Auditar = node prototipos/fps/qa/olhar.mjs --todos e LER os PNGs. Ao criar/mudar uma área, adicione o ponto dela aqui: a auditoria de amanhã custa uma linha hoje.",
+  "_": "Pontos de vista canônicos do cliente oficial (D-35). Cada um é um ?cam=x,y,a — os mesmos links do docs/COMUNICACAO.md. Auditar = node tools/bancadas/olhar.mjs --todos e LER os PNGs. Ao criar/mudar uma área, adicione o ponto dela aqui: a auditoria de amanhã custa uma linha hoje.",
   "spawn": {
     "cam": "27.0,12.0,-0.22",
     "desc": "o primeiro quadro do jogador — a estrada convidando"

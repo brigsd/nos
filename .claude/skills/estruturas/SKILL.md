@@ -15,7 +15,7 @@ npm run prancheta                  # A Clareira (40,9 -> 55,23)
 npm run prancheta -- 25,8,50,20   # qualquer recorte x0,y0,x1,y1
 ```
 
-LEIA o PNG (`prototipos/fps/qa/out/prancheta.png`): hachura = tile sólido ·
+LEIA o PNG (`tools/bancadas/out/prancheta.png`): hachura = tile sólido ·
 bloco+número = parede da cidade (altura) · círculo vermelho = colisão exata
 (tronco/pilar/anel) · traço teal = plano orientado (arco/portal, com espessura)
 · pontos = billboards. Fonte: `window.__nosMapa()` — as estruturas VIVAS do
@@ -41,7 +41,7 @@ volume ou luz — e re-rode o baker.
 2. `npm run olhar -- <x,y,a>` em **3 ângulos** (frente, 45°, perfil) + `--tod=0.8`
    se tiver luz. LER os PNGs (achado do D-50: fatias viram "pente"? AO pesado?).
 3. `npm test` (368+) e, se o visual mudou, atualizar os pontos canônicos
-   (`prototipos/fps/qa/pontos.json`).
+   (`tools/bancadas/pontos.json`).
 
 ## Limitações honestas
 

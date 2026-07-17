@@ -20,9 +20,10 @@
     "build:sprites": "node assets/tools/build.cjs",
     "respond-issues": "tsx scripts/respond-issues.ts",
     "art": "node tools/art-mcp/cli.cjs",
-    "olhar": "node prototipos/fps/qa/olhar.mjs",
-    "ouvir": "node prototipos/fps/qa/ouvir.mjs",
-    "prancheta": "node prototipos/fps/qa/prancheta.mjs"
+    "olhar": "node tools/bancadas/olhar.mjs",
+    "ouvir": "node tools/bancadas/ouvir.mjs",
+    "prancheta": "node tools/bancadas/prancheta.mjs",
+    "res-bench": "node tools/bancadas/res-bench.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0"

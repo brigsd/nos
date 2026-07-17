@@ -23,7 +23,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = resolve(HERE, '../../..');
+const REPO = resolve(HERE, '../..');
 const BUILT = join(REPO, 'site/public/fps/index.html');
 const OUT = join(HERE, 'out');
 mkdirSync(OUT, { recursive: true });

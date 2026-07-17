@@ -2,6 +2,12 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 30) — lar unificado das ferramentas (D-52) + rumo travado: motor de segmentos
+
+- Ideador escolheu **caminho A** (evoluir o raycaster de tiles → segmentos/sectors estilo Doom, pra casas realistas com interior). Antes do trabalho grande, pediu organizar as ferramentas.
+- Feito: bancadas (`olhar`/`ouvir`/`prancheta`/`res-bench`/`pontos.json`) → **`tools/bancadas/`** (ao lado de `tools/art-mcp/`). **`tools/README.md`** = índice mestre, com as acopladas (assets/tools, site/scripts, bake) documentadas onde ficam e por quê. Refs atualizadas; 368/368; sem deploy.
+- **PRÓXIMO (o grande)**: prototipar UMA casa enterável (4 paredes-segmento + porta + piso interno) reusando o renderer de parede orientada, pro ideador julgar o feel antes do motor completo.
+
 ## Sessão 2026-07-17 (parte 29) — PLANTA v1 provada: o Santuário do Pulso (D-51)
 
 - "Podemos testar a geração de estruturas" → `plantar(planta)` no cliente: estrutura = objeto declarativo (paredes/colisões/billboards), o motor sobe tudo. Prova: **Santuário do Pulso** (capela em U ao sul do largo, relicário mini-Núcleo violeta pulsando, 2 lampiões).

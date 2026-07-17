@@ -22,10 +22,10 @@ Sem isso, as bancadas saem com uma mensagem pedindo exatamente esse comando.
 |---|---|
 | `npm test` | Vitest — cobre `engine/**` e `tools/**` (o gate de sempre) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run olhar` | **Bancada visual do FPS** (D-35): screenshot de pontos de vista canônicos. `npm run olhar -- forja portais`, `-- 46.2,15.6,0.9`, `-- largo-noite --tod=0.8`. Depois **LEIA os PNGs** em `prototipos/fps/qa/out/` |
+| `npm run olhar` | **Bancada visual do FPS** (D-35): screenshot de pontos de vista canônicos. `npm run olhar -- forja portais`, `-- 46.2,15.6,0.9`, `-- largo-noite --tod=0.8`. Depois **LEIA os PNGs** em `tools/bancadas/out/` |
 | `npm run ouvir` | **Bancada de som** (D-40): mede estado/ganho/RMS do áudio, barra a regressão muda. `npm run ouvir -- chafariz spawn` |
 | `npm run prancheta` | **Câmera de topo** (D-50): planta técnica viva de um recorte — colisões exatas, paredes+alturas, billboards, planos orientados (via `window.__nosMapa()`). `-- 25,8,50,20` p/ outro recorte. Fluxo completo: skill `/estruturas` |
-| `node prototipos/fps/qa/res-bench.mjs` | **Bancada de desempenho** (D-45): FPS real por rAF + perfil por fase (`window.__nosPerf`: céu/chão/paredes/bill + pior-quadro/engasgos) nos 4 presets, com CPU÷4 como proxy de celular. `CAM=x,y,a` muda o ponto |
+| `npm run res-bench` | **Bancada de desempenho** (D-45): FPS real por rAF + perfil por fase (`window.__nosPerf`: céu/chão/paredes/bill + pior-quadro/engasgos) nos 4 presets, com CPU÷4 como proxy de celular. `CAM=x,y,a` muda o ponto |
 | `npm run art` | CLI do art-mcp (= `node tools/art-mcp/cli.cjs`) — ver "Estúdio de arte" abaixo |
 | `npm run build:sprites` | Renderiza `assets/sprites/src/*.json` → `assets/sprites/*.png` + folhas de contato (= `node assets/tools/build.cjs`) |
 | `npm run lint:sprites` | Valida os PNGs de sprite (roda no CI) |

@@ -34,9 +34,9 @@ npm run olhar -- largo-noite --tod=0.8   # hora do dia forçada
 
 - Roda 100% local (mundo inline no build, server efêmero, Chromium do
   sandbox) — **zero rede externa**.
-- Pontos canônicos em `prototipos/fps/qa/pontos.json`. **Criou uma área
+- Pontos canônicos em `tools/bancadas/pontos.json`. **Criou uma área
   nova? Adicione o ponto dela** — a auditoria de amanhã custa uma linha hoje.
-- Saída em `prototipos/fps/qa/out/` (gitignorada). O passo seguinte é
+- Saída em `tools/bancadas/out/` (gitignorada). O passo seguinte é
   sempre LER os PNGs — screenshot que ninguém olha é ruído.
 - `?cam=x,y,a` (D-33) e `?tod=0..1` (0.3 dia · 0.55 entardecer · 0.8 noite)
   funcionam em produção também — servem ao ideador ("olha AQUI") e ao coder.

@@ -4,7 +4,7 @@
  * INTERNA do render (a alavanca ?res=). Para cada degrau, mede o FPS de
  * verdade (contando rAF por 3s) e tira um recorte da MESMA região da cena
  * pra comparar nitidez. Roda também com a CPU estrangulada 4× (proxy de
- * celular). Uso: node prototipos/fps/qa/res-bench.mjs [--no-build]
+ * celular). Uso: node tools/bancadas/res-bench.mjs [--no-build]
  */
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
@@ -13,7 +13,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = resolve(HERE, '../../..');
+const REPO = resolve(HERE, '../..');
 const BUILT = join(REPO, 'site/public/fps/index.html');
 const OUT = join(HERE, 'out');
 mkdirSync(OUT, { recursive: true });
