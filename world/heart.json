@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 85,
-    "worldTime": 5100
+    "tickCount": 86,
+    "worldTime": 5160
   },
   "width": 64,
   "height": 64,
@@ -4708,6 +4708,25 @@
       "type": "core_pulse",
       "tick": 85,
       "worldTime": 5100
+    },
+    {
+      "type": "native_spoke",
+      "tick": 86,
+      "worldTime": 5160,
+      "nativeId": "broa",
+      "message": "Quem quer pão fresco? Venham, venham! O calor da forja tá bom e o pão tá quentinho!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 86,
+      "worldTime": 5160,
+      "nativeId": "quilha",
+      "message": "Quem se anima a pilotar algo que atravessa o vazio?"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 86,
+      "worldTime": 5160
     }
   ],
   "natives": {
@@ -4716,7 +4735,7 @@
       "name": "Gota",
       "position": {
         "x": 2,
-        "y": 6
+        "y": 5
       },
       "behaviorTree": "wanderer",
       "behaviorState": "{}",
