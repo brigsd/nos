@@ -2,6 +2,15 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 27) — billboards orientados + preset sem teleporte + gesto blindado (D-49)
+
+- Ideador: (1) "objetos ficam me encarando" (chafariz/arco/portal); (2) trocar gráfico respawnava e resetava pra dia; (3) joystick quebrando "geralmente depois de trocar de gráfico".
+- **(1) Novo recurso: `b.orient`** — billboard vira SEGMENTO fixo no mundo (projeção das 2 pontas, perspectiva correta por coluna, como parede com transparência). Arco de entrada e Portal ancorados; circundar encurta até o perfil. **Chafariz fica câmera-facing de propósito** (sólido de revolução — é a emulação correta).
+- **(2)** `nos_resume` (posição+ângulo+hora) salvo na troca e consumido one-shot no boot; hora volta via `timeOffset` (relógio segue). Verificado: trocou pra Alto e voltou exato.
+- **(3)** Blindagem de gesto: `touch-action:none`+`overscroll-behavior:none` no stage, sticks 6%→8% (fora da zona do gesto de home). Nota: preset pesado em aparelho fraco = input com lag por fps, não bug.
+- 368/368; screenshots dos arcos em 3 ângulos (frente/diagonal/perfil) confirmam o encurtamento.
+- **Aguardando o ideador**: joystick + "encarar" + troca de preset no aparelho. Depois: arte (martelo da brasa, broa, quilha).
+
 ## Sessão 2026-07-17 (parte 26) — o joystick que bugava "depois de um tempo" (D-48)
 
 - Ideador: joystick ainda bugando — "de início funciona, depois só anda pra frente com câmera na diagonal". **Autocrítica: o guarda do D-47 criou a ratoeira** — com um up engolido pelo navegador, o `pid` vira fantasma (eixos congelam = anda sozinho) e o guarda bloqueava todo toque novo PRA SEMPRE.
