@@ -5,7 +5,7 @@
 ## Sessão 2026-07-16 (parte 14) — o chafariz (D-38)
 
 - Pedido do ideador: chafariz ⛲ no centro da praça, água cristalina, animação bonita. Feito em duas camadas: **billboard 4 quadros** (pedestal+taça+jato com jitter+coroa+2 arcos de gotas que avançam e respingam) + **bacia no chão** (ondas concêntricas do pedestal, cáustica fina, espuma nas cristas, anel de pedra com lábio aceso).
-- Calibração pelo olhar (1 rodada): a bacia v1 vazava um disco ciano chapado pelo largo — encolhida pra caber DENTRO da bacia do sprite, cor mais funda, cáustica fina. Colisão r0.62 nos 4 tiles tocados.
+- Calibração pelo olhar (3 rodadas + achado do ideador \"tá colado no chão, precisa ser um degrau, uma bacia, não um disco plano\"): o corpo inteiro subiu pro SPRITE — degrau/parede/lábio/água dentro da taça com sombreamento de curvatura; o chão virou só laje + sombra de contato. Pedestal e taça lisos (argamassa lia como janelinhas). \"Lajes escuras\" no ângulo leste eram os pilares do portal atrás, vistos pelos vãos — paralaxe, não bug. Colisão r0.62 nos 4 tiles tocados.
 - À noite a água **brilha** (selfGlow + luz teal na GI): o largo agora tem três presenças de luz — lampiões âmbar, véu do portal, chafariz teal. Ponto canônico `chafariz` no olhar. 59-60fps.
 
 ## Sessão 2026-07-16 (parte 13) — A Clareira v2 (D-37): um portal, praça aberta, carpintaria

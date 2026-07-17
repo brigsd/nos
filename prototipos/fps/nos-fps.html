@@ -1835,33 +1835,33 @@ for (const [i, [lx, ly]] of [[45.0, 14.1], [47.4, 14.1], [45.0, 17.1], [47.4, 17
    arcos d'água caindo, 4 quadros a 150ms); a bacia rasa com água cristalina
    é pintada pelo CHÃO (ondas concêntricas + cáustica, no floor casting). */
 function genFountain(fr) {
-  const Wf = 64, Hf = 52;
+  /* v2 (pedido do ideador): a bacia NÃO é um disco no chão — é um corpo com
+     altura: degrau (plinto) → parede da bacia → lábio → água DENTRO da taça,
+     vista por trás da borda. O chão só ancora (laje + sombra de contato). */
+  const Wf = 64, Hf = 56;
   const buf = new Int16Array(Wf * Hf).fill(-1);
   const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < Wf && y < Hf) buf[y * Wf + x] = v; };
   const inEll = (x, y, cx, cy, rx, ry) => { const dx = (x - cx) / rx, dy = (y - cy) / ry; return dx * dx + dy * dy <= 1; };
   const stone = (x, y) => ((y % 4 === 0) || ((x + (y >> 2) * 3) % 6 === 0)) ? 2 : vnoise(x * 0.7, y * 0.7) > 0.6 ? 7 : 6;
-  /* bacia: anel de pedra (a água rasa de dentro quem pinta é o chão) */
-  for (let y = 36; y < Hf; y++) for (let x = 0; x < Wf; x++) {
-    if (inEll(x, y, 32, 45, 30, 6.5) && !inEll(x, y, 32, 44, 23, 3.8)) {
-      put(x, y, stone(x, y));
-      if (!inEll(x, y, 32, 45, 29, 6)) put(x, y, 1);            // aresta externa
-      else if (y < 41) put(x, y, 8);                            // lábio iluminado
+  const agua = (x, y) => { const n = vnoise(x * 0.55 + fr * 2.7, y * 0.8); return (x * 7 + y * 3 + fr) % 23 === 0 ? 9 : n > 0.7 ? 43 : n > 0.36 ? 42 : 41; };
+  /* 1 · a ÁGUA da bacia (atrás do lábio frontal — só a metade de cima aparece) */
+  for (let y = 31; y < 41; y++) for (let x = 0; x < Wf; x++) {
+    if (inEll(x, y, 32, 36, 20, 4)) put(x, y, agua(x, y));
+  }
+  /* 2 · pedestal central (nasce da água) + taça de cima — COLUNA lisa com
+     sombreamento cilíndrico (argamassa aqui virava "janelinhas de casa") */
+  for (let y = 24; y < 34; y++) for (let x = 29; x < 36; x++) {
+    const kk = Math.abs(x - 32) / 3.5;
+    put(x, y, kk > 0.9 ? 1 : kk > 0.55 ? 2 : kk > 0.3 ? 6 : 7);
+  }
+  for (let y = 19; y < 25; y++) for (let x = 0; x < Wf; x++) {
+    if (inEll(x, y, 32, 22, 10, 3)) {
+      const kk = Math.abs(x - 32) / 10;
+      put(x, y, kk > 0.9 ? 1 : kk > 0.62 ? 2 : kk > 0.32 ? 6 : 7);
     }
   }
-  /* espelho d'água atrás do pedestal (shimmer por quadro) */
-  for (let y = 40; y < 45; y++) for (let x = 0; x < Wf; x++) {
-    if (inEll(x, y, 32, 44, 22, 3.4)) {
-      const n = vnoise(x * 0.6 + fr * 2.3, y * 0.9);
-      put(x, y, n > 0.72 ? 43 : n > 0.38 ? 42 : 41);
-    }
-  }
-  /* pedestal + taça */
-  for (let y = 24; y < 42; y++) for (let x = 29; x < 36; x++) { put(x, y, stone(x, y)); if (x === 29 || x === 35) put(x, y, 1); }
-  for (let y = 19; y < 24; y++) for (let x = 0; x < Wf; x++) {
-    if (inEll(x, y, 32, 22, 11, 3.2)) { put(x, y, stone(x, y)); if (!inEll(x, y, 32, 22, 10, 2.6)) put(x, y, 1); }
-  }
-  for (let x = 23; x < 42; x++) if (inEll(x, 19, 32, 19.6, 9, 1.6)) put(x, 19, (x + fr) % 3 === 0 ? 43 : 42); // água na taça
-  /* o JATO: coluna com jitter por quadro + coroa aberta no topo */
+  for (let x = 24; x < 41; x++) if (inEll(x, 20, 32, 20.5, 8, 1.5)) put(x, 20, (x + fr) % 3 === 0 ? 43 : 42); // água na taça
+  /* 3 · o JATO com jitter + coroa aberta */
   for (let y = 4; y < 20; y++) {
     const j = ((y * 7 + fr * 5) % 3) - 1;
     put(31 + j, y, 43); put(32 + j, y, y < 8 ? 9 : 42);
@@ -1870,17 +1870,45 @@ function genFountain(fr) {
     const a = -0.9 + k * 0.3;
     put((32 + Math.cos(a + fr) * 3.2) | 0, (3 + Math.abs(Math.sin(a * 2 + fr)) * 2.4) | 0, (k & 1) ? 9 : 43);
   }
-  /* dois ARCOS d'água caindo — as gotas AVANÇAM a cada quadro */
+  /* 4 · dois ARCOS d'água — as gotas avançam e pousam DENTRO da bacia */
   for (const s of [-1, 1]) for (let k = 0; k < 6; k++) {
     const t = ((fr / 4) + k / 6) % 1;
-    const xa = (32 + s * 26 * t) | 0, ya = (5 + 35 * t * t) | 0;
+    const xa = (32 + s * 19 * t) | 0, ya = (5 + 28 * t * t) | 0;
     put(xa, ya, (k & 1) ? 43 : 9); put(xa - s, ya + 1, 42);
-    if (t > 0.86) { put(xa, 39, 9); put(xa - s, 40, 43); if ((fr & 1) === 0) put(xa + s, 38, 43); } // respingo
+    if (t > 0.84) { put(xa, 32, 9); put(xa - s, 33, 43); if ((fr & 1) === 0) put(xa + s, 31, 43); } // respingo na água
+  }
+  /* 5 · LÁBIO frontal da bacia (cobre a metade de baixo da água) */
+  for (let y = 33; y < 44; y++) for (let x = 0; x < Wf; x++) {
+    if (inEll(x, y, 32, 38.5, 24, 5) && !inEll(x, y, 32, 36.2, 19, 3.2)) {
+      put(x, y, y < 37 ? 8 : stone(x, y));                       // topo do lábio pega luz
+      if (!inEll(x, y, 32, 38.5, 23, 4.5)) put(x, y, 1);         // aresta externa
+    }
+  }
+  /* 6 · PAREDE da bacia (altura de verdade): desce do lábio até o degrau */
+  for (let y = 41; y < 49; y++) {
+    const w = 24 - ((y - 41) / 8) * 2.5;                          // afina levinho descendo
+    for (let x = 0; x < Wf; x++) {
+      const k = Math.abs(x - 32);
+      if (k > w) continue;
+      const kk = k / w;
+      put(x, y, kk > 0.94 ? 1 : kk > 0.72 ? 2 : y % 3 === 0 ? 2 : kk > 0.4 ? 6 : 7); // curvatura: claro no centro
+    }
+  }
+  /* 7 · o DEGRAU (plinto): mais largo, com face de topo iluminada */
+  for (let y = 48; y < Hf; y++) {
+    const w = y < 50 ? 30 : 29;
+    for (let x = 0; x < Wf; x++) {
+      const k = Math.abs(x - 32);
+      if (k > w) continue;
+      const kk = k / w;
+      if (y < 50) put(x, y, kk > 0.96 ? 1 : ((x + y) & 1) === 0 ? 8 : 7);            // topo do degrau
+      else put(x, y, kk > 0.94 ? 1 : y === Hf - 1 ? 1 : kk > 0.7 ? 2 : stone(x, y)); // face lateral
+    }
   }
   return bufToTex({ buf, W: Wf, H: Hf });
 }
 {
-  bills.push({ x: PLAZA.x, y: PLAZA.y, genFrames: [genFountain(0), genFountain(1), genFountain(2), genFountain(3)], loop: true, label: 'chafariz', scale: 1.28, lift: 0, selfGlow: 0.12 });
+  bills.push({ x: PLAZA.x, y: PLAZA.y, genFrames: [genFountain(0), genFountain(1), genFountain(2), genFountain(3)], loop: true, label: 'chafariz', scale: 1.34, lift: 0, selfGlow: 0.12 });
   /* colisão registrada nos 4 tiles que a bacia toca (o disco vaza do tile central) */
   for (const [tx2, ty2] of [[45, 15], [46, 15], [45, 16], [46, 16]]) addTrunk(tx2, ty2, PLAZA.x, PLAZA.y, 0.62);
 }
@@ -2394,24 +2422,16 @@ function render(now) {
           const r0 = c & 255, g0 = (c >> 8) & 255, b0 = (c >> 16) & 255;
           c = rgb((r0 + (vr - r0) * k) | 0, (g0 + (vg - g0) * k) | 0, (b0 + (vb - b0) * k) | 0);
         }
-        /* O CHAFARIZ (D-38): bacia de água CRISTALINA no coração do largo —
-           ondas concêntricas saindo do pedestal, teia de cáustica, cristas
-           com espuma; a borda de pedra tem lábio aceso e aresta escura */
+        /* O CHAFARIZ (D-38 v2): o corpo com ALTURA (degrau + bacia + água)
+           vive todo no sprite — o chão só ancora: laje de assento clara e
+           anel de sombra de contato (a v1 pintava a água no chão e lia
+           como disco plano colado no calçamento, achado do ideador) */
         const cfdx = fx - PLAZA.x, cfdy = fy - PLAZA.y;
         const cfd2 = cfdx * cfdx + cfdy * cfdy;
-        if (cfd2 < 0.49) { // a bacia do chão é MENOR que a do sprite — ele a contém
+        if (cfd2 < 0.42) {
           const cfd = Math.sqrt(cfd2);
-          if (cfd > 0.52) {
-            c = cfd > 0.64 ? 0xff3a2e42 : ((x + y) & 1) === 0 ? PAL_RGB_U32[7] : PAL_RGB_U32[6];
-            if (cfd < 0.545) c = PAL_RGB_U32[8]; // fio de luz no lábio interno
-          } else {
-            const ring = Math.sin(cfd * 21 - now / 130);
-            const wk = 0.16 + 0.42 * (cfd / 0.52) + ring * 0.12;
-            c = mixRGB(DEEP_RGB, SHALLOW_RGB, wk > 1 ? 1 : wk < 0 ? 0 : wk);
-            const cw = WAVE_A[((fy * 22) & 63) * 64 + ((fx * 22 - waveT) & 63)] / 255;
-            if (cw > 0.645 && cw < 0.68) c = mixRGB(SHALLOW_RGB, [210, 252, 240], 0.5); // teia de cáustica fina
-            if (ring > 0.9 && (BAYER[y & 3][x & 3] / 16) < 0.55) c = FOAM_U32;          // crista da ondinha
-          }
+          if (cfd > 0.56) c = ((x + y) & 1) === 0 ? 0xff3a2e42 : PAL_RGB_U32[2]; // sombra de contato
+          else c = ((x + y) & 1) === 0 ? PAL_RGB_U32[7] : PAL_RGB_U32[6];        // laje de assento
         }
         /* GI ASSADA (D-36): a luz de verdade modula o chão — cantos escurecem,
            rebote esquenta, poças de lampião acendem a pedra à noite */
