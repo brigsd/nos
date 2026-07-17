@@ -9,13 +9,17 @@
  * prototipos/fps/nos-fps.html and writes the self-contained result to
  * site/public/fps/index.html — Vite then ships it verbatim in dist/.
  *
- * Because pages.yml redeploys on every world/** push, the FPS view stays
- * in sync with the live world at every batida, same as the 2D client.
- *
- * Known gap: pages.yml's push paths do NOT include prototipos/fps/**, so a
- * commit that only touches the raycaster waits for the next batida (or a
- * site/** touch) to reach /fps/. Fix is adding 'prototipos/fps/**' to the
- * workflow paths — needs the ideador (workflow edits are gated).
+ * Deploy trigger (measured 2026-07-17): pages.yml fires on push to
+ * site/**, world/**, assets/** or engine/types.ts. TWO gaps stop a
+ * FPS-only change (prototipos/fps/**) from reaching /fps/ on its own:
+ *   1) prototipos/fps/** is NOT in the trigger paths; and
+ *   2) the tick's world/** commits are made by github-actions[bot]
+ *      (GITHUB_TOKEN), and by GitHub design a GITHUB_TOKEN push does NOT
+ *      start another workflow — so batidas alone never redeploy Pages.
+ * Net effect: a raycaster change only ships when a HUMAN push touches one
+ * of the trigger paths (e.g. editing this file). Permanent fix is adding
+ * 'prototipos/fps/**' to pages.yml — needs the ideador (workflow edits are
+ * gated for the coder session). Until then: touch site/** to publish.
  *
  * prototipos/fps/nos-fps.html stays the single source of truth for the
  * prototype; site/public/fps/ is pure build output, regenerated before
