@@ -2,6 +2,13 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-17 (parte 26) — o joystick que bugava "depois de um tempo" (D-48)
+
+- Ideador: joystick ainda bugando — "de início funciona, depois só anda pra frente com câmera na diagonal". **Autocrítica: o guarda do D-47 criou a ratoeira** — com um up engolido pelo navegador, o `pid` vira fantasma (eixos congelam = anda sozinho) e o guarda bloqueava todo toque novo PRA SEMPRE.
+- Fix em **4 camadas independentes** (cada uma assume que as outras falham): `ACTIVE_PTRS` (ponteiros vivos, casca de captura na janela); guarda só protege dono VIVO (fantasma é destronado pelo toque novo); watchdog por quadro no loop; rede do canal touch (`touches.length===0` zera tudo). `clearInputs` re-centra o knob.
+- Provado com eventos sintéticos nos 4 cenários; 368/368. Lição: eventos de soltura são promessa, não garantia — a única verdade é "que ponteiros estão vivos agora".
+- **Aguardando o ideador**: tentar quebrar o joystick de novo no aparelho. Depois: arte (martelo da brasa, broa, quilha 64px).
+
 ## Sessão 2026-07-17 (parte 25) — joystick cravado + 3ª rodada de otimização (D-47)
 
 - Bug do ideador: joystick "cravado numa direção". Dois buracos no `bindStick`: (1) `setPointerCapture` pode falhar → up fora do círculo nunca chega, e a rede global não zerava o JOY; (2) segundo dedo roubava o `pid`. Fix: dono único por stick, try/catch na captura, **rede global** que zera o stick cujo pid solta em qualquer lugar. Provado com eventos sintéticos (up-fora zera; invasor não rouba).

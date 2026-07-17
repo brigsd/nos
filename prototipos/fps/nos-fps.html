@@ -3202,7 +3202,14 @@ bindPad(document.getElementById('padLook'), false);
    trás + lados), o DIREITO olha. Pointer capture por alavanca — dois dedos
    simultâneos funcionam; soltar re-centra o botão e zera o eixo. */
 const JOY = { lx: 0, ly: 0, rx: 0 };
-const STICKS = []; /* registro p/ a rede global de segurança (fix do "cravado", D-47) */
+const STICKS = []; /* registro p/ as redes de segurança (D-47/D-48) */
+/* ponteiros VIVOS agora — mantido em fase de CAPTURA na janela (nenhum
+   stopPropagation esconde) — a fonte de verdade do watchdog (D-48) */
+const ACTIVE_PTRS = new Set();
+addEventListener('pointerdown', (e) => ACTIVE_PTRS.add(e.pointerId), true);
+addEventListener('pointerup', (e) => ACTIVE_PTRS.delete(e.pointerId), true);
+addEventListener('pointercancel', (e) => ACTIVE_PTRS.delete(e.pointerId), true);
+addEventListener('blur', () => ACTIVE_PTRS.clear());
 function bindStick(el, isLeft) {
   const knob = el.firstElementChild;
   let pid = null;
@@ -3221,21 +3228,29 @@ function bindStick(el, isLeft) {
     if (isLeft) { JOY.lx = 0; JOY.ly = 0; } else { JOY.rx = 0; }
   };
   el.addEventListener('pointerdown', (e) => {
-    if (pid !== null) return; /* o 1º dedo é o dono — 2º toque não rouba o stick (roubar deixava o up do 1º sem par = cravado) */
+    /* dono VIVO não é roubado pelo 2º dedo; dono FANTASMA (o up se perdeu —
+       acontece com gesto do navegador/Android) é DESTRONADO na hora: o toque
+       novo assume. Era o "buga depois de um tempo" (D-48): o guarda do D-47
+       bloqueava PRA SEMPRE um stick com pid fantasma. */
+    if (pid !== null && ACTIVE_PTRS.has(pid) && e.pointerId !== pid) return;
     pid = e.pointerId;
-    /* capture pode FALHAR (toque que já morreu, Android apressado) — sem ela o
-       up fora do círculo não chega aqui; a rede global abaixo cobre o caso */
-    try { el.setPointerCapture(pid); } catch { /* segue sem captura */ }
+    try { el.setPointerCapture(pid); } catch { /* toque já morto: as redes cobrem */ }
     setFrom(e); e.preventDefault();
   });
   el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) setFrom(e); });
   el.addEventListener('pointerup', (e) => { if (e.pointerId === pid) reset(); });
   el.addEventListener('pointercancel', reset);
   el.addEventListener('lostpointercapture', reset);
-  STICKS.push({ owns: (id) => pid === id, reset });
+  STICKS.push({ owns: (id) => pid === id, reset, guard: () => { if (pid !== null && !ACTIVE_PTRS.has(pid)) reset(); } });
 }
 bindStick(document.getElementById('stickL'), true);
 bindStick(document.getElementById('stickR'), false);
+/* rede final, à prova de QUALQUER evento pointer perdido: se nenhum dedo está
+   na tela, nenhum stick pode estar ativo — touch events são um canal SEPARADO
+   dos pointer events, então este cinto segura mesmo quando o outro rasga. */
+const nukeSticks = (e) => { if (e.touches && e.touches.length === 0) { ACTIVE_PTRS.clear(); for (const s of STICKS) s.reset(); } };
+addEventListener('touchend', nukeSticks, { capture: true, passive: true });
+addEventListener('touchcancel', nukeSticks, { capture: true, passive: true });
 if (matchMedia('(pointer: coarse)').matches) {
   document.getElementById('hint').textContent = 'alavanca esquerda: andar · direita: olhar · deite o celular pra ver mais';
 }
@@ -3247,6 +3262,7 @@ function clearInputs() {
   for (const k of Object.keys(keys)) keys[k] = false;
   touchMove.on = false;
   touchLook.on = false;
+  for (const s of STICKS) s.reset(); /* zera eixo + re-centra o botão + solta o dono (D-48) */
   JOY.lx = 0; JOY.ly = 0; JOY.rx = 0;
 }
 /* rede global: QUALQUER up/cancel do ponteiro dono zera o stick dele, mesmo
@@ -3529,6 +3545,7 @@ function loop(now) {
     mx += dirX * -touchMove.dy + dirY * -touchMove.dx;
     my += dirY * -touchMove.dy - dirX * -touchMove.dx;
   }
+  for (const s of STICKS) s.guard(); /* watchdog (D-48): dono sem ponteiro vivo = reset imediato */
   if (JOY.lx || JOY.ly) { /* joystick esquerdo (D-39): mesma álgebra do pad */
     mx += dirX * -JOY.ly + dirY * -JOY.lx;
     my += dirY * -JOY.ly - dirX * -JOY.lx;
