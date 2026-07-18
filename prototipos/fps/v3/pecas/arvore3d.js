@@ -71,8 +71,8 @@ export function construir(ctx) {
   /* ---------- copa: BOLA 3D deformada, LISA e OVAL (variante escolhida) ----------
      normais por-vértice RADIAIS = superfície lisa (sem facetado); forma ovalada
      (ry>rx) = cara de árvore, não pirulito; lumps por ruído quebram a bola. O
-     degradê topo→base sai da LUZ na normal; o "pop" vem do contorno de tinta
-     FINO (rim:1.0 no lote — feito no shader do motor). */
+     degradê topo→base sai da LUZ na normal. Sem contorno de tinta (o ideador
+     achou o rim estranho) — o motor tem o recurso (rim por lote) se um dia. */
   const canopy = Mesh();
   const cRx = 1.35, cRy = 2.0, AMP = 0.34, LAT = 9, LON = 12;
   const cCenY = trunkH + cRy * 0.92, cen = [0, cCenY, 0];
@@ -99,7 +99,7 @@ export function construir(ctx) {
     camera: { e: 3.0, r: 7.2 },
     lotes: [
       { mesh: trunk, tex: BARK },
-      { mesh: canopy, tex: LEAFTEX, rim: 1.0 },   // contorno de tinta fino
+      { mesh: canopy, tex: LEAFTEX },   // sem contorno (a ③: lisa+oval limpa)
     ],
   };
 }
