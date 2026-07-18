@@ -1,7 +1,8 @@
 /* benchmark.mjs — mede QUAIS ferramentas de senso crítico ajudam (D-60).
-   Casos = peças reais × (limpo + cada defeito plantado). Cada ferramenta é
-   pontuada: pega os defeitos DO SEU domínio (recall) sem alarme falso em limpo
-   ou em defeito de outro domínio (precision). F1 = ajuda ou não.
+   Casos = peças reais × (limpo + cada defeito plantado). Separa NÚCLEO (defeito
+   real/óbvio) de ADVERSARIAL (a versão sutil = piso de sensibilidade). O
+   veredito vem do NÚCLEO (a ferramenta gateia o defeito que acontece?); a
+   coluna sutil mostra onde ela é fraca — floor honesto, não reprovação.
      node tools/bancadas/bench/benchmark.mjs            # tudo
      node tools/bancadas/bench/benchmark.mjs --verbose  # + cada finding
      node tools/bancadas/bench/benchmark.mjs --tool=lint-de-malha */
@@ -16,7 +17,7 @@ const args = process.argv.slice(2);
 const verbose = args.includes('--verbose');
 const only = /--tool=(.+)/.exec(args.find((a) => a.startsWith('--tool=')) || '')?.[1];
 const BASES = ['arvore3d', 'ilha-chao', 'casa-toras'];
-const BAR = 0.80;  // régua de "ajuda" (F1)
+const BAR = 0.80;
 
 /* 1 · descobre ferramentas */
 const tools = [];
@@ -24,43 +25,56 @@ for (const fn of readdirSync(join(HERE, 'tools')).filter((f) => f.endsWith('.mjs
   const m = await import(pathToFileURL(join(HERE, 'tools', fn)));
   if (m.analisar && m.dom) tools.push({ id: m.id || fn, dom: m.dom, analisar: m.analisar });
 }
-const use = only ? tools.filter((t) => t.id === only) : tools;
+const use = (only ? tools.filter((t) => t.id === only) : tools).sort((a, b) => a.id.localeCompare(b.id));
 
-/* 2 · monta casos */
+/* 2 · monta casos (marca dif = adversarial) */
 const casos = [];
 for (const base of BASES) {
-  casos.push({ id: `${base} · limpo`, base, dom: 'clean', mut: null });
-  for (const [mid, m] of Object.entries(MUT)) casos.push({ id: `${base} · ${mid}`, base, dom: m.dom, mut: m.fn });
+  casos.push({ id: `${base} · limpo`, base, dom: 'clean', mut: null, dif: false });
+  for (const [mid, m] of Object.entries(MUT)) casos.push({ id: `${base} · ${mid}`, base, dom: m.dom, mut: m.fn, dif: !!m.dificil });
 }
+const nAdv = Object.values(MUT).filter((m) => m.dificil).length;
 
-/* 3 · roda tudo (constrói cada caso fresco) */
-const score = new Map(use.map((t) => [t.id, { dom: t.dom, tp: 0, fp: 0, fn: 0, tn: 0, fpCasos: [], fnCasos: [] }]));
+/* 3 · roda tudo; guarda por ferramenta um registro por caso */
+const rec = new Map(use.map((t) => [t.id, { dom: t.dom, casos: [] }]));
 for (const c of casos) {
   const { built, erro } = await construirPeca(c.base, { mut: c.mut });
   for (const t of use) {
-    let flagged, findings = [];
-    if (erro) { flagged = true; findings = [{ sev: 'erro', msg: 'construir lançou: ' + erro.message }]; }
-    else { try { findings = t.analisar(built, { pixels }) || []; } catch (e) { findings = [{ sev: 'erro', msg: 'ferramenta quebrou: ' + e.message }]; } flagged = findings.length > 0; }
-    const pos = c.dom === t.dom, s = score.get(t.id);
-    if (flagged && pos) s.tp++; else if (flagged && !pos) { s.fp++; s.fpCasos.push(c.id); } else if (!flagged && pos) { s.fn++; s.fnCasos.push(c.id); } else s.tn++;
+    let findings = [];
+    if (erro) findings = [{ sev: 'erro', msg: 'construir lançou: ' + erro.message }];
+    else { try { findings = t.analisar(built, { pixels }) || []; } catch (e) { findings = [{ sev: 'erro', msg: 'ferramenta quebrou: ' + e.message }]; } }
+    const flagged = findings.length > 0, pos = c.dom === t.dom;
+    rec.get(t.id).casos.push({ id: c.id, pos, flagged, dif: c.dif });
     if (verbose && findings.length) console.log(`  [${t.id}] ${c.id}: ${findings.map((x) => x.msg).join(' | ')}`);
   }
 }
 
-/* 4 · placar */
-console.log(`\n${casos.length} casos (${BASES.length} peças × ${1 + Object.keys(MUT).length}) · ${use.length} ferramenta(s)\n`);
-console.log('ferramenta'.padEnd(26), 'dom'.padEnd(9), 'TP FN FP', ' prec  rec   F1   veredito');
-const resumo = [];
-for (const [id, s] of score) {
-  const prec = s.tp + s.fp ? s.tp / (s.tp + s.fp) : 1, rec = s.tp + s.fn ? s.tp / (s.tp + s.fn) : 1;
-  const f1 = prec + rec ? 2 * prec * rec / (prec + rec) : 0;
-  const ok = f1 >= BAR;
-  console.log(id.padEnd(26), s.dom.padEnd(9), `${String(s.tp).padStart(2)} ${String(s.fn).padStart(2)} ${String(s.fp).padStart(2)}`, ` ${prec.toFixed(2)}  ${rec.toFixed(2)}  ${f1.toFixed(2)}  ${ok ? '✅ ajuda' : '❌ NÃO'}`);
-  resumo.push({ id, dom: s.dom, f1, ok, fp: s.fpCasos, fn: s.fnCasos });
+/* 4 · pontua (F1 sobre um subconjunto de registros) */
+const f1 = (rs) => {
+  let tp = 0, fp = 0, fn = 0;
+  for (const r of rs) { if (r.flagged && r.pos) tp++; else if (r.flagged && !r.pos) fp++; else if (!r.flagged && r.pos) fn++; }
+  const prec = tp + fp ? tp / (tp + fp) : 1, r = tp + fn ? tp / (tp + fn) : 1;
+  return { tp, fp, fn, prec, rec: r, f1: prec + r ? 2 * prec * r / (prec + r) : 0 };
+};
+
+console.log(`\n${casos.length} casos (${BASES.length} peças × ${1 + Object.keys(MUT).length}) · ${use.length} ferramenta(s) · ${nAdv} defeito(s) adversarial(is)\n`);
+console.log('ferramenta'.padEnd(27), 'domínio'.padEnd(9), 'NÚCLEO F1  veredito     | sutil (adversarial)');
+const listinha = [];
+for (const [id, s] of rec) {
+  const nuc = f1(s.casos.filter((c) => !c.dif));
+  const advPos = s.casos.filter((c) => c.dif && c.pos), advFP = s.casos.filter((c) => c.dif && !c.pos && c.flagged);
+  const advCaught = advPos.filter((c) => c.flagged).length;
+  const ok = nuc.f1 >= BAR;
+  const sutil = advPos.length ? `pega ${advCaught}/${advPos.length}` + (advFP.length ? `, +${advFP.length} FP` : '') : (advFP.length ? `${advFP.length} FP` : '—');
+  console.log(id.padEnd(27), s.dom.padEnd(9), `${nuc.f1.toFixed(2)}       ${ok ? '✅ ajuda' : '❌ NÃO  '}   | ${sutil}`);
+  const limites = [];
+  if (advPos.length && advCaught < advPos.length) limites.push(`perde o ${s.dom} sutil (${advPos.length - advCaught}/${advPos.length})`);
+  if (advFP.length) limites.push(`${advFP.length} alarme(s) sob caso adversarial de outro domínio`);
+  if (!ok) limites.unshift(`NÚCLEO abaixo da régua (F1=${nuc.f1.toFixed(2)})`);
+  if (limites.length) listinha.push({ id, ok, limites });
 }
-const ruins = resumo.filter((r) => !r.ok);
-if (ruins.length) {
-  console.log('\n— não bateram a régua (F1<' + BAR + '):');
-  for (const r of ruins) console.log(`  ${r.id}: F1=${r.f1.toFixed(2)}` + (r.fn.length ? ` · perdeu ${r.fn.length} defeito(s)` : '') + (r.fp.length ? ` · ${r.fp.length} alarme(s) falso(s): ${r.fp.slice(0, 3).join(', ')}${r.fp.length > 3 ? '…' : ''}` : ''));
+if (listinha.length) {
+  console.log('\n— limites honestos (piso de cada ferramenta):');
+  for (const r of listinha) console.log(`  ${r.ok ? '•' : '✗'} ${r.id}: ${r.limites.join(' · ')}`);
 }
 console.log('');

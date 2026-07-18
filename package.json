@@ -24,7 +24,10 @@
     "ouvir": "node tools/bancadas/ouvir.mjs",
     "prancheta": "node tools/bancadas/prancheta.mjs",
     "res-bench": "node tools/bancadas/res-bench.mjs",
-    "peca": "node tools/bancadas/olhar-peca.mjs"
+    "peca": "node tools/bancadas/olhar-peca.mjs",
+    "porteiro": "node tools/bancadas/porteiro.mjs",
+    "auditar": "node tools/bancadas/auditar.mjs",
+    "bench": "node tools/bancadas/bench/benchmark.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0"

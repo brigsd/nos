@@ -85,15 +85,22 @@ Legenda: ★ = prioridade (serve o port já) · [N] nova · [M] melhoria
 > nenhuma imagem deixa óbvio). Três tipos de ferramenta: `[cpu]` roda em Node sem
 > IA · `[render]` passe extra do motor · `[disciplina]` como eu devo olhar.
 
+> **STATUS (D-60): os 5 críticos `[cpu]` abaixo estão CONSTRUÍDOS e MEDIDOS por
+> benchmark** (peças reais × defeitos plantados). Todos gateiam o defeito real
+> com **NÚCLEO F1=1.00, zero falso-alarme na arte de verdade**; o round
+> adversarial mapeou o piso de cada um (ver D-60 e a skill `/auditar-peca`).
+> Comandos: `npm run auditar <peca>` · `npm run porteiro <peca>` · `npm run bench`.
+> Marcados com ✅ abaixo. O resto (`[render]`/`[disciplina]`) segue como plano.
+
 **Arte / textura (achados: seams, banding, paleta, referência)**
-- ★ [N] **distancia-paleta** `[cpu]` — CIEDE2000 (LAB, lib `color-diff` offline) de cada pixel gerado contra a paleta/RGB aprovados. Cor fora do registro vira NÚMERO, não "acho que ficou estranho". A defesa mais barata e a que mais me pega.
-- ★ [N] **detector-de-seam** `[cpu]` — deltaE nas bordas do tile (wrap L↔R, topo↔base) e nas junções de lote. A costura visível da tora/telha vira erro medido, não descoberta no print.
-- [N] **detector-de-banding-e-ruido** `[cpu]` — run-length de cor + autocorrelação (FFT) pra separar dither Bayer (bom, periódico) de ruído aleatório (ruim). Ataca exatamente o "partes escuras/claras sem consistência" que o ideador me apontou 3×.
-- [N] **pixels-orfaos** `[cpu]` — componentes conexos: pixel solto de 1px fora de forma. Lixo de textura pego antes de subir.
+- ✅ [N] **distancia-paleta** `[cpu]` — CIEDE2000 (LAB, lib `color-diff` offline) de cada pixel gerado contra a paleta/RGB aprovados. Cor fora do registro vira NÚMERO, não "acho que ficou estranho". A defesa mais barata e a que mais me pega.
+- ✅ [N] **detector-de-seam** `[cpu]` — deltaE nas bordas do tile (wrap L↔R, topo↔base) e nas junções de lote. A costura visível da tora/telha vira erro medido, não descoberta no print.
+- ✅ [N] **detector-de-banding-e-ruido** `[cpu]` — run-length de cor + autocorrelação (FFT) pra separar dither Bayer (bom, periódico) de ruído aleatório (ruim). Ataca exatamente o "partes escuras/claras sem consistência" que o ideador me apontou 3×.
+- ✅ [N] **pixels-orfaos** `[cpu]` — componentes conexos: pixel solto de 1px fora de forma. Lixo de textura pego antes de subir.
 - [M] **comparador-com-referencia** `[cpu]` — quando o ideador manda imagem-alvo (como a madeira), histograma LAB + distância. "Bateu com a referência?" vira placar.
 
 **Percepção 3D (achado: sou pior em profundidade que em lateral; normais/winding me escapam)**
-- ★ [N] **lint-de-malha** `[cpu]` — sobre os arrays de vértice ANTES do render: triângulo degenerado (área~0), winding/normal invertida (aresta compartilhada em sentidos consistentes), buraco (aresta usada ≠2 vezes), AABB fora de proporção. Pega o bug que causa artefato sutil e NUNCA salta num PNG. (funde com o `lente-raiox` da seção 2.)
+- ✅ [N] **lint-de-malha** `[cpu]` — sobre os arrays de vértice ANTES do render: triângulo degenerado (área~0), winding/normal invertida (aresta compartilhada em sentidos consistentes), buraco (aresta usada ≠2 vezes), AABB fora de proporção. Pega o bug que causa artefato sutil e NUNCA salta num PNG. (funde com o `lente-raiox` da seção 2.)
 - ★ [N] **passe-normal-profundidade** `[render]` — 2 PNGs extra por cena: normal em cor + profundidade linear em cinza. Face invertida aparece como cor errada ANTES de eu tentar julgar luz; z-fighting aparece como banda no depth. Ataca direto minha fraqueza medida de profundidade.
 - [N] **regua-humana** `[render+disciplina]` — silhueta humana (~1.75u) fixa num canto de todo interior/exterior novo. Escala relativa (confiável) no lugar de escala absoluta "no vácuo" (onde erro). A porta estreita/alta teria sido óbvia com ela.
 - [N] **prancheta-ortografica** `[render+disciplina]` — 4 vistas orto (frente/topo/lado/iso) numa grade 2×2 com grid métrico; me obrigo a comparar vista-a-vista antes de julgar proporção. (é a `prancheta-peca` da seção 2 com o grid + a disciplina de comparação.)
