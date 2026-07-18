@@ -73,6 +73,43 @@ Legenda: ★ = prioridade (serve o port já) · [N] nova · [M] melhoria
 - [M] **galeria da oficina** — `peca --todas`: todas as peças renderizadas + porteiro, publicado como galeria. Rede de proteção do motor compartilhado + vitrine pro ideador.
 - [M] **estruturas-v3** — a skill /estruturas atualizada pro ciclo novo (prancheta→peça→paridade→publicar).
 
+## 6 · O senso crítico (pra eu parar de me enganar)
+
+> Pedido do ideador: "uma ferramenta para resolver teu senso crítico... uma que
+> te ajude em arte, outra percepção 3D". Pesquisa por 3 agentes sonnet (senso
+> crítico de IA, arte/textura, percepção 3D). **O achado que sustenta a seção:
+> eu falho JUSTO quando julgo o que acabei de criar, na mesma conversa que criou
+> — viés de auto-preferência + falta de grounding.** A cura não é "olhar com mais
+> atenção"; é **sinal externo objetivo** (número que não depende da minha opinião)
+> + **juiz cego** (sem saber que fui eu) + **checagem-CPU** (bug geométrico que
+> nenhuma imagem deixa óbvio). Três tipos de ferramenta: `[cpu]` roda em Node sem
+> IA · `[render]` passe extra do motor · `[disciplina]` como eu devo olhar.
+
+**Arte / textura (achados: seams, banding, paleta, referência)**
+- ★ [N] **distancia-paleta** `[cpu]` — CIEDE2000 (LAB, lib `color-diff` offline) de cada pixel gerado contra a paleta/RGB aprovados. Cor fora do registro vira NÚMERO, não "acho que ficou estranho". A defesa mais barata e a que mais me pega.
+- ★ [N] **detector-de-seam** `[cpu]` — deltaE nas bordas do tile (wrap L↔R, topo↔base) e nas junções de lote. A costura visível da tora/telha vira erro medido, não descoberta no print.
+- [N] **detector-de-banding-e-ruido** `[cpu]` — run-length de cor + autocorrelação (FFT) pra separar dither Bayer (bom, periódico) de ruído aleatório (ruim). Ataca exatamente o "partes escuras/claras sem consistência" que o ideador me apontou 3×.
+- [N] **pixels-orfaos** `[cpu]` — componentes conexos: pixel solto de 1px fora de forma. Lixo de textura pego antes de subir.
+- [M] **comparador-com-referencia** `[cpu]` — quando o ideador manda imagem-alvo (como a madeira), histograma LAB + distância. "Bateu com a referência?" vira placar.
+
+**Percepção 3D (achado: sou pior em profundidade que em lateral; normais/winding me escapam)**
+- ★ [N] **lint-de-malha** `[cpu]` — sobre os arrays de vértice ANTES do render: triângulo degenerado (área~0), winding/normal invertida (aresta compartilhada em sentidos consistentes), buraco (aresta usada ≠2 vezes), AABB fora de proporção. Pega o bug que causa artefato sutil e NUNCA salta num PNG. (funde com o `lente-raiox` da seção 2.)
+- ★ [N] **passe-normal-profundidade** `[render]` — 2 PNGs extra por cena: normal em cor + profundidade linear em cinza. Face invertida aparece como cor errada ANTES de eu tentar julgar luz; z-fighting aparece como banda no depth. Ataca direto minha fraqueza medida de profundidade.
+- [N] **regua-humana** `[render+disciplina]` — silhueta humana (~1.75u) fixa num canto de todo interior/exterior novo. Escala relativa (confiável) no lugar de escala absoluta "no vácuo" (onde erro). A porta estreita/alta teria sido óbvia com ela.
+- [N] **prancheta-ortografica** `[render+disciplina]` — 4 vistas orto (frente/topo/lado/iso) numa grade 2×2 com grid métrico; me obrigo a comparar vista-a-vista antes de julgar proporção. (é a `prancheta-peca` da seção 2 com o grid + a disciplina de comparação.)
+- [N] **checagem-z-fighting** `[cpu]` — pares de triângulos quase-coplanares e sobrepostos dentro do epsilon do depth. Complementa o lint pro artefato mais chato de ver parado.
+
+**Senso crítico / juiz (achado: auto-julgamento in-context é onde eu mais erro)**
+- ★ [N] **juiz-cego** `[disciplina]` — comparação pairwise antes|depois com ORDEM TROCADA e sem dizer qual fui eu; só conta como ganho se vence nas duas ordens (mata viés de posição + auto-preferência). É o cérebro do `diff-visual` da seção 2.
+- ★ [N] **rubrica-multi-eixo** `[disciplina]` — cada peça julgada por eixos fixos e separados (silhueta / escala / material / costura / luz), nota por eixo, não impressão geral. Disciplina de prompt que impede o "ficou bonito" encobrir um eixo quebrado.
+- [N] **similaridade-clip** `[cpu-ish]` — CLIP ViT-B/16 via transformers.js (~87MB, offline após baixar): distância imagem↔imagem e imagem↔texto ("cabana de toras aconchegante"). Um segundo olho que não sou eu. Só quando os baratos acima já rodarem.
+- [N] **distancia-estrutural** `[cpu]` — SSIM já (DISTS quando der): fidelidade estrutural/textura contra baseline ou referência, melhor que diff-pixel pra material.
+
+> Regra transversal: **todo julgamento meu passa a citar pelo menos um número
+> objetivo** (`[cpu]`) — não "ficou bom", e sim "seam max ΔE 2.1, paleta 100%,
+> malha limpa". O `[cpu]`/`[render]` gera o fato; a `[disciplina]` me impede de
+> ignorá-lo. Quase tudo aqui roda offline, sem IA, e vira gate de CI.
+
 ## Ordem de construção proposta (as 5 primeiras rodadas)
 
 1. **porteiro-visual + diff-visual** — dão olhos seguros a TODAS as outras rodadas; tudo que vier depois já nasce auditado.
@@ -80,6 +117,10 @@ Legenda: ★ = prioridade (serve o port já) · [N] nova · [M] melhoria
 3. **porta-mundo + cena-composta + camera-andavel** — o port começa de verdade, com o mundo v2 como dado.
 4. **perf-gpu + orçamento-peça + paridade-v2v3** — o port avança MEDIDO (fps e fidelidade), não no escuro.
 5. **materiais-v3 + paleta-estendida** — a fábrica de matéria; daqui em diante toda peça nova custa menos que a anterior.
+
+Os `[cpu]` do senso crítico (distancia-paleta, detector-de-seam, lint-de-malha)
+entram JUNTO da rodada 1: são baratos, offline, e passam a proteger toda peça
+nova desde o primeiro material v3 — é o senso crítico virando gate, não opinião.
 
 (som, metabolismo e o resto entram intercalados conforme a dor apertar — som
 quando a 1ª peça sonora nascer; publicar/sync na primeira sessão de port longa.)
