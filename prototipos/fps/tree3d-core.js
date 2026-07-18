@@ -262,7 +262,17 @@ function renderTreeView3D(tree, viewAz, opts) {
           if (e > 1.16) continue;
           if (e > 1) {
             /* anel de tinta do lobo: o vinco entre bolotas do 2D — some
-               exatamente onde outro lobo está NA FRENTE (z-buffer decide) */
+               exatamente onde outro lobo está NA FRENTE (z-buffer decide).
+               NOMEADO "vão entre lobos" (achado do ideador, D-38 pt.2): se
+               dois lobos vizinhos não se sobrepõem o bastante NESTE azimute
+               (dos 8 assados), nem o preenchimento de um nem o anel do
+               outro cobrem o pixel — o fundo (céu) aparece como um recorte
+               dentro da copa. Não é oclusão por outro objeto do mundo (essa
+               é outra classe, zbuf+wallTop em nos-fps.html); é um buraco na
+               SILHUETA do próprio lobo contra o lobo vizinho, específico
+               deste ângulo. Ver docs/CONTINUITY.md. Mitigação candidata:
+               aumentar a sobreposição mínima entre lobos vizinhos (R*1.12
+               acima) ou aceitar só quando o gap medir <2px no bake. */
             put(lcx + ox, lcy + oy, lcd + 0.4, T3_OUTLINE);
             continue;
           }
