@@ -944,7 +944,13 @@ SPECIES.jovem = { ...SPECIES.carvalho, len: 15, width: 5, leafR: [5, 8], depth: 
    sampler de billboard da main (blocos RS/D-45) desenha sem mudança. */
 const TREE_SPECIES_SET = ['carvalho', 'copado', 'anciao', 'jovem', 'florida', 'betula'];
 const TREE_RES = 1.6; // fonte ~1.6x mais densa: tronco deixa de parecer chunky de perto
-const T3_W = Math.round(104 * TREE_RES), T3_H = Math.round(136 * TREE_RES);
+/* LARGURA com folga (+20px): as espécies mais largas (carvalho, copado) tinham a
+   copa CORTADA RETO na borda — renderTreeView3D centra em cx0=W/2 e o put()
+   descarta o que passa de W, e essas copas passavam ~8px de cada lado (medido:
+   scratchpad/medir-corte). A folga cabe a copa inteira SEM mexer no sizeMul
+   (mesma nitidez). O billboard usa sw = sh*(texW/texH) com a árvore centrada,
+   então a margem transparente não muda o tamanho nem a posição no mundo. */
+const T3_W = Math.round(104 * TREE_RES) + 20, T3_H = Math.round(136 * TREE_RES);
 const N_TREE_VIEWS = 8;
 const TREE3D_BAKE_Q = []; // {tree, views, vi} pendentes do idle-bake
 function makeTreeViews(species, seed) {
