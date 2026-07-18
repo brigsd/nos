@@ -14,6 +14,7 @@
  * Saída: tools/bancadas/out/jogo-<nome>.png
  */
 import { createServer } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +45,7 @@ const base = `http://127.0.0.1:${server.address().port}/prototipos/fps/v3/jogo.h
 
 const PW = join(REPO, 'site/node_modules/playwright/index.js');
 if (!existsSync(PW)) { console.error('Playwright não encontrado. Rode: cd site && npm ci'); process.exit(1); }
-const pw = (await import(PW)).default;
+const pw = (await import(pathToFileURL(PW).href)).default;
 const browser = await pw.chromium.launch({ args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 const erros = [];
