@@ -356,6 +356,7 @@
 </footer>
 
 <script src="data.js"></script>
+<script src="tree3d-core.js"></script>
 <script>
 'use strict';
 /* NÓS — gerador de árvores (L-system / ramificação recursiva + copa por campo
@@ -932,15 +933,45 @@ function bufToTex(gen) {
 /* espécies extras só do protótipo (variedade de silhueta) */
 SPECIES.copado = { ...SPECIES.carvalho, spread: 0.74, leafR: [9, 14], depth: 7, len: 20, upBias: 0.03 };
 SPECIES.jovem = { ...SPECIES.carvalho, len: 15, width: 5, leafR: [5, 8], depth: 6, jitter: 0.42 };
-/* mix da floresta: verdes na base, florida/bétula como tempero (8 x 3 frames de vento) */
-const TREE_SPECIES_SET = ['carvalho', 'carvalho', 'copado', 'copado', 'anciao', 'jovem', 'florida', 'betula'];
+/* ÁRVORES 3D (tree3d-core.js, transplante da branch tree3d-leaves): cada
+   variante é UMA árvore 3D rasterizada de 8 azimutes — circular mostra lados
+   diferentes ("rotações Doom"), o lado do sol fica PARADO no mundo (é isso que
+   lê como sólido, não billboard chapado). No load só a vista 0 é assada
+   (rápido); as outras 7 assam no tempo OCIOSO e entram conforme ficam prontas
+   (até lá, a vista mais próxima já assada segura o billboard). Substitui os
+   billboards 2D de 3 frames de vento (growTree) — que SEGUEM servindo aos
+   arbustos/tufos/flores da campina, abaixo. Cada view é bufToTex(); o mesmo
+   sampler de billboard da main (blocos RS/D-45) desenha sem mudança. */
+const TREE_SPECIES_SET = ['carvalho', 'copado', 'anciao', 'jovem', 'florida', 'betula'];
 const TREE_RES = 1.6; // fonte ~1.6x mais densa: tronco deixa de parecer chunky de perto
-const TREE_VARIANTS = TREE_SPECIES_SET.map((sp, i) =>
-  [-1, 0, 1].map((w) => bufToTex(growTree({ species: sp, mood: 'dia', seed: 4021 + i * 977, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES, windAmt: w * TREE_RES })))
-);
+const T3_W = Math.round(104 * TREE_RES), T3_H = Math.round(136 * TREE_RES);
+const N_TREE_VIEWS = 8;
+const TREE3D_BAKE_Q = []; // {tree, views, vi} pendentes do idle-bake
+function makeTreeViews(species, seed) {
+  const tree = growTree3D({ species, seed, sizeMul: TREE_RES });
+  tree.seedTag = seed;
+  const views = new Array(N_TREE_VIEWS).fill(null);
+  views[0] = bufToTex(renderTreeView3D(tree, 0, { W: T3_W, H: T3_H }));
+  /* ordem de assadura: opostas primeiro (4), depois quadraturas (2,6), depois diagonais */
+  for (const vi of [4, 2, 6, 1, 3, 5, 7]) TREE3D_BAKE_Q.push({ tree, views, vi });
+  return views;
+}
+const TREE_VARIANTS = TREE_SPECIES_SET.map((sp, i) => makeTreeViews(sp, 4021 + i * 977));
 /* raridades: cerejeira (bosques rosa) e árvore seca */
-const TREE_CEREJEIRA = [-1, 0, 1].map((w) => bufToTex(growTree({ species: 'cerejeira', mood: 'dia', seed: 777, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES, windAmt: w * TREE_RES })));
-const TREE_SECA = [bufToTex(growTree({ species: 'seca', mood: 'dia', seed: 313, W: Math.round(104 * TREE_RES), H: Math.round(136 * TREE_RES), sizeMul: TREE_RES }))];
+const TREE_CEREJEIRA = makeTreeViews('cerejeira', 777);
+const TREE_SECA = makeTreeViews('seca', 313);
+/* assa 1 vista por chamada ociosa (~36ms) até esvaziar a fila */
+function bakeTreeViewsIdle() {
+  const job = TREE3D_BAKE_Q.shift();
+  if (!job) return;
+  job.views[job.vi] = bufToTex(renderTreeView3D(job.tree, (job.vi / N_TREE_VIEWS) * Math.PI * 2, { W: T3_W, H: T3_H }));
+  if (TREE3D_BAKE_Q.length) scheduleTreeBake();
+}
+function scheduleTreeBake() {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(bakeTreeViewsIdle, { timeout: 800 });
+  else setTimeout(bakeTreeViewsIdle, 60);
+}
+scheduleTreeBake();
 /* arbustos da campina */
 const BUSH_VARIANTS = [];
 for (let i = 0; i < 4; i++) {
@@ -1409,10 +1440,58 @@ function pathAt(fx, fy) {
    texturas geradas (pedra/madeira/cobre oxidado), arcos de portal e fumaça
    como billboards, veias de luz do Pulso no chão (emissivas à noite). */
 function genWallTex(kind, seed) {
-  const Wt = 16, Ht = kind === 'chimney' ? 64 : 48;
+  const isRuin = kind === 'ruin' || kind === 'ruinDark';
+  const Wt = 16, Ht = kind === 'chimney' || isRuin ? 64 : 48;
   const rnd = mulberry32(seed * 60493 + 11);
   const buf = new Int16Array(Wt * Ht).fill(6);
   const ROOF = 12; // faixa de telhado no topo
+  if (isRuin) {
+    /* PEDRA DOS ANTIGOS (transplante da branch tree3d-leaves — AS RUÍNAS):
+       fiadas ciclópicas com blocos FALTANDO (vãos escuros), rachaduras
+       serpenteando e musgo subindo da base. SEM telhado — o topo quebrado
+       quem faz é a ALTURA por tile. 'ruinDark' = o MONÓLITO basáltico com
+       glifos lavanda (as marcas de quem fez o Commit Primordial — ninguém
+       leu até hoje). Largura 16 (a leaves usava 32 no renderizador PRÓPRIO
+       dela; aqui a parede passa pelo motor ATUAL da main — D-53 — que
+       amostra U em TEX=16). */
+    const dark = kind === 'ruinDark';
+    const cH = 8, cW = 11;
+    for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+      const i = y * Wt + x;
+      if (dark) {
+        /* MONÓLITO: pedra ÚNICA — grão vertical alongado, arestas fundas, uma
+           fratura horizontal rara (a v1 com fiadas lia como muro de tijolo). */
+        const n = vnoise(x * 0.4 + seed, y * 0.16 + seed * 2);
+        buf[i] = n > 0.76 ? 44 : n > 0.34 ? 34 : 1;
+        if (x < 1 || x > Wt - 2) buf[i] = 0;                     // aresta funda
+        if (hash2((y / 3) | 0, seed * 5) < 0.05 && (y % 3) < 1) buf[i] = 0; // fratura rara
+      } else {
+        const course = (y / cH) | 0;
+        const wob = ((vnoise(course * 3.3 + seed, 7) - 0.5) * 4) | 0; // fiada torta
+        const off = ((course & 1) * (cW >> 1) + wob + cW * 8) % cW;
+        const blockIx = (((x + off) / cW) | 0) + course * 7;
+        const mortarY = y % cH === 0, mortarX = ((x + off) % cW) === 0;
+        const n = vnoise(x * 0.7 + seed * 2, y * 0.55 + seed);
+        if (mortarY || mortarX) buf[i] = 2;
+        else if (hash2(blockIx * 131 + seed, course * 17) < 0.055) buf[i] = hash2(x * 3, y * 5 + seed) < 0.16 ? 0 : 1; // bloco FALTANDO
+        else { buf[i] = n > 0.78 ? 8 : n > 0.42 ? 7 : 6; if (n > 0.9) buf[i] = 9; } // cristal de quartzo raro
+        const crx = 4 + ((vnoise(y * 0.23 + seed * 5, 3) - 0.5) * 7) | 0;
+        if (x === ((crx + seed) % (Wt - 2)) + 1 && hash2(y, seed * 7) < 0.75) buf[i] = 2; // rachadura
+      }
+      if (y > Ht - 12 && hash2(x * 7 + seed, y * 3) < (y - (Ht - 12)) / 16) buf[i] = hash2(x, y + seed) < 0.5 ? 35 : 36; // musgo
+    }
+    if (dark) { /* glifos: coluna central de marcas lavanda, apagadas em trechos */
+      const mid = Wt >> 1;
+      for (let y = 4; y < Ht - 8; y += 5) {
+        if (hash2(y * 13, seed) < 0.3) continue; // trecho apagado pelo tempo
+        const g = (hash2(y * 7, seed * 3) * 3) | 0;
+        buf[y * Wt + mid - 1] = 52; buf[y * Wt + mid] = 52;
+        if (g > 0) buf[(y + 1) * Wt + mid - 1] = 52;
+        if (g > 1) buf[(y + 1) * Wt + mid + 1] = 51;
+      }
+    }
+    return bufToTex({ buf, W: Wt, H: Ht });
+  }
   for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
     const i = y * Wt + x;
     if (kind !== 'chimney' && y < ROOF) {
@@ -1509,12 +1588,13 @@ function genGable(seed) {
   return bufToTex({ buf, W: Wt, H: Ht });
 }
 
-/* cada ala de madeira tem SEED próprio: padrão de tábuas, nós e janela em
-   posições diferentes — quebra a repetição sem custo novo */
+/* texturas de PAREDE d'A Clareira (transplante tree3d-leaves): as oficinas
+   saíram, entraram as ruínas. 'ruin' em 3 seeds (variedade de silhueta) +
+   'ruinDark' (o monólito com glifos) — cada uma é 16×64, casando o sampler
+   U=TEX do motor de parede atual (D-53). */
 const CT = {
-  stone: genWallTex('stone', 31), wood: genWallTex('wood', 47),
-  woodBan: genWallTex('wood', 12), woodCoz: genWallTex('wood', 83),
-  chimney: genWallTex('chimney', 53),
+  ruin: genWallTex('ruin', 31), ruinB: genWallTex('ruin', 67), ruinC: genWallTex('ruin', 104),
+  ruinDark: genWallTex('ruinDark', 53),
 };
 /* TODAS as ruínas ocultas SÓ no FPS (D-39, pedido do ideador — 2x): viram
    blocos cinza sem leitura, "paredes no meio do nada" (o aglomerado sul em
@@ -1526,20 +1606,26 @@ for (let ty = 0; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
 }
 const CITY = new Map();
 const cityWall = (tx, ty, kind, h, mm) => CITY.set(ty * world.w + tx, { tex: CT[kind], h, mm });
-/* v2 (pedido do ideador): BANCAS REMOVIDAS — eram objetos estranhos tapando
-   a vista e o caminho pro portal; as próprias alas SÃO as lojas. Telhados
-   com DESNÍVEL por tile: cumeeira mais alta num canto = silhueta viva. */
-/* Estaleiro (NW, madeira ALTA + anexo baixo — silhueta em degraus) */
-cityWall(43, 12, 'wood', 1.88, '#cd683d'); cityWall(44, 12, 'wood', 1.68, '#cd683d'); cityWall(43, 13, 'wood', 1.75, '#cd683d');
-cityWall(43, 11, 'wood', 0.85, '#cd683d'); /* anexo movido pra TRÁS (D-39): em (42,12) tapava a chegada pelo carreiro */
-/* Forja (NE, pedra + chaminé fumegando + depósito baixo) */
-cityWall(48, 12, 'stone', 1.42, '#7f708a'); cityWall(49, 12, 'chimney', 2.05, '#625565'); cityWall(49, 13, 'stone', 1.3, '#7f708a');
-cityWall(50, 12, 'stone', 0.8, '#7f708a');
-/* Bancada (SW, oficina baixa de madeira + telheiro) */
-cityWall(43, 19, 'woodBan', 1.02, '#cd683d'); cityWall(44, 19, 'woodBan', 0.9, '#cd683d'); cityWall(43, 18, 'woodBan', 0.95, '#cd683d');
-cityWall(43, 20, 'woodBan', 0.7, '#cd683d'); /* anexo movido pra TRÁS (D-39): idem */
-/* Cozinha (SE, madeira quente) */
-cityWall(48, 19, 'woodCoz', 1.2, '#cd683d'); cityWall(49, 19, 'woodCoz', 1.05, '#cd683d'); cityWall(49, 18, 'woodCoz', 1.12, '#cd683d');
+/* v3 — AS RUÍNAS (transplante da branch tree3d-leaves): as 4 oficinas
+   (Estaleiro/Forja/Bancada/Cozinha) e o Santuário do Pulso SAÍRAM. A Clareira
+   não é uma vila que os Nativos construíram — é o que RESTOU de quem veio
+   antes (quem fez o Commit Primordial? ninguém sabe — LORE.md).
+   O ANEL DA PRIMEIRA BATIDA (NW): círculo de MONÓLITOS de pedra escura com
+   glifos lavanda; as veias do Pulso correm mais fortes por baixo dele. (A
+   Torre da Crônica e os demais blocos de ruína da leaves ficaram DE FORA
+   deste corte — só o Anel + a Cabeça + o obelisco vieram.) */
+const RD = '#484a77';
+cityWall(41, 9, 'ruinDark', 1.7, RD); cityWall(43, 9, 'ruinDark', 1.4, RD);
+cityWall(44, 10, 'ruinDark', 1.85, RD); cityWall(45, 12, 'ruinDark', 1.5, RD);
+cityWall(43, 13, 'ruinDark', 1.45, RD); cityWall(41, 13, 'ruinDark', 1.6, RD);
+cityWall(40, 11, 'ruinDark', 1.75, RD);
+/* sombra de CONTATO no chão ao longo de cada monólito (achado do ideador na
+   leaves: "de lado parece plano") — cola a ruína no terreno de qualquer lado.
+   Roda AQUI: neste ponto CITY só tem os monólitos (as oficinas saíram). */
+for (const [k, cwv] of CITY) {
+  const tx = k % world.w, ty = (k / world.w) | 0;
+  stampTreeShadow(tx + 0.5, ty + 0.5, 0.62 + cwv.h * 0.3, 0.74, 0.34);
+}
 
 /* o LARGO é calçado de pedra (decisão do ideador): lajotas irregulares
    assadas em 2 variantes 64px, mesmo esquema da grama — 1 lookup por pixel */
@@ -1788,7 +1874,7 @@ for (let ty = 0; ty < world.h; ty++) {
       const treeScale = 4.3 + h * 1.4;
       const bx0 = tx + 0.5 + jx, by0 = ty + 0.5 + jy;
       if (pathAt(bx0, by0) < 1.05) continue; // O CARREIRO abre o corredor: tronco nunca no caminho, as copas dos lados emolduram
-      bills.push({ x: bx0, y: by0, genFrames: v, label: 'arvore', scale: treeScale, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
+      bills.push({ x: bx0, y: by0, treeViews: v, label: 'arvore', scale: treeScale, lift: 0, phase: hash2(tx * 7, ty * 3) * Math.PI * 2, swaySpeed: 1600 });
       stampTreeShadow(bx0, by0, 0.7 + treeScale * 0.34, 0.55 + treeScale * 0.075, 0.62);
       addTrunk(tx, ty, bx0, by0, v === TREE_SECA ? 0.26 : 0.22); // raio ~ meia-largura do tronco na base
     } else if (t === 'm') {
@@ -1884,7 +1970,7 @@ for (let ty = 0; ty < world.h; ty++) {
         let v = TREE_VARIANTS[(hv * TREE_VARIANTS.length) | 0];
         if (hash2(n * 37, salt + 16) < 0.16) v = TREE_CEREJEIRA; // cerejeiras pontuando o caminho
         const sc = 4.0 + hv * 1.3;
-        bills.push({ x: txp, y: typ, genFrames: v, label: 'arvore', scale: sc, lift: 0, phase: hash2(n * 41, salt + 20) * Math.PI * 2, swaySpeed: 1600 });
+        bills.push({ x: txp, y: typ, treeViews: v, label: 'arvore', scale: sc, lift: 0, phase: hash2(n * 41, salt + 20) * Math.PI * 2, swaySpeed: 1600 });
         stampTreeShadow(txp, typ, 0.7 + sc * 0.34, 0.55 + sc * 0.075, 0.62);
         addTrunk(txp | 0, typ | 0, txp, typ, 0.22);
       }
@@ -2011,7 +2097,8 @@ const PORTAL = { x: 51.1, y: 15.6 };
   for (const s of [-0.66, 0.66]) {
     addTrunk(PORTAL.x | 0, (PORTAL.y + s) | 0, PORTAL.x, PORTAL.y + s, 0.2);
   }
-  bills.push({ x: 49.5, y: 12.5, genFrames: [genSmoke(0), genSmoke(1), genSmoke(2)], loop: true, label: 'fumaca', scale: 1.2, lift: 2.1 });
+  /* a fumaça saiu com a Forja (v3 AS RUÍNAS): ninguém fabrica nada aqui há
+     eras. genSmoke() segue definido acima, ocioso, caso o ideador queira. */
 }
 
 /* lampiões do largo: postes com lanterna âmbar, emissivos (brilham à noite
@@ -2064,53 +2151,214 @@ function wallSeg(ax, ay, bx, by, b, ta, tb, tex) {
   SEGS.push({ ax, ay, bx, by, b, ta, tb, tex, len: Math.hypot(bx - ax, by - ay) });
 }
 
-/* A CASA-PROTÓTIPO (D-53): cabana de reboco no descampado oeste da clareira,
-   porta ao sul (de frente pro carreiro), duas águas com cume N–S. Terreno
-   auditado pela prancheta. eaveH = beiral · ridgeH = cume · doorTop = verga. */
-{
-  const x0 = 38.3, y0 = 12.3, x1 = 40.7, y1 = 14.7;
-  const xr = (x0 + x1) / 2, ov = 0.22;                 // cume no eixo · beiral saliente
-  const eaveH = 1.02, ridgeH = 1.66, doorTop = 0.72;
-  const dL = 39.05, dR = 39.95;                          // vão da porta (centrado no cume)
-  const wPlain = genHouseWall(1, false), wWin = genHouseWall(2, true), wGab = genGable(4);
-  /* topo da empena: eaveH nas pontas subindo até ridgeH sobre o cume (linear em x) */
-  const gTop = (x) => eaveH + (ridgeH - eaveH) * (1 - Math.abs(x - xr) / ((x1 - x0) / 2));
-  // N — empena cheia (fundo): duas rampas até o cume
-  wallSeg(x0, y0, xr, y0, 0, gTop(x0), gTop(xr), wPlain);
-  wallSeg(xr, y0, x1, y0, 0, gTop(xr), gTop(x1), wPlain);
-  // E / O — laterais do beiral (janela acesa), topo reto no beiral
-  wallSeg(x1, y0, x1, y1, 0, eaveH, eaveH, wWin);
-  wallSeg(x0, y1, x0, y0, 0, eaveH, eaveH, wWin);
-  // S — empena com PORTA: jambas até a rampa, verga sobre o vão, tudo fechado
-  wallSeg(x0, y1, dL, y1, 0, gTop(x0), gTop(dL), wPlain);       // jamba esquerda (+ empena)
-  wallSeg(dR, y1, x1, y1, 0, gTop(dR), gTop(x1), wPlain);       // jamba direita (+ empena)
-  wallSeg(dL, y1, xr, y1, doorTop, gTop(dL), gTop(xr), wGab);   // verga esquerda
-  wallSeg(xr, y1, dR, y1, doorTop, gTop(xr), gTop(dR), wGab);   // verga direita
-  HOUSES.push({ x0, y0, x1, y1, xr, ov, eaveH, ridgeH });
-}
+/* A CASA-PROTÓTIPO (D-53) SAIU (pedido do ideador, junto do transplante das
+   Ruínas): a cabana de reboco no descampado oeste foi removida. O MOTOR de
+   SETOR/PORTAL segue INTACTO (wallSeg/SEGS/HOUSES acima + o roof-cast e o
+   assoalho no render): como SEGS e HOUSES ficam VAZIOS, esses passos viram
+   no-op — nada de telhado/piso flutuando. genHouseWall/genGable seguem
+   definidos, órfãos, caso uma casa volte a ser plantada. */
 
-/* O SANTUÁRIO DO PULSO — a PROVA da PLANTA (D-51): capela aberta ao sul do
-   largo, no eixo do chafariz. Três paredes de pedra (fundo mais alto), boca
-   pro norte, dois lampiões na entrada e um relicário: um mini-Núcleo pulsando
-   sobre um pedestal (o mesmo sprite canônico, escala menor). */
-plantar({
-  nome: 'santuario-pulso',
-  /* deslocado +1 tile a leste após a 1ª prancheta: a árvore em (46.6,20.2)
-     tapava a boca — agora as DUAS árvores (46.6 e 48.2) emolduram a entrada */
-  paredes: [
-    { tx: 46, ty: 21, kind: 'stone', h: 0.55 }, { tx: 48, ty: 21, kind: 'stone', h: 0.55 },
-    { tx: 46, ty: 22, kind: 'stone', h: 0.78 }, { tx: 47, ty: 22, kind: 'stone', h: 0.95 }, { tx: 48, ty: 22, kind: 'stone', h: 0.78 },
-  ],
-  colisoes: [
-    { x: 46.7, y: 20.9, r: 0.1 }, { x: 48.3, y: 20.9, r: 0.1 }, /* postes dos lampiões */
-    { x: 47.5, y: 21.75, r: 0.28 },                              /* pedestal do relicário */
-  ],
-  billboards: [
-    { x: 46.7, y: 20.9, genFrames: [genLamp(11)], label: 'lampiao', scale: 1.05, lift: 0, selfGlow: 0.5 },
-    { x: 48.3, y: 20.9, genFrames: [genLamp(12)], label: 'lampiao', scale: 1.05, lift: 0, selfGlow: 0.5 },
-    { x: 47.5, y: 21.75, tex: 'nucleo', frames: 4, label: 'relicario', scale: 0.42, lift: 0.22, selfGlow: 0.45 },
-  ],
-});
+/* ---------- adereços das Ruínas: colunas, obelisco, A Cabeça ----------
+   Transplante da branch tree3d-leaves. O Santuário do Pulso (D-51) SAIU: no
+   lugar dele, o sítio afundado ao sul do largo — a Cabeça colossal, o obelisco
+   torto e colunas partidas. Billboards gerados; usam as primitivas ATUAIS da
+   main (bills.push + addTrunk + stampTreeShadow), não o renderizador da leaves. */
+/* coluna dos antigos: plinto + fuste canelado + topo QUEBRADO em degraus
+   (o capitel de quase todas caiu — está no chão em algum lugar) */
+function genColumn(seed) {
+  const Wc = 20, Hc = 72;
+  const rnd = mulberry32(seed * 5527 + 13);
+  const buf = new Int16Array(Wc * Hc).fill(-1);
+  const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < Wc && y < Hc) buf[y * Wc + x] = v; };
+  const topY = 6 + (rnd() * 26) | 0; // altura da quebra: cada coluna partiu num ponto
+  for (let y = topY; y < Hc; y++) {
+    let hw = 4.2;
+    if (y > Hc - 8) hw = 5.6;                       // plinto
+    else if (y > Hc - 10) hw = 4.9;                 // filete
+    const jag = y < topY + 4 ? (hash2(y * 7, seed) * 3.5) | 0 : 0; // borda da quebra
+    for (let x = Math.round(10 - hw) + (y < topY + 4 && hash2(y, seed * 3) < 0.5 ? jag : 0); x <= Math.round(9 + hw) - (y < topY + 4 ? jag : 0); x++) {
+      const fl = ((x + ((seed & 3))) % 4);          // caneluras: claro/escuro alternado
+      let v = fl === 0 ? 2 : fl === 2 ? 8 : x < 10 ? 7 : 6;
+      if (y > Hc - 8) v = fl === 0 ? 2 : 7;         // plinto liso
+      if (y < topY + 3) v = hash2(x, y + seed) < 0.5 ? 2 : 6; // miolo exposto na quebra
+      if (y > Hc - 13 && hash2(x * 3, y + seed) < 0.3) v = 35; // musgo na base
+      put(x, y, v);
+    }
+  }
+  /* contorno de tinta */
+  for (let y = 0; y < Hc; y++) for (let x = 0; x < Wc; x++) {
+    const v = buf[y * Wc + x];
+    if (v < 0 || v === 0) continue;
+    if ((x > 0 && buf[y * Wc + x - 1] < 0) || (x < Wc - 1 && buf[y * Wc + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * Wc + x] < 0) || (y < Hc - 1 && buf[(y + 1) * Wc + x] < 0)) buf[y * Wc + x] = 0;
+  }
+  return bufToTex({ buf, W: Wc, H: Hc });
+}
+/* coluna CAÍDA: o fuste deitado na grama, canelura em arcos, face do
+   corte visível — a grama já cresce por cima */
+function genFallenColumn(seed) {
+  const Wf = 56, Hf = 20;
+  const buf = new Int16Array(Wf * Hf).fill(-1);
+  const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < Wf && y < Hf) buf[y * Wf + x] = v; };
+  const cy = 11, R = 5.2;
+  for (let x = 4; x < Wf - 6; x++) {
+    for (let y = cy - R | 0; y <= cy + R * 0.7; y++) {
+      const ny = (y - cy) / R;
+      if (Math.abs(ny) > 1) continue;
+      const fl = ((x + 2) % 5);
+      let v = ny < -0.55 ? 8 : ny < 0.1 ? (fl === 0 ? 2 : 7) : fl === 0 ? 1 : 6;
+      if (hash2(x * 3, y * 7 + seed) < 0.08) v = 35;             // musgo
+      put(x, y, v);
+    }
+  }
+  for (let y = cy - R | 0; y <= cy + R * 0.7; y++) { // face do corte (elipse na ponta)
+    const ny = (y - cy) / R;
+    if (Math.abs(ny) > 1) continue;
+    const half = Math.sqrt(1 - ny * ny) * 2.4;
+    for (let x = Wf - 6 - half | 0; x < Wf - 6 + half; x++) put(x, y, hash2(x, y + seed) < 0.4 ? 2 : 6);
+  }
+  for (let i = 0; i < 12; i++) { // grama crescendo por cima da base
+    const gx = 5 + hash2(i * 37, seed) * (Wf - 12), gh = 2 + hash2(i * 53, seed) * 3;
+    for (let k = 0; k <= gh; k++) put(gx, cy + R * 0.7 - k + 2, k === gh ? 32 : 30);
+  }
+  for (let y = 0; y < Hf; y++) for (let x = 0; x < Wf; x++) {
+    const v = buf[y * Wf + x];
+    if (v <= 0) continue;
+    if ((x > 0 && buf[y * Wf + x - 1] < 0) || (x < Wf - 1 && buf[y * Wf + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * Wf + x] < 0) || (y < Hf - 1 && buf[(y + 1) * Wf + x] < 0)) buf[y * Wf + x] = 0;
+  }
+  return bufToTex({ buf, W: Wf, H: Hf });
+}
+/* obelisco TORTO: afundou de um lado e ficou apontando errado — glifos
+   lavanda descendo a face, ponta lascada */
+function genObelisk(seed) {
+  const Wo = 26, Ho = 80;
+  const buf = new Int16Array(Wo * Ho).fill(-1);
+  const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < Wo && y < Ho) buf[y * Wo + x] = v; };
+  const lean = 7; // px de inclinação do topo
+  for (let y = 4; y < Ho; y++) {
+    const t = 1 - y / Ho;                       // 1 topo .. 0 base
+    const cx = 13 + lean * t * t;
+    const hw = 2.2 + (1 - t) * 4.2;
+    for (let x = Math.round(cx - hw); x <= Math.round(cx + hw); x++) {
+      const sfrac = (x - cx) / hw;
+      let v = sfrac < -0.35 ? 6 : sfrac < 0.35 ? 34 : 1; // basalto com lado aceso (a v1 lia como pilar preto)
+      if (y < 9 && hash2(x * 5, y * 3 + seed) < 0.4) v = -1;     // ponta lascada
+      if (v >= 0) put(x, y, v);
+    }
+    if (y % 4 === 1 && y > 12 && y < Ho - 6 && hash2(y * 11, seed) > 0.25) {
+      put(Math.round(cx) - 1, y, 52); put(Math.round(cx), y, 52); // glifos
+      if (hash2(y, seed * 3) < 0.4) put(Math.round(cx) + 1, y + 1, 51);
+    }
+  }
+  for (let y = 0; y < Ho; y++) for (let x = 0; x < Wo; x++) {
+    const v = buf[y * Wo + x];
+    if (v < 0) continue;
+    if ((x > 0 && buf[y * Wo + x - 1] < 0) || (x < Wo - 1 && buf[y * Wo + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * Wo + x] < 0)) { if (v !== 0) buf[y * Wo + x] = 0; }
+  }
+  return bufToTex({ buf, W: Wo, H: Ho });
+}
+/* A CABEÇA: uma cabeça colossal de pedra, DE PÉ e afundada até os olhos
+   — a cada pulso ela desce mais um nada (lore literal: "ruínas afundam um
+   pouco mais"). "Nas profundezas vive um horror sem cabeça" (LORE.md). */
+function genHead(seed) {
+  const Wh = 60, Hh = 44;
+  const rnd = mulberry32(seed * 8887 + 5);
+  const buf = new Int16Array(Wh * Hh).fill(-1);
+  const put = (x, y, v) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < Wh && y < Hh) buf[y * Wh + x] = v; };
+  const groundY = Hh - 8;                 // linha da grama
+  const cx = 30, cyd = groundY + 10, Rx = 25, Ry = 32; // domo: centro ABAIXO do chao
+  for (let y = 2; y < groundY; y++) {
+    const ny = (y - cyd) / Ry;
+    if (ny < -1) continue;
+    const half = Math.sqrt(Math.max(0, 1 - ny * ny)) * Rx;
+    /* lasca no cranio: mordida na silhueta esquerda-alta */
+    const chip = y > 6 && y < 13 ? (13 - y) * 1.6 : 0;
+    for (let x = Math.round(cx - half + chip * (y < 13 ? 1 : 0)); x <= Math.round(cx + half); x++) {
+      const nx = (x - cx) / Rx;
+      const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+      let lam = -nx * 0.5 - ny * 0.72 + nz * 0.2;
+      lam += (BAYER[y & 3][x & 3] / 16 - 0.5) * 0.18; // dither em TODA borda de banda
+      const v = lam > 0.55 ? 8 : lam > 0.2 ? 7 : lam > -0.2 ? 6 : 2;
+      put(x, y, hash2(x * 3 + seed, y * 5) < 0.05 ? Math.max(2, v - 1) : v);
+    }
+  }
+  /* ARCADA: viga pesada de sombra atravessando o rosto (o T de moai) */
+  const browY = groundY - 12;
+  for (let k = -16; k <= 16; k++) {
+    const dip = Math.abs(k) < 3 ? 1 : 0;  // desce no meio (raiz do nariz)
+    if (buf[(browY + dip) * Wh + cx + k] >= 0) { put(cx + k, browY + dip, 1); put(cx + k, browY + 1 + dip, 2); }
+  }
+  /* OLHOS fechados: dois arcos caidos, simetricos, logo acima da grama */
+  for (const s of [-1, 1]) {
+    const ex = cx + s * 10;
+    for (let k = -4; k <= 4; k++) {
+      const drop = Math.abs(k) > 2 ? 1 : 0;
+      put(ex + k, browY + 5 + drop, 1);
+      put(ex + k, browY + 6 + drop, 2);   // palpebra
+    }
+  }
+  /* NARIZ: ponte LARGA e clara com arestas de tinta dos dois lados,
+     descendo da arcada e MERGULHANDO na terra */
+  for (let y = browY + 1; y < groundY + 1; y++) {
+    const w = 3 + ((y - browY) / 6 | 0);
+    put(cx - w, y, 1); put(cx + w, y, 1);             // arestas de tinta
+    put(cx + w + 1, y, 2);                            // sombra projetada à direita
+    for (let k = -w + 1; k <= w - 1; k++) put(cx + k, y, k < 0 ? 8 : 7); // dorso aceso
+  }
+  /* rachadura descendo o lado ESQUERDO do domo + musgo em manchas */
+  for (let y = 4; y < browY - 1; y++) { const rx2 = cx - 14 + ((vnoise(y * 0.37, seed) - 0.5) * 6) | 0; if (buf[y * Wh + rx2] >= 2) put(rx2, y, 1); }
+  for (let c = 0; c < 5; c++) {
+    const mx0 = cx - Rx * 0.5 + rnd() * Rx, my0 = 3 + rnd() * 9, mr = 2 + rnd() * 2.6;
+    for (let oy = -mr; oy <= mr; oy++) for (let ox = -mr * 1.6; ox <= mr * 1.6; ox++) {
+      if ((ox * ox) / (mr * mr * 2.56) + (oy * oy) / (mr * mr) > 1) continue;
+      if (buf[((my0 + oy) | 0) * Wh + ((mx0 + ox) | 0)] >= 6 && rnd() < 0.85) put(mx0 + ox, my0 + oy, rnd() < 0.6 ? 35 : 36);
+    }
+  }
+  /* contorno de tinta ANTES do enterro (base fica sem contorno = assentada) */
+  for (let y = 0; y < Hh; y++) for (let x = 0; x < Wh; x++) {
+    const v = buf[y * Wh + x];
+    if (v <= 0) continue;
+    if ((x > 0 && buf[y * Wh + x - 1] < 0) || (x < Wh - 1 && buf[y * Wh + x + 1] < 0) ||
+        (y > 0 && buf[(y - 1) * Wh + x] < 0) || (y < Hh - 1 && buf[(y + 1) * Wh + x] < 0)) buf[y * Wh + x] = 0;
+  }
+  /* ENTERRO: faixa de terra em dither + grama crescendo POR CIMA */
+  for (let x = 0; x < Wh; x++) {
+    if (buf[(groundY - 1) * Wh + x] < 0 && buf[(groundY - 2) * Wh + x] < 0) continue;
+    for (let y = groundY - 2; y < groundY + 2 && y < Hh; y++) {
+      if ((BAYER[y & 3][x & 3] / 16) < 0.7) put(x, y, y < groundY ? 1 : 34);
+    }
+    if (hash2(x * 13, seed) < 0.62) {
+      const gh = 2 + hash2(x * 7, seed * 3) * 4;
+      for (let k = 0; k <= gh; k++) put(x + (k > gh - 1 ? 1 : 0), groundY + 1 - k, k >= gh - 1 ? 32 : 30);
+    }
+  }
+  return bufToTex({ buf, W: Wh, H: Hh });
+}
+/* POSICIONAMENTO (primeiro corte — o ideador ajusta pela imagem): a Cabeça e
+   o obelisco no sítio ao sul do largo (onde ficava o Santuário); duas colunas
+   partidas ladeando-a e uma já no chão. Longe do carreiro e do chafariz. */
+{
+  /* A CABEÇA — colosso afundado até os olhos, mato no topo. Nos tiles de
+     CAMPINA (m) da beira sul do largo: em tile de floresta a árvore nascia
+     colada e tapava a peça — a campina deixa a ruína respirar (D-31: dentro
+     do anel não há árvore; aqui, fora dele, escolhem-se tiles 'm'). */
+  bills.push({ x: 47.5, y: 22.4, genFrames: [genHead(11)], label: 'a-cabeca', scale: 1.35, lift: 0 });
+  addTrunk(47, 22, 47.5, 22.4, 0.55);
+  stampTreeShadow(47.5, 22.4, 1.5, 1.1, 0.5); // assenta a Cabeça no chão
+  /* OBELISCO TORTO que emoldura a cena (a leste da Cabeça) */
+  bills.push({ x: 49.4, y: 23.4, genFrames: [genObelisk(3)], label: 'obelisco', scale: 1.9, lift: 0 });
+  addTrunk(49, 23, 49.4, 23.4, 0.22);
+  /* COLUNAS QUEBRADAS ladeando a cena — cada uma partida numa altura */
+  for (const [cxp, cyp, sc] of [[45.7, 22.3, 1.5], [50.6, 23.4, 1.6]]) {
+    bills.push({ x: cxp, y: cyp, genFrames: [genColumn((cxp * 31 + cyp * 7) | 0)], label: 'coluna', scale: sc, lift: 0 });
+    addTrunk(cxp | 0, cyp | 0, cxp, cyp, 0.18);
+    stampTreeShadow(cxp, cyp, 0.5 + sc * 0.5, 0.42, 0.4);
+  }
+  bills.push({ x: 48.3, y: 23.5, genFrames: [genFallenColumn(21)], label: 'coluna', scale: 0.5, lift: 0 });
+  stampTreeShadow(48.3, 23.5, 0.6, 0.9, 0.36);
+}
 
 /* O CHAFARIZ (D-38, pedido do ideador): a água do Pulso aflora no coração
    do largo. O corpo vertical vive aqui (pedestal, taça, JATO subindo e dois
@@ -3079,6 +3327,18 @@ function render(now) {
       // "rotações Doom": a face muda conforme o ângulo de onde você olha
       const va = Math.atan2(b.y - cam.y, b.x - cam.x);
       genTex = b.genViews[((Math.round(va / (Math.PI / 2)) % 4) + 4) % 4];
+    } else if (b.treeViews) {
+      /* árvore 3D (8 rotações Doom): a vista muda conforme o azimute câmera->
+         árvore — o MESMO right do raycaster, então o índice sai direto. Se a
+         vista exata ainda não foi assada (o idle-bake fecha o anel nos 1ºs
+         segundos), usa a mais próxima já pronta. Segue label 'arvore' -> cai
+         nos blocos RS da D-45 sem mudança. */
+      const va = Math.atan2(b.y - cam.y, b.x - cam.x);
+      const vi = ((Math.round(va / (Math.PI * 2 / N_TREE_VIEWS)) % N_TREE_VIEWS) + N_TREE_VIEWS) % N_TREE_VIEWS;
+      genTex = b.treeViews[vi];
+      for (let o = 1; o < N_TREE_VIEWS && !genTex; o++) {
+        genTex = b.treeViews[(vi + o) % N_TREE_VIEWS] || b.treeViews[(vi - o + N_TREE_VIEWS) % N_TREE_VIEWS];
+      }
     }
     const tex = genTex ?? textures[b.tex];
     const tw = genTex ? genTex.w : TEX, th = genTex ? genTex.h : TEX;
