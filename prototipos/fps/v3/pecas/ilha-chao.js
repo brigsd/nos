@@ -9,7 +9,7 @@
 export const meta = {
   nome: 'ilha-chao',
   tipo: 'chao',
-  desc: 'a ilha flutuante na escala v2: grama, lago com praia e a beirada sobre o mar de nuvens',
+  desc: 'a ilha flutuante na escala v2: grama, lago com praia e a beirada de terra',
 };
 
 export function construir(ctx) {
@@ -82,15 +82,6 @@ export function construir(ctx) {
     if (h < 0.02) i = 3; else if (h > 0.985) i = 63;  // conchinha/grão
     return i;
   });
-  /* mar de nuvens: cumes brancos e vales azuis (amplitude esticada — o fbm
-     cru mal cruzava os limiares e virava plano liso) */
-  const CLOUD = texCanvas(256, 256, (x, y) => {
-    const bx = x / 36, by = y / 36;
-    const raw = fbm(bx + 3, by + 7) * 0.62 + fbm(bx * 2.6 + 11, by * 2.6 + 1) * 0.38;
-    const n = (raw - 0.5) * 2.6 + 0.5;
-    return n > 0.68 ? 9 : n > 0.46 ? 8 : n > 0.26 ? 48 : 46;
-  });
-
   /* ---------- geometria ---------- */
   const N = 96, R0 = 28;                 // ~56u de diâmetro = a ilha da v2
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -111,7 +102,7 @@ export function construir(ctx) {
     skirt.push([c * Rr * 0.965, -2.4, s * Rr * 0.965]);
   }
 
-  const top = Mesh(), rock = Mesh(), water = Mesh(), sand = Mesh(), cloud = Mesh();
+  const top = Mesh(), rock = Mesh(), water = Mesh(), sand = Mesh();
 
   // capa de grama (leque do centro à borda) — 1 repeat de textura a cada 4u
   const uvG = p => [p[0] / 4, p[2] / 4];
@@ -145,20 +136,15 @@ export function construir(ctx) {
       [0, 1, 0]);
   }
 
-  // mar de nuvens: plano ENORME bem abaixo; derrete no céu ao longe (fog).
-  // uS=18 -> ~24u por repetição (com 6 a área visível caía DENTRO de um blob)
-  const CY = -16, CX = 220;
-  quad(cloud, [-CX, CY, CX], [CX, CY, CX], [CX, CY, -CX], [-CX, CY, -CX], 18, 18, [0, 1, 0]);
+  // (mar de nuvens apagado a pedido do ideador — a ilha flutua no céu limpo)
 
   return {
     palco: false,       // ESTA peça é o chão
     particulas: false,  // sem pólen em paisagem
-    fog: [120, 300],    // névoa recuada: o mar de nuvens fica VISÍVEL (com a
-                        // padrão ele derretia inteiro no céu — provado no A/B)
-    far: 320,           // o mar de nuvens não pode ser cortado pelo far padrão
+    fog: [80, 160],     // ilha inteira nítida, some no céu ao longe
+    far: 200,
     camera: { e: 16, r: 46 },  // órbita padrão ALTA (a de objeto nasce dentro da ilha)
     lotes: [
-      { mesh: cloud, tex: CLOUD },
       { mesh: rock, tex: ROCK },
       { mesh: top, tex: GRASS },
       { mesh: sand, tex: SAND },
