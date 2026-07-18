@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 106,
-    "worldTime": 6360
+    "tickCount": 107,
+    "worldTime": 6420
   },
   "width": 64,
   "height": 64,
@@ -5023,6 +5023,11 @@
       "worldTime": 6360,
       "nativeId": "quilha",
       "message": "O pão tá quentinho na cozinha. Venham se aquecer e compartilhar suas histórias!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 107,
+      "worldTime": 6420
     }
   ],
   "natives": {
@@ -5030,7 +5035,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 4,
+        "x": 5,
         "y": 9
       },
       "behaviorTree": "wanderer",
