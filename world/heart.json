@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 100,
-    "worldTime": 6000
+    "tickCount": 102,
+    "worldTime": 6120
   },
   "width": 64,
   "height": 64,
@@ -4937,6 +4937,30 @@
       "type": "core_pulse",
       "tick": 100,
       "worldTime": 6000
+    },
+    {
+      "type": "native_spoke",
+      "tick": 101,
+      "worldTime": 6060,
+      "nativeId": "brasa",
+      "message": "Venham, o pão tá quentinho! Histórias novas sempre aquecem. Quem se anima?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 101,
+      "worldTime": 6060,
+      "nativeId": "quilha",
+      "message": "O pão tá quentinho! Quem vem se aquecer e compartilhar suas histórias?"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 101,
+      "worldTime": 6060
+    },
+    {
+      "type": "core_pulse",
+      "tick": 102,
+      "worldTime": 6120
     }
   ],
   "natives": {
