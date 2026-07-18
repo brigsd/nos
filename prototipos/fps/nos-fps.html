@@ -1605,27 +1605,15 @@ for (let ty = 0; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
   if (world.at(tx, ty) === 'r') HIDDEN_RUINS.add(ty * world.w + tx);
 }
 const CITY = new Map();
-const cityWall = (tx, ty, kind, h, mm) => CITY.set(ty * world.w + tx, { tex: CT[kind], h, mm });
+const cityWall = (tx, ty, kind, h, mm) => CITY.set(ty * world.w + tx, { tex: CT[kind], h, mm, tile: kind === 'ruin' || kind === 'ruinDark' });
 /* v3 — AS RUÍNAS (transplante da branch tree3d-leaves): as 4 oficinas
    (Estaleiro/Forja/Bancada/Cozinha) e o Santuário do Pulso SAÍRAM. A Clareira
    não é uma vila que os Nativos construíram — é o que RESTOU de quem veio
    antes (quem fez o Commit Primordial? ninguém sabe — LORE.md).
-   O ANEL DA PRIMEIRA BATIDA (NW): círculo de MONÓLITOS de pedra escura com
-   glifos lavanda; as veias do Pulso correm mais fortes por baixo dele. (A
-   Torre da Crônica e os demais blocos de ruína da leaves ficaram DE FORA
-   deste corte — só o Anel + a Cabeça + o obelisco vieram.) */
-const RD = '#484a77';
-cityWall(41, 9, 'ruinDark', 1.7, RD); cityWall(43, 9, 'ruinDark', 1.4, RD);
-cityWall(44, 10, 'ruinDark', 1.85, RD); cityWall(45, 12, 'ruinDark', 1.5, RD);
-cityWall(43, 13, 'ruinDark', 1.45, RD); cityWall(41, 13, 'ruinDark', 1.6, RD);
-cityWall(40, 11, 'ruinDark', 1.75, RD);
-/* sombra de CONTATO no chão ao longo de cada monólito (achado do ideador na
-   leaves: "de lado parece plano") — cola a ruína no terreno de qualquer lado.
-   Roda AQUI: neste ponto CITY só tem os monólitos (as oficinas saíram). */
-for (const [k, cwv] of CITY) {
-  const tx = k % world.w, ty = (k / world.w) | 0;
-  stampTreeShadow(tx + 0.5, ty + 0.5, 0.62 + cwv.h * 0.3, 0.74, 0.34);
-}
+   Os MONÓLITOS (o Anel da Primeira Batida) foram REMOVIDOS por inteiro (pedido
+   do ideador): como parede DDA liam chapados/espichados de lado; voltam quando
+   tiverem volume 3D de verdade. Por ora as ruínas são só A Cabeça + o obelisco
+   + as colunas (billboards), mais chafariz/arco/portal. CITY fica vazio. */
 
 /* o LARGO é calçado de pedra (decisão do ideador): lajotas irregulares
    assadas em 2 variantes 64px, mesmo esquema da grama — 1 lookup por pixel */
@@ -1793,7 +1781,11 @@ let tagsOn = false; try { tagsOn = localStorage.getItem('nos_tags') === '1'; } c
 /* billboards: máquinas, nativos, jogadores, portal (marco client-side do site) */
 const bills = [];
 function addBill(x, y, tex, frames, label, scale = 1, lift = 0) { bills.push({ x: x + 0.5, y: y + 0.5, tex, frames, label, scale, lift }); }
-for (const [name, p] of Object.entries(NOS_DATA.machines)) addBill(p.x, p.y, 'oficina', 1, name); /* selfGlow via label check abaixo */
+/* MÁQUINAS (forja/cozinha/bancada/estaleiro) NÃO são mais renderizadas no FPS
+   (pedido do ideador): com as oficinas removidas, os sintetizadores ficavam
+   flutuando soltos na ruína. É só client-side — seguem em world.machines
+   (heart.json) e no mapa 2D; voltam se um dia a Fábrica reaparecer. */
+// for (const [name, p] of Object.entries(NOS_DATA.machines)) addBill(p.x, p.y, 'oficina', 1, name);
 addBill(NOS_DATA.natives.gota?.x ?? 4, NOS_DATA.natives.gota?.y ?? 2, 'gota', 1, 'gota');
 addBill(NOS_DATA.natives.raiz?.x ?? 43, NOS_DATA.natives.raiz?.y ?? 6, 'raiz', 1, 'raiz');
 addBill(NOS_DATA.natives.cinza?.x ?? 25, NOS_DATA.natives.cinza?.y ?? 8, 'cinza', 1, 'cinza');
@@ -2470,31 +2462,13 @@ function genFountain(fr) {
    NPCs que pensam FORA do motor (GitHub Models + memória commitada, ver
    docs/HABITANTES.md) e publicam falas.json; aqui eles aparecem em casa,
    com balão de fala. Camada 100% opcional: sem rede, o mundo segue. */
-const HABITANTES = [];
-const HAB_TEX = { brasa: 'brasa' }; // avatar próprio por Habitante (D-42); o resto cai no 'avatar' genérico até ter arte
-(() => {
-  const FALAS_URL = 'https://raw.githubusercontent.com/brigsd/nos-mentes/main/falas.json';
-  const load = async () => {
-    try {
-      const r = await fetch(FALAS_URL, { cache: 'no-store' });
-      if (!r.ok) return;
-      const j = await r.json();
-      for (const h of j.habitantes ?? []) {
-        if (typeof h.x !== 'number' || typeof h.y !== 'number') continue;
-        let b = HABITANTES.find((q) => q.id === h.id);
-        if (!b) {
-          b = { x: h.x, y: h.y, tex: HAB_TEX[String(h.id)] || 'avatar', frames: 1, label: String(h.id), id: String(h.id), scale: 1, lift: 0, selfGlow: 0.12 };
-          HABITANTES.push(b);
-          bills.push(b);
-        }
-        b.x = h.x; b.y = h.y;
-        b.fala = String(h.fala ?? '').replace(/[<>&]/g, '').slice(0, 160); // mente escreve, a gente sanitiza
-      }
-    } catch { /* offline/file:// — A Clareira fica quieta, sem erro */ }
-  };
-  load();
-  setInterval(load, 90000);
-})();
+const HABITANTES = [];   // REMOVIDOS da v2 (pedido do ideador): as oficinas
+/* saíram e os Habitantes ficavam flutuando soltos na ruína. A busca do
+   falas.json + os billboards + balões saíram junto (o array vazio mantém os
+   laços de render/tag inertes). Combina com o corte de NPCs do D-57 (só o
+   mago-guia fica, no v3). As mentes em brigsd/nos-mentes seguem existindo — só
+   não são renderizadas aqui. (Os Nativos gota/raiz/cinza continuam, espalhados
+   na ilha — fora da ruína; saem só se o ideador pedir.) */
 
 /* ---------- O PORTAL MOSTRA OS MUNDOS (D-37, pedido do ideador) ----------
    Chegando perto do Portal do Átrio, o painel acende listando os mundos
@@ -2978,11 +2952,8 @@ function render(now) {
             sd = Math.min(sd, segDist(fx, fy, 48.4, 15.6, 51.1, 15.6) - (0.95 + wob * 0.4));
             sd = Math.min(sd, Math.hypot(fx - 51.1, fy - 15.6) - 1.2);
           }
-          /* pátios dos vãos das alas (as portas das oficinas) */
-          sd = Math.min(sd, Math.hypot(fx - 44.5, fy - 13.5) - 0.95);
-          sd = Math.min(sd, Math.hypot(fx - 48.5, fy - 13.5) - 0.95);
-          sd = Math.min(sd, Math.hypot(fx - 44.5, fy - 18.5) - 0.95);
-          sd = Math.min(sd, Math.hypot(fx - 48.5, fy - 18.5) - 0.95);
+          /* (as 4 lajes dos vãos das oficinas saíram junto com as oficinas —
+             transplante vila-ruína; o largo agora deságua só no corredor do Portal) */
           if (sd < 0 || (sd < 0.3 && (BAYER[y & 3][x & 3] / 16) < (1 - sd / 0.3) * 0.8)) {
             const st = STONE_TILES[(tx + ty) & 1];
             c = st.data[((((fy - ty) * GTEX) | 0) * GTEX + (((fx - tx) * GTEX) | 0))];
@@ -3112,10 +3083,14 @@ function render(now) {
       gwR = GI_R; gwG = GI_G; gwB = GI_Bv;
     }
     const texH = cw ? tex.h : TEX;
-    const texStep = texH / fullH;
+    /* ruínas LADRILHAM na vertical (ancorado à altura do mundo: 1 repetição de
+       textura por unidade), então o grão/glifo mantém o tamanho em qualquer
+       altura — sem isso um monólito alto ESPICHA a textura (texH/fullH). Em
+       parede de altura 1 (lineH==fullH) os dois caminhos são idênticos. */
+    const texStep = (cw && cw.tile) ? texH / Math.max(1, lineH) : texH / fullH;
     let texPos = (y0 - y0r) * texStep;
     for (let y = y0; y <= y1; y++) {
-      const v = clamp(texPos | 0, 0, texH - 1);
+      const v = (cw && cw.tile) ? (((texPos | 0) % texH) + texH) % texH : clamp(texPos | 0, 0, texH - 1);
       texPos += texStep;
       let c = texAt(tex, fIx, u, v);
       if (gwR !== 1 || gwG !== 1 || gwB !== 1) {
@@ -3158,10 +3133,10 @@ function render(now) {
         const f2 = fogAt(dist2) * (side === 1 ? 0.78 : 1);
         const glow2 = glowAt(mapX + 0.5, mapY + 0.5) * f2;
         const texH2 = cw2 ? tex2.h : TEX;
-        const texStep2 = texH2 / fullH2;
+        const texStep2 = (cw2 && cw2.tile) ? texH2 / Math.max(1, lineH2) : texH2 / fullH2;   // ruína ladrilha (não espicha)
         let texPos2 = (yTop2 - y0r2) * texStep2;
         for (let y = yTop2; y < y0; y++) {
-          const v = clamp(texPos2 | 0, 0, texH2 - 1);
+          const v = (cw2 && cw2.tile) ? (((texPos2 | 0) % texH2) + texH2) % texH2 : clamp(texPos2 | 0, 0, texH2 - 1);
           texPos2 += texStep2;
           px[y * W + x] = shade(texAt(tex2, 0, u2, v), f2, glow2);
         }
