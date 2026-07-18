@@ -87,6 +87,8 @@ export function criarInput({ stageEl, onPause }) {
     mouseLookDelta() { const d = { dx: mdx, dy: mdy }; mdx = 0; mdy = 0; return d; },
     /* eixo CONTÍNUO do stick direito (-1..1) — o chamador multiplica por taxa×dt */
     stickLook() { return { rx: JOY.rx, ry: JOY.ry }; },
+    /* verifica se Shift esquerdo ou direito está pressionado (sprint) */
+    shiftHeld() { return keys.has('ShiftLeft') || keys.has('ShiftRight'); },
     guard() { for (const s of STICKS) s.guard(); },   // watchdog por quadro (D-48)
     clear,
   };
