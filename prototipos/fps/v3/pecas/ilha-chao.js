@@ -150,19 +150,23 @@ export function construir(ctx) {
      liso — o raio de cada anel varia por ângulo E por altura com ruído 3D, e
      as alturas jitteram → bossas/saliências irreguladas descendo até a quilha
      lumpy). É a silhueta que vende a altura, espalhadas embaixo e ao redor. */
-  function ilhota(cx, cy, cz, S, seed) {
+  function ilhota(cx, cy, cz, S, seed, o = {}) {
     const M = 40, LV = 5;
+    const bellyD = o.bellyD ?? 1.75;    // profundidade da quilha (× S)
+    const lump = o.lump ?? 0.6;         // amplitude das protuberâncias
+    const taperP = o.taperP ?? 1.4;     // >1 afunila (pontudo), <1 barrigudo
+    const sx = o.stretch ? o.stretch[0] : 1, sz = o.stretch ? o.stretch[1] : 1;  // oval
     const anel = (lv) => {
       const t = lv / LV;                                   // 0 topo .. 1 quilha
-      const taper = (1 - t) ** 1.4 * 0.92 + 0.06;
-      const yBase = cy - S * 1.75 * (t ** 0.9);
+      const taper = (1 - t) ** taperP * 0.92 + 0.06;
+      const yBase = cy - S * bellyD * (t ** 0.9);
       const pts = [];
       for (let i = 0; i <= M; i++) {
         const a = (i % M) / M * TAU, c = Math.cos(a), s = Math.sin(a);
         const bump = fbm(c * 2.4 + seed + t * 4, s * 2.4 + seed * 1.7 + t * 4) - 0.5;  // saliência
-        const R = S * taper * (0.80 + 0.20 * fbm(c * 1.4 + seed, s * 1.4 + seed) + bump * 0.6);
+        const Rr = S * taper * (0.80 + 0.20 * fbm(c * 1.4 + seed, s * 1.4 + seed) + bump * lump);
         const yj = yBase + (fbm(c * 3 + seed + t, s * 3 + seed) - 0.5) * S * 0.20;
-        pts.push([cx + c * R, yj, cz + s * R]);
+        pts.push([cx + c * Rr * sx, yj, cz + s * Rr * sz]);
       }
       return pts;
     };
@@ -179,7 +183,7 @@ export function construir(ctx) {
         quadUV(belly, p0, p1, p2, p3, [i / M * 5, v0], [(i + 1) / M * 5, v0], [(i + 1) / M * 5, v1], [i / M * 5, v1], [nx / nl, ny / nl, nz / nl]);
       }
     }
-    const last = rings[LV], keel = [cx + (fbm(seed, seed) - 0.5) * S * 0.25, cy - S * 1.98, cz + (fbm(seed + 1, seed + 1) - 0.5) * S * 0.25];
+    const last = rings[LV], keel = [cx + (fbm(seed, seed) - 0.5) * S * 0.25, cy - S * (bellyD + 0.23), cz + (fbm(seed + 1, seed + 1) - 0.5) * S * 0.25];
     for (let i = 0; i < M; i++) {
       const p0 = last[i], p1 = last[i + 1];
       let [nx, ny, nz] = faceNorm(p0, p1, keel, [(p0[0] + p1[0]) / 2 - cx, 0, (p0[2] + p1[2]) / 2 - cz]);
@@ -187,21 +191,23 @@ export function construir(ctx) {
       tri(belly, p0, p1, keel, [i / M * 5, 2.4], [(i + 1) / M * 5, 2.4], [2.5, 3], [nx / nl, ny / nl, nz / nl]);
     }
   }
-  // GRANDES e LONGE no horizonte (maiores que a ilha de casa, R=28); perto do
-  // nível de casa (topo logo abaixo) pra pousarem NA linha do horizonte, hazy
-  ilhota(-270, -12, 130, 58, 1.3);
-  ilhota(310, -16, -90, 50, 2.7);
-  ilhota(130, -20, 300, 64, 3.9);
-  ilhota(-170, -10, -330, 60, 4.6);
-  ilhota(340, -22, 190, 46, 5.2);
-  ilhota(-330, -14, -150, 54, 6.4);
+  // arquipélago no horizonte: alturas ESPALHADAS (umas acima, outras bem abaixo
+  // de casa), distâncias variadas, tamanhos e FORMATOS distintos (pontuda,
+  // barriguda, oval, lumpy) — nada alinhado
+  ilhota(-250, 42, 170, 44, 1.3, { taperP: 1.9, lump: 0.7 });                  // acima, pontuda
+  ilhota(360, -58, -70, 72, 2.7, { taperP: 1.05, bellyD: 2.3, lump: 0.5 });    // abaixo, grandona barriguda
+  ilhota(120, 20, 410, 52, 3.9, { taperP: 1.5, stretch: [1.5, 0.8] });         // levemente acima, oval, longe
+  ilhota(-210, -80, -300, 46, 4.6, { taperP: 2.2, lump: 0.95, bellyD: 2.5 });  // bem abaixo, pontuda lumpy
+  ilhota(460, 52, 150, 37, 5.2, { taperP: 1.3 });                              // alta, menor, longe
+  ilhota(-410, -22, -200, 64, 6.4, { taperP: 1.6, lump: 0.8, stretch: [0.8, 1.35] }); // média, oval
+  ilhota(210, -100, 300, 48, 7.1, { taperP: 2.0, lump: 0.6 });                 // bem embaixo
 
   return {
     palco: false,       // ESTA peça é o chão
     particulas: false,  // sem pólen em paisagem
-    fog: [115, 320],    // casa nítida (rim a ~80); distantes em bruma mas ainda verdes
-    far: 800,           // as ilhas do horizonte estão a ~300u
-    camera: { e: 9, r: 52 },  // olha por cima da ilha de casa pro horizonte
+    fog: [120, 430],    // casa nítida; as do horizonte (250–460u) em bruma gradual
+    far: 950,
+    camera: { e: 13, r: 58 },  // recuada e um tico alta pra pegar a variação de altura
     lotes: [
       { mesh: belly, tex: BELLY },
       { mesh: rock, tex: ROCK },
