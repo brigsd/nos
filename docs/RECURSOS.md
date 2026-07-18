@@ -104,7 +104,7 @@ se houver arte) → `qa-tester` → merge → atualizar `docs/CONTINUITY.md` + c
 ## Docs de orientação
 
 `CLAUDE.md` (acordo + regras) · `docs/CODER.md` (método + bancadas + limites) ·
-`docs/CONTINUITY.md` (o "save game") · `docs/DECISIONS.md` (decisões numeradas) ·
+`docs/CONTINUITY.md` (o "save game") · `docs/DECISIONS.md` (índice de todas + ativas em detalhe) · `docs/DECISIONS-ARCHIVE.md` (detalhe histórico D-01…D-54) ·
 `docs/IMPLEMENTATION_PLAN.md` (o plano) · `docs/COMUNICACAO.md` (IDs/setores) ·
 `docs/ARCHITECTURE.md` · `docs/GDD.md` · `docs/LORE.md` · `docs/HABITANTES.md` ·
 `docs/CIDADE.md` · `docs/PORTALS_PROTOCOL.md`.

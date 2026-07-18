@@ -10,7 +10,7 @@ Tiago (`brigsd`) é o **ideador**: dono da visão, do rumo e do escopo. Você (C
 
 1. Leia `docs/CONTINUITY.md` — onde paramos e qual o próximo passo.
 2. Consulte `docs/IMPLEMENTATION_PLAN.md` — fase atual e checkboxes.
-3. Decisões já tomadas estão em `docs/DECISIONS.md` — não as re-discuta sem fato novo.
+3. Decisões já tomadas estão em `docs/DECISIONS.md` (índice de todas + ativas em detalhe; detalhe histórico em `docs/DECISIONS-ARCHIVE.md`) — não as re-discuta sem fato novo.
 4. Textos de jogo seguem `docs/LORE.md` — consistência narrativa é inegociável.
 5. Trabalho visual/no cliente oficial? `docs/CODER.md` é a sua bancada: `npm run olhar` (auditoria por screenshot, `?cam=`/`?tod=`), navegação no arquivo grande e os limites reais do ambiente com as mitigações que funcionam.
 6. Não sabe qual ferramenta/script/agente usar? `docs/RECURSOS.md` é o índice único de tudo (npm scripts, art-mcp, bancadas, MCP, os 6 agentes) com *como invocar*.
