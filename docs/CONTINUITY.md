@@ -2,6 +2,14 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-18 (parte 35) — vila-ruína na main + árvores 3D; gambiarra do arco/portal fora; copa das árvores sem corte (D-62, D-62b)
+
+- **Convergência na main**: o ideador quer tudo unificado na main. Apagou as branches `v2`/`v1`/`cidade-coracao` (confirmei antes: a main já é a v2 mais atual, byte-a-byte).
+- **Vila-ruína transplantada** (par de agentes coder+revisor em worktree, pra ele seguir na main comigo): na vila da v2 **manter chafariz+arco+portal**, **fora** oficinas velhas + Santuário + casa-D-53; da tree3d-leaves vieram as **árvores 3D**. A ideia de trazer monólitos+Cabeça foi revista → **monólitos removidos por completo** (liam chapados/espichados) e **todos os NPCs fora** (Habitantes/`falas.json`, máquinas=billboards de oficina, Nativos). Revisor: **zero regressão**. Mundo sci-fi decaído sem povo por ora (mago-guia vem depois, D-57).
+- **Gambiarra de profundidade REMOVIDA**: arco/portal fingiam volume com `b.depth` (D-50, até 40 fatias empilhadas = overdraw). Reconstruí o **arco como geometria REAL no v3** (peça `pecas/arco.js`: pilares caixa-4-faces + arco extrudado com intradorso/extradorso reais, UV ancorado à face; consertos: fresta no arranque + sinal da normal), depois **tirei o `depth` do arco/portal na v2**. A "casca de 4 planos" tentada na v2 falhou (o raycaster só faz billboard+parede, não caixa) → lição: **caixa de verdade é no v3**. Lado escuro da profundidade v3 = iluminação hemisférica (aceito), não bug.
+- **Copa das árvores SEM CORTE (D-62b)**: o ideador flagrou "folhagem cortada em um monte de árvore". **Medido** (`scratchpad/medir-corte.mjs`, gerador real `renderTreeView3D`): NÃO era resolução (minha aposta) — o buffer **166×218** era estreito e **carvalho/copado** (as 2 mais largas) estouravam ~8px de cada lado → `put()` fatiava reto. Só existem **6 sprites** reusados → as 2 bugadas repetem em ~1/3 da floresta ("é cópia" do ideador = literalmente certo). Fix: buffer **166→186**, mesmo `sizeMul` (mesma nitidez, mesmo tamanho no mundo — `sw=sh·(texW/texH)` com árvore centrada). Re-medido: **0 corte**; carreiro confirma copas inteiras.
+- **PRÓXIMO**: integrar a peça `arco` v3 num mundo (ainda isolada); portal pode virar caixa real no v3; seguir estruturas sci-fi decaído / mago-guia / economia (D-57).
+
 ## Sessão 2026-07-18 (parte 34) — resolução medida (32/64/128px) + o alicerce jogável do v3: câmera livre, som, tiers, menu (D-61)
 
 - **O experimento**: dúvida do ideador sobre presets 32/64/128/256/512px de textura → mesmo método do D-44, mesma árvore em 5 resoluções, render 640×360. **128→256→512 são pixel-idênticas** (o buffer não resolve o excedente); 32→64 melhora, 64→128 é refinamento pequeno. Decisão: **presets Baixo=32/Médio=64/Alto=128**.
