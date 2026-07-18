@@ -26,6 +26,10 @@ Sem isso, as bancadas saem com uma mensagem pedindo exatamente esse comando.
 | `npm run ouvir` | **Bancada de som** (D-40): mede estado/ganho/RMS do áudio, barra a regressão muda. `npm run ouvir -- chafariz spawn` |
 | `npm run prancheta` | **Câmera de topo** (D-50): planta técnica viva de um recorte — colisões exatas, paredes+alturas, billboards, planos orientados (via `window.__nosMapa()`). `-- 25,8,50,20` p/ outro recorte. Fluxo completo: skill `/estruturas` |
 | `npm run res-bench` | **Bancada de desempenho** (D-45): FPS real por rAF + perfil por fase (`window.__nosPerf`: céu/chão/paredes/bill + pior-quadro/engasgos) nos 4 presets, com CPU÷4 como proxy de celular. `CAM=x,y,a` muda o ponto |
+| `npm run peca` | **Visor da OFICINA v3** (D-55): renderiza uma peça isolada no motor v3 em 3 ângulos. `npm run peca -- ilha-chao`, `-- arvore3d --e=3 --r=7`. Peças em `prototipos/fps/v3/pecas/` |
+| `npm run auditar` | **Gate de senso crítico [cpu]** (D-60): roda os 5 críticos numa peça v3 real, exit≠0 em achado. `npm run auditar -- ilha-chao`. Todo julgamento cita ≥1 número |
+| `npm run porteiro` | **Gate de render** (D-60): renderiza a peça via Playwright e falha em pageerror / `__ready`≠true / frame degenerado (decoder PNG próprio via zlib). `npm run porteiro -- arvore3d` |
+| `npm run bench` | **Benchmark dos críticos** (D-60): peças reais × 18 defeitos plantados + controles → placar F1 núcleo/adversarial por ferramenta. Mede se a ferramenta AJUDA, não se roda |
 | `npm run art` | CLI do art-mcp (= `node tools/art-mcp/cli.cjs`) — ver "Estúdio de arte" abaixo |
 | `npm run build:sprites` | Renderiza `assets/sprites/src/*.json` → `assets/sprites/*.png` + folhas de contato (= `node assets/tools/build.cjs`) |
 | `npm run lint:sprites` | Valida os PNGs de sprite (roda no CI) |

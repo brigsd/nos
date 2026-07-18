@@ -89,6 +89,31 @@ viva: colisões, alturas, planos), construir (`cityWall`/billboard `orient`+
 `depth`/`addTrunk`), prancheta de novo, `olhar` em 3 ângulos. Fonte única:
 `window.__nosMapa()`.
 
+## O senso crítico [cpu] — medir o que o olho engana (D-60)
+
+*Atrito de origem: o `hash2` do v3 espremia todo o ruído em [0,0.5) e o
+screenshot me enganava ("deve ser o fog"); só um histograma em Node pegou.
+O olho aprova o plausível; o número não mente.*
+
+Uma peça v3 (`prototipos/fps/v3/pecas/*.js`) passa por dois portões antes de
+eu confiar nela — e **todo julgamento cita ≥1 número**:
+
+```
+npm run auditar -- <peca>   # os 5 críticos [cpu] na malha+textura (exit≠0 em achado)
+npm run porteiro -- <peca>  # gate de render: pageerror/__ready/frame degenerado
+npm run bench               # mede se cada crítico AJUDA (F1 vs defeitos plantados)
+```
+
+- **`auditar`**: lint-de-malha (stride/tri/NaN/normal/degenerado), distancia-paleta
+  (CIEDE2000 + allowlist da madeira D-54f), detector-de-seam, detector-de-banding,
+  contador-de-pixels-orfaos. Rodam sobre o `construir()` da peça em **Node puro**
+  (`bench/sandbox.mjs`, canvas-stub) — sem browser, determinístico.
+- **`porteiro`**: renderiza de verdade (Playwright) e falha se a tela degenera.
+- **`bench`**: a meta-ferramenta — peças reais × 18 defeitos plantados dão o F1
+  de cada crítico (núcleo = veredito, adversarial = piso honesto). "Será que
+  ajuda?" é número, não fé. Limites por ferramenta na skill `/auditar-peca`.
+- Fluxo no loop: skill **`/auditar-peca`** entra antes de commitar peça nova.
+
 ## Navegar no `nos-fps.html` (o arquivo grande)
 
 *Atrito de origem: um edit às cegas na região do loop pendurou um `else` no

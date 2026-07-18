@@ -14,6 +14,13 @@ tools/
                prancheta.mjs — câmera de TOPO: planta técnica viva (colisões, alturas,
                                planos) via window.__nosMapa() — auditar/criar estrutura
                res-bench.mjs — desempenho por fase (window.__nosPerf) nos 4 presets
+               auditar.mjs   — gate de senso crítico [cpu]: os 5 críticos numa peça v3
+                               real, exit≠0 em achado (npm run auditar) — D-60
+               porteiro.mjs  — gate de render: pageerror/__ready/frame degenerado
+                               (decoder PNG próprio via zlib) (npm run porteiro) — D-60
+               bench/        — benchmark dos críticos (D-60): sandbox.mjs (roda construir()
+                               em Node puro), mutacoes.mjs (18 defeitos plantados),
+                               benchmark.mjs (placar F1), tools/ (os 5 críticos), pngstats.mjs
                out/          — PNGs de saída (gitignorado; evidência é regenerável, D-30)
 ```
 

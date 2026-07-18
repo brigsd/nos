@@ -62,7 +62,32 @@
 - [ ] F6 · Habitantes fase 3: mais verbos (/trocar, /fabricar, mover-se), presença no estado do mundo, GitHub App pra identidade própria de bot, mentes apadrinhadas pela comunidade (template)
 - [ ] C3 · A Clareira fase 3: doca do Estaleiro apontando pro vazio, letreiros/lampiões, interiores; arte de ruína de verdade pras ruínas NW (hoje ocultas no FPS)
 
-## v3 — O metaverso
+- [x] F18 · **Resolução por papel + render em camadas (D-44, D-45, D-47)**: `?res=` + `res-bench` provaram que textura satura (~64px) e o render interno rende em blocos RS×RS → 640×360 ~2× mais rápido; 3 rodadas de otimização (chão/billboards/pedra), minimapa a 30fps
+- [x] F19 · **Joystick à prova de gesto + billboards orientados (D-48, D-49)**: input de toque com defesa em 4 camadas (dono vivo/watchdog/rede touch); `b.orient` ancora arquitetura no mundo (arco/portal não giram mais); troca de preset sem teleporte (`nos_resume`)
+- [x] F20 · **Profundidade + A PRANCHETA + skill /estruturas (D-50)**: `b.depth` (extrusão em fatias adaptativas), `npm run prancheta` (planta viva via `__nosMapa()`), skill que formaliza o ciclo prancheta→construir→olhar
+- [x] F21 · **Lar unificado das ferramentas (D-52)**: bancadas → `tools/bancadas/`, `tools/README.md` como índice mestre (com as acopladas documentadas onde ficam)
+- [x] F22 · **Motor de SETOR/PORTAL (D-53)**: parede = segmento fino, porta = verga com vão livre embaixo (o raio entra e vê o interior), telhado roof-cast — a primeira casa DE VERDADE, enterável. "Seja crítico" pegou 3 defeitos reais
+
+## v3 (GPU) — o port em andamento (`main`; v2 congelado na branch `v2`)
+
+O ideador escolheu subir pra GPU e **portar o mundo do zero** (D-54/D-55). A `main`
+desenvolve o v3, publicado em `/fps/v3/` até a paridade; o `/fps/` (v2 CPU) segue no
+ar. Escopo travado (D-57): mundo explorável/construível + **economia** + **1 mago-guia**;
+linguagem **sci-fi decaído**; sem narrativa/craft/outros NPCs (o v2 fica como registro).
+
+- [x] V1 · **GPU provada (D-54)**: WebGL framebuffer fixo (`?res`) + upscale NEAREST, shadow-map PCF, luz de céu, texturas 64px, partículas. Protótipos `/fps/gpu.html` + `/fps/gpu-beauty.html`
+- [x] V2 · **A OFICINA (D-55)**: ambiente padrão de criação em `prototipos/fps/v3/` — motor modular (mat4/tex/geo/render) + contrato de peça (`construir(ctx)→{lotes, animar?}`) + `visor.html` + `npm run peca`
+- [x] V3 · **O plano da potência + `docs/FERRAMENTAS.md` (D-56)**: objetivo final "da frase ao mundo no ar em uma sessão, sem passo cego e sem regressão"; arsenal priorizado em 5 blocos
+- [x] V4 · **Chão v3 (D-58)**: `pecas/ilha-chao.js` (ilha flutuante escala v2, grama/lago/praia, ilhotas craggy no horizonte); opções de paisagem no motor (`palco`/`fog`/`far`/`camera`); bug do `hash2` consertado (medido, não olhado)
+- [x] V5 · **Árvores (D-59)**: `growTree` da v2 portado fiel (`motor/arvore.js`, billboard cruz) + `arvore3d.js` (tronco prisma + copa bola-3D lisa/oval); cutout shadows + auto-CLAMP NPOT
+- [x] V6 · **Ferramentas de senso crítico [cpu] MEDIDAS (D-60)**: benchmark (peças reais × 18 defeitos plantados → F1 por domínio), 5 críticos NÚCLEO F1=1.00, `npm run auditar/porteiro/bench`, skill `/auditar-peca`
+- [ ] V7 · **Plantar as árvores na ilha** (o port da natureza continua — terreno ✓, árvores ✓)
+- [ ] V8 · Estruturas em sci-fi decaído (concreto tomado por mato) — o idioma novo do NÓS
+- [ ] V9 · O mago-guia: base de conhecimento git-native (issue→Action responde), LLM ao vivo como fallback opcional
+- [ ] V10 · Economia no v3 (₱ / ledger / identidade — o único transferível entre mundos)
+- [ ] V11 · Paridade visual/perf com o v2 e virada do `/fps/` pro v3
+
+## Além do port — O metaverso (roadmap distante, D-17/D-18)
 - [ ] Portais e segundo mundo
 - [ ] Kit de criação de mundos + pipeline de PR comunitário (validação automática)
 - [ ] Federação: protocolo de portais entre repositórios (D-17)
