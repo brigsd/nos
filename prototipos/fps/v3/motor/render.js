@@ -26,9 +26,10 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; }
 
   const depthProg = prog(`
-    attribute vec3 aPos; uniform mat4 uLMVP, uModel; varying float vZ;
-    void main(){ vec4 p = uLMVP * uModel * vec4(aPos,1.0); gl_Position = p; vZ = p.z / p.w * 0.5 + 0.5; }`,
-    `precision highp float; varying float vZ; ${PACK} void main(){ gl_FragColor = packDepth(vZ); }`);
+    attribute vec3 aPos; attribute vec2 aUV; uniform mat4 uLMVP, uModel; varying float vZ; varying vec2 vUV;
+    void main(){ vec4 p = uLMVP * uModel * vec4(aPos,1.0); gl_Position = p; vZ = p.z / p.w * 0.5 + 0.5; vUV = aUV; }`,
+    `precision highp float; varying float vZ; varying vec2 vUV; uniform sampler2D uTex; ${PACK}
+     void main(){ if (texture2D(uTex, vUV).a < 0.5) discard; gl_FragColor = packDepth(vZ); }`);
 
   const scene = prog(`
     attribute vec3 aPos; attribute vec2 aUV; attribute vec3 aNrm;
@@ -82,11 +83,15 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
     `precision mediump float; varying vec2 vUV; uniform sampler2D uTex; void main(){ gl_FragColor = texture2D(uTex, vUV);} `);
 
   const AL = { pos: gl.getAttribLocation(scene,'aPos'), uv: gl.getAttribLocation(scene,'aUV'), nrm: gl.getAttribLocation(scene,'aNrm') };
-  const DL = gl.getAttribLocation(depthProg, 'aPos');
+  const DL = { pos: gl.getAttribLocation(depthProg,'aPos'), uv: gl.getAttribLocation(depthProg,'aUV') };
 
+  const isPOT = (n) => (n & (n - 1)) === 0;
   function glTex(cv) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    // REPEAT exige POT no WebGL1; sprite NPOT (árvore 166×218) com REPEAT = PRETO.
+    // billboard usa UV 0..1, então CLAMP é o certo pra NPOT.
+    const wrap = (isPOT(cv.width) && isPOT(cv.height)) ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); return t; }
   function glMesh(m) { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(m.v), gl.STATIC_DRAW); return { buf: b, n: m.v.length / 8 }; }
   function makeFBO(w, h) {
@@ -160,16 +165,16 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
       function resize() { const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = innerWidth * dpr | 0; canvas.height = innerHeight * dpr | 0; }
       addEventListener('resize', resize); resize();
       let t0 = performance.now(), frames = 0;
-      const draw = (prg, aL, withTex) => {
+      const draw = (prg, aL) => {
         const uM = gl.getUniformLocation(prg, 'uModel');
         const all = semPalco ? lotes : [stage, ...lotes];
         for (const L of all) {
           gl.uniformMatrix4fv(uM, false, L.matriz);
-          if (withTex) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex); }
+          gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex);   // ambos os passes: alfa p/ recorte
           gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
           gl.enableVertexAttribArray(aL.pos); gl.vertexAttribPointer(aL.pos, 3, gl.FLOAT, false, 32, 0);
-          if (withTex) { gl.enableVertexAttribArray(aL.uv); gl.vertexAttribPointer(aL.uv, 2, gl.FLOAT, false, 32, 12);
-            gl.enableVertexAttribArray(aL.nrm); gl.vertexAttribPointer(aL.nrm, 3, gl.FLOAT, false, 32, 20); }
+          gl.enableVertexAttribArray(aL.uv); gl.vertexAttribPointer(aL.uv, 2, gl.FLOAT, false, 32, 12);
+          if (aL.nrm !== undefined && aL.nrm >= 0) { gl.enableVertexAttribArray(aL.nrm); gl.vertexAttribPointer(aL.nrm, 3, gl.FLOAT, false, 32, 20); }
           gl.drawArrays(gl.TRIANGLES, 0, L.mesh.n);
         }
       };
@@ -184,7 +189,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFBO.fb); gl.viewport(0, 0, SM, SM);
         gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.clearColor(1,1,1,1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.useProgram(depthProg); gl.uniformMatrix4fv(gl.getUniformLocation(depthProg,'uLMVP'), false, lMVPf);
-        draw(depthProg, { pos: DL }, false);
+        gl.uniform1i(gl.getUniformLocation(depthProg,'uTex'), 0);
+        draw(depthProg, DL);
         // 2: cena
         gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO.fb); gl.viewport(0, 0, IW, IH);
         gl.disable(gl.DEPTH_TEST); gl.useProgram(bg);
@@ -201,7 +207,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
         gl.uniform2f(gl.getUniformLocation(scene,'uFog'), fogCfg[0], fogCfg[1]);
         gl.uniform1i(gl.getUniformLocation(scene,'uTex'), 0); gl.uniform1i(gl.getUniformLocation(scene,'uShadow'), 1);
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, shadowFBO.tex);
-        draw(scene, AL, true);
+        draw(scene, AL);
         // partículas (pólen do palco — paisagens desligam)
         if (!semParts) {
           gl.useProgram(parts); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.depthMask(false);
