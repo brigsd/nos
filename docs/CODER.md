@@ -114,6 +114,48 @@ npm run bench               # mede se cada crítico AJUDA (F1 vs defeitos planta
   ajuda?" é número, não fé. Limites por ferramenta na skill `/auditar-peca`.
 - Fluxo no loop: skill **`/auditar-peca`** entra antes de commitar peça nova.
 
+## O alicerce jogável do v3 — câmera livre, som, tiers (D-61)
+
+*Atrito de origem: o pedido de um preset de textura virou pedido de um menu
+de pausa inteiro (som/gráficos/controles/idioma) — e o v3 não tinha jogador,
+som, nem tiers de luz/sombra/partícula. Escolhido construir no v3, não no v2
+(D-57: perguntei o escopo ANTES, o ideador confirmou o v3).*
+
+```
+npm run jogar                                   # ponto de vista padrão
+npm run jogar -- --cam=-19,0,1.85,0             # câmera em x,z,yaw,pitch
+npm run jogar -- --pausado --aba=graficos       # abre o menu numa aba
+npm run jogar -- --ts=8 --sombra=0 --luz=2      # overrides de tier
+```
+
+- **`jogo.html`** (`prototipos/fps/v3/`) é o alicerce — ilha + árvores
+  plantadas (placeholder, não o "plantar árvores" definitivo) + jogador
+  andando + o menu completo. NÃO substitui `visor.html` (Oficina, peça
+  isolada em órbita) — são dois cidadãos do mesmo motor.
+- **`motor/render.js`** ganhou câmera LIVRE (`visor.setCam(pos,yaw,pitch)`,
+  chamada num hook `antesDoQuadro(dt,T)` por quadro) ao lado da órbita, e
+  3 tiers de motor de verdade (mudam custo real, não só aparência): sombra
+  (desligada pula os draw calls / 1024 / 2048), luz (zera o termo direcional
+  / atual / +rebote falso barato), partículas (contagem direta).
+- **`motor/input.js`** (novo): WASD+pointer-lock (desktop) + joystick touch
+  **portando FIEL** as 3 correções da v2 (D-47/48/49: dono vivo não é
+  roubado, dono fantasma é destronado por toque novo, watchdog por quadro,
+  rede touchend/cancel) — reinventar teria repetido os mesmos bugs.
+- **`motor/som.js`** (novo): porta o D-40/41 (vento constante + água por
+  proximidade) e sintetiza PASSOS (thump filtrado, jitter por passo) — dois
+  volumes independentes, mudos em 0, tudo Web Audio (zero arquivo, D-30).
+- **Textura por tier**: peças que querem respeitar o preset (Baixo/Médio/
+  Alto = 32/64/128px) leem `ctx.TS` — a MESMA convenção que `casa-toras.js`
+  já usava (`GT = 16*TS`), não um campo novo. Hoje só `arvore3d.js` respeita;
+  `ilha-chao.js` fica de fora (limite honesto).
+- **O QA achou 2 bugs reais** (não hipotéticos) antes do commit: o spawn
+  nascia quase dentro de uma árvore (não cruzei a lista de plantio com o
+  próprio spawn); os botões de canto (`voltar`/`✕`) perdiam a batalha de
+  especificidade CSS pra `.painel > button` (1 classe+1 elemento vence 1
+  classe só) e viravam uma barra larga sobreposta — corrigido subindo a
+  especificidade (`.painel .cantoBtn`). Os dois só apareceram no screenshot
+  real; "roda sem erro de JS" não teria pegado nenhum.
+
 ## Navegar no `nos-fps.html` (o arquivo grande)
 
 *Atrito de origem: um edit às cegas na região do loop pendurou um `else` no
