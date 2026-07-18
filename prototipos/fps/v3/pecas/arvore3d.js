@@ -68,12 +68,14 @@ export function construir(ctx) {
   };
   band(rFlare, rBase, 1, 0.85); band(rBase, rTop, 0.85, 0);
 
-  /* ---------- copa: BOLA 3D deformada (elipsoide lumpy, casca fechada) ----------
-     a forma É a geometria; o degradê topo-claro→base-escura sai da LUZ na
-     normal (não de textura pintada). Lumps por ruído = não vira bola lisa. */
+  /* ---------- copa: BOLA 3D deformada, LISA e OVAL (variante escolhida) ----------
+     normais por-vértice RADIAIS = superfície lisa (sem facetado); forma ovalada
+     (ry>rx) = cara de árvore, não pirulito; lumps por ruído quebram a bola. O
+     degradê topo→base sai da LUZ na normal; o "pop" vem do contorno de tinta
+     FINO (rim:1.0 no lote — feito no shader do motor). */
   const canopy = Mesh();
-  const cCenY = trunkH + 1.15, cRx = 1.55, cRy = 1.5;
-  const LAT = 8, LON = 12, AMP = 0.26;
+  const cRx = 1.35, cRy = 2.0, AMP = 0.34, LAT = 9, LON = 12;
+  const cCenY = trunkH + cRy * 0.92, cen = [0, cCenY, 0];
   const cpt = (a, o) => {
     const theta = a / LAT * Math.PI, phi = o / LON * Math.PI * 2;
     const cP = Math.cos(phi), sP = Math.sin(phi), sT = Math.sin(theta);
@@ -82,25 +84,22 @@ export function construir(ctx) {
     return [cP * rx, cCenY + cRy * Math.cos(theta) * (0.92 + 0.08 * bump), sP * rx];
   };
   const grid = Array.from({ length: LAT + 1 }, (_, a) => Array.from({ length: LON + 1 }, (_, o) => cpt(a, o)));
-  const faceNorm = (p0, p1, p2) => {
-    const u = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], v = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]];
-    let n = norm(cross(u, v));
-    const c = [(p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2 - cCenY, (p0[2] + p2[2]) / 2];  // ref radial
-    if (n[0] * c[0] + n[1] * c[1] + n[2] * c[2] < 0) n = [-n[0], -n[1], -n[2]];         // pra fora
-    return n;
+  const quad4 = (P, UV, Nn) => {
+    const push = (i) => canopy.v.push(P[i][0], P[i][1], P[i][2], UV[i][0], UV[i][1], Nn[i][0], Nn[i][1], Nn[i][2]);
+    push(0); push(1); push(2); push(0); push(2); push(3);
   };
   for (let a = 0; a < LAT; a++) for (let o = 0; o < LON; o++) {
-    const p0 = grid[a][o], p1 = grid[a][o + 1], p2 = grid[a + 1][o + 1], p3 = grid[a + 1][o];
-    const nrm = faceNorm(p0, p1, p2);
-    const u0 = o / LON * 2.5, u1 = (o + 1) / LON * 2.5, v0 = a / LAT * 2.5, v1 = (a + 1) / LAT * 2.5;
-    quadUV(canopy, p0, p1, p2, p3, [u0, v0], [u1, v0], [u1, v1], [u0, v1], nrm);
+    const P = [grid[a][o], grid[a][o + 1], grid[a + 1][o + 1], grid[a + 1][o]];
+    const UV = [[o / LON * 2.5, a / LAT * 2.5], [(o + 1) / LON * 2.5, a / LAT * 2.5], [(o + 1) / LON * 2.5, (a + 1) / LAT * 2.5], [o / LON * 2.5, (a + 1) / LAT * 2.5]];
+    const Nn = P.map((p) => norm([p[0] - cen[0], p[1] - cen[1], p[2] - cen[2]]));   // radial = liso
+    quad4(P, UV, Nn);
   }
 
   return {
-    camera: { e: 2.6, r: 6.2 },
+    camera: { e: 3.0, r: 7.2 },
     lotes: [
       { mesh: trunk, tex: BARK },
-      { mesh: canopy, tex: LEAFTEX },
+      { mesh: canopy, tex: LEAFTEX, rim: 1.0 },   // contorno de tinta fino
     ],
   };
 }

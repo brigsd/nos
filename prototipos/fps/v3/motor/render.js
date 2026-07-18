@@ -34,14 +34,14 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
   const scene = prog(`
     attribute vec3 aPos; attribute vec2 aUV; attribute vec3 aNrm;
     uniform mat4 uMVP, uLMVP, uModel; uniform vec3 uCam;
-    varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP;
-    void main(){ vec4 w = uModel * vec4(aPos,1.0);
+    varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP; varying vec3 vW;
+    void main(){ vec4 w = uModel * vec4(aPos,1.0); vW = w.xyz;
       gl_Position = uMVP * w; vUV = aUV; vN = mat3(uModel) * aNrm;
       vD = distance(w.xyz, uCam); vLP = uLMVP * w; }`, `
     precision highp float;
-    varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP;
+    varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP; varying vec3 vW;
     uniform sampler2D uTex, uShadow;
-    uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; ${PACK}
+    uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; uniform vec3 uCam; uniform float uRim; ${PACK}
     float shadow(){
       vec3 lc = vLP.xyz / vLP.w * 0.5 + 0.5;
       if (lc.x < 0.0 || lc.x > 1.0 || lc.y < 0.0 || lc.y > 1.0 || lc.z > 1.0) return 1.0;
@@ -57,6 +57,10 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
       float diff = max(0.0, dot(N, uSun));
       vec3 amb = mix(uGround, mix(uSkyHz, uSkyTop, clamp(N.y,0.0,1.0)), N.y*0.5+0.5) * 0.5;
       vec3 lit = tx.rgb * (amb + uSunCol * diff * shadow());
+      if (uRim > 0.0) {   // contorno de tinta FINO: só a borda mais rasante à vista
+        float r = 1.0 - abs(dot(N, normalize(uCam - vW)));
+        lit = mix(lit, vec3(0.11, 0.09, 0.12), uRim * smoothstep(0.78, 0.97, r));
+      }
       vec3 sky = uSkyHz; /* derrete pro tom do HORIZONTE do fundo (sem degrau) */
       float fog = clamp(1.0 - (vD - uFog.x)/uFog.y, 0.0, 1.0);
       gl_FragColor = vec4(mix(sky, lit, fog), 1.0);
@@ -151,7 +155,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
        palco:false = a peça substitui o chão de grama padrão (é ela o terreno);
        particulas:false = sem pólen (paisagem); fog:[início,alcance] em unidades */
     carregar(peca) {
-      lotes = peca.lotes.map(L => ({ mesh: glMesh(L.mesh), tex: glTex(L.tex), matriz: L.matriz || m4.ident() }));
+      lotes = peca.lotes.map(L => ({ mesh: glMesh(L.mesh), tex: glTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0 }));
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -167,9 +171,11 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
       let t0 = performance.now(), frames = 0;
       const draw = (prg, aL) => {
         const uM = gl.getUniformLocation(prg, 'uModel');
+        const uR = gl.getUniformLocation(prg, 'uRim');   // null no passe de profundidade
         const all = semPalco ? lotes : [stage, ...lotes];
         for (const L of all) {
           gl.uniformMatrix4fv(uM, false, L.matriz);
+          if (uR) gl.uniform1f(uR, L.rim || 0);          // contorno por lote
           gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex);   // ambos os passes: alfa p/ recorte
           gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
           gl.enableVertexAttribArray(aL.pos); gl.vertexAttribPointer(aL.pos, 3, gl.FLOAT, false, 32, 0);
