@@ -2,7 +2,21 @@
 
 > O contrário de Jogador Nº 1.
 
-## ▶ [JOGAR — abrir O Coração](https://brigsd.github.io/nos/fps/)
+## ▶ JOGAR — abrir O Coração (esta branch: `claude/tree3d-leaves`)
+
+> Esta branch ainda não foi mesclada na `main`, e o GitHub Pages só publica a
+> partir dela — o link de produção (`brigsd.github.io/nos/fps/`) por enquanto
+> **não** tem as árvores 3D daqui. Pra jogar com elas, rode local:
+>
+> ```bash
+> git clone https://github.com/brigsd/nos.git && cd nos
+> git checkout claude/tree3d-leaves
+> cd site && npm install && npm run dev
+> ```
+>
+> Abra a URL que o Vite imprimir (ex.: `http://localhost:5173/`) e vá em
+> `/fps/`. Depois que este branch for mesclado, o link de produção volta a
+> valer normalmente.
 
 Roda no navegador do **PC ou do celular**, em **primeira pessoa**. O mundo está vivo agora. 🌍
 (Prefere ver de cima? O [mapa 2D](https://brigsd.github.io/nos/) continua no ar — mesmo mundo, mesmo Registro.)
@@ -29,7 +43,7 @@ O primeiro mundo se chama **O Coração**. Ele pulsa. Mesmo agora.
 
 ## Como jogar
 
-**▶ [Abrir O Coração](https://brigsd.github.io/nos/fps/)** — PC ou celular, sem instalar nada. Primeira pessoa: **WASD** anda, **clique** captura o mouse para mirar (**ESC** solta e abre o menu), **←→**/arrastar também olham, **M** cicla o mapa (minimapa → mapa grande com setores), **I** liga as tags de identificação. Siga o carreiro de terra até **A Clareira**, a cidade-oficina. O [mapa 2D](https://brigsd.github.io/nos/) é a visão de cima do mesmo mundo, com os painéis (Mural, Comércio, Nativos, Portais).
+**▶ Nesta branch, rode local** (veja o comando acima) — o link de produção só reflete a `main`. Primeira pessoa: **WASD** anda, **clique** captura o mouse para mirar (**ESC** solta e abre o menu), **←→**/arrastar também olham, **M** cicla o mapa (minimapa → mapa grande com setores), **I** liga as tags de identificação. Siga o carreiro de terra até **A Clareira**, a cidade-oficina. O [mapa 2D](https://brigsd.github.io/nos/) é a visão de cima do mesmo mundo, com os painéis (Mural, Comércio, Nativos, Portais).
 
 - **Explorar é instantâneo:** no 2D, arraste para andar pelo mapa, pinça ou roda do mouse para dar zoom.
 - **Agir no mundo é por comando** (via issue): `/entrar` cria seu avatar; depois `/mover`, `/coletar`, `/dizer`, `/trocar` e `/fabricar` (as quatro máquinas vivem n'A Clareira). O tick processa em segundos e responde na sua própria issue.
