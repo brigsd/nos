@@ -9,7 +9,7 @@
 export const meta = {
   nome: 'ilha-chao',
   tipo: 'chao',
-  desc: 'a ilha flutuante na escala v2: grama, lago com praia + ilhotas craggy ao redor',
+  desc: 'a ilha de casa + ilhas grandes craggy longe no horizonte, em bruma',
 };
 
 export function construir(ctx) {
@@ -187,19 +187,21 @@ export function construir(ctx) {
       tri(belly, p0, p1, keel, [i / M * 5, 2.4], [(i + 1) / M * 5, 2.4], [2.5, 3], [nx / nl, ny / nl, nz / nl]);
     }
   }
-  ilhota(-46, -13, 22, 12, 1.3);
-  ilhota(50, -19, -14, 10, 2.7);
-  ilhota(14, -27, 52, 14, 3.9);
-  ilhota(-26, -10, -58, 15, 4.6);
-  ilhota(64, -31, 34, 9, 5.2);
-  ilhota(-62, -17, -34, 11, 6.4);
+  // GRANDES e LONGE no horizonte (maiores que a ilha de casa, R=28); perto do
+  // nível de casa (topo logo abaixo) pra pousarem NA linha do horizonte, hazy
+  ilhota(-270, -12, 130, 58, 1.3);
+  ilhota(310, -16, -90, 50, 2.7);
+  ilhota(130, -20, 300, 64, 3.9);
+  ilhota(-170, -10, -330, 60, 4.6);
+  ilhota(340, -22, 190, 46, 5.2);
+  ilhota(-330, -14, -150, 54, 6.4);
 
   return {
     palco: false,       // ESTA peça é o chão
     particulas: false,  // sem pólen em paisagem
-    fog: [80, 160],     // ilha inteira nítida, some no céu ao longe
-    far: 200,
-    camera: { e: 16, r: 46 },  // órbita padrão ALTA (a de objeto nasce dentro da ilha)
+    fog: [115, 320],    // casa nítida (rim a ~80); distantes em bruma mas ainda verdes
+    far: 800,           // as ilhas do horizonte estão a ~300u
+    camera: { e: 9, r: 52 },  // olha por cima da ilha de casa pro horizonte
     lotes: [
       { mesh: belly, tex: BELLY },
       { mesh: rock, tex: ROCK },
