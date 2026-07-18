@@ -57,6 +57,14 @@
     "tod": 0.8,
     "desc": "o largo à noite — veias, lampiões e janelas acesas"
   },
+  "monolitos": {
+    "cam": "42.5,17.0,-1.55",
+    "desc": "o Anel da Primeira Batida (transplante tree3d-leaves): monólitos de pedra escura com glifos lavanda ao norte do largo"
+  },
+  "cabeca": {
+    "cam": "46.5,21.3,0.72",
+    "desc": "A Cabeça colossal afundada até os olhos, mato no topo (transplante tree3d-leaves) — ao sul do largo, onde ficava o Santuário"
+  },
   "borda": {
     "cam": "5.5,32.0,3.14",
     "tod": 0.3,
