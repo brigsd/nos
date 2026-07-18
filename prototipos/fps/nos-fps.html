@@ -1786,9 +1786,13 @@ function addBill(x, y, tex, frames, label, scale = 1, lift = 0) { bills.push({ x
    flutuando soltos na ruína. É só client-side — seguem em world.machines
    (heart.json) e no mapa 2D; voltam se um dia a Fábrica reaparecer. */
 // for (const [name, p] of Object.entries(NOS_DATA.machines)) addBill(p.x, p.y, 'oficina', 1, name);
-addBill(NOS_DATA.natives.gota?.x ?? 4, NOS_DATA.natives.gota?.y ?? 2, 'gota', 1, 'gota');
-addBill(NOS_DATA.natives.raiz?.x ?? 43, NOS_DATA.natives.raiz?.y ?? 6, 'raiz', 1, 'raiz');
-addBill(NOS_DATA.natives.cinza?.x ?? 25, NOS_DATA.natives.cinza?.y ?? 8, 'cinza', 1, 'cinza');
+/* NATIVOS (gota/raiz/cinza) NÃO são mais renderizados no FPS (pedido do
+   ideador): a ruína é desabitada — o que restou de quem veio antes. Client-
+   side; seguem em world.natives (heart.json) e no mapa 2D. Combina com o D-57
+   (sem NPCs no mundo além do futuro mago-guia). */
+// addBill(NOS_DATA.natives.gota?.x ?? 4, NOS_DATA.natives.gota?.y ?? 2, 'gota', 1, 'gota');
+// addBill(NOS_DATA.natives.raiz?.x ?? 43, NOS_DATA.natives.raiz?.y ?? 6, 'raiz', 1, 'raiz');
+// addBill(NOS_DATA.natives.cinza?.x ?? 25, NOS_DATA.natives.cinza?.y ?? 8, 'cinza', 1, 'cinza');
 addBill(57, 32, 'portal', 2, 'portais'); /* recuado da borda da ilha */
 /* O Núcleo não é mais o orbe-bola (deslocado no cenário diurno — decisão do
    ideador, 2026-07-16): sua presença agora é LUZ — o glow violeta da praça
