@@ -26,13 +26,19 @@ v3/
 ## O contrato de peça
 
 ```js
-export const meta = { nome, tipo: 'objeto', desc };
+export const meta = { nome, tipo: 'objeto' | 'chao', desc };
 export function construir(ctx) {
   // ctx = { TS, tex: {texCanvas, dth, hash2, vnoise, fbm, PALETTE, RGB},
   //         geo: {Mesh, quad, quadUV, tri, box}, m4 }
   return {
     lotes: [{ mesh, tex, matriz? }],   // malha CPU + canvas; o visor sobe pra GPU
     animar?: (t, lotes) => {},          // anima trocando lotes[i].matriz
+    // opções de PAISAGEM (ilha-chao é o exemplo):
+    palco?: false,        // a peça É o chão -> some a grama padrão do visor
+    particulas?: false,   // sem pólen (em paisagem lia como enxame)
+    fog?: [início, alcance],  // névoa própria (a padrão esmaga cenas grandes)
+    far?: 320,            // far plane próprio (o padrão 60 cortaria o longe)
+    camera?: { e, r },    // órbita sugerida (?e/?r da URL vencem)
   };
 }
 ```

@@ -40,7 +40,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
     precision highp float;
     varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP;
     uniform sampler2D uTex, uShadow;
-    uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; ${PACK}
+    uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; ${PACK}
     float shadow(){
       vec3 lc = vLP.xyz / vLP.w * 0.5 + 0.5;
       if (lc.x < 0.0 || lc.x > 1.0 || lc.y < 0.0 || lc.y > 1.0 || lc.z > 1.0) return 1.0;
@@ -56,8 +56,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
       float diff = max(0.0, dot(N, uSun));
       vec3 amb = mix(uGround, mix(uSkyHz, uSkyTop, clamp(N.y,0.0,1.0)), N.y*0.5+0.5) * 0.5;
       vec3 lit = tx.rgb * (amb + uSunCol * diff * shadow());
-      vec3 sky = mix(uSkyHz, uSkyTop, 0.4);
-      float fog = clamp(1.0 - (vD - 6.0)/26.0, 0.0, 1.0);
+      vec3 sky = uSkyHz; /* derrete pro tom do HORIZONTE do fundo (sem degrau) */
+      float fog = clamp(1.0 - (vD - uFog.x)/uFog.y, 0.0, 1.0);
       gl_FragColor = vec4(mix(sky, lit, fog), 1.0);
     }`);
 
@@ -132,23 +132,37 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
 
   let lotes = [];       // [{mesh:{buf,n}, tex, matriz}]
   let animar = null;
+  let semPalco = false; // peça-chão (palco:false) É o chão: dispensa a grama padrão
+  let semParts = false; // paisagens desligam o pólen (particulas:false)
+  const FOG_PADRAO = [6, 26];
+  let fogCfg = FOG_PADRAO;
+  let farCfg = 60;  // far plane; paisagens (far>100) sobem o near junto (precisão do depth16)
+  let camCfg = {};  // câmera SUGERIDA pela peça {e,r} (paisagem pede órbita alta) — ?e/?r vencem
   const visor = {
     glTex, glMesh,
-    /* carrega uma peça construída: {lotes:[{mesh,tex,matriz?}], animar?} —
-       mesh ainda em CPU ({v}) e tex ainda canvas: o visor sobe pra GPU aqui */
+    /* carrega uma peça construída:
+       {lotes:[{mesh,tex,matriz?}], animar?, palco?, particulas?, fog?} —
+       mesh ainda em CPU ({v}) e tex ainda canvas: o visor sobe pra GPU aqui.
+       palco:false = a peça substitui o chão de grama padrão (é ela o terreno);
+       particulas:false = sem pólen (paisagem); fog:[início,alcance] em unidades */
     carregar(peca) {
       lotes = peca.lotes.map(L => ({ mesh: glMesh(L.mesh), tex: glTex(L.tex), matriz: L.matriz || m4.ident() }));
       animar = peca.animar || null;
+      semPalco = peca.palco === false;
+      semParts = peca.particulas === false;
+      fogCfg = peca.fog || FOG_PADRAO;
+      farCfg = peca.far || 60;
+      camCfg = peca.camera || {};
     },
     rodar(onFrame) {
       const fixedA = camOrbita ? null : (cam.a ?? 0.66);
-      const eye = cam.e ?? 1.15, rad = cam.r ?? 5.4;
+      const eye = cam.e ?? camCfg.e ?? 1.15, rad = cam.r ?? camCfg.r ?? 5.4;
       function resize() { const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = innerWidth * dpr | 0; canvas.height = innerHeight * dpr | 0; }
       addEventListener('resize', resize); resize();
       let t0 = performance.now(), frames = 0;
       const draw = (prg, aL, withTex) => {
         const uM = gl.getUniformLocation(prg, 'uModel');
-        const all = [stage, ...lotes];
+        const all = semPalco ? lotes : [stage, ...lotes];
         for (const L of all) {
           gl.uniformMatrix4fv(uM, false, L.matriz);
           if (withTex) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex); }
@@ -164,7 +178,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
         if (animar) animar(T, lotes);
         const ang = fixedA !== null ? fixedA : now / 5200;
         const ex = Math.sin(ang) * rad, ez = Math.cos(ang) * rad, camPos = [ex, eye, ez];
-        const mvpf = new Float32Array(m4.mul(m4.persp(58 * Math.PI/180, IW/IH, 0.05, 60), m4.lookAt(camPos, [0, 0.6, 0], [0, 1, 0])));
+        const near = farCfg > 100 ? farCfg / 1000 : 0.05;
+        const mvpf = new Float32Array(m4.mul(m4.persp(58 * Math.PI/180, IW/IH, near, farCfg), m4.lookAt(camPos, [0, 0.6, 0], [0, 1, 0])));
         // 1: sombra
         gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFBO.fb); gl.viewport(0, 0, SM, SM);
         gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.clearColor(1,1,1,1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -183,15 +198,18 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
         gl.uniform3fv(gl.getUniformLocation(scene,'uSun'), SUN_DIR); gl.uniform3fv(gl.getUniformLocation(scene,'uSunCol'), SUN_COL);
         gl.uniform3fv(gl.getUniformLocation(scene,'uSkyTop'), SKY_TOP); gl.uniform3fv(gl.getUniformLocation(scene,'uSkyHz'), SKY_HZ);
         gl.uniform3fv(gl.getUniformLocation(scene,'uGround'), GROUND_AMB);
+        gl.uniform2f(gl.getUniformLocation(scene,'uFog'), fogCfg[0], fogCfg[1]);
         gl.uniform1i(gl.getUniformLocation(scene,'uTex'), 0); gl.uniform1i(gl.getUniformLocation(scene,'uShadow'), 1);
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, shadowFBO.tex);
         draw(scene, AL, true);
-        // partículas
-        gl.useProgram(parts); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.depthMask(false);
-        gl.uniformMatrix4fv(gl.getUniformLocation(parts,'uMVP'), false, mvpf);
-        gl.uniform1f(gl.getUniformLocation(parts,'uT'), T); gl.uniform3fv(gl.getUniformLocation(parts,'uCam'), camPos);
-        gl.bindBuffer(gl.ARRAY_BUFFER, partVBO); gl.enableVertexAttribArray(PA); gl.vertexAttribPointer(PA, 3, gl.FLOAT, false, 0, 0);
-        gl.drawArrays(gl.POINTS, 0, NP); gl.depthMask(true); gl.disable(gl.BLEND);
+        // partículas (pólen do palco — paisagens desligam)
+        if (!semParts) {
+          gl.useProgram(parts); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.depthMask(false);
+          gl.uniformMatrix4fv(gl.getUniformLocation(parts,'uMVP'), false, mvpf);
+          gl.uniform1f(gl.getUniformLocation(parts,'uT'), T); gl.uniform3fv(gl.getUniformLocation(parts,'uCam'), camPos);
+          gl.bindBuffer(gl.ARRAY_BUFFER, partVBO); gl.enableVertexAttribArray(PA); gl.vertexAttribPointer(PA, 3, gl.FLOAT, false, 0, 0);
+          gl.drawArrays(gl.POINTS, 0, NP); gl.depthMask(true); gl.disable(gl.BLEND);
+        }
         // 3: blit
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, canvas.width, canvas.height); gl.disable(gl.DEPTH_TEST);
         gl.useProgram(blit); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneFBO.tex); gl.uniform1i(BT, 0);

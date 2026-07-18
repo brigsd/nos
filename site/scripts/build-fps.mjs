@@ -20,7 +20,7 @@
  * of the trigger paths (e.g. editing this file). Permanent fix is adding
  * 'prototipos/fps/**' to pages.yml — needs the ideador (workflow edits are
  * gated for the coder session). Until then: touch site/** to publish.
- * Published rounds: D-36/37/38 (2026-07-17), D-39, D-40 (som), D-41, D-42 (brasa), D-44 (?res=), D-45 (render em camadas + billboards), D-46 (menu de gráficos), D-45p3 (blocos linha+pedra), D-47 (joystick + 3ª otim), D-48 (joystick 4 camadas), D-49 (billboards orientados), D-50 (profundidade + prancheta), D-50b (espessura fina), D-51 (PLANTA v1 + Santuário), D-53 (motor de setor/portal: a primeira casa enterável), D-54 (protótipo GPU/WebGL em /fps/gpu.html), D-54c (beleza: madeira+tesoura+janelas-abertura), D-54d (casa de TORAS), D-54f (madeira castanho-mel + toras verticais + abas + telha de barro), D-55 (v3 + A OFICINA em /fps/v3/ — this touch).
+ * Published rounds: D-36/37/38 (2026-07-17), D-39, D-40 (som), D-41, D-42 (brasa), D-44 (?res=), D-45 (render em camadas + billboards), D-46 (menu de gráficos), D-45p3 (blocos linha+pedra), D-47 (joystick + 3ª otim), D-48 (joystick 4 camadas), D-49 (billboards orientados), D-50 (profundidade + prancheta), D-50b (espessura fina), D-51 (PLANTA v1 + Santuário), D-53 (motor de setor/portal: a primeira casa enterável), D-54 (protótipo GPU/WebGL em /fps/gpu.html), D-54c (beleza: madeira+tesoura+janelas-abertura), D-54d (casa de TORAS), D-54f (madeira castanho-mel + toras verticais + abas + telha de barro), D-55 (v3 + A OFICINA em /fps/v3/), D-58 (ilha-chao: o chão v3 nasce + hash2 consertado — this touch).
  *
  * prototipos/fps/nos-fps.html stays the single source of truth for the
  * prototype; site/public/fps/ is pure build output, regenerated before
