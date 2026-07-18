@@ -2,6 +2,14 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-18 (parte 34) — resolução medida (32/64/128px) + o alicerce jogável do v3: câmera livre, som, tiers, menu (D-61)
+
+- **O experimento**: dúvida do ideador sobre presets 32/64/128/256/512px de textura → mesmo método do D-44, mesma árvore em 5 resoluções, render 640×360. **128→256→512 são pixel-idênticas** (o buffer não resolve o excedente); 32→64 melhora, 64→128 é refinamento pequeno. Decisão: **presets Baixo=32/Médio=64/Alto=128**.
+- **O pedido cresceu**: o ideador queria os mesmos 3 níveis pra luz/sombra/partículas + som, num menu de pausa completo (continuar/configurações, voltar/✕, 4 abas: som/gráficos/controles/idioma). Nada disso existia no v3 (só órbita, sem input/som/tiers) → pergunta de escopo (D-57) → **ideador escolheu construir no v3**, não no v2.
+- **Construído**: `motor/render.js` ganhou câmera LIVRE (setCam) + tiers reais de sombra(0/1024/2048)/luz(flat/atual/+rebote falso)/partículas(80/320/800), com hook `antesDoQuadro` por quadro. `motor/input.js` (novo) — WASD+pointer-lock + joystick touch portando FIEL as correções D-47/48/49 (dono vivo/fantasma, watchdog, rede touch). `motor/som.js` (novo) — porta o D-40/41 (vento+água por proximidade) + sintetiza PASSOS (novo). `arvore3d.js` ganhou `ctx.TS` (reaproveitando a convenção do `casa-toras.js`, não um campo novo) e `ctx.seed` (pra plantar variar). `carregar()` dedupe mesh/textura por referência (pool de variantes de verdade). **`jogo.html`** (novo): ilha + 12 árvores placeholder + jogador andando + o menu completo.
+- **QA pegou 2 bugs reais**: spawn nascendo dentro de árvore (corrigido); `.cantoBtn` perdendo especificidade CSS pra `.painel > button` e virando barra sobreposta (corrigido). Bancada nova `npm run jogar` (irmã do `olhar-peca`).
+- **PRÓXIMO**: colisão real (D-53 não portado pro v3), `ilha-chao.js` respeitar `ctx.TS`, o "plantar árvores" definitivo (o scatter de 12 é placeholder), depois estruturas sci-fi decaído / mago-guia / economia (D-57).
+
 ## Sessão 2026-07-18 (parte 33) — port v3 da natureza (chão, árvores) + ferramentas de senso crítico MEDIDAS (D-56→D-60)
 
 - **Escopo v3 travado (D-57)**: debate curto reposicionou tudo — **o gargalo é o BRIEFING, não a ferramenta** (a palavra que o ideador buscava era "nós combinarmos informações"). Trato firmado: ele fala mais claro; eu **extraio o brief ANTES de construir** (nem que sejam 3 perguntas), não corro com o palpite; respostas diretas. Linguagem das estruturas do NÓS = **sci-fi decaído (concreto tomado por mato)**. Prune: v3 porta mundo explorável/construível + **economia** (₱/ledger/identidade, único transferível) + **1 NPC mago-guia** (base de conhecimento git-native, sem cota); SAI narrativa, outros NPCs, criaturas, craft. O v2 fica CONGELADO como registro — não apago, só não porto.

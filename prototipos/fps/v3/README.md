@@ -16,11 +16,19 @@ v3/
     mat4.js     matrizes (persp/ortho/lookAt/rotY/translate)
     tex.js      paleta Resurrect64, ruído, dither, texCanvas (índice | [r,g,b] | -1)
     geo.js      Mesh/quad/quadUV/tri/box (8 floats/vértice)
-    render.js   o VISOR: sol+sombra PCF, luz de céu, névoa, partículas, grama, blit
+    render.js   o VISOR: sol+sombra PCF (tier), luz de céu (tier), névoa, partículas
+                (tier), grama, blit — câmera ÓRBITA (Oficina) OU LIVRE (setCam, D-61)
+    input.js    teclado+mouse (pointer lock) + joystick touch (D-47/48/49 portado)
+    som.js      Web Audio: ambiente (vento+água por proximidade) + passos (D-61)
   pecas/        cada peça é um módulo JS autocontido (contrato abaixo)
     casa-toras.js   a cabana aprovada (D-54f) — a peça de referência
+    ilha-chao.js    o chão: ilha flutuante + ilhotas no horizonte (D-58)
+    arvore3d.js     árvore: tronco+copa 3D, respeita ctx.TS e ctx.seed (D-59/61)
     _modelo.js      template comentado ("olá mundo": cubo animado)
-  visor.html    abre qualquer peça: ?peca=nome&res=640&ts=4[&a=&e=&r=]
+  visor.html    abre uma peça ISOLADA: ?peca=nome&res=640&ts=4[&a=&e=&r=] — órbita
+  jogo.html     o ALICERCE jogável (D-61): ilha+árvores plantadas, câmera livre
+                (WASD/mouse/touch), pausa+configurações (som/gráficos/controles/
+                idioma). NÃO é o cliente v3 definitivo — é onde ele nasce.
 ```
 
 ## O contrato de peça
@@ -53,9 +61,18 @@ export function construir(ctx) {
 
 ## Limites honestos (hoje)
 
-- **Sons**: ainda no cliente v2 (`SOM`/`npm run ouvir`); peça de som entra na
-  oficina numa próxima rodada.
 - **Reflexos**: recurso do motor (passe planar/água), planejado, não feito.
-- **Câmera andável** (WASD/touch) no visor: ainda não — órbita/fixa por URL.
-- O cliente v3 em si (mundo, HUD, gameplay) é o PORT em andamento — a oficina
-  é a primeira cidadã do motor, não o jogo pronto.
+- **Sem colisão de verdade**: `jogo.html` só trava o jogador num raio (MAXR=25)
+  do centro da ilha — atravessa tronco de árvore, não cai na lagoa. O motor de
+  segmento/colisão da v2 (D-53) não foi portado ainda.
+- **As árvores plantadas em `jogo.html` são PLACEHOLDER**: 12 posições fixas,
+  4 variantes por seed — não é o "plantar árvores" definitivo (densidade,
+  espécie, relação com o terreno ainda em aberto).
+- **`ilha-chao.js` não respeita `ctx.TS`** (só `arvore3d.js` foi migrada) — o
+  tier de textura do menu não afeta grama/água/rocha, só as árvores.
+- **Sombra "Alto" (2048px) é PESADA**: medido em WebGL por software (sandbox)
+  caiu de ~20fps (Médio) pra ~10fps — trate como experimental até medir num
+  aparelho de verdade (a mesma ressalva do D-54 sobre swiftshader).
+- O cliente v3 em si (mundo, HUD, gameplay) é o PORT em andamento; `jogo.html`
+  é o primeiro alicerce jogável, não o jogo pronto — falta identidade/economia/
+  mago-guia (D-57) e a passagem de bastão do `/fps/` (v2) pro v3 (D-55).

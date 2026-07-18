@@ -81,7 +81,9 @@ linguagem **sci-fi decaído**; sem narrativa/craft/outros NPCs (o v2 fica como r
 - [x] V4 · **Chão v3 (D-58)**: `pecas/ilha-chao.js` (ilha flutuante escala v2, grama/lago/praia, ilhotas craggy no horizonte); opções de paisagem no motor (`palco`/`fog`/`far`/`camera`); bug do `hash2` consertado (medido, não olhado)
 - [x] V5 · **Árvores (D-59)**: `growTree` da v2 portado fiel (`motor/arvore.js`, billboard cruz) + `arvore3d.js` (tronco prisma + copa bola-3D lisa/oval); cutout shadows + auto-CLAMP NPOT
 - [x] V6 · **Ferramentas de senso crítico [cpu] MEDIDAS (D-60)**: benchmark (peças reais × 18 defeitos plantados → F1 por domínio), 5 críticos NÚCLEO F1=1.00, `npm run auditar/porteiro/bench`, skill `/auditar-peca`
-- [ ] V7 · **Plantar as árvores na ilha** (o port da natureza continua — terreno ✓, árvores ✓)
+- [x] V7 · **Resolução medida + o alicerce jogável (D-61)**: 32/64/128px confirmado (256/512 são idênticas no render 640×360); `jogo.html` novo — câmera livre (`motor/input.js`, portando D-47/48/49), som sintetizado (`motor/som.js`, porta D-40/41 + passos novo), tiers reais de sombra/luz/partículas no `render.js`, menu de pausa+configurações (4 abas). Bancada `npm run jogar`
+- [ ] V7b · **Plantar as árvores DE VERDADE** (o scatter de 12 do `jogo.html` é placeholder explícito — densidade/espécie/relação com o terreno em aberto)
+- [ ] V7c · Colisão real no v3 (o motor de segmento da v2, D-53, não foi portado — hoje só um raio-guarda)
 - [ ] V8 · Estruturas em sci-fi decaído (concreto tomado por mato) — o idioma novo do NÓS
 - [ ] V9 · O mago-guia: base de conhecimento git-native (issue→Action responde), LLM ao vivo como fallback opcional
 - [ ] V10 · Economia no v3 (₱ / ledger / identidade — o único transferível entre mundos)

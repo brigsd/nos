@@ -7,16 +7,21 @@
 import { m4 } from './mat4.js';
 import { texCanvas, fbm, hash2 } from './tex.js';
 
-const SM = 1024; // lado do shadow-map
 const SUN_DIR = (() => { const v = [0.48, 0.72, 0.5]; const l = Math.hypot(...v); return [v[0]/l, v[1]/l, v[2]/l]; })();
 const SUN_COL = [1.05, 0.98, 0.84], SKY_TOP = [0.55, 0.72, 0.95], SKY_HZ = [0.86, 0.90, 0.86], GROUND_AMB = [0.34, 0.30, 0.24];
+/* tiers de qualidade (D-61): sombra 0=desligada(pula o passe)/1=1024(atual)/2=2048;
+   luz 0=só ambiente/1=sol+sombra(atual)/2=+rebote falso; partículas = contagem direta */
+const SOMBRA_SM = { 0: 64, 1: 1024, 2: 2048 };
+const LUZ_TIER = { 0: { diff: 0, bounce: 0 }, 1: { diff: 1, bounce: 0 }, 2: { diff: 1, bounce: 0.12 } };
 
 const PACK = `
   vec4 packDepth(float d){ vec4 e = fract(d * vec4(1.0,255.0,65025.0,16581375.0)); e -= e.yzww * (1.0/255.0); return e; }
   float unpackDepth(vec4 c){ return dot(c, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0)); }`;
 
-export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
+export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, sombra = 1, particulasN = 320, luz = 1 }) {
   const IW = Math.max(160, res | 0), IH = Math.round(IW * 9 / 16);
+  const SM = SOMBRA_SM[sombra] ?? 1024, sombraOn = sombra > 0;
+  const LT = LUZ_TIER[luz] ?? LUZ_TIER[1];
   const gl = canvas.getContext('webgl', { antialias: false, depth: true });
   if (!gl) throw new Error('WebGL indisponível');
 
@@ -42,10 +47,11 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
     varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP; varying vec3 vW;
     uniform sampler2D uTex, uShadow;
     uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; uniform vec3 uCam; uniform float uRim; ${PACK}
+    uniform float uShadowTexel, uDiffOn, uBounce;
     float shadow(){
       vec3 lc = vLP.xyz / vLP.w * 0.5 + 0.5;
       if (lc.x < 0.0 || lc.x > 1.0 || lc.y < 0.0 || lc.y > 1.0 || lc.z > 1.0) return 1.0;
-      float cur = lc.z - 0.0035; float s = 0.0; float t = 1.0/${SM}.0;
+      float cur = lc.z - 0.0035; float s = 0.0; float t = uShadowTexel;
       for (int i=-1;i<=1;i++) for (int j=-1;j<=1;j++){
         float d = unpackDepth(texture2D(uShadow, lc.xy + vec2(float(i),float(j))*t));
         s += cur <= d ? 1.0 : 0.0; }
@@ -54,8 +60,9 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
     void main(){
       vec4 tx = texture2D(uTex, vUV); if (tx.a < 0.5) discard;
       vec3 N = normalize(vN);
-      float diff = max(0.0, dot(N, uSun));
+      float diff = max(0.0, dot(N, uSun)) * uDiffOn;
       vec3 amb = mix(uGround, mix(uSkyHz, uSkyTop, clamp(N.y,0.0,1.0)), N.y*0.5+0.5) * 0.5;
+      amb += uGround * uBounce * max(0.0, -N.y);   // rebote falso embaixo de copas/beirais (tier Alto)
       vec3 lit = tx.rgb * (amb + uSunCol * diff * shadow());
       if (uRim > 0.0) {   // contorno de tinta FINO: só a borda mais rasante à vista
         float r = 1.0 - abs(dot(N, normalize(uCam - vW)));
@@ -89,6 +96,13 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
   const AL = { pos: gl.getAttribLocation(scene,'aPos'), uv: gl.getAttribLocation(scene,'aUV'), nrm: gl.getAttribLocation(scene,'aNrm') };
   const DL = { pos: gl.getAttribLocation(depthProg,'aPos'), uv: gl.getAttribLocation(depthProg,'aUV') };
 
+  /* uniforms de TIER são fixos pela vida do visor (tier muda = recarrega a
+     página, como o D-49 já faz pro ?res — evita geri-los por quadro) */
+  gl.useProgram(scene);
+  gl.uniform1f(gl.getUniformLocation(scene, 'uShadowTexel'), 1 / SM);
+  gl.uniform1f(gl.getUniformLocation(scene, 'uDiffOn'), LT.diff);
+  gl.uniform1f(gl.getUniformLocation(scene, 'uBounce'), LT.bounce);
+
   const isPOT = (n) => (n & (n - 1)) === 0;
   function glTex(cv) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
@@ -113,7 +127,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
 
   const quadVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-  const NP = 320, seeds = new Float32Array(NP * 3);
+  const NP = Math.max(0, particulasN | 0), seeds = new Float32Array(NP * 3);
   for (let i = 0; i < NP; i++) { seeds[i*3] = (hash2(i,1)*2-1)*4.5; seeds[i*3+1] = hash2(i,2)*2.2; seeds[i*3+2] = hash2(i,3); }
   const partVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, partVBO); gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
   const PA = gl.getAttribLocation(parts, 'aSeed');
@@ -147,15 +161,26 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
   let fogCfg = FOG_PADRAO;
   let farCfg = 60;  // far plane; paisagens (far>100) sobem o near junto (precisão do depth16)
   let camCfg = {};  // câmera SUGERIDA pela peça {e,r} (paisagem pede órbita alta) — ?e/?r vencem
+  let freeCam = null;  // {pos:[x,y,z], yaw, pitch} — câmera de JOGADOR (jogo.html); substitui a órbita quando setada
   const visor = {
     glTex, glMesh,
+    /* câmera livre (jogo.html chama a cada quadro com a posição/olhar do
+       jogador); passar null volta pra órbita — usado só no visor da Oficina */
+    setCam(pos, yaw, pitch) { freeCam = pos ? { pos, yaw, pitch } : null; },
     /* carrega uma peça construída:
        {lotes:[{mesh,tex,matriz?}], animar?, palco?, particulas?, fog?} —
        mesh ainda em CPU ({v}) e tex ainda canvas: o visor sobe pra GPU aqui.
        palco:false = a peça substitui o chão de grama padrão (é ela o terreno);
        particulas:false = sem pólen (paisagem); fog:[início,alcance] em unidades */
     carregar(peca) {
-      lotes = peca.lotes.map(L => ({ mesh: glMesh(L.mesh), tex: glTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0 }));
+      /* dedupe por REFERÊNCIA (D-61): plantar a mesma árvore em N posições
+         reusa a MESMA textura/malha na GPU (o pool de variantes medido —
+         textura não paga por instância) — no-op pras peças de hoje, que só
+         passam objetos frescos por lote. */
+      const meshCache = new Map(), texCache = new Map();
+      const getMesh = (m) => { let g = meshCache.get(m); if (!g) { g = glMesh(m); meshCache.set(m, g); } return g; };
+      const getTex = (t) => { let g = texCache.get(t); if (!g) { g = glTex(t); texCache.set(t, g); } return g; };
+      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0 }));
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -163,12 +188,15 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
       farCfg = peca.far || 60;
       camCfg = peca.camera || {};
     },
-    rodar(onFrame) {
+    /* antesDoQuadro(dt, T): chamado TODO quadro, antes da câmera ser lida —
+       o jogo.html usa isso pra integrar movimento (input -> pos/yaw/pitch ->
+       setCam()) sempre imediatamente antes do frame que vai desenhá-lo. */
+    rodar(onFrame, antesDoQuadro) {
       const fixedA = camOrbita ? null : (cam.a ?? 0.66);
       const eye = cam.e ?? camCfg.e ?? 1.15, rad = cam.r ?? camCfg.r ?? 5.4;
       function resize() { const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = innerWidth * dpr | 0; canvas.height = innerHeight * dpr | 0; }
       addEventListener('resize', resize); resize();
-      let t0 = performance.now(), frames = 0;
+      let t0 = performance.now(), frames = 0, tPrev = performance.now();
       const draw = (prg, aL) => {
         const uM = gl.getUniformLocation(prg, 'uModel');
         const uR = gl.getUniformLocation(prg, 'uRim');   // null no passe de profundidade
@@ -186,17 +214,30 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {} }) {
       };
       const frame = (now) => {
         const T = now / 1000;
+        const dt = Math.min(0.1, (now - tPrev) / 1000); tPrev = now;   // trava dt (aba em 2º plano não "pula")
+        if (antesDoQuadro) antesDoQuadro(dt, T);
         if (animar) animar(T, lotes);
-        const ang = fixedA !== null ? fixedA : now / 5200;
-        const ex = Math.sin(ang) * rad, ez = Math.cos(ang) * rad, camPos = [ex, eye, ez];
-        const near = farCfg > 100 ? farCfg / 1000 : 0.05;
-        const mvpf = new Float32Array(m4.mul(m4.persp(58 * Math.PI/180, IW/IH, near, farCfg), m4.lookAt(camPos, [0, 0.6, 0], [0, 1, 0])));
-        // 1: sombra
+        let camPos, lookAtM;
+        if (freeCam) {
+          const { pos, yaw, pitch } = freeCam;
+          const cy = Math.cos(pitch), sy = Math.sin(pitch), sx = Math.sin(yaw), cx = Math.cos(yaw);
+          camPos = pos;
+          lookAtM = m4.lookAt(camPos, [camPos[0] + sx * cy, camPos[1] + sy, camPos[2] + cx * cy], [0, 1, 0]);
+        } else {
+          const ang = fixedA !== null ? fixedA : now / 5200;
+          camPos = [Math.sin(ang) * rad, eye, Math.cos(ang) * rad];
+          lookAtM = m4.lookAt(camPos, [0, 0.6, 0], [0, 1, 0]);
+        }
+        const near = freeCam ? 0.05 : (farCfg > 100 ? farCfg / 1000 : 0.05);
+        const mvpf = new Float32Array(m4.mul(m4.persp(58 * Math.PI/180, IW/IH, near, farCfg), lookAtM));
+        // 1: sombra (tier 0 = só limpa pra "tudo lit"; pula os draw calls, o custo real)
         gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFBO.fb); gl.viewport(0, 0, SM, SM);
         gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.clearColor(1,1,1,1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        gl.useProgram(depthProg); gl.uniformMatrix4fv(gl.getUniformLocation(depthProg,'uLMVP'), false, lMVPf);
-        gl.uniform1i(gl.getUniformLocation(depthProg,'uTex'), 0);
-        draw(depthProg, DL);
+        if (sombraOn) {
+          gl.useProgram(depthProg); gl.uniformMatrix4fv(gl.getUniformLocation(depthProg,'uLMVP'), false, lMVPf);
+          gl.uniform1i(gl.getUniformLocation(depthProg,'uTex'), 0);
+          draw(depthProg, DL);
+        }
         // 2: cena
         gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO.fb); gl.viewport(0, 0, IW, IH);
         gl.disable(gl.DEPTH_TEST); gl.useProgram(bg);

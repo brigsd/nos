@@ -10,6 +10,8 @@ tools/
   bancadas/    As BANCADAS de auditoria do cliente FPS (Playwright headless, offline):
                olhar.mjs     — screenshot de pontos de vista canônicos (pontos.json)
                olhar-peca.mjs— screenshot de PEÇA da Oficina v3 em 3 ângulos (npm run peca)
+               jogar.mjs     — screenshot do ALICERCE jogável v3 (jogo.html): câmera
+                               livre + tiers de gráfico/menu (npm run jogar) — D-61
                ouvir.mjs     — mede o som (estado/ganho/RMS), barra a regressão muda
                prancheta.mjs — câmera de TOPO: planta técnica viva (colisões, alturas,
                                planos) via window.__nosMapa() — auditar/criar estrutura

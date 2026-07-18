@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>NÓS · v3 (alicerce)</title>
+<style>
+  :root { --line: #3a3350; --accent: #a884f3; }
+  html, body { margin: 0; height: 100%; background: #0c0f16; overflow: hidden; font-family: ui-monospace, Menlo, monospace; }
+  #c { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; }
+  #hud { position: fixed; top: 8px; left: 10px; font-size: 11px; color: #cddf6c; text-shadow: 0 1px 2px #000; pointer-events: none; line-height: 1.5; }
+  #hint { position: fixed; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #9b93a8; text-shadow: 0 1px 2px #000; pointer-events: none; }
+  #pauseBtn { position: fixed; top: 10px; right: 10px; width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(23,18,33,.7); color: #eaaded; border: 1px solid var(--line); font-size: 16px; cursor: pointer; z-index: 15; }
+
+  .tela { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(10,8,16,.72); z-index: 20; }
+  .tela.show { display: flex; }
+  .painel { background: #171221; border: 1px solid var(--line); border-radius: 10px; padding: 22px 28px; min-width: 260px; text-align: center; color: #c7bcd8; }
+  .painel h2 { margin: 0 0 16px; letter-spacing: .35em; font-size: 16px; color: #eaaded; }
+  .painel > button { display: block; width: 100%; margin: 8px 0; padding: 10px; background: rgba(168,132,243,.14);
+    color: #c7bcd8; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
+  .painel > button:hover { background: rgba(168,132,243,.28); }
+
+  .painelConfig { min-width: 320px; max-width: 420px; width: 88vw; position: relative; text-align: left; padding-top: 46px; max-height: 78vh; overflow-y: auto; }
+  /* .painel .cantoBtn (2 classes) precisa bater ".painel > button" (1 classe +
+     1 elemento) na especificidade — senão width:100% do botão genérico vence
+     e os dois cantos viram uma barra larga sobreposta (achado do QA visual). */
+  .painel .cantoBtn { position: absolute; top: 10px; width: auto; margin: 0; padding: 6px 10px; font-size: 11px;
+    background: rgba(168,132,243,.14); color: #c7bcd8; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
+  .cantoEsq { left: 10px; } .cantoDir { right: 10px; padding: 6px 12px; }
+  .abas { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  .aba { flex: 1; background: transparent; border: none; color: #9b93a8; padding: 8px 2px; font: inherit; font-size: 10px;
+    letter-spacing: .05em; cursor: pointer; border-radius: 4px; }
+  .aba.on { background: rgba(168,132,243,.22); color: #eaaded; }
+  .painelAba .linha { display: flex; align-items: center; gap: 8px; margin: 14px 0; }
+  .painelAba .linha > span:first-child { flex: 0 0 76px; font-size: 11px; color: #c7bcd8; }
+  .painelAba input[type=range] { flex: 1; accent-color: #a884f3; }
+  .tiers { display: flex; gap: 6px; flex: 1; }
+  .opt { flex: 1; background: rgba(168,132,243,.14); color: #c7bcd8; border: 1px solid var(--line); border-radius: 4px;
+    padding: 7px 2px; font: inherit; font-size: 10px; cursor: pointer; }
+  .opt.on { background: #a884f3; color: #171221; border-color: #a884f3; }
+  .gnote { font-size: 9px; color: #6b6675; margin: -6px 0 12px; }
+  .controlesLista { font-size: 11px; line-height: 2; color: #c7bcd8; }
+  .controlesLista b { color: #eaaded; display: inline-block; min-width: 92px; }
+  .linguaOpt { display: flex; align-items: center; justify-content: space-between; padding: 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }
+  .linguaOpt small { color: #6b6675; }
+
+  .stick { position: fixed; bottom: 26px; width: 104px; height: 104px; border-radius: 50%;
+    background: rgba(23,18,33,.35); border: 1px solid rgba(168,132,243,.4); touch-action: none; display: none; z-index: 12; }
+  .stick .knob { position: absolute; top: 50%; left: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(168,132,243,.55); }
+  #stickL { left: 22px; } #stickR { right: 22px; }
+  @media (pointer: coarse) { .stick { display: block; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">NÓS · v3 — o alicerce (D-61)<br><b id="fps">— fps</b> · <span id="dev">—</span></div>
+<div id="hint">clique: mirar (ESC pausa) · WASD anda</div>
+<button id="pauseBtn" title="pausa (ESC)">⏸</button>
+<div id="stickL" class="stick"><div class="knob"></div></div>
+<div id="stickR" class="stick"><div class="knob"></div></div>
+
+<div id="telaPausa" class="tela">
+  <div class="painel">
+    <h2>N Ó S</h2>
+    <button id="btnContinuar">continuar ▶</button>
+    <button id="btnAbrirConfig">configurações ⚙</button>
+  </div>
+</div>
+
+<div id="telaConfig" class="tela">
+  <div class="painel painelConfig">
+    <button class="cantoBtn cantoEsq" id="btnVoltar">‹ voltar</button>
+    <button class="cantoBtn cantoDir" id="btnFecharX">✕</button>
+    <div class="abas">
+      <button class="aba on" data-aba="som">som</button>
+      <button class="aba" data-aba="graficos">gráficos</button>
+      <button class="aba" data-aba="controles">controles</button>
+      <button class="aba" data-aba="lingua">idioma</button>
+    </div>
+
+    <div class="painelAba" id="abaSom">
+      <div class="linha"><span>ambiente</span><input type="range" id="slAmbiente" min="0" max="100" value="80" /></div>
+      <p class="gnote">vento constante + água da lagoa por proximidade</p>
+      <div class="linha"><span>passos</span><input type="range" id="slPassos" min="0" max="100" value="80" /></div>
+      <p class="gnote">arraste até 0 pra mutar cada um</p>
+    </div>
+
+    <div class="painelAba" id="abaGraficos" hidden>
+      <div class="linha"><span>textura</span><div class="tiers" data-cfg="ts">
+        <button class="opt" data-v="2">Baixo</button><button class="opt" data-v="4">Médio</button><button class="opt" data-v="8">Alto</button>
+      </div></div>
+      <div class="linha"><span>iluminação</span><div class="tiers" data-cfg="luz">
+        <button class="opt" data-v="0">Baixo</button><button class="opt" data-v="1">Médio</button><button class="opt" data-v="2">Alto</button>
+      </div></div>
+      <div class="linha"><span>sombras</span><div class="tiers" data-cfg="sombra">
+        <button class="opt" data-v="0">Baixo</button><button class="opt" data-v="1">Médio</button><button class="opt" data-v="2">Alto</button>
+      </div></div>
+      <div class="linha"><span>partículas</span><div class="tiers" data-cfg="particulas">
+        <button class="opt" data-v="0">Baixo</button><button class="opt" data-v="1">Médio</button><button class="opt" data-v="2">Alto</button>
+      </div></div>
+      <p class="gnote">muda a densidade real (32/64/128px, contagem de pólen etc.) — aplica recarregando a página</p>
+    </div>
+
+    <div class="painelAba" id="abaControles" hidden>
+      <div class="controlesLista">
+        <div><b>W A S D</b> andar</div>
+        <div><b>mouse</b> olhar (clique pra travar o cursor)</div>
+        <div><b>alavancas</b> andar / olhar (celular)</div>
+        <div><b>ESC</b> pausar</div>
+      </div>
+    </div>
+
+    <div class="painelAba" id="abaLingua" hidden>
+      <div class="linguaOpt"><span>Português</span><small>ativo</small></div>
+      <p class="gnote">mais idiomas: futuro</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* jogo.html — o alicerce JOGÁVEL do v3 (D-61): ilha-chao + um punhado de
+   arvore3d plantadas (placeholder — NÃO é o "plantar árvores" definitivo,
+   é só o suficiente pra testar câmera livre + tiers de gráfico/som em
+   contexto real). Mesmo motor da Oficina (D-55): o que funciona aqui,
+   funciona no jogo. */
+import { criarVisor } from './motor/render.js';
+import { m4 } from './motor/mat4.js';
+import * as tex from './motor/tex.js';
+import * as geo from './motor/geo.js';
+import { criarInput } from './motor/input.js';
+import { criarSom } from './motor/som.js';
+import * as ilhaChao from './pecas/ilha-chao.js';
+import * as arvore3d from './pecas/arvore3d.js';
+
+const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1 };
+const Q = new URLSearchParams(location.search);
+function lerCfg() {
+  let c;
+  try { c = { ...CFG_PADRAO, ...JSON.parse(localStorage.getItem('nos3_graficos') || '{}') }; }
+  catch { c = { ...CFG_PADRAO }; }
+  for (const k of Object.keys(CFG_PADRAO)) if (Q.has(k)) c[k] = Number(Q.get(k));   // override p/ bancada (?ts=8&sombra=0…)
+  return c;
+}
+function salvarCfg(cfg) { try { localStorage.setItem('nos3_graficos', JSON.stringify(cfg)); } catch { /* ok */ } }
+const cfg = lerCfg();
+const PARTICULAS_N = { 0: 80, 1: 320, 2: 800 };
+
+/* ---------- monta a cena: ilha + árvores plantadas (placeholder) ---------- */
+const ilha = ilhaChao.construir({ TS: 4, tex, geo, m4 });
+const VARIANTES = [0, 1, 2, 3].map((seed) => arvore3d.construir({ TS: cfg.ts, tex, geo, m4, seed }));
+const ARVORE_POS = [
+  [-13, 8], [-15, -3], [-7, -14], [2, 16], [13, 11], [17, 1],
+  [-10, -20], [-1, -17], [-16, 9], [20, -3], [-4, 13], [4, -19],
+];
+const loteArvores = ARVORE_POS.flatMap(([x, z], i) => {
+  const v = VARIANTES[i % VARIANTES.length];
+  const M = m4.translate(x, 0, z);
+  return v.lotes.map((L) => ({ ...L, matriz: M }));
+});
+const cena = { ...ilha, particulas: true, lotes: [...ilha.lotes, ...loteArvores] };
+
+/* ---------- visor: câmera LIVRE, tiers do jogador ---------- */
+const canvas = document.getElementById('c');
+const visor = criarVisor({
+  canvas, res: 640, camOrbita: false,
+  sombra: cfg.sombra, particulasN: PARTICULAS_N[cfg.particulas] ?? 320, luz: cfg.luz,
+});
+visor.carregar(cena);
+document.getElementById('dev').textContent = `${visor.info} · tex ${16 * cfg.ts}px · ${visor.renderer}`;
+
+/* ---------- som ---------- */
+const som = criarSom();
+som.setVolumes(som.volumes());   // reaplica o que veio do localStorage
+window.__nosAudio = som.debug;
+
+/* ---------- pausa / configurações ---------- */
+let paused = false;
+const telaPausa = document.getElementById('telaPausa'), telaConfig = document.getElementById('telaConfig');
+function abrirPausa() { paused = true; document.exitPointerLock?.(); telaConfig.classList.remove('show'); telaPausa.classList.add('show'); }
+function fecharTudo() { paused = false; telaPausa.classList.remove('show'); telaConfig.classList.remove('show'); }
+document.getElementById('pauseBtn').addEventListener('click', () => (paused ? fecharTudo() : abrirPausa()));
+document.getElementById('btnContinuar').addEventListener('click', fecharTudo);
+document.getElementById('btnAbrirConfig').addEventListener('click', () => { telaPausa.classList.remove('show'); telaConfig.classList.add('show'); });
+document.getElementById('btnVoltar').addEventListener('click', () => { telaConfig.classList.remove('show'); telaPausa.classList.add('show'); });
+document.getElementById('btnFecharX').addEventListener('click', fecharTudo);   // X fecha E resume direto
+
+for (const aba of document.querySelectorAll('.aba')) {
+  aba.addEventListener('click', () => {
+    for (const a of document.querySelectorAll('.aba')) a.classList.toggle('on', a === aba);
+    for (const p of document.querySelectorAll('.painelAba')) p.hidden = (p.id !== 'aba' + aba.dataset.aba[0].toUpperCase() + aba.dataset.aba.slice(1));
+  });
+}
+
+/* som: aplica AO VIVO (sem reload) */
+const slA = document.getElementById('slAmbiente'), slP = document.getElementById('slPassos');
+slA.value = Math.round(som.volumes().ambiente * 100); slP.value = Math.round(som.volumes().passos * 100);
+slA.addEventListener('input', () => som.setVolumes({ ambiente: slA.value / 100 }));
+slP.addEventListener('input', () => som.setVolumes({ passos: slP.value / 100 }));
+
+/* gráficos: tiers reais de motor — recarrega a página pra aplicar (mesmo
+   padrão do D-49 na v2: ?res troca de preset recarregando limpo) */
+for (const grupo of document.querySelectorAll('.tiers')) {
+  const chave = grupo.dataset.cfg;
+  for (const btn of grupo.querySelectorAll('.opt')) {
+    btn.classList.toggle('on', String(cfg[chave]) === btn.dataset.v);
+    btn.addEventListener('click', () => {
+      const novo = { ...lerCfg(), [chave]: Number(btn.dataset.v) };
+      salvarCfg(novo);
+      location.reload();
+    });
+  }
+}
+
+addEventListener('keydown', (e) => { if (e.code === 'Escape' && !paused) abrirPausa(); });
+
+/* ---------- jogador: câmera livre + som de passo + guarda de raio (D-61) ---------- */
+const input = criarInput({ stageEl: canvas, onPause: () => (paused ? fecharTudo() : abrirPausa()) });
+input.bindSticks(document.getElementById('stickL'), document.getElementById('stickR'));
+
+const EYE = 1.7, SPEED = 5.2, MAXR = 25, LAGO = [10, -8];
+/* ?cam=x,z,yaw,pitch — ponto de vista reprodutível pra bancada/QA */
+const camQ = Q.get('cam')?.split(',').map(Number);
+let pos = camQ ? [camQ[0], 0, camQ[1]] : [-19, 0, 0];
+let yaw = camQ ? camQ[2] : 1.85, pitch = camQ ? (camQ[3] ?? 0) : 0;
+if (Q.get('pausado') === '1') abrirPausa();   // QA: capturar o menu direto
+
+function antesDoQuadro(dt, T) {
+  input.guard();
+  if (!paused) {
+    const { dx, dy } = input.mouseLookDelta();
+    yaw += dx * 0.0032; pitch -= dy * 0.0032;
+    const { rx, ry } = input.stickLook();
+    yaw += rx * 2.2 * dt; pitch -= ry * 2.2 * dt;
+    pitch = Math.max(-1.3, Math.min(1.3, pitch));
+
+    const { x: mx, z: mz } = input.moveAxis();
+    if (mx || mz) {
+      const fwd = [Math.sin(yaw), Math.cos(yaw)], right = [-Math.cos(yaw), Math.sin(yaw)];
+      pos[0] += (fwd[0] * mz + right[0] * mx) * SPEED * dt;
+      pos[2] += (fwd[1] * mz + right[1] * mx) * SPEED * dt;
+      const d = Math.hypot(pos[0], pos[2]);
+      if (d > MAXR) { pos[0] *= MAXR / d; pos[2] *= MAXR / d; }
+      if (Math.hypot(mx, mz) > 0.12) som.passo(T);
+    }
+  }
+  som.proximidadeAgua(Math.hypot(pos[0] - LAGO[0], pos[2] - LAGO[1]));
+  visor.setCam([pos[0], EYE, pos[2]], yaw, pitch);
+}
+
+visor.rodar((fps) => { document.getElementById('fps').textContent = fps + ' fps'; }, antesDoQuadro);
+window.__ready = true;
+</script>
+</body>
+</html>

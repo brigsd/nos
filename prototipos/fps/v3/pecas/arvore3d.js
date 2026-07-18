@@ -14,37 +14,48 @@ export function construir(ctx) {
   const { tex, geo } = ctx;
   const { texCanvas, fbm, hash2 } = tex;
   const { Mesh, quad, quadUV, tri } = geo;
+  /* tier de TEXTURA (D-61, medido — 32/64/128px, ctx.TS=2/4/8): GT=16·TS
+     casa com a convenção que a casa-toras já usa; SCALE reescala as
+     frequências de ruído JUNTO (senão vira padrão mais denso, não "mesma
+     árvore com mais pixel" — a lição do teste de 32..512px). */
+  const TS = ctx.TS ?? 4, SCALE = TS / 4;
+  /* SEED (D-61): construir() era 100% determinístico — sempre a MESMA árvore.
+     Pra plantar um punhado sem clonar, um seed opcional desloca a fase do
+     ruído da copa e o jitter dos cachos; tronco/silhueta continuam iguais
+     (a pool de variantes é textura+copa, não geometria toda nova). */
+  const SEED = ctx.seed ?? 0;
 
   /* ---------- texturas ---------- */
   /* folhagem: CACHOS de folha ladrilháveis — cada cacho é um blob escalopado
      com topo iluminado, meio, e fresta escura embaixo (separação entre cachos)
      + glint de sol esparso. Estampado num buffer (wrap = ladrilha na casca). */
-  const GT = 64;
+  const GT = 16 * TS;
   const lb = new Int16Array(GT * GT);
   for (let i = 0; i < lb.length; i++) {            // base mosqueada
-    const n = fbm((i % GT) / 6 + 1, ((i / GT) | 0) / 6 + 2);
+    const n = fbm((i % GT) / (6 * SCALE) + 1, ((i / GT) | 0) / (6 * SCALE) + 2);
     lb[i] = n > 0.6 ? 31 : n > 0.35 ? 30 : 29;
   }
-  const rnd = (a, b) => hash2(a * 7 + b * 13 + 1, b * 17 + 3);
+  const rnd = (a, b) => hash2(a * 7 + b * 13 + 1 + SEED * 31, b * 17 + 3 + SEED * 17);
   for (let gy = 0; gy < 8; gy++) for (let gx = 0; gx < 8; gx++) {   // 8×8 cachos jitterados
-    const cx = gx * 8 + rnd(gx, gy) * 6, cy = gy * 8 + rnd(gy, gx) * 6, r = 4 + rnd(gx + 1, gy) * 3;
+    const cx = (gx * 8 + rnd(gx, gy) * 6) * SCALE, cy = (gy * 8 + rnd(gy, gx) * 6) * SCALE, r = (4 + rnd(gx + 1, gy) * 3) * SCALE;
     for (let dy = -r - 1; dy <= r + 1; dy++) for (let dx = -r - 1; dx <= r + 1; dx++) {
       const dd = Math.hypot(dx, dy);
       const er = r * (0.82 + 0.18 * Math.sin(Math.atan2(dy, dx) * 3 + gx));  // borda escalopada
       if (dd > er) continue;
-      const px = (cx + dx + GT) & (GT - 1), py = (cy + dy + GT) & (GT - 1);
+      const px = (Math.round(cx + dx) + GT) & (GT - 1), py = (Math.round(cy + dy) + GT) & (GT - 1);
       let i = dy < -r * 0.35 ? 33 : dy < r * 0.05 ? 32 : 31;   // topo claro -> meio
-      if (dd > er - 1.5) i = dy > 0 ? 29 : 30;                 // fresta escura embaixo
+      if (dd > er - 1.5 * SCALE) i = dy > 0 ? 29 : 30;         // fresta escura embaixo
       lb[py * GT + px] = i;
     }
-    if (rnd(gx, gy + 9) < 0.45) lb[(((cy - r * 0.5) | 0) + GT & (GT - 1)) * GT + (cx & (GT - 1))] = 28;  // glint
+    if (rnd(gx, gy + 9) < 0.45) { const gpx = Math.round(cx) & (GT - 1), gpy = (Math.round(cy - r * 0.5) + GT) & (GT - 1); lb[gpy * GT + gpx] = 28; }  // glint
   }
   const LEAFTEX = texCanvas(GT, GT, (x, y) => lb[y * GT + x]);
   /* casca: estrias verticais quentes */
-  const BARK = texCanvas(32, 64, (x, y) => {
-    const n = fbm(x / 5, y / 11);
+  const BW = 8 * TS, BH = 16 * TS;
+  const BARK = texCanvas(BW, BH, (x, y) => {
+    const n = fbm(x / (5 * SCALE), y / (11 * SCALE));
     let i = n > 0.6 ? 4 : n > 0.4 ? 21 : n > 0.24 ? 20 : 24;
-    if ((x + (fbm(x / 3, y / 22) * 3 | 0)) % 5 === 0) i = 24;  // ranhura
+    if (Math.round(x + fbm(x / (3 * SCALE), y / (22 * SCALE)) * 3 * SCALE) % Math.round(5 * SCALE) < SCALE) i = 24;  // ranhura
     return i;
   });
 
@@ -79,7 +90,7 @@ export function construir(ctx) {
   const cpt = (a, o) => {
     const theta = a / LAT * Math.PI, phi = o / LON * Math.PI * 2;
     const cP = Math.cos(phi), sP = Math.sin(phi), sT = Math.sin(theta);
-    const bump = 1 + AMP * (fbm(cP * 1.9 + a * 0.8 + 5, sP * 1.9 + a * 0.8) - 0.5) * 2;  // saliências
+    const bump = 1 + AMP * (fbm(cP * 1.9 + a * 0.8 + 5 + SEED * 9, sP * 1.9 + a * 0.8 + SEED * 5) - 0.5) * 2;  // saliências
     const rx = cRx * sT * bump;
     return [cP * rx, cCenY + cRy * Math.cos(theta) * (0.92 + 0.08 * bump), sP * rx];
   };

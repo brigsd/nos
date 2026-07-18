@@ -25,6 +25,7 @@
     "prancheta": "node tools/bancadas/prancheta.mjs",
     "res-bench": "node tools/bancadas/res-bench.mjs",
     "peca": "node tools/bancadas/olhar-peca.mjs",
+    "jogar": "node tools/bancadas/jogar.mjs",
     "porteiro": "node tools/bancadas/porteiro.mjs",
     "auditar": "node tools/bancadas/auditar.mjs",
     "bench": "node tools/bancadas/bench/benchmark.mjs"
