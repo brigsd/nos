@@ -2079,7 +2079,7 @@ function genGateArch() {
   /* o PLANO do arco é perpendicular ao carreiro (mesma linha dos pilares) */
   const dx = 46.2 - 44.0, dy = 15.6 - 14.8;
   const L = Math.hypot(dx, dy), pxn = -dy / L, pyn = dx / L;
-  bills.push({ x: GA.x, y: GA.y, genFrames: [genGateArch()], label: 'arco-entrada', scale: 1.5, lift: 0, orient: Math.atan2(pyn, pxn), depth: 0.14 }); /* ancorado no mundo (D-49): não "encara" mais */
+  bills.push({ x: GA.x, y: GA.y, genFrames: [genGateArch()], label: 'arco-entrada', scale: 1.5, lift: 0, orient: Math.atan2(pyn, pxn) }); /* ancorado no mundo (D-49); SEM depth — nada de gambiarra de fatias (D-62) */
   for (const sgn of [-0.78, 0.78]) {
     const bx1 = GA.x + pxn * sgn, by1 = GA.y + pyn * sgn;
     addTrunk(bx1 | 0, by1 | 0, bx1, by1, 0.2);
@@ -2088,7 +2088,7 @@ function genGateArch() {
 
 const PORTAL = { x: 51.1, y: 15.6 };
 {
-  bills.push({ x: PORTAL.x, y: PORTAL.y, genFrames: [genArch(1, 9)], label: 'portal-atrio', scale: 2.45, lift: 0, orient: Math.PI / 2, depth: 0.18 }); /* plano N-S: atravessa-se indo pro leste (D-49) */
+  bills.push({ x: PORTAL.x, y: PORTAL.y, genFrames: [genArch(1, 9)], label: 'portal-atrio', scale: 2.45, lift: 0, orient: Math.PI / 2 }); /* plano N-S (D-49); SEM depth — sem gambiarra (D-62) */
   /* pilares com colisão fina — dá pra ATRAVESSAR o vão */
   for (const s of [-0.66, 0.66]) {
     addTrunk(PORTAL.x | 0, (PORTAL.y + s) | 0, PORTAL.x, PORTAL.y + s, 0.2);
