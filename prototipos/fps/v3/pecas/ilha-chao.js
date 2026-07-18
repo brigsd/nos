@@ -152,13 +152,13 @@ export function construir(ctx) {
      lumpy). É a silhueta que vende a altura, espalhadas embaixo e ao redor. */
   function ilhota(cx, cy, cz, S, seed, o = {}) {
     const M = 40, LV = 5;
-    const bellyD = o.bellyD ?? 1.75;    // profundidade da quilha (× S)
+    const bellyD = o.bellyD ?? 1.2;     // profundidade da quilha (× S)
     const lump = o.lump ?? 0.6;         // amplitude das protuberâncias
-    const taperP = o.taperP ?? 1.4;     // >1 afunila (pontudo), <1 barrigudo
+    const taperP = o.taperP ?? 1.05;    // >1 afunila (pontudo), <1 barrigudo
     const sx = o.stretch ? o.stretch[0] : 1, sz = o.stretch ? o.stretch[1] : 1;  // oval
     const anel = (lv) => {
       const t = lv / LV;                                   // 0 topo .. 1 quilha
-      const taper = (1 - t) ** taperP * 0.92 + 0.06;
+      const taper = (1 - t) ** taperP * 0.82 + 0.18;       // piso 0.18 = base grossa, não agulha
       const yBase = cy - S * bellyD * (t ** 0.9);
       const pts = [];
       for (let i = 0; i <= M; i++) {
@@ -194,13 +194,13 @@ export function construir(ctx) {
   // arquipélago no horizonte: alturas ESPALHADAS (umas acima, outras bem abaixo
   // de casa), distâncias variadas, tamanhos e FORMATOS distintos (pontuda,
   // barriguda, oval, lumpy) — nada alinhado
-  ilhota(-250, 42, 170, 44, 1.3, { taperP: 1.9, lump: 0.7 });                  // acima, pontuda
-  ilhota(360, -58, -70, 72, 2.7, { taperP: 1.05, bellyD: 2.3, lump: 0.5 });    // abaixo, grandona barriguda
-  ilhota(120, 20, 410, 52, 3.9, { taperP: 1.5, stretch: [1.5, 0.8] });         // levemente acima, oval, longe
-  ilhota(-210, -80, -300, 46, 4.6, { taperP: 2.2, lump: 0.95, bellyD: 2.5 });  // bem abaixo, pontuda lumpy
-  ilhota(460, 52, 150, 37, 5.2, { taperP: 1.3 });                              // alta, menor, longe
-  ilhota(-410, -22, -200, 64, 6.4, { taperP: 1.6, lump: 0.8, stretch: [0.8, 1.35] }); // média, oval
-  ilhota(210, -100, 300, 48, 7.1, { taperP: 2.0, lump: 0.6 });                 // bem embaixo
+  ilhota(-250, 42, 170, 44, 1.3, { taperP: 1.0, lump: 0.7, bellyD: 1.2 });     // acima
+  ilhota(360, -58, -70, 72, 2.7, { taperP: 0.8, bellyD: 1.4, lump: 0.5 });     // abaixo, grandona barriguda
+  ilhota(120, 20, 410, 52, 3.9, { taperP: 0.95, stretch: [1.5, 0.8], bellyD: 1.1 }); // acima, oval, longe
+  ilhota(-210, -80, -300, 46, 4.6, { taperP: 1.15, lump: 0.95, bellyD: 1.3 }); // bem abaixo, lumpy
+  ilhota(460, 52, 150, 37, 5.2, { taperP: 0.9, bellyD: 1.0 });                 // alta, menor, longe
+  ilhota(-410, -22, -200, 64, 6.4, { taperP: 1.0, lump: 0.8, stretch: [0.8, 1.35], bellyD: 1.15 }); // oval
+  ilhota(210, -100, 300, 48, 7.1, { taperP: 1.1, lump: 0.6, bellyD: 1.25 });   // bem embaixo
 
   return {
     palco: false,       // ESTA peça é o chão
