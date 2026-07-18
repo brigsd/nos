@@ -107,7 +107,18 @@ if (!html.includes(DATA_TAG)) {
   throw new Error('build-fps: tag <script src="data.js"> não encontrada em prototipos/fps/nos-fps.html');
 }
 const inline = `<script>const NOS_DATA = ${JSON.stringify(data)};\nconst NOS_SPRITES = ${JSON.stringify(sprites)};\nconst NOS_GI = ${JSON.stringify(gi)};\nconst NOS_WORLDS = ${JSON.stringify(worlds)};</script>`;
-const out = html.replace(DATA_TAG, inline);
+let out = html.replace(DATA_TAG, inline);
+
+/* ÁRVORES 3D (tree3d-core.js): o cliente carrega o núcleo das árvores por
+   <script src="tree3d-core.js">. A bancada (olhar/ouvir) serve UM arquivo só,
+   e o Pages precisa de auto-contido — então inlinamos o JS aqui, do mesmo
+   jeito que o data.js acima. Fonte única segue prototipos/fps/tree3d-core.js. */
+const T3D_TAG = '<script src="tree3d-core.js"></script>';
+if (out.includes(T3D_TAG)) {
+  const t3dPath = path.join(REPO_ROOT, 'prototipos', 'fps', 'tree3d-core.js');
+  if (!existsSync(t3dPath)) throw new Error('build-fps: tree3d-core.js não encontrado (referenciado por nos-fps.html)');
+  out = out.replace(T3D_TAG, `<script>\n${readFileSync(t3dPath, 'utf8')}\n</script>`);
+}
 
 const outDir = path.join(SITE_ROOT, 'public', 'fps');
 mkdirSync(outDir, { recursive: true });
