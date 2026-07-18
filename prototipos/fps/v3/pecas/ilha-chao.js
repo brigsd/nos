@@ -9,7 +9,7 @@
 export const meta = {
   nome: 'ilha-chao',
   tipo: 'chao',
-  desc: 'a ilha flutuante na escala v2: grama, lago com praia e a beirada de terra',
+  desc: 'a ilha flutuante na escala v2: grama, lago com praia + ilhotas craggy ao redor',
 };
 
 export function construir(ctx) {
@@ -82,6 +82,16 @@ export function construir(ctx) {
     if (h < 0.02) i = 3; else if (h > 0.985) i = 63;  // conchinha/grão
     return i;
   });
+  /* BARRIGA de rocha das ilhotas distantes: pedra craggy cinza c/ veio terroso
+     e coroa de terra sob a grama (a silhueta pontuda que "flutua") */
+  const BELLY = texCanvas(128, 128, (x, y) => {
+    const n = fbm(x / 11, y / 11), m = fbm(x / 4 + 5, y / 4 + 2);
+    let i = n > 0.62 ? 7 : n > 0.44 ? 6 : n > 0.28 ? 2 : 34;
+    if (m > 0.72) i = 5;                          // veio
+    if (m < 0.14) i = 1;                          // fenda
+    if (y < 9 + fbm(x / 7, 3) * 7) i = 24;        // coroa de terra sob a grama
+    return i;
+  });
   /* ---------- geometria ---------- */
   const N = 96, R0 = 28;                 // ~56u de diâmetro = a ilha da v2
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -102,7 +112,7 @@ export function construir(ctx) {
     skirt.push([c * Rr * 0.965, -2.4, s * Rr * 0.965]);
   }
 
-  const top = Mesh(), rock = Mesh(), water = Mesh(), sand = Mesh();
+  const top = Mesh(), rock = Mesh(), water = Mesh(), sand = Mesh(), belly = Mesh();
 
   // capa de grama (leque do centro à borda) — 1 repeat de textura a cada 4u
   const uvG = p => [p[0] / 4, p[2] / 4];
@@ -136,7 +146,53 @@ export function construir(ctx) {
       [0, 1, 0]);
   }
 
-  // (mar de nuvens apagado a pedido do ideador — a ilha flutua no céu limpo)
+  /* ILHOTAS FLUTUANTES distantes: capa de grama + barriga CRAGGY (não cone
+     liso — o raio de cada anel varia por ângulo E por altura com ruído 3D, e
+     as alturas jitteram → bossas/saliências irreguladas descendo até a quilha
+     lumpy). É a silhueta que vende a altura, espalhadas embaixo e ao redor. */
+  function ilhota(cx, cy, cz, S, seed) {
+    const M = 40, LV = 5;
+    const anel = (lv) => {
+      const t = lv / LV;                                   // 0 topo .. 1 quilha
+      const taper = (1 - t) ** 1.4 * 0.92 + 0.06;
+      const yBase = cy - S * 1.75 * (t ** 0.9);
+      const pts = [];
+      for (let i = 0; i <= M; i++) {
+        const a = (i % M) / M * TAU, c = Math.cos(a), s = Math.sin(a);
+        const bump = fbm(c * 2.4 + seed + t * 4, s * 2.4 + seed * 1.7 + t * 4) - 0.5;  // saliência
+        const R = S * taper * (0.80 + 0.20 * fbm(c * 1.4 + seed, s * 1.4 + seed) + bump * 0.6);
+        const yj = yBase + (fbm(c * 3 + seed + t, s * 3 + seed) - 0.5) * S * 0.20;
+        pts.push([cx + c * R, yj, cz + s * R]);
+      }
+      return pts;
+    };
+    const rings = []; for (let lv = 0; lv <= LV; lv++) rings.push(anel(lv));
+    const rim = rings[0];
+    for (let i = 0; i < M; i++)
+      tri(top, [cx, cy, cz], rim[i], rim[i + 1], uvG([cx, cy, cz]), uvG(rim[i]), uvG(rim[i + 1]), [0, 1, 0]);
+    for (let lv = 0; lv < LV; lv++) {
+      const A = rings[lv], B = rings[lv + 1], v0 = lv / LV * 2.4, v1 = (lv + 1) / LV * 2.4;
+      for (let i = 0; i < M; i++) {
+        const p0 = A[i], p1 = A[i + 1], p2 = B[i + 1], p3 = B[i];
+        let [nx, ny, nz] = faceNorm(p0, p1, p2, [(p0[0] + p2[0]) / 2 - cx, 0, (p0[2] + p2[2]) / 2 - cz]);
+        ny += 0.3; const nl = Math.hypot(nx, ny, nz);
+        quadUV(belly, p0, p1, p2, p3, [i / M * 5, v0], [(i + 1) / M * 5, v0], [(i + 1) / M * 5, v1], [i / M * 5, v1], [nx / nl, ny / nl, nz / nl]);
+      }
+    }
+    const last = rings[LV], keel = [cx + (fbm(seed, seed) - 0.5) * S * 0.25, cy - S * 1.98, cz + (fbm(seed + 1, seed + 1) - 0.5) * S * 0.25];
+    for (let i = 0; i < M; i++) {
+      const p0 = last[i], p1 = last[i + 1];
+      let [nx, ny, nz] = faceNorm(p0, p1, keel, [(p0[0] + p1[0]) / 2 - cx, 0, (p0[2] + p1[2]) / 2 - cz]);
+      const nl = Math.hypot(nx, ny, nz);
+      tri(belly, p0, p1, keel, [i / M * 5, 2.4], [(i + 1) / M * 5, 2.4], [2.5, 3], [nx / nl, ny / nl, nz / nl]);
+    }
+  }
+  ilhota(-46, -13, 22, 12, 1.3);
+  ilhota(50, -19, -14, 10, 2.7);
+  ilhota(14, -27, 52, 14, 3.9);
+  ilhota(-26, -10, -58, 15, 4.6);
+  ilhota(64, -31, 34, 9, 5.2);
+  ilhota(-62, -17, -34, 11, 6.4);
 
   return {
     palco: false,       // ESTA peça é o chão
@@ -145,6 +201,7 @@ export function construir(ctx) {
     far: 200,
     camera: { e: 16, r: 46 },  // órbita padrão ALTA (a de objeto nasce dentro da ilha)
     lotes: [
+      { mesh: belly, tex: BELLY },
       { mesh: rock, tex: ROCK },
       { mesh: top, tex: GRASS },
       { mesh: sand, tex: SAND },
