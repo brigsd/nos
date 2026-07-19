@@ -349,7 +349,7 @@ export function criarArvores(ctx) {
       for (let k = 0; k < nB; k++) {
         const ang = phB + (k / nB) * TAU + (hash2(k * 9, S) - 0.5) * 0.7;
         const dir = norm([Math.cos(ang) * 0.6, 0.8, Math.sin(ang) * 0.6]);
-        galhoSeca(canopy, [0, topo[1] - 0.13, 0], dir, 0.98, 0.16, 0.05, 2, S * 7 + k + 5, null, 1.5, true);   // brotam abaixo da ponta e a ENVOLVEM (mimetiza galho↔galho)
+        galhoSeca(canopy, [0, topo[1] - 0.13, 0], dir, 0.98, 0.105, 0.045, 2, S * 7 + k + 5, null, 1.25, true);   // início FINO (r0 baixo + colar leve): galho não estufa mais que o cerne; brota abaixo da ponta e a envolve
       }
       ctex = BARK_SECA; ink = null; outl = 0; toon = 0;
     } else if (especie === 'frondosa') {
