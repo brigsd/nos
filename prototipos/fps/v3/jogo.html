@@ -142,9 +142,12 @@
       </div></div>
       <div class="linha"><span>suavização</span><div class="tiers" data-cfg="aa">
         <button class="opt" data-v="0">Pixel duro</button><button class="opt" data-v="1">Suave</button
-        ><button class="opt" data-v="2">2× (SSAA)</button>
+        ><button class="opt" data-v="2">2× (SSAA)</button><button class="opt" data-v="3" id="optTemporal">Temporal</button>
       </div></div>
-      <p class="gnote">2× tira serrilha sem borrar, mas pesa como o dobro da resolução · só textura recarrega</p>
+      <div class="linha"><span>reconstrução</span><div class="tiers" data-cfg="recon">
+        <button class="opt" data-v="0">Desligada</button><button class="opt" data-v="1">Ligada</button>
+      </div></div>
+      <p class="gnote">Temporal custa quase nada e é o melhor custo-benefício; 2× é mais caro. Reconstrução ajuda em resolução baixa · só textura recarrega</p>
     </div>
 
     <div class="painelAba" id="abaControles" hidden>
@@ -181,7 +184,7 @@ import * as arvore3d from './pecas/arvore3d.js';
 /* res = largura do quadro interno. 0 significa "nativa": acompanha a janela,
    limitada a 2560 pra ninguém pedir sem querer um quadro gigante num monitor
    de altíssima resolução e achar que o jogo travou. */
-const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0 };
+const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0, recon: 0 };
 const larguraInterna = (r) => (r > 0 ? r : Math.min(2560, Math.round(innerWidth * (devicePixelRatio || 1))));
 const Q = new URLSearchParams(location.search);
 function lerCfg() {
@@ -266,7 +269,7 @@ function recarregarMantendoLugar() {
    reconstruir a textura de tudo que está na cena. O resto é do visor e troca
    na hora — o jogador vê a diferença enquanto olha pro mesmo lugar, que é o
    único jeito de comparar duas opções de verdade. */
-const TIERS_AO_VIVO = new Set(['luz', 'sombra', 'particulas', 'res', 'aa']);
+const TIERS_AO_VIVO = new Set(['luz', 'sombra', 'particulas', 'res', 'aa', 'recon']);
 
 /* Baixo e Médio ficam em pixel duro: é o visual do projeto e não custa nada.
    Alto usa supersampling 2×, e não a suavização "Suave" — esta borra o pixel
@@ -322,6 +325,10 @@ for (const btn of document.querySelectorAll('#presets .opt')) {
     marcarBotoes();
   });
 }
+
+/* o tier temporal precisa ler a profundidade, que depende de extensão. Onde
+   não houver, o botão some da lista em vez de virar um que não faz nada. */
+if (!visor.suportaTemporal?.()) document.getElementById('optTemporal')?.remove();
 
 marcarBotoes();
 
