@@ -14,14 +14,6 @@ const SUN_COL = [1.05, 0.98, 0.84], SKY_TOP = [0.55, 0.72, 0.95], SKY_HZ = [0.86
 const SOMBRA_SM = { 0: 64, 1: 1024, 2: 2048 };
 const LUZ_TIER = { 0: { diff: 0, bounce: 0 }, 1: { diff: 1, bounce: 0 }, 2: { diff: 1, bounce: 0.12 } };
 
-/* Halton(2,3), 8 termos — as posições da sacudida do TAA dentro do pixel.
-   Sequência de baixa discrepância: cobre o pixel por igual sem repetir cedo,
-   ao contrário do aleatório, que se agrupa e deixa buraco. */
-const HALTON = [
-  [0.500, 0.333], [0.250, 0.667], [0.750, 0.111], [0.125, 0.444],
-  [0.625, 0.778], [0.375, 0.222], [0.875, 0.556], [0.062, 0.889],
-];
-
 const PACK = `
   vec4 packDepth(float d){ vec4 e = fract(d * vec4(1.0,255.0,65025.0,16581375.0)); e -= e.yzww * (1.0/255.0); return e; }
   float unpackDepth(vec4 c){ return dot(c, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0)); }`;
@@ -40,7 +32,6 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
      amostrado ponto a ponto na saida, nenhuma media acontece, e sao 4x pixels
      desenhados pra serrilhar ate MAIS que o pixel duro. Medido, nao suposto. */
   let AA_SUAVE = aa === 1 || aa === 2;
-  let AA_TEMPORAL = aa === 3;   // tier 3: TAA (ver o shader `taa` abaixo)
   let RECON = 0;                // reconstrução na saída (0 desliga)
   /* O quadro interno segue a PROPORÇÃO DA JANELA, não 16:9 fixo. Antes a cena
      era desenhada em 16:9 e esticada pra tela inteira no blit final: num
@@ -56,11 +47,6 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
   let LT = LUZ_TIER[luz] ?? LUZ_TIER[1];
   const gl = canvas.getContext('webgl', { antialias: false, depth: true });
   if (!gl) throw new Error('WebGL indisponível');
-  /* TAA precisa LER a profundidade pra saber onde cada pixel estava no quadro
-     anterior. Sem esta extensão o depth só existe como renderbuffer, que não
-     se amostra — então o tier temporal simplesmente não fica disponível, em
-     vez de desenhar errado. */
-  const TEM_DEPTH_TEX = !!gl.getExtension('WEBGL_depth_texture');
 
   function sh(t, s) { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o);
     if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; }
@@ -131,44 +117,6 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
   const blit = prog(VS_QUAD,
     `precision mediump float; varying vec2 vUV; uniform sampler2D uTex; void main(){ gl_FragColor = texture2D(uTex, vUV);} `);
 
-  /* TAA — junta o quadro de agora com o acumulado dos anteriores.
-     A ideia: a projeção é sacudida menos de um pixel a cada quadro, então cada
-     quadro amostra a cena num ponto ligeiramente diferente. Somando ao longo do
-     tempo sai o mesmo que muitas amostras por pixel, mas pagando UMA.
-
-     O problema é que a câmera anda: o pixel de agora não é o mesmo lugar do
-     quadro passado. Por isso a profundidade — com ela e a inversa da projeção
-     dá pra voltar do pixel ao ponto do mundo, e desse ponto perguntar em que
-     pixel ele estava antes. É o `uReproj`.
-
-     O `clamp` na caixa de cores dos vizinhos é o que segura o fantasma: se a
-     cor guardada não cabe no que existe em volta agora, aquele pedaço mudou de
-     verdade e o histórico é puxado de volta pra realidade em vez de arrastar. */
-  const taa = prog(VS_QUAD, `
-    precision highp float;
-    varying vec2 vUV;
-    uniform sampler2D uAtual, uHist, uProf;
-    uniform mat4 uReproj;
-    uniform vec2 uTexel;
-    uniform float uPeso;
-    void main(){
-      vec3 c = texture2D(uAtual, vUV).rgb;
-      float d = texture2D(uProf, vUV).r;
-      if (d >= 1.0) { gl_FragColor = vec4(c, 1.0); return; }   // céu: nada pra reprojetar
-      vec4 ant = uReproj * vec4(vUV * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
-      vec2 uvAnt = (ant.xy / ant.w) * 0.5 + 0.5;
-      if (uvAnt.x < 0.0 || uvAnt.x > 1.0 || uvAnt.y < 0.0 || uvAnt.y > 1.0) {
-        gl_FragColor = vec4(c, 1.0); return;                   // entrou agora na tela
-      }
-      vec3 mn = c, mx = c;
-      for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
-        vec3 s = texture2D(uAtual, vUV + vec2(float(i), float(j)) * uTexel).rgb;
-        mn = min(mn, s); mx = max(mx, s);
-      }
-      vec3 h = clamp(texture2D(uHist, uvAnt).rgb, mn, mx);
-      gl_FragColor = vec4(mix(c, h, uPeso), 1.0);
-    }`);
-
   /* Reconstrução na saída, no espírito do FSR: em vez de esticar o quadro com
      bilinear (que borra tudo por igual), olha a vizinhança e puxa a
      interpolação NA DIREÇÃO da borda, depois devolve a nitidez com um realce
@@ -226,7 +174,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); return t; }
   function glMesh(m) { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(m.v), gl.STATIC_DRAW); return { buf: b, n: m.v.length / 8 }; }
-  function makeFBO(w, h, suave, profundidadeLegivel) {
+  function makeFBO(w, h, suave) {
     /* O filtro vale SÓ pro quadro final da cena. As texturas das peças seguem
        NEAREST sempre — suavizar elas apagaria o pixel art na origem.
        E o SHADOW MAP nunca pode vir suave: ele guarda profundidade empacotada
@@ -240,43 +188,23 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-    let rb = null, prof = null;
-    if (profundidadeLegivel) {                 // depth como TEXTURA: o TAA amostra
-      prof = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, prof);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT, w, h, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, prof, 0);
-    } else {
-      rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
-      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
-    }
-    return { fb, tex, rb, prof };   // rb/prof vão junto: sem eles, refazer o FBO vaza
+    const rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+    return { fb, tex, rb };   // rb vai junto: sem ele, refazer o FBO vaza o renderbuffer
   }
   function descartarFBO(f) {
     if (!f) return;
     gl.deleteFramebuffer(f.fb); gl.deleteTexture(f.tex);
     if (f.rb) gl.deleteRenderbuffer(f.rb);
-    if (f.prof) gl.deleteTexture(f.prof);
   }
-  let sceneFBO = makeFBO(IW, IH, AA_SUAVE, AA_TEMPORAL);
+  let sceneFBO = makeFBO(IW, IH, AA_SUAVE);
   let shadowFBO = makeFBO(SM, SM);
-  /* dois buffers de histórico revezando: não dá pra ler e escrever a mesma
-     textura no mesmo desenho, então o quadro resolvido vai num e lê do outro */
-  let histFBO = [null, null], histAtual = 0, histValido = false;
-  function refazerHistorico() {
-    histFBO.forEach(descartarFBO);
-    histFBO = AA_TEMPORAL ? [makeFBO(IW, IH, true), makeFBO(IW, IH, true)] : [null, null];
-    histValido = false;
-  }
 
   function refazerCena() {
     IH = Math.max(90, Math.round(IW / propJanela()));
     descartarFBO(sceneFBO);
-    sceneFBO = makeFBO(IW, IH, AA_SUAVE, AA_TEMPORAL);
-    refazerHistorico();
+    sceneFBO = makeFBO(IW, IH, AA_SUAVE);
   }
-  refazerHistorico();
   /* girar a tela ou arrastar a janela muda a proporcao: o quadro interno tem
      que ser refeito, senao volta a esticar. Sem isso o conserto do ultrawide
      so valeria ate o primeiro redimensionamento. */
@@ -298,9 +226,6 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
   subirSementes();
   const PA = gl.getAttribLocation(parts, 'aSeed');
   const BA = gl.getAttribLocation(blit, 'aPos'), BT = gl.getUniformLocation(blit, 'uTex');
-  const T_ATUAL = gl.getUniformLocation(taa, 'uAtual'), T_HIST = gl.getUniformLocation(taa, 'uHist');
-  const T_PROF = gl.getUniformLocation(taa, 'uProf'), T_REPROJ = gl.getUniformLocation(taa, 'uReproj');
-  const T_TEXEL = gl.getUniformLocation(taa, 'uTexel'), T_PESO = gl.getUniformLocation(taa, 'uPeso');
   const RA = gl.getAttribLocation(recon, 'aPos'), R_TEX = gl.getUniformLocation(recon, 'uTex');
   const R_TEXEL = gl.getUniformLocation(recon, 'uTexel'), R_NITIDEZ = gl.getUniformLocation(recon, 'uNitidez');
 
@@ -368,9 +293,6 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
        lado oposto da tela, o clássico "a etiqueta aparece nas costas".
        `dist` vem junto porque quem chama quase sempre quer filtrar por distância
        e ordenar, e o cálculo já está feito aqui. */
-    /* o tier temporal depende de extensão: a UI usa isto pra não oferecer
-       uma opção que não funcionaria naquele navegador */
-    suportaTemporal: () => TEM_DEPTH_TEX,
     projetar(p) {
       /* Com câmera de jogador, RECONSTRÓI a matriz do estado atual em vez de
          usar a do último quadro: projetar() é chamado no antesDoQuadro, ou
@@ -423,13 +345,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         if (r !== RES) { RES = r; refazQuadro = true; }
       }
       if (aa !== undefined) {
-        /* tier 3 (temporal) cai pra 0 se o navegador não deixar ler a
-           profundidade: melhor pixel duro que TAA desenhando errado */
-        const t = aa === 3 && !TEM_DEPTH_TEX ? 0 : aa;
-        const esc = t === 2 ? 2 : 1, suave = t === 1 || t === 2, temp = t === 3;
-        if (esc !== AA_ESCALA || suave !== AA_SUAVE || temp !== AA_TEMPORAL) {
-          AA_ESCALA = esc; AA_SUAVE = suave; AA_TEMPORAL = temp; refazQuadro = true;
-        }
+        const esc = aa === 2 ? 2 : 1, suave = aa === 1 || aa === 2;
+        if (esc !== AA_ESCALA || suave !== AA_SUAVE) { AA_ESCALA = esc; AA_SUAVE = suave; refazQuadro = true; }
       }
       if (recon !== undefined) RECON = recon ? 1 : 0;
       if (refazQuadro) { IW = RES * AA_ESCALA; refazerCena(); }
@@ -457,7 +374,6 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       function resize() { const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = innerWidth * dpr | 0; canvas.height = innerHeight * dpr | 0; }
       addEventListener('resize', () => { resize(); ajustarProporcao(); }); resize();
       let t0 = performance.now(), frames = 0, tPrev = performance.now();
-      let quadroTAA = 0, vpAnterior = null;
       const draw = (prg, aL, comExtras) => {
         const uM = gl.getUniformLocation(prg, 'uModel');
         const uR = gl.getUniformLocation(prg, 'uRim');   // null no passe de profundidade
@@ -496,23 +412,10 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         /* IH muda quando a janela muda de proporção, então a abertura é lida
            aqui e não uma vez só — senão o mundo volta a esticar ao redimensionar */
         const proj = m4.persp(58 * Math.PI/180, IW/IH, near, farCfg);
-        /* SEM sacudida: é esta que vai pro projetar() e pra reprojeção do TAA.
-           Usar a sacudida ali faria a etiqueta tremer e o histórico se perder. */
         const mvp = m4.mul(proj, lookAtM);
         mvpAtual = mvp; camAtualPos = camPos;   // guardados pra projetar()
 
-        /* sacode a projeção menos de um pixel por quadro. Halton(2,3) espalha
-           as posições sem repetir cedo, que é o que faz as amostras somarem em
-           vez de cair sempre no mesmo canto do pixel. */
-        let mvpDesenho = mvp;
-        if (AA_TEMPORAL) {
-          const j = HALTON[quadroTAA % HALTON.length];
-          const pj = proj.slice();
-          pj[8] += (j[0] * 2 - 1) / IW;
-          pj[9] += (j[1] * 2 - 1) / IH;
-          mvpDesenho = m4.mul(pj, lookAtM);
-        }
-        const mvpf = new Float32Array(mvpDesenho);
+        const mvpf = new Float32Array(mvp);
         // 1: sombra (tier 0 = só limpa pra "tudo lit"; pula os draw calls, o custo real)
         gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFBO.fb); gl.viewport(0, 0, SM, SM);
         gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.clearColor(1,1,1,1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -546,34 +449,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
           gl.bindBuffer(gl.ARRAY_BUFFER, partVBO); gl.enableVertexAttribArray(PA); gl.vertexAttribPointer(PA, 3, gl.FLOAT, false, 0, 0);
           gl.drawArrays(gl.POINTS, 0, NP); gl.depthMask(true); gl.disable(gl.BLEND);
         }
-        // 3: TAA — junta com o histórico antes de mandar pra tela
-        let fonte = sceneFBO.tex;
-        if (AA_TEMPORAL && sceneFBO.prof && histFBO[0]) {
-          const inv = m4.inv(mvp);
-          if (inv && vpAnterior) {
-            const alvo = histFBO[histAtual], anterior = histFBO[1 - histAtual];
-            gl.bindFramebuffer(gl.FRAMEBUFFER, alvo.fb); gl.viewport(0, 0, IW, IH); gl.disable(gl.DEPTH_TEST);
-            gl.useProgram(taa);
-            gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneFBO.tex);
-            gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, anterior.tex);
-            gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sceneFBO.prof);
-            gl.uniform1i(T_ATUAL, 0); gl.uniform1i(T_HIST, 1); gl.uniform1i(T_PROF, 2);
-            gl.uniformMatrix4fv(T_REPROJ, false, new Float32Array(m4.mul(vpAnterior, inv)));
-            gl.uniform2f(T_TEXEL, 1 / IW, 1 / IH);
-            /* 1º quadro depois de ligar/refazer não tem histórico: peso 0 pra
-               não misturar com lixo. Depois 0.9 — quanto mais alto, mais suave
-               e mais propenso a fantasma. */
-            gl.uniform1f(T_PESO, histValido ? 0.9 : 0);
-            gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO); gl.enableVertexAttribArray(BA); gl.vertexAttribPointer(BA, 2, gl.FLOAT, false, 0, 0);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            fonte = alvo.tex;
-            histAtual = 1 - histAtual; histValido = true;
-          }
-          vpAnterior = mvp;
-          quadroTAA++;
-        }
-
-        // 4: pra tela — cópia direta ou reconstrução
+        // 3: pra tela — cópia direta ou reconstrução
+        const fonte = sceneFBO.tex;
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, canvas.width, canvas.height); gl.disable(gl.DEPTH_TEST);
         if (RECON) {
           gl.useProgram(recon);
@@ -592,7 +469,9 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       };
       requestAnimationFrame(frame);
     },
-    info: `${IW}×${IH}`,
+    /* funcao, nao valor: os tiers trocam ao vivo, entao um retrato
+       tirado na criacao passa a mentir no primeiro ajuste */
+    info: () => `${IW}×${IH}`,
     renderer: gl.getParameter(gl.RENDERER) || '',
   };
   return visor;

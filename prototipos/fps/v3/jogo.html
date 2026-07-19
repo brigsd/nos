@@ -119,6 +119,10 @@
     </div>
 
     <div class="painelAba" id="abaGraficos" hidden>
+      <div class="linha"><span>automático</span><div class="tiers" data-cfg="auto">
+        <button class="opt" data-v="0">Desligado</button><button class="opt" data-v="1">Ligado</button>
+      </div></div>
+      <p class="gnote">ligado, o jogo mede o tempo de quadro e vai ajustando sozinho pra segurar 60 · mexer numa opção abaixo desliga</p>
       <div class="linha"><span>preset</span><div class="tiers" id="presets">
         <button class="opt" data-p="baixo">Baixo</button><button class="opt" data-p="medio">Médio</button
         ><button class="opt" data-p="alto">Alto</button>
@@ -142,12 +146,12 @@
       </div></div>
       <div class="linha"><span>suavização</span><div class="tiers" data-cfg="aa">
         <button class="opt" data-v="0">Pixel duro</button><button class="opt" data-v="1">Suave</button
-        ><button class="opt" data-v="2">2× (SSAA)</button><button class="opt" data-v="3" id="optTemporal">Temporal</button>
+        ><button class="opt" data-v="2">2× (SSAA)</button>
       </div></div>
       <div class="linha"><span>reconstrução</span><div class="tiers" data-cfg="recon">
         <button class="opt" data-v="0">Desligada</button><button class="opt" data-v="1">Ligada</button>
       </div></div>
-      <p class="gnote">Temporal custa quase nada e é o melhor custo-benefício; 2× é mais caro. Reconstrução ajuda em resolução baixa · só textura recarrega</p>
+      <p class="gnote">2× tira serrilha sem borrar, mas pesa. Reconstrução ajuda em resolução baixa · só textura recarrega</p>
     </div>
 
     <div class="painelAba" id="abaControles" hidden>
@@ -181,10 +185,28 @@ import { criarSom } from './motor/som.js';
 import * as ilhaChao from './pecas/ilha-chao.js';
 import * as arvore3d from './pecas/arvore3d.js';
 
+/* O laço de erro fica no TOPO de propósito: registrado lá embaixo, ele não
+   pegava nada que quebrasse durante a montagem — e falha na montagem é
+   justamente a que deixa a tela preta sem dizer por quê.
+   Um erro dentro do quadro também derrubava o rAF inteiro: tela preta, sem
+   movimento, e o som seguindo normal (Web Audio roda em outra thread). Só a 1ª
+   mensagem — a 60 quadros por segundo, repetir viraria enxurrada. */
+const elErro = document.getElementById('erro');
+let erroMostrado = false;
+function mostrarErro(e) {
+  if (erroMostrado) return;
+  erroMostrado = true;
+  elErro.textContent = String(e?.stack || e?.message || e);
+  elErro.style.display = 'block';
+}
+addEventListener('error', (ev) => mostrarErro(ev.error || ev.message));
+addEventListener('unhandledrejection', (ev) => mostrarErro(ev.reason));
+
+
 /* res = largura do quadro interno. 0 significa "nativa": acompanha a janela,
    limitada a 2560 pra ninguém pedir sem querer um quadro gigante num monitor
    de altíssima resolução e achar que o jogo travou. */
-const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0, recon: 0 };
+const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0, recon: 0, auto: 0 };
 const larguraInterna = (r) => (r > 0 ? r : Math.min(2560, Math.round(innerWidth * (devicePixelRatio || 1))));
 const Q = new URLSearchParams(location.search);
 function lerCfg() {
@@ -219,7 +241,7 @@ const visor = criarVisor({
   sombra: cfg.sombra, particulasN: PARTICULAS_N[cfg.particulas] ?? 320, luz: cfg.luz,
 });
 visor.carregar(cena);
-document.getElementById('dev').textContent = `${visor.info} · tex ${16 * cfg.ts}px · ${visor.renderer}`;
+
 
 /* ---------- som ---------- */
 const som = criarSom();
@@ -304,6 +326,14 @@ for (const grupo of document.querySelectorAll('.tiers[data-cfg]')) {
   for (const btn of grupo.querySelectorAll('.opt')) {
     btn.addEventListener('click', () => {
       const valor = Number(btn.dataset.v);
+      if (chave === 'auto') {
+        autoLigado = valor === 1;
+        salvarCfg({ ...lerCfg(), auto: valor });
+        if (autoLigado) { janelaT = 0; janelaN = 0; folgaSeguida = 0; aplicarDegrau(); }
+        marcarBotoes();
+        return;
+      }
+      desligarAuto();
       salvarCfg({ ...lerCfg(), [chave]: valor });
       if (!TIERS_AO_VIVO.has(chave)) { recarregarMantendoLugar(); return; }
       visor.aplicarTiers({ [chave]: paraVisor(chave, valor) });
@@ -314,6 +344,7 @@ for (const grupo of document.querySelectorAll('.tiers[data-cfg]')) {
 
 for (const btn of document.querySelectorAll('#presets .opt')) {
   btn.addEventListener('click', () => {
+    desligarAuto();
     const antes = lerCfg(), p = PRESETS[btn.dataset.p];
     salvarCfg({ ...antes, ...p });
     /* textura é das peças e exige reconstruir a cena: só recarrega se o preset
@@ -326,9 +357,62 @@ for (const btn of document.querySelectorAll('#presets .opt')) {
   });
 }
 
-/* o tier temporal precisa ler a profundidade, que depende de extensão. Onde
-   não houver, o botão some da lista em vez de virar um que não faz nada. */
-if (!visor.suportaTemporal?.()) document.getElementById('optTemporal')?.remove();
+/* ---------- ajuste automático de qualidade ----------
+   O jogador não deveria precisar saber o que é resolução interna nem SSAA. O
+   jogo mede o tempo de quadro e se encaixa no aparelho sozinho.
+
+   Uma ESCADA de degraus, do mais leve pro mais pesado, em vez de mexer nos
+   tiers soltos: assim cada ajuste é um passo previsível, e não uma combinação
+   que ninguém consegue reproduzir depois. Textura fica de fora — ela exige
+   recarregar, e recarregar sozinho no meio do jogo seria pior que qualquer
+   queda de fps. */
+const ESCADA = [
+  { res: 480, luz: 0, sombra: 0, particulas: 0, aa: 0, recon: 1 },
+  { res: 480, luz: 1, sombra: 0, particulas: 0, aa: 0, recon: 1 },
+  { res: 640, luz: 1, sombra: 1, particulas: 1, aa: 0, recon: 1 },
+  { res: 640, luz: 2, sombra: 1, particulas: 1, aa: 0, recon: 0 },
+  { res: 960, luz: 2, sombra: 2, particulas: 2, aa: 0, recon: 0 },
+  { res: 960, luz: 2, sombra: 2, particulas: 2, aa: 2, recon: 0 },
+];
+const ALVO_MS = 1000 / 60;
+let autoLigado = cfg.auto === 1;
+let degrau = 2;                      // começa no meio: nem otimista nem pessimista
+let janelaT = 0, janelaN = 0, folgaSeguida = 0;
+
+function aplicarDegrau() {
+  const d = ESCADA[degrau];
+  visor.aplicarTiers({ ...d, res: larguraInterna(d.res), particulas: PARTICULAS_N[d.particulas] });
+  salvarCfg({ ...lerCfg(), ...d });
+  marcarBotoes();
+}
+
+/* Decide sobre uma JANELA de ~1s, não sobre um quadro: um pico isolado (coleta
+   de lixo do navegador, uma peça carregando) não pode derrubar a qualidade.
+   E pra SUBIR exige três janelas boas seguidas — sem essa assimetria o ajuste
+   fica pingando entre dois degraus pra sempre. */
+function ajustar(dt) {
+  if (!autoLigado || paused) return;
+  janelaT += dt * 1000; janelaN++;
+  if (janelaT < 1000) return;
+  const medio = janelaT / janelaN;
+  janelaT = 0; janelaN = 0;
+  if (medio > ALVO_MS * 1.25 && degrau > 0) {
+    degrau--; folgaSeguida = 0; aplicarDegrau();
+    avisar('qualidade ajustada pra baixo (' + Math.round(1000 / medio) + ' fps)');
+  } else if (medio < ALVO_MS * 0.8 && degrau < ESCADA.length - 1) {
+    if (++folgaSeguida >= 3) { degrau++; folgaSeguida = 0; aplicarDegrau(); }
+  } else folgaSeguida = 0;
+}
+
+/* Mexer numa opção à mão desliga o automático. Os dois disputando o mesmo
+   controle deixaria o jogador sem entender por que a escolha dele some. */
+function desligarAuto() {
+  if (!autoLigado) return;
+  autoLigado = false;
+  salvarCfg({ ...lerCfg(), auto: 0 });
+  marcarBotoes();
+  avisar('ajuste automático desligado');
+}
 
 marcarBotoes();
 
@@ -428,6 +512,7 @@ function antesDoQuadro(dt, T) {
      Desligadas, esta linha é uma comparação e mais nada. */
   if (verTags) mostrarTags();
   if (mapaModo) desenharMapa();
+  ajustar(dt);
 }
 
 /* Coordenadas no topo. Só 10x por segundo: escrever no DOM a cada quadro é
@@ -460,6 +545,7 @@ function mostrarCoords(T) {
   const r = Math.hypot(pos[0], pos[2]);
   const piso = ilhaChao.superficieEm(pos[0], pos[2]);
   const lim = ilhaChao.raioEm(pos[0], pos[2]) - BEIRA;
+  document.getElementById('dev').textContent = `${visor.info()} · tex ${16 * lerCfg().ts}px`;
   elCoord.innerHTML = `setor ${setorEm(pos[0], pos[2])} · x ${pos[0].toFixed(1)} · z ${pos[2].toFixed(1)}`
     + ` · raio ${r.toFixed(1)}/${lim.toFixed(1)} · ${piso}`
     + `<br><span style="opacity:.55">?cam=${camAtual()} · [=] copia o link</span>`;
@@ -687,21 +773,6 @@ addEventListener('keydown', (e) => {
   visor.depurar(verColisao ? malhaColisao : []);
 });
 
-/* Um erro dentro do quadro derrubava o rAF inteiro: tela preta, sem movimento,
-   e o som seguindo normal (Web Audio roda em outra thread). O sintoma não dizia
-   nada. Agora a falha aparece NA TELA e o render continua, então dá pra ler o
-   que quebrou em vez de olhar pro preto. Só a 1ª mensagem — a 60 quadros por
-   segundo, repetir viraria enxurrada. */
-const elErro = document.getElementById('erro');
-let erroMostrado = false;
-function mostrarErro(e) {
-  if (erroMostrado) return;
-  erroMostrado = true;
-  elErro.textContent = String(e?.stack || e?.message || e);
-  elErro.style.display = 'block';
-}
-addEventListener('error', (ev) => mostrarErro(ev.error || ev.message));
-addEventListener('unhandledrejection', (ev) => mostrarErro(ev.reason));
 
 visor.rodar(
   (fps) => { document.getElementById('fps').textContent = fps + ' fps'; },
