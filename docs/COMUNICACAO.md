@@ -86,13 +86,27 @@ o mesmo erro que já custou caro no código.
   `y` da v2, e o `yaw` ao `a`.
 - **Tecla `=` copia o link pronto** pra área de transferência — a URL inteira,
   não só os números. Aperta e cola. (Na v2 era digitar à mão.)
+- **Tecla `I` liga as etiquetas de ID**, como na v2: os 12 objetos mais
+  próximos (até 14 unidades) ganham etiqueta ancorada no topo do tronco, e
+  objeto tapado por outro não mostra etiqueta.
 - **Tecla `O`** liga e desliga a visualização das áreas de colisão.
+
+## IDs de objeto na v3
+
+Formato **`arvore@-13,8`** — tipo, arroba, e a posição no mundo.
+
+Difere do `tipo-XxY` da v2 de propósito: lá o mundo era uma grade de tiles
+sempre positivos, aqui são unidades com sinal, e `arvore--13x8` seria ilegível.
+O que importa preservar não é o formato, é a propriedade: **o ID sai da posição**,
+então reordenar a lista de árvores não renomeia nada e o nome leva direto ao
+lugar. Os números são os MESMOS que o HUD mostra — dois sistemas de número pra
+mesma coisa é exatamente o que já causou bug aqui.
+
+Em código, as árvores de hoje estão em `ARVORE_POS` no `jogo.html`; quando
+virarem geração por posição, o ID continua valendo sem mudar nada.
 
 ## O que falta portar
 
-- **Tecla `I` e as etiquetas de ID** (`arvore-38x12` e afins). Precisa de
-  projeção em tela e oclusão. Sem isso, hoje se aponta objeto por setor mais
-  `?cam=` — resolve, mas é menos direto que citar o ID.
 - **Tecla `M` e o mapa** com a grade de setores.
 
 ## Ideias futuras (não implementadas)

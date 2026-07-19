@@ -16,6 +16,12 @@
     pointer-events: none; white-space: nowrap; user-select: text; }
   /* erro no loop de quadro mata o render e deixa a tela preta, sem nada na
      tela dizendo o porquê — a mensagem tem que aparecer AQUI, não só no console */
+  /* etiquetas de ID (tecla I). O container nunca some do DOM; o que some são
+     as etiquetas. pointer-events:none pra não roubar clique do jogo. */
+  #tags { position: fixed; inset: 0; z-index: 15; pointer-events: none; }
+  #tags b { position: absolute; transform: translate(-50%, -100%); font-weight: 400;
+    font-size: 11px; color: #f9c22b; text-shadow: 0 1px 2px #000, 0 0 3px #000;
+    background: rgba(20,16,30,.55); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
   /* aviso curto (copiei o link, etc): embaixo ao centro, some sozinho */
   #aviso { position: fixed; left: 50%; bottom: 42px; transform: translateX(-50%); z-index: 41;
     display: none; background: rgba(20,16,30,.9); border: 1px solid var(--line); border-radius: 6px;
@@ -71,6 +77,7 @@
 <canvas id="c"></canvas>
 <div id="hud">NÓS · v3 — o alicerce (D-61)<br><b id="fps">— fps</b> · <span id="dev">—</span></div>
 <div id="coord">—</div>
+<div id="tags"></div>
 <div id="aviso"></div>
 <div id="erro"></div>
 <div id="hint">clique: mirar (ESC pausa) · WASD anda</div>
@@ -316,6 +323,9 @@ function antesDoQuadro(dt, T) {
   som.proximidadeAgua(Math.hypot(pos[0] - LAGO[0], pos[2] - LAGO[1]));
   visor.setCam([pos[0], EYE, pos[2]], yaw, pitch);
   mostrarCoords(T);
+  /* etiquetas acompanham a câmera, então é todo quadro — mas só quando ligadas.
+     Desligadas, esta linha é uma comparação e mais nada. */
+  if (verTags) mostrarTags();
 }
 
 /* Coordenadas no topo. Só 10x por segundo: escrever no DOM a cada quadro é
@@ -377,6 +387,81 @@ function avisar(texto, segundos = 2.5) {
   clearTimeout(timerAviso);
   timerAviso = setTimeout(() => { el.style.display = 'none'; }, segundos * 1000);
 }
+
+/* ---------- etiquetas de ID (tecla I) ----------
+   Porta o protocolo do COMUNICACAO.md: apontar objeto pelo nome em vez de
+   descrever. O ID sai da POSIÇÃO, não de um índice na lista — reordenar as
+   árvores não renomeia nada, e o nome leva direto ao lugar.
+
+   Formato `arvore@-13,8`, e não o `tipo-XxY` da v2, porque lá o mundo era uma
+   grade de tiles positivos e aqui as coordenadas são unidades com sinal. Usar
+   os MESMOS números que o HUD mostra vale mais que a semelhança do formato:
+   dois sistemas de número pra mesma coisa foi o que causou o bug da borda. */
+const ALCANCE_TAG = 14, MAX_TAGS = 12;
+const OBJETOS = ARVORE_POS.map(([x, z]) => ({
+  id: `${arvore3d.meta.nome.replace('3d', '')}@${x},${z}`,
+  x, z, alto: arvore3d.meta.colisao?.altura ?? 2,
+  r: arvore3d.meta.colisao?.raio ?? 0.3,
+}));
+
+const elTags = document.getElementById('tags');
+let verTags = false;
+
+/* tapado por outro objeto? Anda pela linha de visão e vê se algum tronco fica
+   no caminho. Amostrar é bom o bastante aqui: tronco é fino e a etiqueta some
+   um instante depois do certo, o que ninguém percebe — e evita um raycast
+   completo por objeto por quadro. */
+function tapado(alvo) {
+  const olho = [pos[0], EYE, pos[2]];
+  const PASSOS = 12;
+  for (const o of OBJETOS) {
+    if (o === alvo) continue;
+    for (let i = 1; i < PASSOS; i++) {
+      const t = i / PASSOS;
+      const px = olho[0] + (alvo.x - olho[0]) * t;
+      const py = olho[1] + (alvo.alto - olho[1]) * t;
+      const pz = olho[2] + (alvo.z - olho[2]) * t;
+      if (py > o.alto) continue;                       // passa POR CIMA do tronco
+      if (Math.hypot(px - o.x, pz - o.z) < o.r) return true;
+    }
+  }
+  return false;
+}
+
+function mostrarTags() {
+  /* perto primeiro, corta no MAX: um punhado de etiquetas legíveis vale mais
+     que a floresta inteira rotulada por cima de si mesma */
+  const perto = OBJETOS
+    .map((o) => ({ o, d: Math.hypot(o.x - pos[0], o.z - pos[2]) }))
+    .filter((c) => c.d <= ALCANCE_TAG)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, MAX_TAGS);
+
+  const vistos = [];
+  for (const { o } of perto) {
+    const p = visor.projetar([o.x, o.alto, o.z]);
+    if (p && !tapado(o)) vistos.push({ o, p });
+  }
+  /* reusa os elementos: criar e destruir div a 60 quadros por segundo é o que
+     transforma HUD de depuração em queda de fps */
+  while (elTags.children.length < vistos.length) elTags.appendChild(document.createElement('b'));
+  for (let i = 0; i < elTags.children.length; i++) {
+    const el = elTags.children[i];
+    if (i >= vistos.length) { el.style.display = 'none'; continue; }
+    const { o, p } = vistos[i];
+    el.style.display = 'block';
+    el.style.transform = `translate(-50%,-100%) translate(${p.x.toFixed(0)}px, ${p.y.toFixed(0)}px)`;
+    el.style.opacity = String(Math.max(0.35, 1 - p.dist / ALCANCE_TAG));
+    if (el.textContent !== o.id) el.textContent = o.id;
+  }
+}
+
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyI' || paused) return;
+  verTags = !verTags;
+  if (!verTags) elTags.replaceChildren();        // desligado: nada no DOM, nada a atualizar
+  avisar(verTags ? 'etiquetas de ID ligadas' : 'etiquetas desligadas');
+});
 
 /* ---------- ver colisão (tecla O) ----------
    Desligada, a camada NÃO EXISTE no laço de desenho — não é lote invisível nem

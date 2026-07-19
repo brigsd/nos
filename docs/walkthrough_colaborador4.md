@@ -94,13 +94,25 @@ O segundo número do "raio" é o limite **naquela direção**, então muda confo
 se anda. A tecla `=` copia a URL inteira pra área de transferência — abrir ela
 devolve exatamente esta vista.
 
-**Setores portados da v2.** O `docs/COMUNICACAO.md` já definia `A1`–`H8` pro FPS
-antigo e a v3 tinha nascido sem nada disso; adotamos a mesma notação em vez de
-inventar outra. A grade sai de `ilhaChao.EXTENSAO`, então acompanha se a ilha
-mudar de tamanho. **Ainda falta portar** a tecla `I` (etiquetas de ID nos
-objetos, precisa de projeção em tela e oclusão) e a tecla `M` (mapa). O
-COMUNICACAO.md foi atualizado com uma seção da v3 dizendo o que existe e o que
-falta.
+**Protocolo da v2 portado.** O `docs/COMUNICACAO.md` já definia `A1`–`H8` e as
+etiquetas de ID pro FPS antigo, e a v3 tinha nascido sem nada disso; adotamos a
+mesma notação em vez de inventar outra. A grade de setores sai de
+`ilhaChao.EXTENSAO`, então acompanha se a ilha mudar de tamanho.
+
+**Tecla `I` — etiquetas de ID.** Os 12 objetos mais próximos (até 14 unidades)
+ganham etiqueta ancorada no topo do tronco, com opacidade caindo com a distância.
+Objeto tapado por outro não mostra etiqueta: a checagem anda pela linha de visão
+amostrando 12 pontos e vê se algum tronco fica no caminho — bom o bastante pra
+tronco fino, e sem o custo de um raycast completo por objeto por quadro. Os
+elementos do DOM são reusados entre quadros; criar e destruir div a 60fps é o que
+transforma HUD de depuração em queda de fps. Desligada, nada fica no DOM e a
+função nem é chamada.
+
+ID no formato **`arvore@-13,8`**, derivado da posição e não de índice na lista —
+reordenar as árvores não renomeia nada. Difere do `tipo-XxY` da v2 porque lá o
+mundo era grade de tiles positivos e aqui são unidades com sinal.
+
+**Ainda falta** a tecla `M` (mapa com a grade de setores).
 
 **Faixa de erro no rodapé.** Uma exceção dentro do `antesDoQuadro` derrubava o
 `rAF` inteiro: tela preta, sem movimento, e o som seguindo normal (Web Audio roda
@@ -161,7 +173,21 @@ fazia certo com `pathToFileURL`; os outros sete foram alinhados.
 
 ## O que mexe com render
 
-Só uma coisa, e é aditiva: **`motor/render.js` ganhou `visor.depurar(lotes)`**.
+Duas coisas, ambas aditivas.
+
+### `visor.projetar([x,y,z])`
+
+Leva um ponto do mundo pra coordenada de tela em pixels de CSS, pra ancorar HTML
+em cima de algo 3D (é o que as etiquetas de ID usam). Devolve `{x, y, dist}`, ou
+`null` se o ponto está atrás da câmera ou fora da tela.
+
+Detalhe que vale saber: com câmera de jogador ele **reconstrói** a matriz do
+estado atual em vez de usar a do último quadro. `projetar` é chamado no
+`antesDoQuadro`, ou seja, antes do quadro existir — usar a matriz velha faria a
+etiqueta arrastar um quadro atrás ao girar. Na câmera de órbita não dá pra
+reconstruir (o ângulo depende do relógio do quadro), então lá ele usa a guardada.
+
+### `visor.depurar(lotes)`
 
 ```js
 visor.depurar([{ mesh, tex }]);   // liga

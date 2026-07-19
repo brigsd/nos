@@ -163,6 +163,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
   let camCfg = {};  // câmera SUGERIDA pela peça {e,r} (paisagem pede órbita alta) — ?e/?r vencem
   let freeCam = null;  // {pos:[x,y,z], yaw, pitch} — câmera de JOGADOR (jogo.html); substitui a órbita quando setada
   let extras = [];     // camada de DEPURAÇÃO (colisores etc). Vazia = nada a pagar.
+  let mvpAtual = null, camAtualPos = null;   // do último quadro, pra projetar()
   const visor = {
     glTex, glMesh,
     /* câmera livre (jogo.html chama a cada quadro com a posição/olhar do
@@ -188,6 +189,40 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       fogCfg = peca.fog || FOG_PADRAO;
       farCfg = peca.far || 60;
       camCfg = peca.camera || {};
+    },
+    /* leva um ponto do MUNDO pra COORDENADA DE TELA em pixels de CSS, usando a
+       matriz do último quadro desenhado. Serve pra ancorar HTML em cima de algo
+       3D (etiqueta de objeto, marcador). Devolve null se o ponto está atrás da
+       câmera — que é onde a divisão por w inverte o sinal e joga o elemento pro
+       lado oposto da tela, o clássico "a etiqueta aparece nas costas".
+       `dist` vem junto porque quem chama quase sempre quer filtrar por distância
+       e ordenar, e o cálculo já está feito aqui. */
+    projetar(p) {
+      /* Com câmera de jogador, RECONSTRÓI a matriz do estado atual em vez de
+         usar a do último quadro: projetar() é chamado no antesDoQuadro, ou
+         seja, ANTES do quadro existir, e a matriz velha faria a etiqueta
+         arrastar um quadro atrás ao girar. Na órbita não dá pra reconstruir
+         (o ângulo depende do relógio do quadro), então lá vale a guardada. */
+      let M = mvpAtual, C = camAtualPos;
+      if (freeCam) {
+        const { pos: fp, yaw, pitch } = freeCam;
+        const cy = Math.cos(pitch), sy = Math.sin(pitch), sx = Math.sin(yaw), cx = Math.cos(yaw);
+        const lk = m4.lookAt(fp, [fp[0] + sx * cy, fp[1] + sy, fp[2] + cx * cy], [0, 1, 0]);
+        M = m4.mul(m4.persp(58 * Math.PI / 180, IW / IH, 0.05, farCfg), lk);
+        C = fp;
+      }
+      if (!M) return null;
+      const w = M[3] * p[0] + M[7] * p[1] + M[11] * p[2] + M[15];
+      if (w <= 1e-6) return null;                     // atrás da câmera
+      const x = (M[0] * p[0] + M[4] * p[1] + M[8] * p[2] + M[12]) / w;
+      const y = (M[1] * p[0] + M[5] * p[1] + M[9] * p[2] + M[13]) / w;
+      if (x < -1.2 || x > 1.2 || y < -1.2 || y > 1.2) return null;   // fora da tela
+      const c = C;
+      return {
+        x: (x * 0.5 + 0.5) * canvas.clientWidth,
+        y: (1 - (y * 0.5 + 0.5)) * canvas.clientHeight,
+        dist: c ? Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]) : 0,
+      };
     },
     /* camada de depuração desenhada por cima da cena. Passe [] (ou nada) pra
        desligar: a lista some do laço de desenho, então DESLIGADA não custa
@@ -246,7 +281,9 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
           lookAtM = m4.lookAt(camPos, [0, 0.6, 0], [0, 1, 0]);
         }
         const near = freeCam ? 0.05 : (farCfg > 100 ? farCfg / 1000 : 0.05);
-        const mvpf = new Float32Array(m4.mul(m4.persp(58 * Math.PI/180, IW/IH, near, farCfg), lookAtM));
+        const mvp = m4.mul(m4.persp(58 * Math.PI/180, IW/IH, near, farCfg), lookAtM);
+        mvpAtual = mvp; camAtualPos = camPos;   // guardados pra projetar()
+        const mvpf = new Float32Array(mvp);
         // 1: sombra (tier 0 = só limpa pra "tudo lit"; pula os draw calls, o custo real)
         gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFBO.fb); gl.viewport(0, 0, SM, SM);
         gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.clearColor(1,1,1,1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
