@@ -693,11 +693,22 @@ function desenharMapa() {
      o vetor vai igual, sem inversão. */
   const px = paraTela(pos[0]), py = paraTela(pos[2]);
   const fx = Math.sin(yaw), fz = Math.cos(yaw), L = MAPA_PX * 0.028;
+  const ponta = [px + fx * L * 1.6, py + fz * L * 1.6];
+  const esq = [px - fz * L - fx * L * 0.4, py + fx * L - fz * L * 0.4];
+  const dir = [px + fz * L - fx * L * 0.4, py - fx * L - fz * L * 0.4];
   ctxMapa.fillStyle = '#f9c22b';
   ctxMapa.beginPath();
-  ctxMapa.moveTo(px + fx * L * 1.6, py + fz * L * 1.6);
-  ctxMapa.lineTo(px - fz * L - fx * L * 0.4, py + fx * L - fz * L * 0.4);
-  ctxMapa.lineTo(px + fz * L - fx * L * 0.4, py - fx * L - fz * L * 0.4);
+  ctxMapa.moveTo(ponta[0], ponta[1]); ctxMapa.lineTo(esq[0], esq[1]); ctxMapa.lineTo(dir[0], dir[1]);
+  ctxMapa.closePath(); ctxMapa.fill();
+  /* A PONTA sai vermelha: um triangulo de uma cor so e simetrico demais de
+     relance e da pra ler a base como se fosse a frente. A cor resolve sem
+     depender do formato. O corte sai da mistura da ponta com os cantos de tras,
+     entao acompanha qualquer tamanho de seta. */
+  const mist = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const ce = mist(ponta, esq, 0.45), cd = mist(ponta, dir, 0.45);
+  ctxMapa.fillStyle = '#e83b3b';
+  ctxMapa.beginPath();
+  ctxMapa.moveTo(ponta[0], ponta[1]); ctxMapa.lineTo(ce[0], ce[1]); ctxMapa.lineTo(cd[0], cd[1]);
   ctxMapa.closePath(); ctxMapa.fill();
 }
 
