@@ -11,3 +11,8 @@ command_results.json
 # Previews de sprites (8x, contact sheets, mapa mock) — artefatos de build,
 # regenerados por `npm run build:sprites` (assets/tools/) em assets/preview/.
 assets/preview/
+
+# FPS bake/QA outputs — screenshots e GI renders, regeneráveis via scripts.
+# Ver D-30 (Dieta do repo): binários regeneráveis nunca na main.
+prototipos/fps/bake/
+prototipos/fps/qa/
