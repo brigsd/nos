@@ -14,6 +14,11 @@
   #coord { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); font-size: 11px;
     font-variant-numeric: tabular-nums; color: #cddf6c; text-shadow: 0 1px 2px #000;
     pointer-events: none; white-space: nowrap; user-select: text; }
+  /* erro no loop de quadro mata o render e deixa a tela preta, sem nada na
+     tela dizendo o porquê — a mensagem tem que aparecer AQUI, não só no console */
+  #erro { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: none;
+    background: rgba(120,20,30,.92); color: #fdcbb0; font-size: 12px; padding: 10px 14px;
+    white-space: pre-wrap; user-select: text; }
   #hint { position: fixed; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #9b93a8; text-shadow: 0 1px 2px #000; pointer-events: none; }
   #pauseBtn { position: fixed; top: 10px; right: 10px; width: 38px; height: 38px; border-radius: 50%;
     background: rgba(23,18,33,.7); color: #eaaded; border: 1px solid var(--line); font-size: 16px; cursor: pointer; z-index: 15; }
@@ -61,6 +66,7 @@
 <canvas id="c"></canvas>
 <div id="hud">NÓS · v3 — o alicerce (D-61)<br><b id="fps">— fps</b> · <span id="dev">—</span></div>
 <div id="coord">—</div>
+<div id="erro"></div>
 <div id="hint">clique: mirar (ESC pausa) · WASD anda</div>
 <button id="pauseBtn" title="pausa (ESC)">⏸</button>
 <div id="stickL" class="stick"><div class="knob"></div></div>
@@ -306,7 +312,26 @@ function mostrarCoords(T) {
     + `<br><span style="opacity:.55">?cam=${cam}</span>`;
 }
 
-visor.rodar((fps) => { document.getElementById('fps').textContent = fps + ' fps'; }, antesDoQuadro);
+/* Um erro dentro do quadro derrubava o rAF inteiro: tela preta, sem movimento,
+   e o som seguindo normal (Web Audio roda em outra thread). O sintoma não dizia
+   nada. Agora a falha aparece NA TELA e o render continua, então dá pra ler o
+   que quebrou em vez de olhar pro preto. Só a 1ª mensagem — a 60 quadros por
+   segundo, repetir viraria enxurrada. */
+const elErro = document.getElementById('erro');
+let erroMostrado = false;
+function mostrarErro(e) {
+  if (erroMostrado) return;
+  erroMostrado = true;
+  elErro.textContent = String(e?.stack || e?.message || e);
+  elErro.style.display = 'block';
+}
+addEventListener('error', (ev) => mostrarErro(ev.error || ev.message));
+addEventListener('unhandledrejection', (ev) => mostrarErro(ev.reason));
+
+visor.rodar(
+  (fps) => { document.getElementById('fps').textContent = fps + ' fps'; },
+  (dt, T) => { try { antesDoQuadro(dt, T); } catch (e) { mostrarErro(e); } },
+);
 window.__ready = true;
 </script>
 </body>
