@@ -268,13 +268,14 @@ function recarregarMantendoLugar() {
    único jeito de comparar duas opções de verdade. */
 const TIERS_AO_VIVO = new Set(['luz', 'sombra', 'particulas', 'res', 'aa']);
 
-/* Presets NÃO mexem em `aa`. Suavização é escolha de GOSTO — pixel duro contra
-   borrado — e não um degrau de qualidade; um preset que apagasse o pixel art de
-   quem escolheu isso estaria trocando o visual do jogo sem ser pedido. */
+/* Baixo e Médio ficam em pixel duro: é o visual do projeto e não custa nada.
+   Alto usa supersampling 2×, e não a suavização "Suave" — esta borra o pixel
+   art, aquele tira serrilha sem borrar. Repare que Alto pede 960 com 2×, ou
+   seja, 1920 de largura interna: é de longe o degrau mais caro da lista. */
 const PRESETS = {
-  baixo: { ts: 2, luz: 0, sombra: 0, particulas: 0, res: 480 },
-  medio: { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640 },
-  alto:  { ts: 8, luz: 2, sombra: 2, particulas: 2, res: 960 },
+  baixo: { ts: 2, luz: 0, sombra: 0, particulas: 0, res: 480, aa: 0 },
+  medio: { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0 },
+  alto:  { ts: 8, luz: 2, sombra: 2, particulas: 2, res: 960, aa: 2 },
 };
 
 /* traduz um tier de config no número que o visor espera */
