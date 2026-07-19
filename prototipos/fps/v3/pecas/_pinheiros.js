@@ -18,18 +18,10 @@ export function construir(ctx) {
     if ((x + (fbm(x / 3, y / 22) * 3 | 0)) % 5 === 0) i = 1;
     return i;
   });
-  /* AGULHA: verde escuro "uma cor só" (29/30 + poucos 31), traços curtos */
-  const PINE = (() => {
-    const GT = 64, WR = (v) => (Math.round(v) & (GT - 1)), lb = new Int16Array(GT * GT);
-    for (let i = 0; i < lb.length; i++) { const n = fbm((i % GT) / 8 + 3, ((i / GT) | 0) / 8 + 1); lb[i] = n > 0.6 ? 30 : 29; }
-    for (let s = 0; s < 560; s++) {
-      const x = hash2(s * 13 + 1, 7) * GT, y0 = hash2(s * 29 + 3, 11) * GT;
-      const len = 2 + hash2(s * 7, 5) * 3, lean = (hash2(s * 5, 9) - 0.5) * 1.3;
-      const g = hash2(s * 3, 13), col = g < 0.62 ? 30 : g < 0.9 ? 31 : 29;
-      for (let k = 0; k <= len; k++) lb[WR(y0 + k) * GT + WR(x + lean * k / len)] = col;
-    }
-    return texCanvas(GT, GT, (x, y) => lb[y * GT + x]);
-  })();
+  /* pinheiro CARTOON (D-63): verde-escuro chapado em faixas por nível (topo do
+     nível 31, corpo 30, rebordo escuro 29 = sombra sob cada camada). Casa com as
+     folhosas cartoon do _arvformas; a forma vem das saias + contorno + cel. */
+  const PINE = texCanvas(32, 32, (x, y) => { const v = y / 32; return v > 0.72 ? 29 : v > 0.3 ? 30 : 31; });
 
   /* tronco compartilhado (tronco-cone afunilado) */
   const trunk = Mesh(), SIDES = 8;
@@ -87,6 +79,6 @@ export function construir(ctx) {
     camera: { e: 4.2, r: 26 },
     fog: [60, 45],
     far: 130,
-    lotes: [{ mesh: trunk, tex: BARK }, { mesh: canopy, tex: PINE }],
+    lotes: [{ mesh: trunk, tex: BARK }, { mesh: canopy, tex: PINE, outline: 0.05, toon: 1 }],
   };
 }
