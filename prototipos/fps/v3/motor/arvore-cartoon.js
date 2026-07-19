@@ -244,7 +244,7 @@ export function criarArvores(ctx) {
   };
   /* um galho: tubo afunilado ESTANQUE tampado nas 2 pontas + recursão de filhos
      que EMBUTEM na ponta (a sobreposição esconde a junção). Determinístico via hash2. */
-  function galhoSeca(m, base, dir, len, r0, r1, nivel, sd, tips, flare, vAltMode, lados = LADOS) {
+  function galhoSeca(m, base, dir, len, r0, r1, nivel, sd, tips, flare, vAltMode, lados = LADOS, pe = false) {
     let rc = 0;
     const rnd = () => hash2(sd + rc * 29 + 11, (rc++) * 17 + sd * 2 + 3);
     const SUB = nivel > 0 ? 3 : 2, curva = 0.10 + 0.05 * (3 - nivel);
@@ -273,7 +273,38 @@ export function criarArvores(ctx) {
         quadUV(m, p0, p1, p2, p3, [uA, vL], [uB, vL], [uB, vH], [uA, vH], Nrm);
       }
     }
-    tampa(m, pts[0], rings[0], tang(0), -1, lados);
+    /* PÉ DE ELEFANTE integrado: prepende anilhas do pé ABAIXO da base, na MESMA malha.
+       A anilha de topo do pé (dy=0, sem dedo) coincide com a anilha da base do tubo
+       (mesmo frame u0/w0, mesmo raio rb, mesmos lados) -> superfície contínua, ZERO
+       sobreposição/emenda. Alarga com dedos cos(5a) na linha do chão e afina em pontas
+       na terra (y<0, escondido). UV por altura (vAlt) igual ao tronco -> casca flui. */
+    if (pe) {
+      const u0 = quadro(tang(0))[0], w0 = cross(u0, tang(0)), nR = 5, phF = hash2(sd * 3 + 1, 7) * TAU, rb = rads[0];
+      const PE = [
+        [0.00, 1.00, 0.00],   // topo = anilha da base do tronco (círculo, solda)
+        [-0.22, 1.25, 0.10],
+        [-0.45, 1.55, 0.30],  // alargando
+        [-0.62, 1.62, 0.42],  // linha do chão: MÁX + dedos abertos
+        [-0.80, 1.40, 0.46],  // abaixo do chão: dedos mergulham
+        [-1.02, 0.85, 0.34],
+        [-1.28, 0.30, 0.15],  // pontas na terra
+      ];
+      const peRing = ([dy, rs, ta]) => Array.from({ length: lados + 1 }, (_, i) => {
+        const a = i / lados * TAU, s = Math.max(0, Math.cos(nR * (a - phF))), rr = rb * rs + Math.pow(s, 1.5) * ta;
+        const cx = base[0] + dir[0] * dy, cy = base[1] + dir[1] * dy, cz = base[2] + dir[2] * dy;
+        const ca = Math.cos(a) * rr, sa = Math.sin(a) * rr;
+        return [cx + u0[0] * ca + w0[0] * sa, cy + u0[1] * ca + w0[1] * sa, cz + u0[2] * ca + w0[2] * sa];
+      });
+      const peR = PE.map(peRing);
+      for (let r = 0; r < peR.length - 1; r++) {
+        const up = peR[r], dn = peR[r + 1], vU = vAltMode ? vAlt(base[1] + dir[1] * PE[r][0]) : 0, vD = vAltMode ? vAlt(base[1] + dir[1] * PE[r + 1][0]) : 1;
+        for (let i = 0; i < lados; i++) {
+          const p0 = dn[i], p1 = dn[i + 1], p2 = up[i + 1], p3 = up[i];
+          quadUV(m, p0, p1, p2, p3, [i / lados * 3, vD], [(i + 1) / lados * 3, vD], [(i + 1) / lados * 3, vU], [i / lados * 3, vU], norm([p0[0] + p3[0], 0, p0[2] + p3[2]]));
+        }
+      }
+    }
+    if (!pe) tampa(m, pts[0], rings[0], tang(0), -1, lados);   // com pé, a base do tubo é coberta pelo pé (não tampa)
     tampa(m, pts[SUB], rings[SUB], tang(SUB), +1, lados);
     if (nivel <= 0) { if (tips) tips.push(pts[SUB].slice()); return; }   // ponta terminal -> semente de lóbulo
     const tip = pts[SUB], tdir = tang(SUB), nCh = 2 + (rnd() < 0.45 ? 1 : 0);
@@ -344,9 +375,10 @@ export function criarArvores(ctx) {
       // ranhura). Pé de raízes + tronco/galhos (galhoSeca em vAltMode) NO MESMO mesh e MESMO
       // mapeamento por altura -> casca idêntica que flui (base escura -> warm liso) da raiz
       // ao topo; galhoSeca nivel 3 dá a ramificação natural. Única marca: a emenda geométrica.
-      const NL = 10;   // MESMO nº de lados na raiz e no tronco/galhos -> a FORMA bate (sem a raiz redonda vs tronco quadrado); 10 = estrela de 5 pontas afiada
-      baseRaiz(canopy, S, NL);
-      galhoSeca(canopy, [0, 0.5, 0], [0, 1, 0], 1.5, 0.31, 0.18, 3, S + 1, null, null, true, NL);
+      // PÉ DE ELEFANTE integrado na base do tronco (uma malha só, sem emenda): o tronco
+      // galhoSeca começa em y=0.72 e o pe=true prepende o pé flarado abaixo, MESMO nº de
+      // lados (15 = estrela de 5 pontas). Tronco, pé e galhos = uma superfície contínua.
+      galhoSeca(canopy, [0, 0.72, 0], [0, 1, 0], 1.5, 0.29, 0.16, 3, S + 1, null, null, true, 15, true);
       ctex = BARK_RAIZ; ink = null; outl = 0; toon = 0;
     } else if (especie === 'frondosa') {
       /* a seca ramificada + COPA que SEGUE os galhos: aglomera as pontas de CIMA em
