@@ -89,8 +89,9 @@ o mesmo erro que já custou caro no código.
 - **Tecla `I` liga as etiquetas de ID**, como na v2: os 12 objetos mais
   próximos (até 14 unidades) ganham etiqueta ancorada no topo do tronco, e
   objeto tapado por outro não mostra etiqueta.
-- **Tecla `M` cicla o mapa**, como na v2: minimapa → mapa grande com a grade de
-  setores e o setor atual em destaque → nenhum.
+- **Tecla `M` abre e fecha o mapa grande**, com a grade de setores e o atual em
+  destaque. Diferente da v2, ela NÃO cicla o minimapa: aquele é estado do HUD,
+  configurado na aba HUD, e o M não desfaz a escolha do jogador.
   As cores do terreno saem de `superficieEm`, a mesma função que escolhe o som
   do passo — superfície nova aparece no mapa sozinha.
 - **Tecla `O`** liga e desliga a visualização das áreas de colisão.
