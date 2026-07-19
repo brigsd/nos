@@ -89,8 +89,8 @@ o mesmo erro que já custou caro no código.
 - **Tecla `I` liga as etiquetas de ID**, como na v2: os 12 objetos mais
   próximos (até 14 unidades) ganham etiqueta ancorada no topo do tronco, e
   objeto tapado por outro não mostra etiqueta.
-- **Tecla `M` cicla o mapa**, como na v2: nenhum → minimapa (canto inferior
-  direito) → mapa grande com a grade de setores e o setor atual em destaque.
+- **Tecla `M` cicla o mapa**, como na v2: minimapa → mapa grande com a grade de
+  setores e o setor atual em destaque → nenhum.
   As cores do terreno saem de `superficieEm`, a mesma função que escolhe o som
   do passo — superfície nova aparece no mapa sozinha.
 - **Tecla `O`** liga e desliga a visualização das áreas de colisão.
