@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 142,
-    "worldTime": 8520
+    "tickCount": 143,
+    "worldTime": 8580
   },
   "width": 64,
   "height": 64,
@@ -5595,6 +5595,32 @@
       "type": "core_pulse",
       "tick": 142,
       "worldTime": 8520
+    },
+    {
+      "type": "native_spoke",
+      "tick": 143,
+      "worldTime": 8580,
+      "nativeId": "brasa",
+      "message": "O pão quentinho atrai histórias. Venham se aquecer! Não deixem o frio entrar."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 143,
+      "worldTime": 8580,
+      "nativeId": "broa",
+      "message": "O pão quentinho está na mesa! Venham, contadores de histórias!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 143,
+      "worldTime": 8580,
+      "nativeId": "quilha",
+      "message": "O pão quentinho nos chama. Venham contar suas histórias, viajantes."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 143,
+      "worldTime": 8580
     }
   ],
   "natives": {
@@ -5603,7 +5629,7 @@
       "name": "Gota",
       "position": {
         "x": 6,
-        "y": 1
+        "y": 2
       },
       "behaviorTree": "wanderer",
       "behaviorState": "{}",
