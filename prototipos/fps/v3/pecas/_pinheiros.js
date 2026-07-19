@@ -70,17 +70,17 @@ export function construir(ctx) {
   }
 
   /* pinheiro = tronco + copa; a saia de baixo assenta logo abaixo do topo do tronco */
-  function pinheiro(ox, trunkH, trunkRb, rBase, totalH, tiers) {
+  function pinheiro(ox, trunkH, trunkRb, rBase, totalH, tiers, baseY) {
     addTrunk(ox, trunkH, trunkRb, trunkRb * 0.42);
-    pinheiroTiers(ox, trunkH - 0.15, rBase, totalH, tiers);
+    pinheiroTiers(ox, baseY ?? (trunkH - 0.15), rBase, totalH, tiers);  // baseY: onde a saia de baixo assenta (padrão = topo do tronco)
   }
 
   /* ---- 5 variações (foco: altura do tronco) ---- */
   //         ox    trunkH trunkRb rBase totalH tiers
   pinheiro(-10,   0.5,   0.16,  1.05,  2.5,  4);   // mudinha (baixa, canopy quase no chão)
   pinheiro(-5,    0.85,  0.28,  1.6,   4.0,  5);   // padrão (o aprovado)
-  pinheiro(0,     2.2,   0.30,  1.35,  3.6,  5);   // alto (tronco alto, copa no alto)
-  pinheiro(5,     3.2,   0.26,  1.15,  3.4,  6);   // espigão (bem alto e estreito)
+  pinheiro(0,     1.8,   0.30,  1.35,  3.6,  5);        // alto (tronco alto — encurtado um pouco)
+  pinheiro(5,     3.2,   0.36,  1.55,  4.2,  6,  1.6);  // espigão (tronco largo; copa grande começa na METADE do tronco)
   pinheiro(10,    1.1,   0.38,  2.05,  4.4,  6);   // largo (velho, saias amplas)
 
   return {
