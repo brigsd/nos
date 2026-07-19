@@ -119,14 +119,11 @@
     </div>
 
     <div class="painelAba" id="abaGraficos" hidden>
-      <div class="linha"><span>automático</span><div class="tiers" data-cfg="auto">
-        <button class="opt" data-v="0">Desligado</button><button class="opt" data-v="1">Ligado</button>
-      </div></div>
-      <p class="gnote">ligado, o jogo mede o tempo de quadro e vai ajustando sozinho pra segurar 60 · mexer numa opção abaixo desliga</p>
       <div class="linha"><span>preset</span><div class="tiers" id="presets">
-        <button class="opt" data-p="baixo">Baixo</button><button class="opt" data-p="medio">Médio</button
-        ><button class="opt" data-p="alto">Alto</button>
+        <button class="opt" data-p="dinamico">Dinâmico</button><button class="opt" data-p="baixo">Baixo</button
+        ><button class="opt" data-p="medio">Médio</button><button class="opt" data-p="alto">Alto</button>
       </div></div>
+      <p class="gnote">dinâmico mede o tempo de quadro e ajusta sozinho pra segurar 60 · mexer numa opção abaixo volta pro manual</p>
       <div class="linha"><span>textura</span><div class="tiers" data-cfg="ts">
         <button class="opt" data-v="2">Baixo</button><button class="opt" data-v="4">Médio</button><button class="opt" data-v="8">Alto</button>
       </div></div>
@@ -313,11 +310,13 @@ function marcarBotoes() {
   for (const g of document.querySelectorAll('.tiers[data-cfg]')) {
     for (const b of g.querySelectorAll('.opt')) b.classList.toggle('on', String(atual[g.dataset.cfg]) === b.dataset.v);
   }
-  /* o preset só acende se TUDO nele bater. Mexeu num tier solto, nenhum acende
-     — mentir que ainda está "no Médio" seria pior que não marcar nada. */
+  /* Dinâmico acende quando o ajuste automático está no comando. Os presets
+     fixos só acendem com ele desligado E com TUDO batendo — mexeu num tier
+     solto, nenhum acende, porque dizer que ainda está "no Médio" seria mentira. */
   for (const b of document.querySelectorAll('#presets .opt')) {
+    if (b.dataset.p === 'dinamico') { b.classList.toggle('on', autoLigado); continue; }
     const p = PRESETS[b.dataset.p];
-    b.classList.toggle('on', Object.keys(p).every((k) => atual[k] === p[k]));
+    b.classList.toggle('on', !autoLigado && Object.keys(p).every((k) => atual[k] === p[k]));
   }
 }
 
@@ -326,13 +325,6 @@ for (const grupo of document.querySelectorAll('.tiers[data-cfg]')) {
   for (const btn of grupo.querySelectorAll('.opt')) {
     btn.addEventListener('click', () => {
       const valor = Number(btn.dataset.v);
-      if (chave === 'auto') {
-        autoLigado = valor === 1;
-        salvarCfg({ ...lerCfg(), auto: valor });
-        if (autoLigado) { janelaT = 0; janelaN = 0; folgaSeguida = 0; aplicarDegrau(); }
-        marcarBotoes();
-        return;
-      }
       desligarAuto();
       salvarCfg({ ...lerCfg(), [chave]: valor });
       if (!TIERS_AO_VIVO.has(chave)) { recarregarMantendoLugar(); return; }
@@ -344,6 +336,13 @@ for (const grupo of document.querySelectorAll('.tiers[data-cfg]')) {
 
 for (const btn of document.querySelectorAll('#presets .opt')) {
   btn.addEventListener('click', () => {
+    if (btn.dataset.p === 'dinamico') {
+      autoLigado = true;
+      salvarCfg({ ...lerCfg(), auto: 1 });
+      janelaT = 0; janelaN = 0; folgaSeguida = 0;
+      aplicarDegrau();
+      return;
+    }
     desligarAuto();
     const antes = lerCfg(), p = PRESETS[btn.dataset.p];
     salvarCfg({ ...antes, ...p });
@@ -411,7 +410,7 @@ function desligarAuto() {
   autoLigado = false;
   salvarCfg({ ...lerCfg(), auto: 0 });
   marcarBotoes();
-  avisar('ajuste automático desligado');
+  avisar('preset dinâmico desligado');
 }
 
 marcarBotoes();
