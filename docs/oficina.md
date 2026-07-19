@@ -82,11 +82,12 @@ faces, e duas faces vizinhas compartilham uma.
 | **Ver vértices / arestas / faces** (1, 2, 3) | Mostra e seleciona as partes. | Desenhar por cima sem receber sombra nem névoa. **Já existe canal pra isso**: `visor.depurar`, feito pro debug de colisão, fica fora do passe de sombra e serve direto. Decidir se ponto atrás da superfície some ou aparece apagado. |
 | **E para extrudar** | Puxa a face, já com as setas. | Extrudar duas faces vizinhas ao mesmo tempo cria parede interna na aresta compartilhada. V1: uma face por vez. Manter a orientação das faces novas, senão o objeto vira do avesso. |
 | **Painel lateral** | Posição, rotação, dimensão e detalhes, editáveis. | "Dimensão" exige recalcular a caixa do objeto — guardar e refazer só quando muda, não a cada quadro. Digitar no painel e arrastar o gizmo brigam; um trava o outro. |
-| **Ímã (Ctrl segurado)** | Cola no vértice ou face mais próximo durante o arrasto. | **Conflito direto: Ctrl já é descer a câmera.** Ver "Decisões abertas". Procurar o alvo mais próximo varre a cena a cada movimento; com muitos objetos precisa dividir o espaço em células. Colar em face é projetar o ponto no plano e prender dentro do triângulo. |
+| **Ímã (Ctrl segurado)** | Cola no vértice ou face mais próximo durante o arrasto. | Procurar o alvo mais próximo varre a cena a cada movimento; com muitos objetos precisa dividir o espaço em células. Colar em face é projetar o ponto no plano e prender dentro do triângulo. |
 | **Mesclar vértices** | Arrasta um sobre o outro e viram um. | Mexe no coração do sistema: as operações falam "vértice 7", e mesclar apaga identidades. Tem que gravar **"7 e 12 viraram 31"**, senão refazer a lista quebra. Apagar as faces que ficaram com dois cantos iguais (área zero). |
 | **Arestas** | Selecionar e mover. | Deduzida das faces, não guardada. Precisa de chave estável pros dois vértices em qualquer ordem, senão a mesma aresta vira duas. |
 | **Pintar** | Cor na malha. | Face criada por extrusão **não tem coordenada de textura**. Pintar textura exigiria desdobrar a malha — problema grande. Resolve com **cor por face**: sem coordenada nenhuma, cada face guarda sua cor e a textura gerada vira paleta. Pincel de degradê fica pra depois. |
-| **Câmera livre** | WASD, shift sobe, ctrl desce, scroll muda a velocidade. | O `render.js` já tem `freeCam` com posição, yaw e pitch — a base existe. Mas o jogo trava o cursor ao clicar, e no editor ele precisa ficar livre pra clicar em gizmo. São modos de entrada diferentes, separar de verdade. |
+| **Modo navegação (botão 5 do mouse)** | Liga e desliga o voo. Ligado, aparece a mira e WASD + Q/E movem a câmera. Desligado, as mesmas teclas voltam a ser comandos de edição. | Botão 5 é `e.button === 4` no navegador, e ele dispara o "avançar" do histórico — precisa de `preventDefault` no `mousedown` e no `auxclick`. Mouse sem botão lateral precisa de tecla alternativa. Com o voo desligado, olhar em volta fica no arrastar do botão do meio. |
+| **Câmera livre** | WASD anda, Q sobe, E desce, scroll muda a velocidade. | O `render.js` já tem `freeCam` com posição, yaw e pitch — a base existe. |
 | **Salvar como código** | Gera o arquivo em `pecas/`. | Nome e identidade combinando com o `arvore@-13,8` do protocolo (ver `COMUNICACAO.md`). |
 | **Colisão automática** | Encaixa cilindro, caixa ou esfera. | Só nas faces marcadas como sólidas — sem isso a copa da árvore vira parede, que é o erro que a colisão de hoje evita de propósito. Sem marcação, usa o objeto inteiro. |
 
@@ -98,17 +99,27 @@ em casos ruins. Último item, se um dia for.
 
 ---
 
+## Modos de entrada
+
+O botão 5 do mouse liga e desliga a navegação, e é o que resolve a briga por
+teclas. Com o voo LIGADO aparece a mira e WASD, Q e E movem a câmera. Com o voo
+DESLIGADO as mesmas teclas viram comando: E extruda, S escalona, R rotaciona.
+
+Uma tecla nunca faz duas coisas no mesmo momento, e o estado é visível na tela —
+a mira diz em qual modo você está. Isso é melhor que regra condicional
+("Ctrl desce, menos quando você está arrastando"), que funciona mas some da
+vista e confunde meses depois.
+
+Efeito colateral bom: como Q e E passaram a subir e descer, o **Ctrl ficou
+livre** e o ímã pode usá-lo sem conflito nenhum.
+
 ## Decisões abertas
 
-**1. O conflito do Ctrl.** Ctrl desce a câmera e Ctrl liga o ímã. Ou o ímã vai
-pra outra tecla, ou Ctrl só desce quando não há arrasto em andamento. A segunda
-funciona mas é o tipo de regra invisível que confunde depois.
-
-**2. Mesclagem contra as identidades.** Resolvida no papel (a mesclagem grava as
+**1. Mesclagem contra as identidades.** Resolvida no papel (a mesclagem grava as
 identidades que colapsaram), mas é a interação mais delicada do sistema e merece
 ser a primeira coisa testada de verdade.
 
-**3. Cor por face no lugar de textura pintada.** Contorna o desdobramento de
+**2. Cor por face no lugar de textura pintada.** Contorna o desdobramento de
 malha inteiro. O custo é não ter degradê nem pincel macio. Aceitável agora,
 mas é uma porta que fecha um pouco.
 
