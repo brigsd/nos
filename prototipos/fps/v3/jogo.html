@@ -131,7 +131,14 @@
       <div class="linha"><span>partículas</span><div class="tiers" data-cfg="particulas">
         <button class="opt" data-v="0">Baixo</button><button class="opt" data-v="1">Médio</button><button class="opt" data-v="2">Alto</button>
       </div></div>
-      <p class="gnote">muda a densidade real (32/64/128px, contagem de pólen etc.) — aplica recarregando a página</p>
+      <div class="linha"><span>resolução</span><div class="tiers" data-cfg="res">
+        <button class="opt" data-v="480">480</button><button class="opt" data-v="640">640</button
+        ><button class="opt" data-v="960">960</button><button class="opt" data-v="1440">1440</button
+        ><button class="opt" data-v="1920">1920</button><button class="opt" data-v="0">Nativa</button>
+      </div></div>
+      <p class="gnote">resolução é a LARGURA do quadro interno; a altura sai da proporção da janela.
+        Baixa = pixel grande (a cara do jogo) e barato; Nativa acompanha a tela — em monitor grande
+        pesa, porque o custo do render vem daqui e não do tamanho da janela. Aplica recarregando.</p>
     </div>
 
     <div class="painelAba" id="abaControles" hidden>
@@ -165,7 +172,11 @@ import { criarSom } from './motor/som.js';
 import * as ilhaChao from './pecas/ilha-chao.js';
 import * as arvore3d from './pecas/arvore3d.js';
 
-const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1 };
+/* res = largura do quadro interno. 0 significa "nativa": acompanha a janela,
+   limitada a 2560 pra ninguém pedir sem querer um quadro gigante num monitor
+   de altíssima resolução e achar que o jogo travou. */
+const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640 };
+const larguraInterna = (r) => (r > 0 ? r : Math.min(2560, Math.round(innerWidth * (devicePixelRatio || 1))));
 const Q = new URLSearchParams(location.search);
 function lerCfg() {
   let c;
@@ -195,7 +206,7 @@ const cena = { ...ilha, particulas: true, lotes: [...ilha.lotes, ...loteArvores]
 /* ---------- visor: câmera LIVRE, tiers do jogador ---------- */
 const canvas = document.getElementById('c');
 const visor = criarVisor({
-  canvas, res: 640, camOrbita: false,
+  canvas, res: larguraInterna(cfg.res), camOrbita: false,
   sombra: cfg.sombra, particulasN: PARTICULAS_N[cfg.particulas] ?? 320, luz: cfg.luz,
 });
 visor.carregar(cena);

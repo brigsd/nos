@@ -19,7 +19,15 @@ const PACK = `
   float unpackDepth(vec4 c){ return dot(c, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0)); }`;
 
 export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, sombra = 1, particulasN = 320, luz = 1 }) {
-  const IW = Math.max(160, res | 0), IH = Math.round(IW * 9 / 16);
+  /* O quadro interno segue a PROPORÇÃO DA JANELA, não 16:9 fixo. Antes a cena
+     era desenhada em 16:9 e esticada pra tela inteira no blit final: num
+     ultrawide 21:9 tudo saía 33% mais largo, círculo virava oval. Como a
+     abertura vertical é que fica fixa (58°), tela mais larga passa a MOSTRAR
+     mais dos lados, que é o comportamento certo — e não deformar o mesmo
+     enquadramento. `res` é a largura interna; a altura sai da proporção. */
+  const propJanela = () => Math.max(0.5, Math.min(3.5, innerWidth / Math.max(1, innerHeight)));
+  const IW = Math.max(160, res | 0);
+  let IH = Math.max(90, Math.round(IW / propJanela()));
   const SM = SOMBRA_SM[sombra] ?? 1024, sombraOn = sombra > 0;
   const LT = LUZ_TIER[luz] ?? LUZ_TIER[1];
   const gl = canvas.getContext('webgl', { antialias: false, depth: true });
@@ -123,7 +131,18 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
     return { fb, tex };
   }
-  const sceneFBO = makeFBO(IW, IH), shadowFBO = makeFBO(SM, SM);
+  let sceneFBO = makeFBO(IW, IH);
+  const shadowFBO = makeFBO(SM, SM);
+  /* girar a tela ou arrastar a janela muda a proporcao: o quadro interno tem
+     que ser refeito, senao volta a esticar. Sem isso o conserto do ultrawide
+     so valeria ate o primeiro redimensionamento. */
+  function ajustarProporcao() {
+    const novo = Math.max(90, Math.round(IW / propJanela()));
+    if (novo === IH) return;
+    IH = novo;
+    gl.deleteFramebuffer(sceneFBO.fb); gl.deleteTexture(sceneFBO.tex);
+    sceneFBO = makeFBO(IW, IH);
+  }
 
   const quadVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
@@ -244,7 +263,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       const fixedA = camOrbita ? null : (cam.a ?? 0.66);
       const eye = cam.e ?? camCfg.e ?? 1.15, rad = cam.r ?? camCfg.r ?? 5.4;
       function resize() { const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = innerWidth * dpr | 0; canvas.height = innerHeight * dpr | 0; }
-      addEventListener('resize', resize); resize();
+      addEventListener('resize', () => { resize(); ajustarProporcao(); }); resize();
       let t0 = performance.now(), frames = 0, tPrev = performance.now();
       const draw = (prg, aL, comExtras) => {
         const uM = gl.getUniformLocation(prg, 'uModel');
@@ -281,6 +300,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
           lookAtM = m4.lookAt(camPos, [0, 0.6, 0], [0, 1, 0]);
         }
         const near = freeCam ? 0.05 : (farCfg > 100 ? farCfg / 1000 : 0.05);
+        /* IH muda quando a janela muda de proporção, então a abertura é lida
+           aqui e não uma vez só — senão o mundo volta a esticar ao redimensionar */
         const mvp = m4.mul(m4.persp(58 * Math.PI/180, IW/IH, near, farCfg), lookAtM);
         mvpAtual = mvp; camAtualPos = camPos;   // guardados pra projetar()
         const mvpf = new Float32Array(mvp);
