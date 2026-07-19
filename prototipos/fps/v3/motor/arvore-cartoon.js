@@ -9,7 +9,7 @@
    invertida) + CEL-shading — os três recursos toon vivem no motor/render.js;
    aqui a peça só marca outline/toon/outlineInk por lote. */
 
-export const ESPECIES = ['oval', 'larga', 'pinheiro', 'cerejeira', 'copada', 'seca'];
+export const ESPECIES = ['oval', 'larga', 'pinheiro', 'cerejeira', 'copada', 'seca', 'frondosa', 'raiz'];
 
 export function criarArvores(ctx) {
   const { tex, geo } = ctx;
@@ -22,10 +22,34 @@ export function criarArvores(ctx) {
   /* casca CARTOON (D-63): UMA cor marrom clara (22 #e6904e) + RANHURAS verticais
      finas e frequentes (24 escuro) que ondulam de leve por linha — sem os manchões
      escuros do fbm. Casca limpa, casa com o fill das copas. */
-  const BARK = texCanvas(32, 64, (x, y) => {
-    const wob = (fbm(y * 0.12 + 1, 5) - 0.5) * 2.4;      // ranhuras ondulam levemente
-    const c = ((Math.round(x - wob) % 32) + 32) % 32;
-    return hash2(c, 7) < 0.22 ? 24 : 22;                 // ~22% das colunas = ranhura fina escura
+  /* CORPO de madeira compartilhado (tronco == raiz): veios largos misturando 22
+     (claro) + 21 (médio) -> mesma paleta quente, sem emenda de cor na junção. */
+  const woodBody = (x) => fbm(x * 0.09 + 3, 1) > 0.5 ? 21 : 22;
+  const BARK = texCanvas(64, 64, (x, y) => {
+    const groove = hash2(x, 7) < 0.13;                   // colunas fixas -> ranhuras RETAS, ~13% = espaçadas
+    const on = hash2(x * 7 + 1, (y >> 2) * 3) > 0.48;    // liga/desliga a cada ~4px -> traços CURTOS na altura
+    return groove && on ? 20 : woodBody(x);              // ranhura = 20 (#9e4539) marrom ESCURO; corpo = madeira quente
+  });
+  /* casca do TRONCO-RAIZ (loft único pé->tronco): mapeada por ALTURA (v = vAlt(y)).
+     Base (v baixo) = escura (sombra de aterramento) -> raiz LISA -> tronco RANHURADO.
+     Uma textura só que flui da raiz pro tronco sem emenda. */
+  const vAlt = (y) => (y + 0.55) * 0.28;   // worldY -> v da textura (usado pelo loft E pelos galhos)
+  const BARK_SECA = texCanvas(32, 128, (x, y) => {
+    const f = y / 128, body = woodBody(x);
+    if (f < 0.09) return 20;                                    // base na terra: sombra escura
+    if (f < 0.16) return hash2(x, y) < 0.5 ? 20 : 21;           // penumbra subindo (dither)
+    if (f < 0.28) return body;                                  // raiz: lisa (sem ranhura)
+    /* FORQUILHA em penumbra (jogo de cor pra DISFARÇAR a junção loft↔galhos):
+       a forquilha vive em y≈1.3-1.5 (v≈0.50-0.57). Como loft E galhos usam o MESMO
+       vAlt(y), escurecer essa faixa escurece AMBOS de forma contínua -> a linha de
+       interseção fica dentro de área escura, onde o contraste (e a emenda) some. */
+    const dF = Math.abs(f - 0.535);
+    if (dF < 0.075) {
+      const t = dF / 0.075 + (hash2(x * 3 + 2, y) - 0.5) * 0.5;   // 0 centro -> 1 borda, com dither
+      return t < 0.45 ? 20 : t < 0.8 ? 21 : body;
+    }
+    const groove = hash2(x, 7) < 0.13, on = hash2(x * 7 + 1, (y >> 2) * 3) > 0.48;   // tronco+galhos: ranhura fina
+    return groove && on ? 20 : body;
   });
   /* textura CARTOON: base chapada + curvas de cacho "‿" (curva + sombra), arcos
      de inclinação/abertura variadas. base/curva/sombra = índices da paleta. */
@@ -44,6 +68,7 @@ export function criarArvores(ctx) {
     return texCanvas(GT, GT, (x, y) => lb[y * GT + x]);
   };
   const VERDE_CARTOON = cartoonTex(32, 30, 29);   // verde: base clara 32, curva 30, sombra 29
+  const VERDE_FLAT = texCanvas(4, 4, () => 32);   // verde CHAPADO (sem curvas): a copa fundida lê melhor lisa, forma vem do cel+contorno
   const ROSA_CARTOON = cartoonTex(57, 55, 54);    // cerejeira: base lavanda 57, curva 55, sombra 54
   /* pinheiro: verde-escuro chapado em faixas por nível (topo 31, corpo 30, rebordo 29) */
   const PINE = texCanvas(32, 32, (x, y) => { const v = y / 32; return v > 0.72 ? 29 : v > 0.3 ? 30 : 31; });
@@ -82,6 +107,81 @@ export function criarArvores(ctx) {
       quad4(m, P, uvOf(a, o, LAT, LON, uo, vo), P.map((p) => norm([p[0] - cen[0], p[1] - cen[1], p[2] - cen[2]])));
     }
   }
+  /* ---------- extrator de SUPERFÍCIE (surface-nets sobre um SDF qualquer) ----------
+     Recebe um campo sdf (<0 dentro) e uma caixa [lo,hi]; devolve UMA malha fundida:
+     amostra a grade, extrai 1 vértice por célula de borda (média das interseções),
+     opcional deslocamento por fbm (caroços), triângulos orientados p/ fora pelo
+     gradiente, normais suaves = média das faces (casa com o contorno). UV vem de
+     uvFn(p,n). É o MOTOR comum da copa (esferas) e da árvore seca (cápsulas). */
+  const CO = [[0,0,0],[1,0,0],[1,0,1],[0,0,1],[0,1,0],[1,1,0],[1,1,1],[0,1,1]];
+  const ED = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  const smin = (a, b, k) => { const h = Math.max(0, Math.min(1, 0.5 + 0.5 * (b - a) / k)); return a * h + b * (1 - h) - k * h * (1 - h); };
+  function superficieSDF(m, sdf, lo, hi, H, bumpAmp, smooth, seed, uvFn) {
+    const grad = (px, py, pz) => { const e = 0.02; return norm([sdf(px+e,py,pz)-sdf(px-e,py,pz), sdf(px,py+e,pz)-sdf(px,py-e,pz), sdf(px,py,pz+e)-sdf(px,py,pz-e)]); };  // +grad = p/ FORA
+    const nx = Math.ceil((hi[0]-lo[0])/H), ny = Math.ceil((hi[1]-lo[1])/H), nz = Math.ceil((hi[2]-lo[2])/H);
+    const NX = nx+1, NY = ny+1, NZ = nz+1;
+    const val = new Float32Array(NX*NY*NZ), vidx = (i,j,k) => (i*NY+j)*NZ+k;
+    for (let i=0;i<NX;i++) for (let j=0;j<NY;j++) for (let k=0;k<NZ;k++) val[vidx(i,j,k)] = sdf(lo[0]+i*H, lo[1]+j*H, lo[2]+k*H);
+    const cellV = new Int32Array(nx*ny*nz).fill(-1), cidx = (i,j,k) => (i*ny+j)*nz+k;
+    const verts = [];
+    for (let i=0;i<nx;i++) for (let j=0;j<ny;j++) for (let k=0;k<nz;k++) {
+      const cv = CO.map(([a,b,c]) => val[vidx(i+a,j+b,k+c)]);
+      let neg = 0; for (const v of cv) if (v < 0) neg++;
+      if (neg === 0 || neg === 8) continue;                               // célula toda dentro/fora
+      let ax=0, ay=0, az=0, cnt=0;
+      for (const [a,b] of ED) { const va=cv[a], vb=cv[b]; if ((va<0)===(vb<0)) continue; const t=va/(va-vb); ax+=CO[a][0]+(CO[b][0]-CO[a][0])*t; ay+=CO[a][1]+(CO[b][1]-CO[a][1])*t; az+=CO[a][2]+(CO[b][2]-CO[a][2])*t; cnt++; }
+      const p = [lo[0]+(i+ax/cnt)*H, lo[1]+(j+ay/cnt)*H, lo[2]+(k+az/cnt)*H];
+      const n = grad(p[0], p[1], p[2]);
+      if (bumpAmp) { const b = (fbm(p[0]*1.8 + seed + 3, p[2]*1.8 + p[1]*0.9 + seed) - 0.5) * bumpAmp; p[0]+=n[0]*b; p[1]+=n[1]*b; p[2]+=n[2]*b; }
+      cellV[cidx(i,j,k)] = verts.length; verts.push(p);
+    }
+    const tris = [], nrm = verts.map(() => [0, 0, 0]);
+    const tri = (A, B, C) => {                                            // orienta p/ fora via gradiente no centro
+      const a = verts[A], b = verts[B], c = verts[C];
+      const ux=b[0]-a[0], uy=b[1]-a[1], uz=b[2]-a[2], wx=c[0]-a[0], wy=c[1]-a[1], wz=c[2]-a[2];
+      const fx=uy*wz-uz*wy, fy=uz*wx-ux*wz, fz=ux*wy-uy*wx;
+      const g = grad((a[0]+b[0]+c[0])/3, (a[1]+b[1]+c[1])/3, (a[2]+b[2]+c[2])/3);
+      tris.push(A, (fx*g[0]+fy*g[1]+fz*g[2]) < 0 ? C : B, (fx*g[0]+fy*g[1]+fz*g[2]) < 0 ? B : C);
+    };
+    const quad = (a,b,c,d) => { if (a<0||b<0||c<0||d<0) return; tri(a,b,c); tri(a,c,d); };
+    for (let i=0;i<nx;i++) for (let j=0;j<ny;j++) for (let k=0;k<nz;k++) {
+      const s0 = val[vidx(i,j,k)] < 0;
+      if (j>0 && k>0 && (val[vidx(i+1,j,k)]<0) !== s0) quad(cellV[cidx(i,j-1,k-1)], cellV[cidx(i,j,k-1)], cellV[cidx(i,j,k)], cellV[cidx(i,j-1,k)]);
+      if (i>0 && k>0 && (val[vidx(i,j+1,k)]<0) !== s0) quad(cellV[cidx(i-1,j,k-1)], cellV[cidx(i,j,k-1)], cellV[cidx(i,j,k)], cellV[cidx(i-1,j,k)]);
+      if (i>0 && j>0 && (val[vidx(i,j,k+1)]<0) !== s0) quad(cellV[cidx(i-1,j-1,k)], cellV[cidx(i,j-1,k)], cellV[cidx(i,j,k)], cellV[cidx(i-1,j,k)]);
+    }
+    if (smooth) {                                                         // suavização Laplaciana: tira os caroços do surface-nets
+      const adj = verts.map(() => new Set());
+      for (let t = 0; t < tris.length; t += 3) { const a=tris[t], b=tris[t+1], c=tris[t+2]; adj[a].add(b); adj[a].add(c); adj[b].add(a); adj[b].add(c); adj[c].add(a); adj[c].add(b); }
+      for (let it = 0; it < smooth; it++) {
+        const nv = verts.map((p, i) => { if (!adj[i].size) return p; let x=0, y=0, z=0; for (const j of adj[i]) { x+=verts[j][0]; y+=verts[j][1]; z+=verts[j][2]; } const n = adj[i].size; return [p[0]+0.5*(x/n-p[0]), p[1]+0.5*(y/n-p[1]), p[2]+0.5*(z/n-p[2])]; });
+        for (let i = 0; i < verts.length; i++) verts[i] = nv[i];
+      }
+    }
+    for (let t = 0; t < tris.length; t += 3) {                            // normais suaves = média das faces
+      const A=tris[t], B=tris[t+1], C=tris[t+2], a=verts[A], b=verts[B], c=verts[C];
+      const ux=b[0]-a[0], uy=b[1]-a[1], uz=b[2]-a[2], wx=c[0]-a[0], wy=c[1]-a[1], wz=c[2]-a[2];
+      const fx=uy*wz-uz*wy, fy=uz*wx-ux*wz, fz=ux*wy-uy*wx;
+      for (const V of [A, B, C]) { nrm[V][0]+=fx; nrm[V][1]+=fy; nrm[V][2]+=fz; }
+    }
+    for (let v = 0; v < nrm.length; v++) nrm[v] = norm(nrm[v]);
+    for (let t = 0; t < tris.length; t += 3) for (const V of [tris[t], tris[t+1], tris[t+2]]) {
+      const p = verts[V], n = nrm[V], uv = uvFn(p, n);
+      m.v.push(p[0], p[1], p[2], uv[0], uv[1], n[0], n[1], n[2]);
+    }
+  }
+  /* copa MESCLADA: lóbulos = esferas SDF unidas por smin (o "boolean" pedido),
+     mantendo o raio de cada bojo; caroços por fbm. UV triplanar. */
+  function copaMetaball(m, lobes, seed) {
+    const K = 0.14, PAD = 0.4;
+    const ph = hash2(seed * 3 + 1, 5) * 9, ph2 = hash2(seed * 7 + 2, 9) * 9;
+    const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+    for (const L of lobes) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], L.c[a] - L.r - PAD); hi[a] = Math.max(hi[a], L.c[a] + L.r + PAD); }
+    const sdf = (px, py, pz) => { let d = 1e9; for (const L of lobes) { const dx=px-L.c[0], dy=py-L.c[1], dz=pz-L.c[2]; d = smin(d, Math.sqrt(dx*dx+dy*dy+dz*dz) - L.r, K); } return d; };
+    const uv = (p, n) => { const ax=Math.abs(n[0]), ay=Math.abs(n[1]), az=Math.abs(n[2]); const u = ay>=ax&&ay>=az?p[0]:ax>=az?p[2]:p[0]; const v = ay>=ax&&ay>=az?p[2]:p[1]; return [u*0.78+ph, v*0.78+ph2]; };
+    superficieSDF(m, sdf, lo, hi, 0.15, 0.16, 0, seed, uv);
+  }
+
   function pinheiroTiers(m, baseY, rBase, totalH, tiers, seed) {
     const LON = 16, sJit = (hash2(seed * 5 + 1, 3) - 0.5) * 2;   // fase da serrilha por seed
     const ring = (yc, r, droopAmp, sd) => Array.from({ length: LON + 1 }, (_, i) => {
@@ -143,11 +243,11 @@ export function criarArvores(ctx) {
   };
   /* um galho: tubo afunilado ESTANQUE tampado nas 2 pontas + recursão de filhos
      que EMBUTEM na ponta (a sobreposição esconde a junção). Determinístico via hash2. */
-  function galhoSeca(m, base, dir, len, r0, r1, nivel, sd) {
+  function galhoSeca(m, base, dir, len, r0, r1, nivel, sd, tips, flare, vAltMode) {
     let rc = 0;
     const rnd = () => hash2(sd + rc * 29 + 11, (rc++) * 17 + sd * 2 + 3);
     const SUB = nivel > 0 ? 3 : 2, curva = 0.10 + 0.05 * (3 - nivel);
-    const pts = [base.slice()], rads = [r0], segD = [];
+    const pts = [base.slice()], rads = [r0 * (flare || 1)], segD = [];   // flare>1: base do galho começa larga (colar) e afina -> junção suave
     let d = dir.slice(), p = base.slice();
     for (let s = 1; s <= SUB; s++) {
       d = desviar(d, curva * (0.4 + rnd()), rnd() * TAU);
@@ -168,28 +268,67 @@ export function criarArvores(ctx) {
         const mid = [(p0[0]+p1[0]+p2[0]+p3[0])/4, (p0[1]+p1[1]+p2[1]+p3[1])/4, (p0[2]+p1[2]+p2[2]+p3[2])/4];
         const Nrm = norm([mid[0]-axm[0], mid[1]-axm[1], mid[2]-axm[2]]);
         const uA = i/LADOS*3, uB = (i+1)/LADOS*3;
-        quadUV(m, p0, p1, p2, p3, [uA, s], [uB, s], [uB, s+1], [uA, s+1], Nrm);
+        const vL = vAltMode ? vAlt(pts[s][1]) : s, vH = vAltMode ? vAlt(pts[s+1][1]) : s + 1;   // vAltMode: V pela ALTURA (casa com o loft do tronco-raiz)
+        quadUV(m, p0, p1, p2, p3, [uA, vL], [uB, vL], [uB, vH], [uA, vH], Nrm);
       }
     }
     tampa(m, pts[0], rings[0], tang(0), -1);
     tampa(m, pts[SUB], rings[SUB], tang(SUB), +1);
-    if (nivel <= 0) return;
+    if (nivel <= 0) { if (tips) tips.push(pts[SUB].slice()); return; }   // ponta terminal -> semente de lóbulo
     const tip = pts[SUB], tdir = tang(SUB), nCh = 2 + (rnd() < 0.45 ? 1 : 0);
-    const start = [tip[0] - tdir[0]*len*0.06, tip[1] - tdir[1]*len*0.06, tip[2] - tdir[2]*len*0.06];
+    const start = [tip[0] - tdir[0]*len*0.13, tip[1] - tdir[1]*len*0.13, tip[2] - tdir[2]*len*0.13];   // embute MAIS fundo -> esconde a costura
     for (let k = 0; k < nCh; k++) {
       const theta = 0.45 + rnd() * 0.5, phi = (k / nCh) * TAU + rnd() * 0.9;
       let cdir = desviar(tdir, theta, phi);
       cdir = norm([cdir[0], cdir[1] + 0.18, cdir[2]]);   // viés p/ cima -> lê como árvore
       const cLen = len * (0.60 + rnd() * 0.16), cR0 = r1 * (0.78 + rnd() * 0.10);
       const cR1 = Math.max(0.035, cR0 * (0.48 + rnd() * 0.18));
-      galhoSeca(m, start, cdir, cLen, cR0, cR1, nivel - 1, sd * 4 + k + 1);
+      galhoSeca(m, start, cdir, cLen, cR0, cR1, nivel - 1, sd * 4 + k + 1, tips, 1.5, vAltMode);   // base do filho flarada -> colar suave
     }
+  }
+
+  /* ---------- TRONCO-RAIZ: loft ÚNICO das pontas das raízes até a 1ª forquilha ----
+     Perfil vertical [y, raio, amplitudeDedo]: embaixo dedos abertos (raízes na terra),
+     os dedos DESVANECEM com a altura (amp->0) e a superfície vira o tronco reto que
+     sobe até o topo. Mesma malha + UV por altura (vAlt) -> a textura FLUI da raiz pro
+     tronco sem emenda nenhuma. Devolve o ponto do topo (onde os galhos brotam). */
+  function troncoRaiz(m, seed) {
+    const LON = 24, nR = 5, phase = hash2(seed * 3 + 1, 7) * TAU;
+    /* perfil CÔNCAVO (varredura agressiva): o tronco fica SLENDER em cima e só perto
+       do chão ABRE RÁPIDO num pé largo (o raio cresce com taxa crescente descendo =
+       curva, não cone reto). Dedos concentrados na base. */
+    const LV = [
+      [-0.55, 0.10, 0.16],   // pontas das raízes fundas
+      [-0.28, 0.26, 0.48],   // raízes bem abertas
+      [-0.05, 0.40, 0.50],   // chão: pé MÁX aberto + dedos
+      [ 0.12, 0.32, 0.28],   // curva fechando RÁPIDO subindo
+      [ 0.26, 0.24, 0.12],
+      [ 0.42, 0.195, 0.03],  // quase no tronco slender
+      [ 0.62, 0.175, 0.00],  // tronco SLENDER (varredura terminou)
+      [ 0.95, 0.16, 0.00],
+      [ 1.22, 0.135, 0.00],
+      [ 1.45, 0.06, 0.00],   // topo AFINA numa PONTA fina (tipo ponta de tubo) -> galhos envolvem
+    ];
+    const mkRing = ([yy, rb, ta]) => Array.from({ length: LON + 1 }, (_, i) => {
+      const a = i / LON * TAU, s = Math.max(0, Math.cos(nR * (a - phase)));   // 1 no dedo, 0 no vão
+      const rr = rb + Math.pow(s, 1.5) * ta;
+      return [Math.cos(a) * rr, yy, Math.sin(a) * rr];
+    });
+    const rings = LV.map(mkRing);
+    for (let r = 0; r < rings.length - 1; r++) {
+      const dn = rings[r], up = rings[r + 1], vD = vAlt(LV[r][0]), vU = vAlt(LV[r + 1][0]);
+      for (let i = 0; i < LON; i++) {
+        const p0 = dn[i], p1 = dn[i + 1], p2 = up[i + 1], p3 = up[i];   // winding = addTrunk (baixo->cima)
+        quadUV(m, p0, p1, p2, p3, [i / LON * 4, vD], [(i + 1) / LON * 4, vD], [(i + 1) / LON * 4, vU], [i / LON * 4, vU], norm([p0[0] + p3[0], 0.15, p0[2] + p3[2]]));
+      }
+    }
+    return [0, 1.45, 0];   // ponta do loft = forquilha (galhos envolvem)
   }
 
   /* ---------- o carimbo: uma árvore por (espécie, seed) na origem ---------- */
   function construir(especie, seed) {
     const S = (seed | 0) || 1, trunk = Mesh(), canopy = Mesh();
-    let ctex = VERDE_CARTOON, ink = null;
+    let ctex = VERDE_CARTOON, ink = null, outl = 0.05, toon = 1;
     if (especie === 'oval') {
       addTrunk(trunk, 1.9, 0.34, 0.12); blobOval(canopy, [0, 1.9 + 2.0 * 0.92, 0], 1.35, 2.0, 0.44, S);
     } else if (especie === 'larga') {
@@ -199,8 +338,35 @@ export function criarArvores(ctx) {
     } else if (especie === 'cerejeira') {
       addTrunk(trunk, 1.7, 0.3, 0.12); blobOval(canopy, [0, 1.7 + 1.6 * 0.92, 0], 1.6, 1.6, 0.42, S); ctex = ROSA_CARTOON; ink = TINTA_ROSA;
     } else if (especie === 'seca') {
-      // a árvore INTEIRA é o esqueleto de galhos -> vira o "trunk" (recebe BARK do plantador); copa vazia
-      galhoSeca(trunk, [0, 0, 0], [0, 1, 0], 1.7, 0.30, 0.20, 3, S); ink = TINTA_SECA;
+      // esqueleto de galhos (tubos) -> trunk (BARK ranhurada); copa vazia
+      galhoSeca(trunk, [0, 0, 0], [0, 1, 0], 1.7, 0.30, 0.20, 3, S); ink = TINTA_SECA; outl = 0; toon = 0;
+    } else if (especie === 'raiz') {
+      // "pé vira tronco": loft único raízes->tronco (troncoRaiz) + galhos do topo, MESMA malha (canopy)
+      // e MESMA textura por altura (BARK_SECA) -> transição raiz->tronco SEM emenda; a junção
+      // loft↔galhos fica na faixa de PENUMBRA da BARK_SECA (jogo de cor disfarça a divisão).
+      const topo = troncoRaiz(canopy, S);
+      const nB = 2 + (hash2(S, 3) < 0.5 ? 1 : 0), phB = hash2(S * 5 + 1, 7) * TAU;
+      for (let k = 0; k < nB; k++) {
+        const ang = phB + (k / nB) * TAU + (hash2(k * 9, S) - 0.5) * 0.7;
+        const dir = norm([Math.cos(ang) * 0.6, 0.8, Math.sin(ang) * 0.6]);
+        galhoSeca(canopy, [0, topo[1] - 0.13, 0], dir, 0.98, 0.16, 0.05, 2, S * 7 + k + 5, null, 1.5, true);   // brotam abaixo da ponta e a ENVOLVEM (mimetiza galho↔galho)
+      }
+      ctex = BARK_SECA; ink = null; outl = 0; toon = 0;
+    } else if (especie === 'frondosa') {
+      /* a seca ramificada + COPA que SEGUE os galhos: aglomera as pontas de CIMA em
+         poucos lóbulos MESCLADOS (silhueta irregular, não bolas nas pontas); os galhos
+         de baixo ficam PELADOS. Esqueleto -> trunk (BARK); lóbulos -> canopy (verde+contorno). */
+      const tips = [];
+      galhoSeca(trunk, [0, 0, 0], [0, 1, 0], 1.55, 0.30, 0.16, 3, S, tips);
+      let ymin = 1e9, ymax = -1e9;
+      for (const t of tips) { if (t[1] < ymin) ymin = t[1]; if (t[1] > ymax) ymax = t[1]; }
+      const corte = ymin + (ymax - ymin) * 0.34;             // só as pontas do TERÇO de cima viram copa
+      const altas = tips.filter((t) => t[1] > corte).sort((a, b) => b[1] - a[1]);
+      const centros = [];                                    // aglomera greedy: pontas próximas viram um lóbulo só
+      for (const t of altas) if (centros.every((c) => Math.hypot(c[0]-t[0], c[1]-t[1], c[2]-t[2]) > 0.64)) centros.push(t.slice());
+      const lobes = centros.map((c, i) => ({ c: [c[0], c[1] + 0.10, c[2]], r: 0.54 + hash2(i * 7 + 1, S) * 0.26 }));
+      copaMetaball(canopy, lobes, S);                        // funde tudo numa pele só (sem seams internos)
+      ctex = VERDE_FLAT; outl = 0.03;                        // sem curvas; contorno FINO (superfície orgânica não aguenta casca grossa)
     } else {   // copada: maciço de 4 lóbulos ancorado no tronco
       addTrunk(trunk, 1.7, 0.34, 0.13); const cy = 1.7 + 1.15;
       blobOval(canopy, [0, cy, 0], 1.5, 1.62, 0.42, S);
@@ -208,7 +374,7 @@ export function criarArvores(ctx) {
       blobOval(canopy, [0.68, cy - 0.12, -0.28], 0.86, 1.02, 0.44, S + 2);
       blobOval(canopy, [0.06, cy + 0.72, 0.06], 0.8, 0.86, 0.46, S + 3);
     }
-    return { trunk, canopy, tex: ctex, outlineInk: ink, outline: 0.05, toon: 1 };
+    return { trunk, canopy, tex: ctex, outlineInk: ink, outline: outl, toon };
   }
 
   return { construir, ESPECIES, BARK };
