@@ -223,8 +223,8 @@ export function criarArvores(ctx) {
     const [u, w] = quadro(d), st = Math.sin(theta), ct = Math.cos(theta), cp = Math.cos(phi), sp = Math.sin(phi);
     return norm([d[0]*ct + (u[0]*cp + w[0]*sp)*st, d[1]*ct + (u[1]*cp + w[1]*sp)*st, d[2]*ct + (u[2]*cp + w[2]*sp)*st]);
   };
-  const anel = (c, u, w, r) => Array.from({ length: LADOS + 1 }, (_, i) => {
-    const a = i / LADOS * TAU, ca = Math.cos(a) * r, sa = Math.sin(a) * r;
+  const anel = (c, u, w, r, lados = LADOS) => Array.from({ length: lados + 1 }, (_, i) => {
+    const a = i / lados * TAU, ca = Math.cos(a) * r, sa = Math.sin(a) * r;
     return [c[0] + u[0]*ca + w[0]*sa, c[1] + u[1]*ca + w[1]*sa, c[2] + u[2]*ca + w[2]*sa];
   });
   const tri3 = (m, p0, p1, p2, N, uv0, uv1, uv2) => {
@@ -233,18 +233,18 @@ export function criarArvores(ctx) {
     m.v.push(p2[0],p2[1],p2[2], uv2[0],uv2[1], N[0],N[1],N[2]);
   };
   /* tampa em leque que FECHA o tubo (senão a casca invertida do contorno vaza) */
-  const tampa = (m, cen, ring, d, lado) => {
+  const tampa = (m, cen, ring, d, lado, lados = LADOS) => {
     const N = [d[0]*lado, d[1]*lado, d[2]*lado], uvc = [0.5, 0.5];
-    for (let i = 0; i < LADOS; i++) {
+    for (let i = 0; i < lados; i++) {
       const a0 = ring[i], a1 = ring[i + 1];
-      const uv0 = [0.5 + Math.cos(i/LADOS*TAU)*0.5, 0.5 + Math.sin(i/LADOS*TAU)*0.5];
-      const uv1 = [0.5 + Math.cos((i+1)/LADOS*TAU)*0.5, 0.5 + Math.sin((i+1)/LADOS*TAU)*0.5];
+      const uv0 = [0.5 + Math.cos(i/lados*TAU)*0.5, 0.5 + Math.sin(i/lados*TAU)*0.5];
+      const uv1 = [0.5 + Math.cos((i+1)/lados*TAU)*0.5, 0.5 + Math.sin((i+1)/lados*TAU)*0.5];
       if (lado > 0) tri3(m, cen, a0, a1, N, uvc, uv0, uv1); else tri3(m, cen, a1, a0, N, uvc, uv1, uv0);
     }
   };
   /* um galho: tubo afunilado ESTANQUE tampado nas 2 pontas + recursão de filhos
      que EMBUTEM na ponta (a sobreposição esconde a junção). Determinístico via hash2. */
-  function galhoSeca(m, base, dir, len, r0, r1, nivel, sd, tips, flare, vAltMode) {
+  function galhoSeca(m, base, dir, len, r0, r1, nivel, sd, tips, flare, vAltMode, lados = LADOS) {
     let rc = 0;
     const rnd = () => hash2(sd + rc * 29 + 11, (rc++) * 17 + sd * 2 + 3);
     const SUB = nivel > 0 ? 3 : 2, curva = 0.10 + 0.05 * (3 - nivel);
@@ -260,21 +260,21 @@ export function criarArvores(ctx) {
       : norm([segD[i-1][0]+segD[i][0], segD[i-1][1]+segD[i][1], segD[i-1][2]+segD[i][2]]);
     const rings = [];
     let u = quadro(tang(0))[0];
-    for (let i = 0; i <= SUB; i++) { const t = tang(i); u = i === 0 ? u : transporta(u, t); rings.push(anel(pts[i], u, cross(u, t), rads[i])); }
+    for (let i = 0; i <= SUB; i++) { const t = tang(i); u = i === 0 ? u : transporta(u, t); rings.push(anel(pts[i], u, cross(u, t), rads[i], lados)); }
     for (let s = 0; s < SUB; s++) {
       const lo = rings[s], hi = rings[s+1];
       const axm = [(pts[s][0]+pts[s+1][0])/2, (pts[s][1]+pts[s+1][1])/2, (pts[s][2]+pts[s+1][2])/2];
-      for (let i = 0; i < LADOS; i++) {
+      for (let i = 0; i < lados; i++) {
         const p0 = lo[i], p1 = lo[i+1], p2 = hi[i+1], p3 = hi[i];
         const mid = [(p0[0]+p1[0]+p2[0]+p3[0])/4, (p0[1]+p1[1]+p2[1]+p3[1])/4, (p0[2]+p1[2]+p2[2]+p3[2])/4];
         const Nrm = norm([mid[0]-axm[0], mid[1]-axm[1], mid[2]-axm[2]]);
-        const uA = i/LADOS*3, uB = (i+1)/LADOS*3;
+        const uA = i/lados*3, uB = (i+1)/lados*3;
         const vL = vAltMode ? vAlt(pts[s][1]) : s, vH = vAltMode ? vAlt(pts[s+1][1]) : s + 1;   // vAltMode: V pela ALTURA (casa com o loft do tronco-raiz)
         quadUV(m, p0, p1, p2, p3, [uA, vL], [uB, vL], [uB, vH], [uA, vH], Nrm);
       }
     }
-    tampa(m, pts[0], rings[0], tang(0), -1);
-    tampa(m, pts[SUB], rings[SUB], tang(SUB), +1);
+    tampa(m, pts[0], rings[0], tang(0), -1, lados);
+    tampa(m, pts[SUB], rings[SUB], tang(SUB), +1, lados);
     if (nivel <= 0) { if (tips) tips.push(pts[SUB].slice()); return; }   // ponta terminal -> semente de lóbulo
     const tip = pts[SUB], tdir = tang(SUB), nCh = 2 + (rnd() < 0.45 ? 1 : 0);
     const start = [tip[0] - tdir[0]*len*0.13, tip[1] - tdir[1]*len*0.13, tip[2] - tdir[2]*len*0.13];   // embute MAIS fundo -> esconde a costura
@@ -284,7 +284,7 @@ export function criarArvores(ctx) {
       cdir = norm([cdir[0], cdir[1] + 0.18, cdir[2]]);   // viés p/ cima -> lê como árvore
       const cLen = len * (0.60 + rnd() * 0.16), cR0 = r1 * (0.78 + rnd() * 0.10);
       const cR1 = Math.max(0.035, cR0 * (0.48 + rnd() * 0.18));
-      galhoSeca(m, start, cdir, cLen, cR0, cR1, nivel - 1, sd * 4 + k + 1, tips, 1.5, vAltMode);   // base do filho flarada -> colar suave
+      galhoSeca(m, start, cdir, cLen, cR0, cR1, nivel - 1, sd * 4 + k + 1, tips, 1.5, vAltMode, lados);   // base do filho flarada -> colar suave
     }
   }
 
@@ -297,8 +297,8 @@ export function criarArvores(ctx) {
      é IDÊNTICA e FLUI da raiz pro tronco (base escura -> raiz lisa -> tronco ranhurado);
      a sombra do vão/base agora vem da própria BARK_SECA (gradiente por altura), não de
      luz pintada -> mesma textura nas duas partes (exigência do ideador). */
-  function baseRaiz(m, seed) {
-    const LON = 30, nRoots = 5, phase = hash2(seed * 3 + 1, 7) * TAU;
+  function baseRaiz(m, seed, LON = 30) {
+    const nRoots = 5, phase = hash2(seed * 3 + 1, 7) * TAU;   // LON múltiplo de 5 -> dedos caem em vértices (estrela nítida)
     const LV = [
       [0.72, 0.29, 0.00],   // topo: junta liso no tronco
       [0.46, 0.33, 0.07],
@@ -344,8 +344,9 @@ export function criarArvores(ctx) {
       // ranhura). Pé de raízes + tronco/galhos (galhoSeca em vAltMode) NO MESMO mesh e MESMO
       // mapeamento por altura -> casca idêntica que flui (base escura -> warm liso) da raiz
       // ao topo; galhoSeca nivel 3 dá a ramificação natural. Única marca: a emenda geométrica.
-      baseRaiz(canopy, S);
-      galhoSeca(canopy, [0, 0.5, 0], [0, 1, 0], 1.5, 0.31, 0.18, 3, S + 1, null, null, true);
+      const NL = 10;   // MESMO nº de lados na raiz e no tronco/galhos -> a FORMA bate (sem a raiz redonda vs tronco quadrado); 10 = estrela de 5 pontas afiada
+      baseRaiz(canopy, S, NL);
+      galhoSeca(canopy, [0, 0.5, 0], [0, 1, 0], 1.5, 0.31, 0.18, 3, S + 1, null, null, true, NL);
       ctex = BARK_RAIZ; ink = null; outl = 0; toon = 0;
     } else if (especie === 'frondosa') {
       /* a seca ramificada + COPA que SEGUE os galhos: aglomera as pontas de CIMA em
