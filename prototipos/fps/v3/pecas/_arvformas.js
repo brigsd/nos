@@ -46,19 +46,12 @@ export function construir(ctx) {
     }
     return texCanvas(GT, GT, (x, y) => lb[y * GT + x]);
   }
-  /* AGULHA de conífera: verde escuro "uma cor só" (fica em 29/30 com poucos 31
-     de brilho — sem amarelo/glint), traços curtos = textura de agulha em vez de
-     manchas de folha. A forma vem da luz hemisférica sobre as saias. */
+  /* pinheiro CARTOON: verde-escuro CHAPADO em faixas por nível (cada saia mapeia
+     v=0 no topo -> v=1 no rebordo): topo do nível mais claro (31), corpo (30) e
+     rebordo ESCURO (29) = a linha de sombra sob cada camada. Limpo, sem a agulha
+     ruidosa — casa com as folhosas cartoon; a forma vem das saias + contorno. */
   function pineTex() {
-    const GT = 64, WR = (v) => (Math.round(v) & (GT - 1)), lb = new Int16Array(GT * GT);
-    for (let i = 0; i < lb.length; i++) { const n = fbm((i % GT) / 8 + 3, ((i / GT) | 0) / 8 + 1); lb[i] = n > 0.6 ? 30 : 29; }
-    for (let s = 0; s < 560; s++) {
-      const x = hash2(s * 13 + 1, 7) * GT, y0 = hash2(s * 29 + 3, 11) * GT;
-      const len = 2 + hash2(s * 7, 5) * 3, lean = (hash2(s * 5, 9) - 0.5) * 1.3;
-      const g = hash2(s * 3, 13), col = g < 0.62 ? 30 : g < 0.9 ? 31 : 29;   // maioria médio, poucos brilho
-      for (let k = 0; k <= len; k++) lb[WR(y0 + k) * GT + WR(x + lean * k / len)] = col;
-    }
-    return texCanvas(GT, GT, (x, y) => lb[y * GT + x]);
+    return texCanvas(32, 32, (x, y) => { const v = y / 32; return v > 0.72 ? 29 : v > 0.3 ? 30 : 31; });
   }
   const GREEN = leafTex([29, 30, 31, 32, 33, 28]);
   const PINE = pineTex();
