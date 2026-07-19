@@ -88,7 +88,7 @@ com asterisco têm a solução detalhada logo abaixo da tabela.
 | **Ímã (Ctrl segurado)** | Cola no vértice ou face mais próximo. | **Varredura linear, sem estrutura espacial.** 10 mil vértices a 60 quadros por segundo dá 600 mil comparações por segundo, que é barato. Só dividir o espaço em células se passar de uns 100 mil vértices. Colar em face é projetar no plano e prender dentro do triângulo. |
 | **Mesclar vértices** | Dois viram um. | Grava `['mescla', { de: [7,12], para: 31 }]`, então o replay sobrevive à troca de identidade. Depois da mesclagem, apaga toda face que ficou com dois cantos iguais, de área zero. |
 | **Arestas** | Selecionar e mover. | Chave canônica `min(a,b) + ':' + max(a,b)`, então a mesma aresta nunca vira duas. Deduzida das faces a cada mudança de malha, não guardada. |
-| **Pintar** * | Cor na malha. | Paleta em textura: os três cantos da face recebem a **mesma** coordenada, apontando pro centro da célula de cor. Sem desdobrar malha e sem risco de vazar a cor vizinha. Detalhe abaixo. |
+| **Pintar** * | Cor e pincel na malha. | **Projeção em caixa** gera a coordenada de textura sozinha, sem desdobrar malha. Cor por face é o primeiro modo do pincel, não um sistema à parte — assim o pincel macio entra depois sem jogar nada fora. Detalhe abaixo. |
 | **Modo navegação (botão 5)** | Liga e desliga o voo. | `e.button === 4`, com `preventDefault` no `mousedown` e no `auxclick` pra não disparar o "avançar" do navegador. Tecla alternativa configurável pra mouse sem botão lateral. Com o voo desligado, olhar em volta fica no arrastar do botão do meio. |
 | **Câmera livre** | WASD anda, Q sobe, E desce, scroll acelera. | O `freeCam` do `render.js` já entrega posição, yaw e pitch. |
 | **Salvar como código** | Gera o arquivo em `pecas/`. | Nome vindo do campo do painel, identidade no formato do `COMUNICACAO.md`. |
@@ -166,17 +166,36 @@ exatamente o caso que estava travando a extrusão em uma face por vez.
 A orientação da parede sai da ordem da aresta na face de origem, então as faces
 novas nascem viradas pro lado certo sem cálculo extra.
 
-### Cor por face sem desdobrar a malha
+### Pintura: projeção em caixa desde o começo
 
-A paleta é uma textura gerada com as cores em células. Cada face recebe a
-**mesma coordenada nos três cantos**, apontando pro centro da sua célula.
+Pintar numa textura exige saber qual pedaço da imagem cada ponto do objeto usa.
+Este documento chegou a tratar isso como bloqueio, dizendo que exigiria
+desdobrar a malha à mão. **Está errado, e a correção mudou o plano.**
 
-Como os três cantos são iguais, a coordenada interpolada é constante em toda a
-face. Ela nunca chega perto da borda da célula, então o filtro linear não tem
-como puxar a cor vizinha. O vazamento de cor, que é o problema clássico de
-paleta em textura, não pode acontecer nem em teoria.
+A coordenada sai sozinha por **projeção em caixa**: pra cada face, vê pra qual
+eixo a normal dela mais aponta e usa as outras duas coordenadas do mundo. Face
+virada pra cima usa X e Z, face virada pro lado usa Y e Z. Dez linhas, nenhum
+algoritmo de desdobramento, nenhuma costura pra resolver na mão. É o que se usa
+em terreno e rocha há décadas, e pelo mesmo motivo.
 
-O custo é não ter degradê nem pincel macio: cada face é de uma cor só.
+Ela cobra emenda visível onde a face troca de eixo dominante, e distorção em
+face muito inclinada. Em formas retas e orgânicas, que é o caso do jogo, quase
+não aparece.
+
+**Por que já nascer assim, e não depois.** A versão anterior deste documento
+recomendava cor por face primeiro e pincel depois. Os dois usariam sistemas
+diferentes por baixo, então a segunda etapa jogaria fora a paleta e a geração
+de coordenada da primeira. Retrabalho de verdade.
+
+Com a projeção em caixa desde o início, **cor por face vira só o primeiro modo
+do pincel** — um "preenche esta face com esta cor", pintado na mesma textura que
+o pincel macio vai usar depois. Mesmo sistema, mesma operação gravada. Raio,
+suavidade e degradê entram como modos novos, sem desmanchar nada.
+
+**As pinceladas são operações como qualquer outra.** O arquivo grava
+`['pincel', { modo, cor, raio, pontos: [...] }]` e a textura é gerada ao abrir.
+Continua sem nenhum arquivo de imagem, o Ctrl+Z desfaz pincelada igual desfaz o
+resto, e a regra de zero arquivo do jogo segue de pé.
 
 ### Encaixe automático da colisão
 
@@ -220,13 +239,15 @@ livre** e o ímã pode usá-lo sem conflito nenhum.
 
 ## Decisões abertas
 
-Sobrou uma. A mesclagem contra as identidades de vértice está resolvida — grava
-`de` e `para` — mas segue sendo a interação mais delicada do sistema, e é a
-primeira que deve ganhar teste de verdade.
+Nenhuma. As três que este documento carregava foram fechadas:
 
-**Cor por face no lugar de textura pintada.** Contorna o desdobramento de
-malha inteiro. O custo é não ter degradê nem pincel macio. Aceitável agora,
-mas é uma porta que fecha um pouco.
+- **Conflito do Ctrl** — Q e E assumiram subir e descer, então o Ctrl ficou livre
+  pro ímã.
+- **Mesclagem contra as identidades de vértice** — a operação grava `de` e
+  `para`. Resolvida, mas segue sendo a interação mais delicada do sistema, e é a
+  primeira que deve ganhar teste de verdade.
+- **Cor por face contra textura pintada** — deixou de ser escolha. Com projeção
+  em caixa, cor por face é um modo do pincel, não um sistema concorrente.
 
 ---
 
@@ -246,7 +267,7 @@ const PASSOS = [
   ['extruda',  { face: 12, dist: 0.4 }],
   ['moveV',    { v: 7, d: [0.1, 0, -0.05] }],
   ['mescla',   { de: [7, 12], para: 31 }],
-  ['cor',      { faces: [3, 4, 5], cor: '#4a7c3f' }],
+  ['pincel',   { modo: 'face', faces: [3, 4, 5], cor: '#4a7c3f' }],
   ['solido',   { faces: [0, 1, 2, 3] }],
 ];
 
@@ -287,7 +308,7 @@ uma identidade de vértice desaparecesse.
 | `rotaciona` | `sel`, `eixo`, `graus` | Pivô é o centro da seleção. |
 | `mescla` | `de: [ids]`, `para: id` | Some as faces de área zero que sobrarem. |
 | `apagaFace` | `f` | — |
-| `cor` | `faces: [ids]`, `cor` | Cor por face; vira paleta na textura gerada. |
+| `pincel` | `modo`, `cor`, e o alvo conforme o modo | `modo: 'face'` preenche faces inteiras; `modo: 'livre'` recebe `raio`, `dureza` e `pontos: [[u,v],...]`. Os dois pintam na mesma textura. |
 | `solido` | `faces: [ids]` | Marca o que entra na colisão. |
 
 Toda operação precisa ser **determinística**: mesma lista, mesmo objeto,
@@ -310,14 +331,15 @@ inteiro pra desenhar um toco.
 
 1. Estrutura de dados (vértices únicos, faces, identidades) e a lista de passos.
 2. Câmera do editor com cursor livre.
-3. Ver vértices e faces por cima da malha, via `visor.depurar`.
+3. Ver vértices e faces por cima da malha, em canvas 2D.
 4. Selecionar e arrastar **um** vértice, gravado como operação.
 5. Desfazer e refazer em cima disso.
 6. Gizmo de eixos e o painel lateral.
 7. Extrudar.
 8. Mesclar e ímã.
-9. Cor por face.
+9. Textura por objeto com projeção em caixa, e o pincel no modo "face".
 10. Exportar código e colisão automática.
+11. Modos livres do pincel: raio, dureza, degradê. Acrescenta, não substitui.
 
 Os passos 1 e 4 são o teste da ideia inteira. Quando arrastar um vértice
 funcionar e o arquivo de passos refizer o objeto igual, o resto é trabalho
@@ -335,5 +357,5 @@ conhecido.
 - `freeCam` no `render.js` — câmera livre, já existe.
 - `mat4.js` — falta rotação em X e Z.
 - Formato de vértice: posição, coordenada de textura e normal. **Não tem cor** —
-  daí a cor por face virar paleta na textura gerada, em vez de mexer no
+  daí a pintura ir pra textura gerada por objeto, em vez de mexer no
   `render.js`, que é território de quem cuida de gráficos.
