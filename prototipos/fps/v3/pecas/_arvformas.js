@@ -63,10 +63,10 @@ export function construir(ctx) {
   const GREEN = leafTex([29, 30, 31, 32, 33, 28]);
   const PINE = pineTex();
   const CHERRY = leafTex([54, 55, 56, 57, 63, 9]);
-  /* verde CLARO e LISO (larga): só 2 tons próximos (31 no vinco/mancha, 32 no
-     corpo) — mínima variação de cor. Sem 33/28 (amarelo). A forma da copa vem
-     quase toda da luz, não do contraste da textura. */
-  const GREEN_CLARA = leafTex([31, 32, 32, 32, 32, 32]);
+  /* verde CLARO e CHAPADO (larga): UMA cor só (32 = #91db69, o claro) — zero
+     variação de textura. Toda a forma da copa vem da luz hemisférica sobre a
+     geometria, não do contraste da pintura. */
+  const GREEN_CLARA = leafTex([32, 32, 32, 32, 32, 32]);
 
   const quad4 = (m, P, UV, N) => {
     const push = (i) => m.v.push(P[i][0], P[i][1], P[i][2], UV[i][0], UV[i][1], N[i][0], N[i][1], N[i][2]);
