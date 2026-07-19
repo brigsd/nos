@@ -510,7 +510,7 @@ function antesDoQuadro(dt, T) {
     /* yaw NEGATIVO no dx: a direcao de visao e (sin yaw, cos yaw), entao yaw
        crescente gira a camera para a ESQUERDA — somar o dx do mouse invertia
        o eixo horizontal. O strafe usa o mesmo yaw e continua coerente. */
-    const { dx, dy } = input.mouseLookDelta();
+    const { dx, dy } = input.mouseLookDelta(dt, MOUSE_TAU);
     yaw -= dx * 0.0032; pitch -= dy * 0.0032;
     const { rx, ry } = input.stickLook();
     yaw -= rx * 2.2 * dt; pitch -= ry * 2.2 * dt;
@@ -840,6 +840,24 @@ addEventListener('keydown', (e) => {
   visor.depurar(verColisao ? malhaColisao : []);
 });
 
+
+/* Amortecimento do olhar por mouse.
+
+   Mouse comum lê a 125Hz e a tela atualiza a 120Hz. As taxas não se dividem,
+   então uns quadros recebem duas leituras e outros nenhuma — medido aqui,
+   16% de quadros vazios ao girar. O acumulado fica certo, o RITMO não, e a
+   câmera anda aos solavancos.
+
+   12ms espalha cada leitura pelos quadros seguintes sem descartar nada: o
+   total de um giro é idêntico ao do mouse, só o caminho deixa de ser em
+   degraus. Custa cerca de um quadro de atraso.
+
+   Medido com um painel de diagnóstico (removido): a irregularidade entre
+   quadros vizinhos cai de 17% pra 6%, e os quadros vazios pra 6.3%. Em 40ms
+   iria a 2%, mas nem nesse nível a diferença foi percebida a olho, então não
+   vale o atraso extra. Fica registrado que o ganho aqui é medido e não
+   perceptível — se um dia isso atrapalhar a mira, pode ir embora sem dó. */
+const MOUSE_TAU = 0.012;
 
 visor.rodar(
   (fps) => { document.getElementById('fps').textContent = fps + ' fps'; },

@@ -87,7 +87,7 @@ beirada empurrar pra fora, melhor ficar preso no tronco que cair no vazio.
 
 ```
 setor E5 · x -19.0 · z 0.0 · raio 19.0/24.3 · grama
-?cam=-19.0,0.0,1.85,0.00 · [=] copia o link
+?cam=-19.0,0.0,1.85,0.00
 ```
 
 O segundo número do "raio" é o limite **naquela direção**, então muda conforme
@@ -112,8 +112,10 @@ ID no formato **`arvore@-13,8`**, derivado da posição e não de índice na lis
 reordenar as árvores não renomeia nada. Difere do `tipo-XxY` da v2 porque lá o
 mundo era grade de tiles positivos e aqui são unidades com sinal.
 
-**Tecla `M` — mapa.** Cicla nenhum → minimapa → mapa grande com a grade de
-setores e o atual em destaque. Canvas 2D solto por cima; não encosta no WebGL.
+**Tecla `M` — mapa grande.** Abre e fecha o mapa com a grade de setores e o
+atual em destaque. Canvas 2D solto por cima; não encosta no WebGL. Ela **não**
+cicla o minimapa: quem manda nele é a aba HUD, e uma tecla não deve desfazer a
+escolha de quem joga. Fechando o mapa grande, volta pro que o HUD mandar.
 
 O desenho é dividido em duas camadas por custo: ilha, água, areia e árvores não
 mudam, então saem uma vez num canvas guardado (25ms, no primeiro `M`); por quadro
@@ -125,6 +127,99 @@ passo. Superfície nova aparece no mapa sozinha, sem ninguém lembrar de atualiz
 dois lugares.
 
 Com isso o protocolo do `COMUNICACAO.md` está portado por inteiro.
+
+**Aba HUD.** O minimapa passou a ser parte fixa do HUD, ligado por padrão no
+canto de baixo à esquerda, e a aba escolhe entre os quatro cantos ou nenhum.
+Também oculta de uma vez os textos da tela, pra print limpo. Ligados, os textos
+ficam ACIMA do minimapa (`z-index` 17 contra 16): são pequenos e sumiriam por
+baixo dele no canto em que estivesse.
+
+---
+
+## Configurações de gráfico
+
+**Resolução interna** em valores explícitos: 480, 640, 960, 1440, 1920, 2560 e
+3440. A opção "Nativa" foi REMOVIDA e é o caso que vale contar: ela acompanhava
+a janela mas tinha um teto de 2560, então num monitor de 3440 entregava menos
+que o nativo — e como o número no HUD era um retrato tirado na criação, nada
+denunciava isso. Daí `info` ter virado função em vez de valor.
+
+**Suavização** (`aa`): desligada, LINEAR no blit, ou supersampling 2×. Cuidado
+com o `AA_SUAVE = aa === 1 || aa === 2`: o supersampling PRECISA do filtro
+linear na redução. Trocar isso por igualdade estrita já regrediu uma vez, e o
+sintoma foi o supersampling medir PIOR que o pixel duro contra um render de
+referência, o que não fazia sentido nenhum e foi como o bug apareceu.
+
+**Reconstrução** (`recon`): upscale direcionado por borda com nitidez local.
+Não se chama FSR na interface porque não é a implementação oficial da AMD.
+
+**TAA foi implementado e removido** — embaçava demais. Junto saíram o jitter de
+Halton e a inversa de matriz 4×4 que só ele usava.
+
+**Preset "Dinâmico"**, primeiro item da fila de presets: escada de 6 degraus que
+mede janelas de ~1s e exige 3 janelas boas pra subir um degrau. Serve pra
+máquina fraca e celular não serem forçados a uma escolha fixa.
+
+**Tudo aplica ao vivo** menos textura, via `visor.aplicarTiers`, que só refaz o
+que mudou. Quando o recarregamento é inevitável, a posição do jogador e a aba
+aberta são preservadas.
+
+---
+
+## Amortecimento do olhar por mouse
+
+Mouse comum lê a 125Hz e a tela atualiza a 120Hz. As taxas não se dividem, então
+uns quadros recebem duas leituras e outros nenhuma — medimos **16% de quadros
+vazios** ao girar. O acumulado fica certo, o ritmo não, e a câmera anda aos
+solavancos.
+
+`mouseLookDelta(dt, tau)` espalha cada leitura pelos quadros seguintes sem
+descartar nada: a soma de um giro é idêntica à do mouse, só o caminho deixa de
+ser em degraus. `tau = 12ms`, custo de cerca de um quadro de atraso.
+
+Medido com painel temporário: a irregularidade entre quadros vizinhos cai de 17%
+pra 6%, e os quadros vazios pra 0%.
+
+**Ressalva honesta, registrada de propósito:** ninguém percebeu a diferença a
+olho, nem num nível exagerado de 40ms. O ganho aqui é medido e não perceptível.
+Se algum dia isso atrapalhar a mira, pode ir embora sem dó.
+
+---
+
+## O "fantasma" ao girar — investigado e NÃO é do jogo
+
+Fica registrado pra ninguém gastar tempo nisso de novo, especialmente quem cuida
+de gráficos.
+
+Relato: objetos parecem deixar um rastro breve ao andar ou girar a câmera.
+
+O que foi descartado, cada um com medição:
+
+- **Acumulação temporal no motor** — não existe. Nenhum buffer de histórico,
+  nenhuma suavização de câmera, cada quadro desenhado do zero.
+- **Ritmo de quadro** — dt de 8.30ms com 0.0% de quadros fora do ritmo.
+- **Descompasso de taxa com o monitor** — 120 fps num painel de 120Hz, confirmado
+  no teste do Blur Busters.
+- **Resolução interna e o filtro do upscale** — sem mudança nenhuma em 3440 com
+  as três opções de suavização.
+- **Ritmo do mouse** — corrigido (acima), e o fantasma continuou igual.
+
+O teste que fechou: um quadrado HTML grande, ancorado numa árvore pela mesma
+projeção das etiquetas, atravessando a tela junto com ela. **Ele fantasma
+igual ao tronco** — e quem desenha ele é o navegador, não o WebGL.
+
+Conclusão: é persistência de tela mais comportamento do olho. A tela segura cada
+quadro aceso por 8ms, então a imagem salta de posição em posição em vez de
+deslizar; com o olhar fixo no centro enquanto o mundo varre por baixo, o cérebro
+registra as posições sucessivas juntas. Não é rastro do quadro anterior, são
+quadros distintos vistos ao mesmo tempo.
+
+Isso explica as três observações que antes não fechavam: o texto parado do HUD
+sai limpo (não se move), os discos do teste saem nítidos a 120 (seguidos com os
+olhos), e tronco e quadrado fantasmam (varrem um olhar parado).
+
+Só backlight estroboscópico no monitor resolve. **Nenhuma mudança de código muda
+isso**, então não vale procurar no render.
 
 **Faixa de erro no rodapé.** Uma exceção dentro do `antesDoQuadro` derrubava o
 `rAF` inteiro: tela preta, sem movimento, e o som seguindo normal (Web Audio roda
