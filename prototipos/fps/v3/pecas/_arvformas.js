@@ -63,10 +63,16 @@ export function construir(ctx) {
   const GREEN = leafTex([29, 30, 31, 32, 33, 28]);
   const PINE = pineTex();
   const CHERRY = leafTex([54, 55, 56, 57, 63, 9]);
-  /* verde CLARO e CHAPADO (larga): UMA cor só (32 = #91db69, o claro) — zero
-     variação de textura. Toda a forma da copa vem da luz hemisférica sobre a
-     geometria, não do contraste da pintura. */
-  const GREEN_CLARA = leafTex([32, 32, 32, 32, 32, 32]);
+  /* verde claro + UMA curva de cacho por LOBE (larga): base clara (32) com UMA
+     faixa curva escura (30 + sombra 29) na terça baixa. Mapeada SEM ladrilho —
+     uma faixa = uma curva por lobe; como cada lobe é uma bola opaca, só a parte
+     da frente da faixa aparece = a "boca ‿" do tufo, casada com o caroço. */
+  const LOBE_TEX = texCanvas(64, 64, (x, y) => {
+    const v = y / 64;
+    if (v >= 0.66 && v < 0.71) return 30;   // a curva do cacho
+    if (v >= 0.71 && v < 0.75) return 29;   // sombra logo abaixo
+    return 32;                              // corpo claro
+  });
 
   const quad4 = (m, P, UV, N) => {
     const push = (i) => m.v.push(P[i][0], P[i][1], P[i][2], UV[i][0], UV[i][1], N[i][0], N[i][1], N[i][2]);
@@ -101,6 +107,26 @@ export function construir(ctx) {
     for (let a = 0; a < LAT; a++) for (let o = 0; o < LON; o++) {
       const P = [g[a][o], g[a][o + 1], g[a + 1][o + 1], g[a + 1][o]];
       quad4(m, P, uvOf(a, o, LAT, LON, uo, vo), P.map((p) => norm([p[0] - cen[0], p[1] - cen[1], p[2] - cen[2]])));
+    }
+  }
+  /* LOBE cartoon (larga): bola com bump suave; UV.v = latitude SEM ladrilho + um
+     jitter por seed -> a faixa escura da LOBE_TEX vira UMA curva "‿" na terça
+     baixa do lobe (casada com o caroço), em altura variada. */
+  function lobeCartoon(m, cen, r, seed) {
+    const LAT = 10, LON = 14, amp = 0.2;
+    const jv = (hash2(seed * 5 + 1, 7) - 0.5) * 0.12;   // jitter da altura da curva -> variação
+    const cpt = (a, o) => {
+      const th = a / LAT * Math.PI, ph = o / LON * TAU, cP = Math.cos(ph), sP = Math.sin(ph), sT = Math.sin(th);
+      const bump = 1 + amp * (fbm(cP * 2.2 + a * 0.7 + seed + 5, sP * 2.2 + a * 0.7 + seed) - 0.5) * 2;
+      const rr = r * sT * bump;
+      return [cen[0] + cP * rr, cen[1] + r * Math.cos(th) * (0.9 + 0.1 * bump), cen[2] + sP * rr];
+    };
+    const g = Array.from({ length: LAT + 1 }, (_, a) => Array.from({ length: LON + 1 }, (_, o) => cpt(a, o)));
+    const vv = (a) => a / LAT + jv;
+    for (let a = 0; a < LAT; a++) for (let o = 0; o < LON; o++) {
+      const P = [g[a][o], g[a][o + 1], g[a + 1][o + 1], g[a + 1][o]];
+      const UV = [[o / LON, vv(a)], [(o + 1) / LON, vv(a)], [(o + 1) / LON, vv(a + 1)], [o / LON, vv(a + 1)]];
+      quad4(m, P, UV, P.map((p) => norm([p[0] - cen[0], p[1] - cen[1], p[2] - cen[2]])));
     }
   }
   /* pinheiro em NÍVEIS: saias cônicas empilhadas (rebordo largo embaixo, ponta
@@ -138,8 +164,16 @@ export function construir(ctx) {
   const push = (mesh, tex) => forms.push({ mesh, tex });
   // 1 carvalho (oval média)
   addTrunk(-9, 1.9); { const m = Mesh(); blobOval(m, [-9, 1.9 + 2.0 * 0.92, 0], 1.35, 2.0, 0.34); push(m, GREEN); }
-  // 2 larga (baixa e espalhada, tronco curto) — verde claro e liso
-  addTrunk(-4.5, 1.3, 0.4, 0.16); { const m = Mesh(); blobOval(m, [-4.5, 1.3 + 1.35 * 0.92, 0], 2.05, 1.3, 0.36, 7); push(m, GREEN_CLARA); }
+  // 2 larga (baixa e espalhada) — copa LOBADA (silhueta bombada) + uma curva cartoon por lobe
+  addTrunk(-4.5, 1.3, 0.4, 0.16);
+  { const m = Mesh(); const ox = -4.5, cy = 2.3;
+    lobeCartoon(m, [ox, cy + 0.05, 0], 1.05, 1);
+    lobeCartoon(m, [ox - 1.3, cy - 0.1, 0.2], 0.85, 2);
+    lobeCartoon(m, [ox + 1.3, cy - 0.08, -0.2], 0.88, 3);
+    lobeCartoon(m, [ox + 0.3, cy - 0.05, 1.0], 0.8, 4);
+    lobeCartoon(m, [ox - 0.3, cy, -1.0], 0.8, 5);
+    lobeCartoon(m, [ox + 0.1, cy + 0.6, 0.1], 0.82, 6);
+    push(m, LOBE_TEX); }
   // 3 pinheiro (NÍVEIS em escada, verde escuro de agulha, tronco curto)
   addTrunk(0, 0.85, 0.28, 0.11); { const m = Mesh(); pinheiroTiers(m, 0, 0.7, 1.65, 4.0, 5); push(m, PINE); }
   // 4 cerejeira (oval redonda, rosa)
