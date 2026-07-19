@@ -249,7 +249,14 @@ addEventListener('keydown', (e) => {
 const input = criarInput({ stageEl: canvas, onPause: () => (paused ? fecharTudo() : abrirPausa()) });
 input.bindSticks(document.getElementById('stickL'), document.getElementById('stickR'));
 
-const EYE = 1.7, SPEED = 5.2, BEIRA = 0.7, LAGO = [10, -8];
+const EYE = 1.7, SPEED = 5.2, BEIRA = 0.7, LAGO = [10, -8], JOGADOR_R = 0.35;
+
+/* Colisores vêm do META da peça, não escritos aqui: plantar mais árvore não
+   pede calibragem nenhuma, e trocar a espessura do tronco move a colisão
+   junto. Peça sem `colisao` declarada simplesmente não colide. */
+const COLISORES = arvore3d.meta.colisao
+  ? ARVORE_POS.map(([x, z]) => ({ x, z, r: arvore3d.meta.colisao.raio, h: arvore3d.meta.colisao.altura }))
+  : [];
 /* ?cam=x,z,yaw,pitch — ponto de vista reprodutível pra bancada/QA */
 const camQ = Q.get('cam')?.split(',').map(Number);
 let pos = camQ ? [camQ[0], 0, camQ[1]] : [-19, 0, 0];
@@ -278,6 +285,18 @@ function antesDoQuadro(dt, T) {
          círculo fixo. A margem tira o jogador da beirada exata, senão ele fica
          com meio pé no vazio. Continua sendo um limite radial: andar de lado
          encostado na borda ainda desliza. */
+      /* objetos primeiro: empurra pra FORA do cilindro, na direção do centro
+         dele. Empurrar assim (e não cancelar o movimento) é o que deixa
+         encostar num tronco e continuar andando de lado em vez de grudar. */
+      for (const c of COLISORES) {
+        const ox = pos[0] - c.x, oz = pos[2] - c.z;
+        const od = Math.hypot(ox, oz), min = c.r + JOGADOR_R;
+        if (od >= min) continue;
+        if (od < 1e-6) { pos[0] = c.x + min; continue; }   // em cima do centro: direção indefinida
+        pos[0] = c.x + (ox / od) * min; pos[2] = c.z + (oz / od) * min;
+      }
+      /* ilha por último: se um tronco na beirada empurrar pra fora, quem manda
+         é a borda — melhor ficar preso no tronco que cair no vazio */
       const d = Math.hypot(pos[0], pos[2]);
       const lim = ilhaChao.raioEm(pos[0], pos[2]) - BEIRA;
       if (d > lim) { pos[0] *= lim / d; pos[2] *= lim / d; }
@@ -311,6 +330,43 @@ function mostrarCoords(T) {
   elCoord.innerHTML = `x ${pos[0].toFixed(1)} · z ${pos[2].toFixed(1)} · raio ${r.toFixed(1)}/${lim.toFixed(1)} · ${piso}`
     + `<br><span style="opacity:.55">?cam=${cam}</span>`;
 }
+
+/* ---------- ver colisão (tecla O) ----------
+   Desligada, a camada NÃO EXISTE no laço de desenho — não é lote invisível nem
+   material transparente, é lista vazia. Custo zero de quadro, que era o pedido.
+   A malha é montada na PRIMEIRA vez que se liga e fica guardada: ligar/desligar
+   depois é só trocar a lista. */
+let malhaColisao = null, verColisao = false;
+
+/* vermelho furado em xadrez: o shader das peças recorta por alfa (a<0.5) e não
+   mistura, então "transparente" de verdade não existe aqui. O furo deixa ver o
+   tronco através da parede, que é o efeito que se quer. */
+function texColisao() {
+  return tex.texCanvas(16, 16, (x, y) => (((x >> 1) + (y >> 1)) & 1 ? [235, 60, 70] : -1));
+}
+
+function malhaCilindro(cs) {
+  const m = geo.Mesh(), LADOS = 14;
+  for (const c of cs) {
+    const R = c.r + JOGADOR_R;      // desenha o limite REAL: tronco + corpo do jogador
+    for (let i = 0; i < LADOS; i++) {
+      const a0 = (i / LADOS) * Math.PI * 2, a1 = ((i + 1) / LADOS) * Math.PI * 2;
+      const p = (a, y) => [c.x + Math.cos(a) * R, y, c.z + Math.sin(a) * R];
+      const nrm = [Math.cos((a0 + a1) / 2), 0, Math.sin((a0 + a1) / 2)];
+      const u0 = (i / LADOS) * 6, u1 = ((i + 1) / LADOS) * 6;
+      geo.quadUV(m, p(a0, 0), p(a1, 0), p(a1, c.h), p(a0, c.h),
+        [u0, 0], [u1, 0], [u1, 3], [u0, 3], nrm);
+    }
+  }
+  return m;
+}
+
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyO' || paused) return;
+  verColisao = !verColisao;
+  if (verColisao && !malhaColisao) malhaColisao = [{ mesh: malhaCilindro(COLISORES), tex: texColisao() }];
+  visor.depurar(verColisao ? malhaColisao : []);
+});
 
 /* Um erro dentro do quadro derrubava o rAF inteiro: tela preta, sem movimento,
    e o som seguindo normal (Web Audio roda em outra thread). O sintoma não dizia

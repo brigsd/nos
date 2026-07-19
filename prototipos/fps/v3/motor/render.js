@@ -162,6 +162,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
   let farCfg = 60;  // far plane; paisagens (far>100) sobem o near junto (precisão do depth16)
   let camCfg = {};  // câmera SUGERIDA pela peça {e,r} (paisagem pede órbita alta) — ?e/?r vencem
   let freeCam = null;  // {pos:[x,y,z], yaw, pitch} — câmera de JOGADOR (jogo.html); substitui a órbita quando setada
+  let extras = [];     // camada de DEPURAÇÃO (colisores etc). Vazia = nada a pagar.
   const visor = {
     glTex, glMesh,
     /* câmera livre (jogo.html chama a cada quadro com a posição/olhar do
@@ -188,6 +189,19 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       farCfg = peca.far || 60;
       camCfg = peca.camera || {};
     },
+    /* camada de depuração desenhada por cima da cena. Passe [] (ou nada) pra
+       desligar: a lista some do laço de desenho, então DESLIGADA não custa
+       quadro nenhum — não é um lote invisível, é lote que não existe.
+       As malhas vêm em CPU e sobem pra GPU aqui, uma vez por chamada; quem
+       chama deve guardar o retorno e reusar em vez de remontar a cada toque. */
+    depurar(lotesCPU) {
+      extras = (lotesCPU || []).map((L) => ({
+        mesh: L.mesh.buf ? L.mesh : glMesh(L.mesh),
+        tex: L.tex.width ? glTex(L.tex) : L.tex,
+        matriz: L.matriz || m4.ident(), rim: 0,
+      }));
+      return extras;
+    },
     /* antesDoQuadro(dt, T): chamado TODO quadro, antes da câmera ser lida —
        o jogo.html usa isso pra integrar movimento (input -> pos/yaw/pitch ->
        setCam()) sempre imediatamente antes do frame que vai desenhá-lo. */
@@ -197,10 +211,13 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       function resize() { const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = innerWidth * dpr | 0; canvas.height = innerHeight * dpr | 0; }
       addEventListener('resize', resize); resize();
       let t0 = performance.now(), frames = 0, tPrev = performance.now();
-      const draw = (prg, aL) => {
+      const draw = (prg, aL, comExtras) => {
         const uM = gl.getUniformLocation(prg, 'uModel');
         const uR = gl.getUniformLocation(prg, 'uRim');   // null no passe de profundidade
-        const all = semPalco ? lotes : [stage, ...lotes];
+        const base = semPalco ? lotes : [stage, ...lotes];
+        /* extras só no passe de cor: colisor de depuração projetando sombra no
+           chão confundiria mais do que ajuda */
+        const all = comExtras && extras.length ? [...base, ...extras] : base;
         for (const L of all) {
           gl.uniformMatrix4fv(uM, false, L.matriz);
           if (uR) gl.uniform1f(uR, L.rim || 0);          // contorno por lote
@@ -236,7 +253,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         if (sombraOn) {
           gl.useProgram(depthProg); gl.uniformMatrix4fv(gl.getUniformLocation(depthProg,'uLMVP'), false, lMVPf);
           gl.uniform1i(gl.getUniformLocation(depthProg,'uTex'), 0);
-          draw(depthProg, DL);
+          draw(depthProg, DL, false);
         }
         // 2: cena
         gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO.fb); gl.viewport(0, 0, IW, IH);
@@ -254,7 +271,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         gl.uniform2f(gl.getUniformLocation(scene,'uFog'), fogCfg[0], fogCfg[1]);
         gl.uniform1i(gl.getUniformLocation(scene,'uTex'), 0); gl.uniform1i(gl.getUniformLocation(scene,'uShadow'), 1);
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, shadowFBO.tex);
-        draw(scene, AL);
+        draw(scene, AL, true);
         // partículas (pólen do palco — paisagens desligam)
         if (!semParts) {
           gl.useProgram(parts); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.depthMask(false);

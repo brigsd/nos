@@ -4,10 +4,18 @@
    de qualquer ângulo, ~30 triângulos. Copa e casca são texturas próprias do
    v3 (fbm consertado, D-58); estilo BotW da V2 (sombra teal embaixo → topo
    amarelo-verde, contorno de tinta). Barato por design — dá pra florestar. */
+/* raio do flare de raiz — a parte MAIS LARGA do tronco. Fica aqui fora porque
+   o meta e a geometria leem o mesmo número: colisor declarado à parte vira uma
+   segunda verdade, e foi assim que a borda da ilha saiu do lugar. */
+const TRONCO_R = 0.34, TRONCO_H = 1.9;
+
 export const meta = {
   nome: 'arvore3d',
   tipo: 'objeto',
   desc: 'árvore 3D: tronco prisma + copa bola-3D deformada com cachos de folha',
+  /* colisão POR TIPO, não por árvore plantada. Só o tronco: a copa começa
+     acima da cabeça, e incluí-la faria esbarrar em nada a metros do tronco. */
+  colisao: { forma: 'cilindro', raio: TRONCO_R, altura: TRONCO_H },
 };
 
 export function construir(ctx) {
@@ -65,11 +73,11 @@ export function construir(ctx) {
 
   /* ---------- tronco: prisma afunilado com flare de raiz ---------- */
   const trunk = Mesh();
-  const SIDES = 8, trunkH = 1.9;
+  const SIDES = 8, trunkH = TRONCO_H;
   const ring = (yy, r) => Array.from({ length: SIDES + 1 }, (_, i) => {
     const a = i / SIDES * Math.PI * 2; return [Math.cos(a) * r, yy, Math.sin(a) * r];
   });
-  const rFlare = ring(0, 0.34), rBase = ring(0.35, 0.24), rTop = ring(trunkH, 0.12);
+  const rFlare = ring(0, TRONCO_R), rBase = ring(0.35, 0.24), rTop = ring(trunkH, 0.12);
   const band = (A, B, vA, vB) => {
     for (let i = 0; i < SIDES; i++) {
       const p0 = A[i], p1 = A[i + 1], p2 = B[i + 1], p3 = B[i];
