@@ -30,6 +30,12 @@ export function criarArvores(ctx) {
     const on = hash2(x * 7 + 1, (y >> 2) * 3) > 0.48;    // liga/desliga a cada ~4px -> traços CURTOS na altura
     return groove && on ? 20 : woodBody(x);              // ranhura = 20 (#9e4539) marrom ESCURO; corpo = madeira quente
   });
+  /* casca da RAIZ: SEM ranhura + SOMBRA PINTADA. O v vem do .l pintado na baseRaiz
+     (0 = base/vão escuro -> 1 = luz): gradiente 20 escuro -> 21 médio -> 22 claro. */
+  const BARK_RAIZ = texCanvas(24, 64, (x, y) => {
+    const s = y / 63 + (hash2(x, y) - 0.5) * 0.14;
+    return s < 0.32 ? 20 : s < 0.66 ? 21 : 22;
+  });
   /* casca do TRONCO-RAIZ (loft único pé->tronco): mapeada por ALTURA (v = vAlt(y)).
      Base (v baixo) = escura (sombra de aterramento) -> raiz LISA -> tronco RANHURADO.
      Uma textura só que flui da raiz pro tronco sem emenda. */
@@ -39,15 +45,6 @@ export function criarArvores(ctx) {
     if (f < 0.09) return 20;                                    // base na terra: sombra escura
     if (f < 0.16) return hash2(x, y) < 0.5 ? 20 : 21;           // penumbra subindo (dither)
     if (f < 0.28) return body;                                  // raiz: lisa (sem ranhura)
-    /* FORQUILHA em penumbra (jogo de cor pra DISFARÇAR a junção loft↔galhos):
-       a forquilha vive em y≈1.3-1.5 (v≈0.50-0.57). Como loft E galhos usam o MESMO
-       vAlt(y), escurecer essa faixa escurece AMBOS de forma contínua -> a linha de
-       interseção fica dentro de área escura, onde o contraste (e a emenda) some. */
-    const dF = Math.abs(f - 0.535);
-    if (dF < 0.075) {
-      const t = dF / 0.075 + (hash2(x * 3 + 2, y) - 0.5) * 0.5;   // 0 centro -> 1 borda, com dither
-      return t < 0.45 ? 20 : t < 0.8 ? 21 : body;
-    }
     const groove = hash2(x, 7) < 0.13, on = hash2(x * 7 + 1, (y >> 2) * 3) > 0.48;   // tronco+galhos: ranhura fina
     return groove && on ? 20 : body;
   });
@@ -287,42 +284,39 @@ export function criarArvores(ctx) {
     }
   }
 
-  /* ---------- TRONCO-RAIZ: loft ÚNICO das pontas das raízes até a 1ª forquilha ----
-     Perfil vertical [y, raio, amplitudeDedo]: embaixo dedos abertos (raízes na terra),
-     os dedos DESVANECEM com a altura (amp->0) e a superfície vira o tronco reto que
-     sobe até o topo. Mesma malha + UV por altura (vAlt) -> a textura FLUI da raiz pro
-     tronco sem emenda nenhuma. Devolve o ponto do topo (onde os galhos brotam). */
-  function troncoRaiz(m, seed) {
-    const LON = 24, nR = 5, phase = hash2(seed * 3 + 1, 7) * TAU;
-    /* perfil CÔNCAVO (varredura agressiva): o tronco fica SLENDER em cima e só perto
-       do chão ABRE RÁPIDO num pé largo (o raio cresce com taxa crescente descendo =
-       curva, não cone reto). Dedos concentrados na base. */
+  /* ---------- base com RAÍZES (ref. do ideador): tronco alarga num "pé de elefante"
+     e splaia em N dedos que ABREM na linha do chão e afinam em ponta abaixo (entrando
+     na terra, y<0 escondido pelo chão). Loft por um PERFIL vertical explícito
+     [y, raioBase, amplitudeDedo]: o dedo (cos(N·a)) é MÁXIMO no chão e some no topo
+     (junta no tronco) e afina embaixo (ponta na terra). Pele contínua com o tronco. */
+  function baseRaiz(m, seed) {
+    const LON = 30, nRoots = 5, phase = hash2(seed * 3 + 1, 7) * TAU;
     const LV = [
-      [-0.55, 0.10, 0.16],   // pontas das raízes fundas
-      [-0.28, 0.26, 0.48],   // raízes bem abertas
-      [-0.05, 0.40, 0.50],   // chão: pé MÁX aberto + dedos
-      [ 0.12, 0.32, 0.28],   // curva fechando RÁPIDO subindo
-      [ 0.26, 0.24, 0.12],
-      [ 0.42, 0.195, 0.03],  // quase no tronco slender
-      [ 0.62, 0.175, 0.00],  // tronco SLENDER (varredura terminou)
-      [ 0.95, 0.16, 0.00],
-      [ 1.22, 0.135, 0.00],
-      [ 1.45, 0.06, 0.00],   // topo AFINA numa PONTA fina (tipo ponta de tubo) -> galhos envolvem
+      [0.72, 0.29, 0.00],   // topo: junta liso no tronco
+      [0.46, 0.33, 0.07],
+      [0.24, 0.40, 0.22],
+      [0.05, 0.49, 0.44],   // LINHA DO CHÃO: dedos bem abertos
+      [-0.12, 0.44, 0.52],  // logo abaixo: ainda largo, mergulhando
+      [-0.34, 0.27, 0.42],  // estreitando
+      [-0.58, 0.09, 0.18],  // ponta na terra
     ];
-    const mkRing = ([yy, rb, ta]) => Array.from({ length: LON + 1 }, (_, i) => {
-      const a = i / LON * TAU, s = Math.max(0, Math.cos(nR * (a - phase)));   // 1 no dedo, 0 no vão
-      const rr = rb + Math.pow(s, 1.5) * ta;
-      return [Math.cos(a) * rr, yy, Math.sin(a) * rr];
+    /* cada vértice carrega LUZ pintada em .l (0=sombra,1=claro) que vira o V da textura
+       (BARK_RAIZ é gradiente vertical): escurece na BASE (f alto) E no VÃO (s baixo)
+       = o AO/reentrância entre as raízes que o ideador pediu. */
+    const mkRing = ([yy, rb, ta], f) => Array.from({ length: LON + 1 }, (_, i) => {
+      const a = i / LON * TAU, s = Math.max(0, Math.cos(nRoots * (a - phase)));   // 1 no dedo, 0 no vão
+      const rr = rb + Math.pow(s, 1.5) * ta - (1 - s) * 0.03 * (ta > 0.05 ? 1 : 0);   // dedo salta; vão recua leve
+      const l = (1 - f * 0.5) * (0.4 + 0.6 * s);        // sombra pintada: base(f→1) e vão(s→0) escurecem
+      return { p: [Math.cos(a) * rr, yy, Math.sin(a) * rr], l };
     });
-    const rings = LV.map(mkRing);
-    for (let r = 0; r < rings.length - 1; r++) {
-      const dn = rings[r], up = rings[r + 1], vD = vAlt(LV[r][0]), vU = vAlt(LV[r + 1][0]);
+    const NR = LV.length, rings = LV.map((lv, r) => mkRing(lv, r / (NR - 1)));   // f: 0 topo -> 1 base
+    for (let r = 0; r < NR - 1; r++) {
+      const up = rings[r], dn = rings[r + 1];
       for (let i = 0; i < LON; i++) {
-        const p0 = dn[i], p1 = dn[i + 1], p2 = up[i + 1], p3 = up[i];   // winding = addTrunk (baixo->cima)
-        quadUV(m, p0, p1, p2, p3, [i / LON * 4, vD], [(i + 1) / LON * 4, vD], [(i + 1) / LON * 4, vU], [i / LON * 4, vU], norm([p0[0] + p3[0], 0.15, p0[2] + p3[2]]));
+        const a = dn[i], b = dn[i + 1], c = up[i + 1], d = up[i];   // winding = addTrunk (baixo->cima, frente p/ fora)
+        quadUV(m, a.p, b.p, c.p, d.p, [i / LON * 3, a.l], [(i + 1) / LON * 3, b.l], [(i + 1) / LON * 3, c.l], [i / LON * 3, d.l], norm([a.p[0] + d.p[0], 0.25, a.p[2] + d.p[2]]));
       }
     }
-    return [0, 1.45, 0];   // ponta do loft = forquilha (galhos envolvem)
   }
 
   /* ---------- o carimbo: uma árvore por (espécie, seed) na origem ---------- */
@@ -341,17 +335,13 @@ export function criarArvores(ctx) {
       // esqueleto de galhos (tubos) -> trunk (BARK ranhurada); copa vazia
       galhoSeca(trunk, [0, 0, 0], [0, 1, 0], 1.7, 0.30, 0.20, 3, S); ink = TINTA_SECA; outl = 0; toon = 0;
     } else if (especie === 'raiz') {
-      // "pé vira tronco": loft único raízes->tronco (troncoRaiz) + galhos do topo, MESMA malha (canopy)
-      // e MESMA textura por altura (BARK_SECA) -> transição raiz->tronco SEM emenda; a junção
-      // loft↔galhos fica na faixa de PENUMBRA da BARK_SECA (jogo de cor disfarça a divisão).
-      const topo = troncoRaiz(canopy, S);
-      const nB = 2 + (hash2(S, 3) < 0.5 ? 1 : 0), phB = hash2(S * 5 + 1, 7) * TAU;
-      for (let k = 0; k < nB; k++) {
-        const ang = phB + (k / nB) * TAU + (hash2(k * 9, S) - 0.5) * 0.7;
-        const dir = norm([Math.cos(ang) * 0.6, 0.8, Math.sin(ang) * 0.6]);
-        galhoSeca(canopy, [0, topo[1] - 0.13, 0], dir, 0.98, 0.105, 0.045, 2, S * 7 + k + 5, null, 1.25, true);   // início FINO (r0 baixo + colar leve): galho não estufa mais que o cerne; brota abaixo da ponta e a envolve
-      }
-      ctex = BARK_SECA; ink = null; outl = 0; toon = 0;
+      // TRONCO SEPARADO da RAIZ (o ideador preferiu — galhos mais naturais que na pé-vira-tronco):
+      // pé de raízes (canopy, BARK_RAIZ lisa com sombra pintada) + tronco/galhos como UM esqueleto
+      // galhoSeca (trunk, BARK ranhurada). O tronco começa DENTRO do pé (y=0.5, pé sobe até 0.72)
+      // -> a sobreposição esconde a emenda; galhoSeca nivel 3 dá a ramificação natural.
+      baseRaiz(canopy, S);
+      galhoSeca(trunk, [0, 0.5, 0], [0, 1, 0], 1.5, 0.31, 0.18, 3, S + 1);
+      ctex = BARK_RAIZ; ink = null; outl = 0; toon = 0;
     } else if (especie === 'frondosa') {
       /* a seca ramificada + COPA que SEGUE os galhos: aglomera as pontas de CIMA em
          poucos lóbulos MESCLADOS (silhueta irregular, não bolas nas pontas); os galhos

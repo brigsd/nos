@@ -1,6 +1,6 @@
-/* scratch: close do TESTE "pé vira tronco" — loft único raízes->tronco + galhos, uma malha só. */
+/* scratch: close da RAIZ — tronco ranhurado + pé de raízes liso com sombra (malhas separadas). */
 import { criarArvores } from '../motor/arvore-cartoon.js';
-export const meta = { nome: '_raiz1', tipo: 'objeto', desc: 'raiz close: pé-vira-tronco (loft único, textura flui sem emenda)' };
+export const meta = { nome: '_raiz1', tipo: 'objeto', desc: 'raiz close: tronco ranhurado + raiz lisa com sombra (separados)' };
 export function construir(ctx) {
   const arv = criarArvores(ctx);
   const M = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
