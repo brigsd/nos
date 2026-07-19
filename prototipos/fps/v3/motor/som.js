@@ -8,9 +8,9 @@
    grave. O contexto só nasce no 1º gesto (política de autoplay). */
 
 export function criarSom() {
-  let AC = null, masterG = null, windG = null, rajadaG = null, ventoLP = null, waterG = null, eventosG = null, passosG = null, noiseBuf = null;
+  let AC = null, masterG = null, windG = null, rajadaG = null, turbG = null, mixerG = null, assoBioG = null, ventoLP = null, waterG = null, eventosG = null, passosG = null, noiseBuf = null;
   let ambienteVol = 0.8, passosVol = 0.8;
-  // controle de agendamento da água (bolhas/lambidas)
+  // controle de agendamento da água (bolhas/lambidas) e vento
   let waterTimeout = null, ventoTimeout = null;
   let waterScheduled = false;
   let lastWaterDist = 99; // distância da última vez que agendamos
@@ -39,6 +39,28 @@ export function criarSom() {
     return buf;
   }
 
+  /* turbulência: sinal lento (0,25 a 7 Hz) que treme a amplitude do vento.
+     Duas exigências que apontam pra mesma solução:
+     — createBuffer só aceita taxa de 3000 a 768000 Hz, então não dá pra criar
+       um buffer "de 60 Hz" e deixar o navegador esticar; é na taxa do contexto;
+     — o buffer TOCA EM LAÇO, e passeio aleatório não fecha onde começou, o que
+       daria um degrau de volume a cada volta.
+     Somar senoides de frequências INTEIRAS dentro da janela resolve as duas: o
+     laço emenda exato, e com fase sorteada e peso 1/c não soa periódico. */
+  function makeTurbBuffer(secs = 4) {
+    const n = Math.floor(AC.sampleRate * secs);
+    const buf = AC.createBuffer(1, n, AC.sampleRate);
+    const d = buf.getChannelData(0);
+    let pico = 0;
+    for (const c of [1, 2, 3, 5, 8, 13, 21, 29]) {
+      const fase = Math.random() * Math.PI * 2, amp = 1 / c;
+      for (let i = 0; i < n; i++) d[i] += amp * Math.sin((2 * Math.PI * c * i) / n + fase);
+    }
+    for (let i = 0; i < n; i++) if (Math.abs(d[i]) > pico) pico = Math.abs(d[i]);
+    for (let i = 0; i < n; i++) d[i] /= pico || 1;   // fica em -1..1
+    return buf;
+  }
+
   function build() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;                        // sem Web Audio: silêncio, sem erro
@@ -57,22 +79,71 @@ export function criarSom() {
        serve de ambiente pra praia ou ilha sem precisar de mais nenhum nó. */
     const wSrc = AC.createBufferSource(); wSrc.buffer = makeNoise(3, 0.12); wSrc.loop = true;
     const wHP = AC.createBiquadFilter(); wHP.type = 'highpass'; wHP.frequency.value = 150; wHP.Q.value = 0.5;
-    const wLP = AC.createBiquadFilter(); wLP.type = 'lowpass'; wLP.frequency.value = 1200; wLP.Q.value = 0.5;
-    /* rajadaG começa em ZERO e só abre durante a rajada: não existe leito de
-       vento constante, o silêncio entre uma rajada e outra é silêncio de fato.
-       Multiplicativo de propósito — a senoide antiga somava valor absoluto no
-       windG.gain e brigava com ambienteVol. */
-    windG = AC.createGain(); windG.gain.value = 0.055 * ambienteVol;
-    rajadaG = AC.createGain(); rajadaG.gain.value = 0;
-    ventoLP = wLP;
-    wSrc.connect(wHP).connect(wLP).connect(rajadaG).connect(windG).connect(masterG);
 
-    // deriva lenta do timbre entre rajadas, pra duas seguidas não saírem iguais
-    const drift = AC.createOscillator(); drift.type = 'sine'; drift.frequency.value = 0.043;
-    const driftAmt = AC.createGain(); driftAmt.gain.value = 200;
-    drift.connect(driftAmt).connect(wLP.frequency);
-    drift.start();
-    agendarRajada();
+    /* mixerG: soma os três caminhos do vento (lowpass + duas ressonâncias bandpass) */
+    mixerG = AC.createGain(); mixerG.gain.value = 1;
+
+    wSrc.connect(wHP);          // sem isto a fonte fica órfã e não sai vento nenhum
+
+    /* caminho 1: lowpass (base do vento) */
+    const wLP = AC.createBiquadFilter(); wLP.type = 'lowpass'; wLP.frequency.value = 1200; wLP.Q.value = 0.5;
+    ventoLP = wLP;              // rajada() varre este corte junto com a força
+    const gainLP = AC.createGain(); gainLP.gain.value = 0.6; // contribuição RMS
+    wHP.connect(wLP); wLP.connect(gainLP); gainLP.connect(mixerG);
+
+    /* caminho 2: ressonância 1 (bandpass) com frequência derivando */
+    const bp1 = AC.createBiquadFilter(); bp1.type = 'bandpass'; bp1.frequency.value = 600; bp1.Q.value = 1.8;
+    const gainBP1 = AC.createGain(); gainBP1.gain.value = 0.3;
+    const lfoBP1 = AC.createOscillator(); lfoBP1.type = 'sine'; lfoBP1.frequency.value = 0.07;
+    const lfoBP1Amt = AC.createGain(); lfoBP1Amt.gain.value = 180;
+    lfoBP1.connect(lfoBP1Amt); lfoBP1Amt.connect(bp1.frequency);
+    wHP.connect(bp1); bp1.connect(gainBP1); gainBP1.connect(mixerG);
+    lfoBP1.start();
+
+    /* caminho 3: ressonância 2 (bandpass) em outra faixa, com deriva própria */
+    const bp2 = AC.createBiquadFilter(); bp2.type = 'bandpass'; bp2.frequency.value = 900; bp2.Q.value = 2.2;
+    const gainBP2 = AC.createGain(); gainBP2.gain.value = 0.3;
+    const lfoBP2 = AC.createOscillator(); lfoBP2.type = 'sine'; lfoBP2.frequency.value = 0.05;
+    const lfoBP2Amt = AC.createGain(); lfoBP2Amt.gain.value = 250;
+    lfoBP2.connect(lfoBP2Amt); lfoBP2Amt.connect(bp2.frequency);
+    wHP.connect(bp2); bp2.connect(gainBP2); gainBP2.connect(mixerG);
+    lfoBP2.start();
+
+    /* turbulência EM SÉRIE, antes do rajadaG. Somada no mesmo parâmetro da
+       rajada, ela tremeria sozinha durante o silêncio, quando o ganho devia ser
+       zero; multiplicando, zero continua zero. O sinal é centrado em torno de
+       zero (-1..1), então treme pros dois lados: 0.65 a 1.35 do volume. */
+    turbG = AC.createGain(); turbG.gain.value = 1;
+    const turbSrc = AC.createBufferSource(); turbSrc.buffer = makeTurbBuffer(); turbSrc.loop = true;
+    const turbProf = AC.createGain(); turbProf.gain.value = 0.35;
+    turbSrc.connect(turbProf); turbProf.connect(turbG.gain);
+    turbSrc.start();
+
+    /* rajadaG: envelope principal (meio-cosseno) */
+    rajadaG = AC.createGain(); rajadaG.gain.value = 0;
+
+    /* windG: ganho final, sob o volume de ambiente. 0.067 e nao 0.055 porque
+       os passa-banda estreitos atenuam: medido em render offline, 8 rajadas de
+       cada versao, o numero foi calibrado pra bater a mediana de RMS da versao
+       de caminho unico. Mexeu na estrutura do vento? Remeça, nao chute. */
+    windG = AC.createGain(); windG.gain.value = 0.067 * ambienteVol;
+
+    /* assobio: NÃO é senoide — senoide vira apito eletrônico. Ar em fresta é
+       uma ressonância ESTREITA sobre o próprio ruído, então é um passa-banda
+       de Q alto. Entra no mixerG (e não no master) por dois motivos: continua
+       sob o volume de ambiente, e ainda passa pelo envelope da rajada. Como a
+       curva daqui multiplica a de lá, o assobio só aparece de fato no PICO,
+       que é justamente quando a fresta assobia. */
+    const bpAss = AC.createBiquadFilter(); bpAss.type = 'bandpass'; bpAss.frequency.value = 1400; bpAss.Q.value = 14;
+    assoBioG = AC.createGain(); assoBioG.gain.value = 0;
+    wHP.connect(bpAss); bpAss.connect(assoBioG); assoBioG.connect(mixerG);
+    const assDrift = AC.createOscillator(); assDrift.type = 'sine'; assDrift.frequency.value = 0.031;
+    const assDriftAmt = AC.createGain(); assDriftAmt.gain.value = 380;   // escorrega devagar
+    assDrift.connect(assDriftAmt).connect(bpAss.frequency);
+    assDrift.start();
+
+    /* encadeamento final: mixerG -> turbG -> rajadaG -> windG -> master */
+    mixerG.connect(turbG); turbG.connect(rajadaG); rajadaG.connect(windG); windG.connect(masterG);
 
     /* ÁGUA: agora eventos discretos. O ruído contínuo é reduzido a um fundo
        muito baixo (highpass+bandpass com ganho 0.05 * ambienteVol) para dar
@@ -102,12 +173,13 @@ export function criarSom() {
       waterScheduled = true;
       agendarAgua();
     }
+    agendarRajada(); // inicia o ciclo do vento
   }
 
   function ensure() { if (!AC) build(); else if (AC.state === 'suspended') AC.resume(); }
   ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => addEventListener(ev, ensure, { passive: true }));
 
-  /* ---------- VENTO: rajadas em intervalo irregular ---------- */
+  /* ---------- VENTO: rajadas com turbulência, ressonâncias, assobio e farfalhar granular ---------- */
   /* uma rajada: sobe, segura e cai, cada trecho com duração própria. O corte
      do passa-baixa acompanha a força — vento forte é mais claro, não só mais
      alto, e sem isso a rajada soa como alguém girando um botão de volume. */
@@ -115,18 +187,62 @@ export function criarSom() {
     if (!AC || !rajadaG) return 0;
     const t = AC.currentTime;
     const forca = 0.45 + Math.random() * 0.85;
-    const subida = 1.2 + Math.random() * 2.8;
+    /* 1 em 4 entra de repente, como lufada que chega de vereda. A ENTRADA pode
+       ser rápida; a saída nunca é — vento sumindo de estalo entrega o truque. */
+    const subida = Math.random() < 0.25 ? 0.4 + Math.random() * 0.6 : 1.8 + Math.random() * 3;
     const platô = 0.4 + Math.random() * 2.2;
-    const queda = 2.5 + Math.random() * 4.5;
+    const queda = 4 + Math.random() * 5;
     const fim = subida + platô + queda;
-    rajadaG.gain.setTargetAtTime(forca, t, subida / 3);
-    rajadaG.gain.setTargetAtTime(0, t + subida + platô, queda / 3);
-    /* setTargetAtTime chega perto de zero mas nunca EM zero: sem este corte
-       sobraria um fiapo de vento tocando pra sempre no fundo. */
-    rajadaG.gain.setValueAtTime(0, t + fim);
-    ventoLP.frequency.setTargetAtTime(1200 + forca * 650, t, subida / 3);
-    ventoLP.frequency.setTargetAtTime(1200, t + subida + platô, queda / 3);
+
+    /* meio-cosseno nas duas pontas: a derivada é ZERO no início e no fim, então
+       não há canto nenhum pro ouvido pegar, e termina exatamente em zero.
+       Antes era setTargetAtTime, que se aproxima do zero sem chegar nele e
+       precisava de um corte seco no fim — o corte é que soava abrupto. */
+    const N = 256, curva = new Float32Array(N), corte = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const x = (i / (N - 1)) * fim;
+      let v;
+      if (x < subida) v = 0.5 - 0.5 * Math.cos(Math.PI * (x / subida));
+      else if (x < subida + platô) v = 1;
+      else v = 0.5 + 0.5 * Math.cos(Math.PI * ((x - subida - platô) / queda));
+      curva[i] = forca * v;
+      corte[i] = 1200 + forca * 650 * v;        // brilho acompanha a força
+    }
+    rajadaG.gain.cancelScheduledValues(t);
+    rajadaG.gain.setValueCurveAtTime(curva, t, fim);
+    assoBioG.gain.cancelScheduledValues(t);
+    assoBioG.gain.setValueCurveAtTime(curva.map((v) => v * 0.9), t, fim);
+    ventoLP.frequency.cancelScheduledValues(t);
+    ventoLP.frequency.setValueCurveAtTime(corte, t, fim);
+
+    /* farfalhar: os grãos são AGENDADOS de uma vez, no relógio do áudio. Com
+       setInterval seriam ~350 por rajada (um a cada 40ms), e ainda ficariam
+       reféns do estrangulamento de timer em aba de fundo. Aqui é um punhado,
+       posicionado por sorteio, com o volume lido da própria curva. */
+    const nGraos = Math.round(14 + forca * 18);          // 20 a 38
+    for (let i = 0; i < nGraos; i++) {
+      const dt = Math.random() * fim;
+      const v = curva[Math.min(N - 1, Math.floor((dt / fim) * (N - 1)))];
+      if (v > 0.05) farfalharGrao(t + dt, 0.5 * v * (0.5 + Math.random() * 0.5));
+    }
     return fim;
+  }
+
+  /* um grão de farfalhar: ruído agudo, curto, com envelope rápido */
+  function farfalharGrao(t0, amp) {
+    if (amp <= 0) return;
+    const dur = 0.012 + Math.random() * 0.02;
+    const src = AC.createBufferSource(); src.buffer = noiseBuf;
+    const off = Math.random() * Math.max(0, noiseBuf.duration - dur - 0.01);
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2000 + Math.random() * 2000; bp.Q.value = 2 + Math.random() * 2;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(amp, t0 + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    /* entra no mixerG e nao no rajadaG: la ele levaria o envelope de novo,
+       e o volume do grao ja sai lido da curva */
+    src.connect(bp).connect(g).connect(mixerG);
+    src.start(t0, off); src.stop(t0 + dur + 0.01);
   }
 
   /* espera com CAUDA LONGA: o produto de dois aleatórios concentra os valores
@@ -431,7 +547,7 @@ export function criarSom() {
   function setVolumes({ ambiente, passos } = {}) {
     if (ambiente !== undefined) {
       ambienteVol = Math.max(0, Math.min(1, ambiente));
-      if (windG && AC) windG.gain.setTargetAtTime(0.045 * ambienteVol, AC.currentTime, 0.05);
+      if (windG && AC) windG.gain.setTargetAtTime(0.067 * ambienteVol, AC.currentTime, 0.05);
       if (eventosG && AC) eventosG.gain.setTargetAtTime(ambienteVol, AC.currentTime, 0.05);
     }
     if (passos !== undefined) {
