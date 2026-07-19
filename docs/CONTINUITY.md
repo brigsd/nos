@@ -2,6 +2,16 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-19 (parte 36) — virada CARTOON das árvores do v3 + toon no motor + carimbo plantável (D-63)
+
+- **Linguagem cartoon fixada** (iteração longa de arte no `_arvformas`): folhagem foi do mosqueado → limpo → **cor única chapada + curvas de cacho "‿"**. O ideador mandou uma **referência** de arbusto cartoon e o alvo travou: massa bombada + contorno grosso + cel + brilho.
+- **3 recursos TOON no motor (`render.js`), por-lote e gated:** (a) **contorno de casca invertida** (`outline`) — infla a malha, desenha só as faces de trás antes da cena → contorno firme e uniforme (o rim fresnel antigo era fino e sumia na luz); (b) **cor de contorno por-lote** (`outlineInk`) — cerejeira em ameixa; (c) **cel-shading** (`toon`) — luz do sol em 3 degraus. **Insight do ideador:** brilho pintado na textura furaria a lógica (apareceria de noite) → o brilho vem da LUZ (faixa clara do cel segue o sol, some no escuro).
+- **Pinheiro** virou saias empilhadas em escada + faixas chapadas por nível; elenco de alturas no `_pinheiros`. Tudo (oval/larga/pinheiro/cerejeira/copada) unificado no cartoon.
+- **Estilo mosqueado GUARDADO** como arte alternativa: `pecas/_arvformas-mosqueado.js` (abrível no visor).
+- **PORT (o carimbo plantável):** `motor/arvore-cartoon.js` (`criarArvores(ctx)` → `construir(especie, seed)` na origem) + `pecas/arvore-cartoon.js` (prova: 36 instâncias de um pool de 10, por matriz, com dedupe). **NÃO integrado à ilha ainda** (pedido do ideador).
+- **Limites:** contorno dobra os draw calls (~18fps p/ 36 árvores no software daqui — floresta grande vai pedir LOD); `auditar` acusa banding nas faixas do pinheiro (limite honesto do detector, faixa cel é intencional).
+- **PRÓXIMO:** integrar o carimbo no mundo (jogo.html/ilha) quando o ideador quiser; talvez LOD/impostor pra floresta densa; variação de altura por espécie no construtor.
+
 ## Sessão 2026-07-18 (parte 35) — vila-ruína na main + árvores 3D; gambiarra do arco/portal fora; copa das árvores sem corte (D-62, D-62b)
 
 - **Convergência na main**: o ideador quer tudo unificado na main. Apagou as branches `v2`/`v1`/`cidade-coracao` (confirmei antes: a main já é a v2 mais atual, byte-a-byte).
