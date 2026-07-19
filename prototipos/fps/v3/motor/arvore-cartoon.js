@@ -34,11 +34,11 @@ export function criarArvores(ctx) {
      LISA (SEM ranhura — exigência do ideador: tudo com a textura da raiz), mapeada por
      ALTURA (vAlt) igual a BARK_SECA mas SEM a faixa ranhurada -> base aterrada escura ->
      resto warm liso, fluindo contínuo da raiz ao topo. */
-  const BARK_RAIZ = texCanvas(32, 128, (x, y) => {
+  const BARK_RAIZ = texCanvas(8, 128, (x, y) => {
     const f = y / 128;
-    if (f < 0.09) return 20;                          // base na terra: sombra escura
-    if (f < 0.16) return hash2(x, y) < 0.5 ? 20 : 21; // penumbra subindo (dither)
-    return woodBody(x);                               // resto: warm LISO (sem ranhura)
+    if (f < 0.08) return 20;                          // base na terra: sombra de aterramento
+    if (f < 0.15) return hash2(x, y) < 0.5 ? 20 : 21; // penumbra subindo (dither)
+    return 21;                                        // corpo: UM tom warm só (SEM listra 21/22) -> raiz==tronco==galhos, seja qual for o UV
   });
   /* casca do TRONCO-RAIZ (loft único pé->tronco): mapeada por ALTURA (v = vAlt(y)).
      Base (v baixo) = escura (sombra de aterramento) -> raiz LISA -> tronco RANHURADO.
@@ -318,7 +318,7 @@ export function criarArvores(ctx) {
       const up = rings[r], dn = rings[r + 1], vU = vAlt(LV[r][0]), vD = vAlt(LV[r + 1][0]);   // v pela ALTURA (mesma da BARK_SECA)
       for (let i = 0; i < LON; i++) {
         const p0 = dn[i], p1 = dn[i + 1], p2 = up[i + 1], p3 = up[i];   // winding = addTrunk (baixo->cima, frente p/ fora)
-        quadUV(m, p0, p1, p2, p3, [i / LON * 4, vD], [(i + 1) / LON * 4, vD], [(i + 1) / LON * 4, vU], [i / LON * 4, vU], norm([p0[0] + p3[0], 0.25, p0[2] + p3[2]]));
+        quadUV(m, p0, p1, p2, p3, [i / LON * 4, vD], [(i + 1) / LON * 4, vD], [(i + 1) / LON * 4, vU], [i / LON * 4, vU], norm([p0[0] + p3[0], 0, p0[2] + p3[2]]));   // normal RADIAL pura (sem viés p/ cima) = igual ao galhoSeca -> pé e tronco sombreiam idêntico, sem degrau de brilho na emenda
       }
     }
   }
