@@ -63,6 +63,10 @@ export function construir(ctx) {
   const GREEN = leafTex([29, 30, 31, 32, 33, 28]);
   const PINE = pineTex();
   const CHERRY = leafTex([54, 55, 56, 57, 63, 9]);
+  /* verde CLARO e LISO (larga): rampa curta em 31/32/33 (só 3 tons próximos e
+     claros) e glint = 33 em vez de amarelo -> pouca variação de cor, mais claro.
+     A forma vem da luz sobre a copa, não do contraste da textura. */
+  const GREEN_CLARA = leafTex([31, 32, 33, 33, 33, 33]);
 
   const quad4 = (m, P, UV, N) => {
     const push = (i) => m.v.push(P[i][0], P[i][1], P[i][2], UV[i][0], UV[i][1], N[i][0], N[i][1], N[i][2]);
@@ -134,8 +138,8 @@ export function construir(ctx) {
   const push = (mesh, tex) => forms.push({ mesh, tex });
   // 1 carvalho (oval média)
   addTrunk(-9, 1.9); { const m = Mesh(); blobOval(m, [-9, 1.9 + 2.0 * 0.92, 0], 1.35, 2.0, 0.34); push(m, GREEN); }
-  // 2 larga (baixa e espalhada, tronco curto)
-  addTrunk(-4.5, 1.3, 0.4, 0.16); { const m = Mesh(); blobOval(m, [-4.5, 1.3 + 1.35 * 0.92, 0], 2.05, 1.3, 0.36, 7); push(m, GREEN); }
+  // 2 larga (baixa e espalhada, tronco curto) — verde claro e liso
+  addTrunk(-4.5, 1.3, 0.4, 0.16); { const m = Mesh(); blobOval(m, [-4.5, 1.3 + 1.35 * 0.92, 0], 2.05, 1.3, 0.36, 7); push(m, GREEN_CLARA); }
   // 3 pinheiro (NÍVEIS em escada, verde escuro de agulha, tronco curto)
   addTrunk(0, 0.85, 0.28, 0.11); { const m = Mesh(); pinheiroTiers(m, 0, 0.7, 1.65, 4.0, 5); push(m, PINE); }
   // 4 cerejeira (oval redonda, rosa)
