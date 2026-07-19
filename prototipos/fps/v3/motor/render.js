@@ -191,7 +191,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       const meshCache = new Map(), texCache = new Map();
       const getMesh = (m) => { let g = meshCache.get(m); if (!g) { g = glMesh(m); meshCache.set(m, g); } return g; };
       const getTex = (t) => { let g = texCache.get(t); if (!g) { g = glTex(t); texCache.set(t, g); } return g; };
-      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0 }));
+      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null }));
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -270,9 +270,11 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
           if (outLotes.length) {
             gl.useProgram(outline);
             gl.uniformMatrix4fv(gl.getUniformLocation(outline, 'uMVP'), false, mvpf);
-            gl.uniform3f(gl.getUniformLocation(outline, 'uInk'), 0.05, 0.17, 0.11);
+            const uInkL = gl.getUniformLocation(outline, 'uInk');
             gl.enable(gl.CULL_FACE); gl.cullFace(gl.FRONT);   // desenha só as faces de TRÁS da casca inflada
             for (const L of outLotes) {
+              const ink = L.outlineInk || [0.05, 0.17, 0.11];   // tinta por lote (verde-escuro padrão)
+              gl.uniform3f(uInkL, ink[0], ink[1], ink[2]);
               gl.uniformMatrix4fv(gl.getUniformLocation(outline, 'uModel'), false, L.matriz);
               gl.uniform1f(gl.getUniformLocation(outline, 'uW'), L.outline);
               gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);

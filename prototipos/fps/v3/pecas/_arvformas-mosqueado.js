@@ -1,7 +1,7 @@
 /* scratch: variações de FORMATO de árvore (não versionar/publicar).
    Builder paramétrico: tronco + copa (oval / cone / multi-blob), rampa de cor
    por espécie. 6 formas lado a lado pra o ideador escolher o elenco. */
-export const meta = { nome: '_arvformas', tipo: 'objeto', desc: 'formatos: oval, larga, pinheiro, cerejeira, copada' };
+export const meta = { nome: '_arvformas-mosqueado', tipo: 'objeto', desc: 'ARTE ALTERNATIVA — estilo texturizado/mosqueado das folhosas (antes da virada cartoon do D-63). Guardado como referência.' };
 
 export function construir(ctx) {
   const { tex, geo } = ctx;
@@ -63,12 +63,12 @@ export function construir(ctx) {
   const GREEN = leafTex([29, 30, 31, 32, 33, 28]);
   const PINE = pineTex();
   const CHERRY = leafTex([54, 55, 56, 57, 63, 9]);
-  /* textura CARTOON (D-63): base chapada + CURVAS DE CACHO — arcos curvos "‿"
-     escuros (curva + sombra) espalhados, com inclinação e abertura VARIADAS por
-     clump. base/curva/sombra = índices da paleta -> serve verde e rosa. Ladrilha
-     seamless (GT=64 POT), fase por blob desalinha o padrão na copa. */
-  const cartoonTex = (base, curva, sombra) => {
-    const GT = 64, WR = (v) => (Math.round(v) & (GT - 1)), lb = new Int16Array(GT * GT).fill(base);
+  /* verde claro + CURVAS DE CACHO cartoon (larga, copa ÚNICA): base clara (32) e
+     arcos curvos escuros (30 + sombra 29) espalhados = a "boca ‿" de cada tufo.
+     Agora os arcos VARIAM: centro (inclinação) e abertura próprios por clump —
+     não são todos a mesma boca. Ladrilha seamless (GT=64 POT) com fase por blob. */
+  const VERDE_CARTOON = (() => {
+    const GT = 64, WR = (v) => (Math.round(v) & (GT - 1)), lb = new Int16Array(GT * GT).fill(32);
     const arc = (cx, cy, r, aMid, span, c) => { for (let a = aMid - span; a <= aMid + span; a += 3) { const rad = a * Math.PI / 180; lb[WR(cy + Math.sin(rad) * r) * GT + WR(cx + Math.cos(rad) * r)] = c; } };
     for (let gy = 0; gy < 3; gy++) for (let gx = 0; gx < 3; gx++) {
       const cx = (gx + 0.5) * (GT / 3) + (hash2(gx * 7 + 1, gy * 5) - 0.5) * 8;
@@ -76,13 +76,11 @@ export function construir(ctx) {
       const r = 6 + hash2(gx + 2, gy) * 3;
       const aMid = 90 + (hash2(gx * 5, gy * 9) - 0.5) * 70;   // inclinação da boca varia
       const span = 52 + hash2(gx, gy * 3) * 34;              // abertura varia
-      arc(cx, cy, r + 1, aMid, span - 6, sombra);
-      arc(cx, cy, r, aMid, span, curva);
+      arc(cx, cy, r + 1, aMid, span - 6, 29);   // sombra
+      arc(cx, cy, r, aMid, span, 30);           // curva do cacho
     }
     return texCanvas(GT, GT, (x, y) => lb[y * GT + x]);
-  };
-  const VERDE_CARTOON = cartoonTex(32, 30, 29);   // verde: base clara 32, curva 30, sombra 29
-  const ROSA_CARTOON = cartoonTex(57, 55, 54);    // cerejeira: base lavanda-clara 57, curva 55, sombra 54
+  })();
 
   const quad4 = (m, P, UV, N) => {
     const push = (i) => m.v.push(P[i][0], P[i][1], P[i][2], UV[i][0], UV[i][1], N[i][0], N[i][1], N[i][2]);
@@ -151,24 +149,25 @@ export function construir(ctx) {
      é a oval #1 esticada = variação de ALTURA da oval, não espécie própria
      (vai pro mostruário de variações da oval, como fizemos com os pinheiros) ---- */
   const forms = [];
-  const push = (mesh, tex, rim = 0, outline = 0, outlineInk = null) => forms.push({ mesh, tex, rim, outline, outlineInk });   // outline>0 = contorno casca (D-63)
-  const TINTA_ROSA = [0.20, 0.10, 0.18];   // contorno da cerejeira (ameixa escura, não verde)
-  // 1 carvalho (oval) — CARTOON: base clara + curvas + contorno
-  addTrunk(-9, 1.9); { const m = Mesh(); blobOval(m, [-9, 1.9 + 2.0 * 0.92, 0], 1.35, 2.0, 0.44); push(m, VERDE_CARTOON, 0, 0.05); }
-  // 2 larga (copa ÚNICA BOMBADA, arbusto cartoon) — silhueta caroçuda + contorno + curvas
-  addTrunk(-4.5, 1.3, 0.4, 0.16); { const m = Mesh(); blobOval(m, [-4.5, 1.3 + 1.5 * 0.92, 0], 2.0, 1.5, 0.5, 7); push(m, VERDE_CARTOON, 0, 0.05); }
-  // 3 pinheiro (NÍVEIS em escada, agulha verde-escuro) — + contorno (unifica no cartoon)
-  addTrunk(0, 0.85, 0.28, 0.11); { const m = Mesh(); pinheiroTiers(m, 0, 0.7, 1.65, 4.0, 5); push(m, PINE, 0, 0.05); }
-  // 4 cerejeira (oval rosa) — CARTOON: base lavanda + curvas + contorno ameixa
-  addTrunk(4.5, 1.7, 0.3, 0.12); { const m = Mesh(); blobOval(m, [4.5, 1.7 + 1.6 * 0.92, 0], 1.6, 1.6, 0.42, 11); push(m, ROSA_CARTOON, 0, 0.05, TINTA_ROSA); }
-  // 5 copada (multi-lóbulo bushy) — CARTOON: base clara + curvas + contorno (um maciço conectado)
+  const push = (mesh, tex, rim = 0, outline = 0) => forms.push({ mesh, tex, rim, outline });   // outline>0 = contorno casca (D-63)
+  // 1 carvalho (oval média)
+  addTrunk(-9, 1.9); { const m = Mesh(); blobOval(m, [-9, 1.9 + 2.0 * 0.92, 0], 1.35, 2.0, 0.34); push(m, GREEN); }
+  // 2 larga (baixa e espalhada, copa única) — estilo texturizado (GREEN mosqueado)
+  addTrunk(-4.5, 1.3, 0.4, 0.16); { const m = Mesh(); blobOval(m, [-4.5, 1.3 + 1.35 * 0.92, 0], 2.05, 1.3, 0.36, 7); push(m, GREEN); }
+  // 3 pinheiro (NÍVEIS em escada, verde escuro de agulha, tronco curto)
+  addTrunk(0, 0.85, 0.28, 0.11); { const m = Mesh(); pinheiroTiers(m, 0, 0.7, 1.65, 4.0, 5); push(m, PINE); }
+  // 4 cerejeira (oval redonda, rosa)
+  addTrunk(4.5, 1.7, 0.3, 0.12); { const m = Mesh(); blobOval(m, [4.5, 1.7 + 1.6 * 0.92, 0], 1.6, 1.6, 0.3, 11); push(m, CHERRY); }
+  // 5 copada (multi-lóbulo bushy): blob central dominante ANCORADO no topo do
+  // tronco + satélites MENORES encaixados (offsets pequenos -> a silhueta funde
+  // num maciço em vez de 4 bolas soltas; base desce sobre o tronco, sem flutuar)
   addTrunk(9, 1.7, 0.34, 0.13);
   { const m = Mesh(); const cy = 1.7 + 1.15;
     blobOval(m, [9, cy, 0], 1.5, 1.62, 0.42, 21);              // central: base ~1.23 engole o topo do tronco (1.7)
     blobOval(m, [9 - 0.66, cy - 0.18, 0.3], 0.82, 0.98, 0.44, 22);
     blobOval(m, [9 + 0.68, cy - 0.12, -0.28], 0.86, 1.02, 0.44, 23);
     blobOval(m, [9 + 0.06, cy + 0.72, 0.06], 0.8, 0.86, 0.46, 24);
-    push(m, VERDE_CARTOON, 0, 0.05); }
+    push(m, GREEN); }
 
   return {
     camera: { e: 4.6, r: 23 },
