@@ -251,6 +251,10 @@ export function superficieEm(x, z) {
    pequeno demais pra aparecer no chão.
    No centro exato a direção é indefinida — devolve o raio mínimo, que é o
    único valor seguro ali. */
+/* meia-largura da ilha. Quem divide o mundo em setores lê DAQUI em vez de
+   repetir o 28 — o bug da borda nasceu de um número copiado. */
+export const EXTENSAO = ILHA.R0;
+
 export function raioEm(x, z) {
   const d = Math.hypot(x, z);
   if (d < 1e-6) return ILHA.R0 * 0.82;

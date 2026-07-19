@@ -16,6 +16,11 @@
     pointer-events: none; white-space: nowrap; user-select: text; }
   /* erro no loop de quadro mata o render e deixa a tela preta, sem nada na
      tela dizendo o porquê — a mensagem tem que aparecer AQUI, não só no console */
+  /* aviso curto (copiei o link, etc): embaixo ao centro, some sozinho */
+  #aviso { position: fixed; left: 50%; bottom: 42px; transform: translateX(-50%); z-index: 41;
+    display: none; background: rgba(20,16,30,.9); border: 1px solid var(--line); border-radius: 6px;
+    color: #cddf6c; font-size: 12px; padding: 8px 14px; pointer-events: none; max-width: 80vw;
+    white-space: pre-wrap; text-align: center; }
   #erro { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: none;
     background: rgba(120,20,30,.92); color: #fdcbb0; font-size: 12px; padding: 10px 14px;
     white-space: pre-wrap; user-select: text; }
@@ -66,6 +71,7 @@
 <canvas id="c"></canvas>
 <div id="hud">NÓS · v3 — o alicerce (D-61)<br><b id="fps">— fps</b> · <span id="dev">—</span></div>
 <div id="coord">—</div>
+<div id="aviso"></div>
 <div id="erro"></div>
 <div id="hint">clique: mirar (ESC pausa) · WASD anda</div>
 <button id="pauseBtn" title="pausa (ESC)">⏸</button>
@@ -320,15 +326,56 @@ function antesDoQuadro(dt, T) {
    A string ?cam= sai pronta pra colar na URL e voltar exatamente a este ponto. */
 const elCoord = document.getElementById('coord');
 let proximoCoord = 0;
+
+/* setores como o COMUNICACAO.md define pra v2: colunas A–H de oeste a leste,
+   linhas 1–8 de norte a sul. É a notação pra FALAR de um lugar ("a árvore
+   torta em E5"); o ?cam= é pra MÁQUINA reproduzir a vista exata. A ilha é
+   quadriculada pela extensão declarada na peça, não por um 28 copiado. */
+const SETOR = (ilhaChao.EXTENSAO * 2) / 8;
+function setorEm(x, z) {
+  const c = Math.min(7, Math.max(0, Math.floor((x + ilhaChao.EXTENSAO) / SETOR)));
+  const l = Math.min(7, Math.max(0, Math.floor((z + ilhaChao.EXTENSAO) / SETOR)));
+  return 'ABCDEFGH'[c] + (l + 1);
+}
+
+/* uma fonte só pro ?cam=: o HUD mostra e a tecla = copia o MESMO texto */
+const camAtual = () => `${pos[0].toFixed(1)},${pos[2].toFixed(1)},${yaw.toFixed(2)},${pitch.toFixed(2)}`;
+const urlAtual = () => `${location.origin}${location.pathname}?cam=${camAtual()}`;
+
 function mostrarCoords(T) {
   if (T < proximoCoord) return;
   proximoCoord = T + 0.1;
   const r = Math.hypot(pos[0], pos[2]);
   const piso = ilhaChao.superficieEm(pos[0], pos[2]);
-  const cam = `${pos[0].toFixed(1)},${pos[2].toFixed(1)},${yaw.toFixed(2)},${pitch.toFixed(2)}`;
   const lim = ilhaChao.raioEm(pos[0], pos[2]) - BEIRA;
-  elCoord.innerHTML = `x ${pos[0].toFixed(1)} · z ${pos[2].toFixed(1)} · raio ${r.toFixed(1)}/${lim.toFixed(1)} · ${piso}`
-    + `<br><span style="opacity:.55">?cam=${cam}</span>`;
+  elCoord.innerHTML = `setor ${setorEm(pos[0], pos[2])} · x ${pos[0].toFixed(1)} · z ${pos[2].toFixed(1)}`
+    + ` · raio ${r.toFixed(1)}/${lim.toFixed(1)} · ${piso}`
+    + `<br><span style="opacity:.55">?cam=${camAtual()} · [=] copia o link</span>`;
+}
+
+/* tecla = copia a URL PRONTA, não só os números: colar no navegador já abre
+   deste ponto de vista. O navegador só libera a área de transferência dentro
+   de um gesto do usuário — o keydown É o gesto, por isso funciona aqui e não
+   funcionaria num aviso automático. */
+addEventListener('keydown', async (e) => {
+  if (e.code !== 'Equal' || paused) return;
+  const url = urlAtual();
+  try {
+    await navigator.clipboard.writeText(url);
+    avisar('link copiado — é só colar');
+  } catch {
+    /* pode falhar sem https ou sem permissão: mostra o texto pra copiar à mão
+       em vez de sumir sem dizer nada */
+    avisar('não consegui copiar. o link é: ' + url, 8);
+  }
+});
+
+let timerAviso = 0;
+function avisar(texto, segundos = 2.5) {
+  const el = document.getElementById('aviso');
+  el.textContent = texto; el.style.display = 'block';
+  clearTimeout(timerAviso);
+  timerAviso = setTimeout(() => { el.style.display = 'none'; }, segundos * 1000);
 }
 
 /* ---------- ver colisão (tecla O) ----------

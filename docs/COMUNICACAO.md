@@ -62,6 +62,39 @@ mesmo enquadramento.
 - "no setor `C2`, quero mais flores perto do carreiro" — área macro + contexto.
 - "`?cam=45.5,15.6,0.10` — essa banca aí tá torta" — enquadramento exato.
 
+---
+
+# No FPS v3 (`prototipos/fps/v3/jogo.html`)
+
+A v3 é motor novo e nasceu sem nada disto. O que já foi portado usa a **mesma
+notação** de propósito — duas notações pra mesma coisa seria, na documentação,
+o mesmo erro que já custou caro no código.
+
+## O que já existe na v3
+
+- **Setores `A1`–`H8`**, iguais aos da v2: colunas de oeste a leste, linhas de
+  norte a sul, `E5` no centro da ilha. A grade sai da **extensão declarada pela
+  peça** (`ilhaChao.EXTENSAO`, hoje 28), dando setor de 7 unidades. Se a ilha
+  mudar de tamanho, os setores acompanham sozinhos.
+- **HUD sempre visível** no topo ao centro (na v2 dependia da tecla `I`):
+  `setor E5 · x -19.0 · z 0.0 · raio 19.0/24.3 · grama`.
+  O `raio` é a distância ao centro contra o limite de colisão **naquela
+  direção** — a borda da ilha é irregular, então o 2º número muda conforme se
+  anda.
+- **`?cam=x,z,yaw,pitch`** — quatro números, não três. A v2 é plana (`x,y,a`);
+  a v3 tem altura de olhar, daí o `pitch` a mais. O `z` da v3 corresponde ao
+  `y` da v2, e o `yaw` ao `a`.
+- **Tecla `=` copia o link pronto** pra área de transferência — a URL inteira,
+  não só os números. Aperta e cola. (Na v2 era digitar à mão.)
+- **Tecla `O`** liga e desliga a visualização das áreas de colisão.
+
+## O que falta portar
+
+- **Tecla `I` e as etiquetas de ID** (`arvore-38x12` e afins). Precisa de
+  projeção em tela e oclusão. Sem isso, hoje se aponta objeto por setor mais
+  `?cam=` — resolve, mas é menos direto que citar o ID.
+- **Tecla `M` e o mapa** com a grade de setores.
+
 ## Ideias futuras (não implementadas)
 
 - **Modo foto (F2?)**: salvar screenshot já com `?cam=` carimbado no canto.

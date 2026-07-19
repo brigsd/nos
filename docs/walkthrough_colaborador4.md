@@ -86,21 +86,21 @@ beirada empurrar pra fora, melhor ficar preso no tronco que cair no vazio.
 **Coordenadas no topo ao centro**, atualizando 10× por segundo:
 
 ```
-x -19.0 · z 0.0 · raio 19.0/24.3 · grama
-?cam=-19.0,0.0,1.85,0.00
+setor E5 · x -19.0 · z 0.0 · raio 19.0/24.3 · grama
+?cam=-19.0,0.0,1.85,0.00 · [=] copia o link
 ```
 
 O segundo número do "raio" é o limite **naquela direção**, então muda conforme
-se anda. A string `?cam=` sai pronta pra colar na URL e voltar ao mesmo ponto de
-vista.
+se anda. A tecla `=` copia a URL inteira pra área de transferência — abrir ela
+devolve exatamente esta vista.
 
-> ⚠️ **Isto provavelmente duplica convenção que já existe.** `docs/COMUNICACAO.md`
-> define, pro FPS da v2, a tecla `I` pra etiquetas de ID, a tecla `M` pro mapa,
-> setores `A1`–`H8` e um HUD que já mostrava `?cam=`. A v3 não herdou nada disso
-> e eu inventei um segundo vocabulário sem saber. **Antes de consolidar, vale
-> decidir**: portar o protocolo da v2 pra v3 (com setores e tecla `I`), ou assumir
-> o formato novo e atualizar o COMUNICACAO.md. Duas notações pra mesma coisa é o
-> mesmo erro que causou o bug da borda, só que na documentação.
+**Setores portados da v2.** O `docs/COMUNICACAO.md` já definia `A1`–`H8` pro FPS
+antigo e a v3 tinha nascido sem nada disso; adotamos a mesma notação em vez de
+inventar outra. A grade sai de `ilhaChao.EXTENSAO`, então acompanha se a ilha
+mudar de tamanho. **Ainda falta portar** a tecla `I` (etiquetas de ID nos
+objetos, precisa de projeção em tela e oclusão) e a tecla `M` (mapa). O
+COMUNICACAO.md foi atualizado com uma seção da v3 dizendo o que existe e o que
+falta.
 
 **Faixa de erro no rodapé.** Uma exceção dentro do `antesDoQuadro` derrubava o
 `rAF` inteiro: tela preta, sem movimento, e o som seguindo normal (Web Audio roda
