@@ -1,6 +1,6 @@
 /* scratch: close da RAIZ — tronco ranhurado + pé de raízes liso com sombra (malhas separadas). */
 import { criarArvores } from '../motor/arvore-cartoon.js';
-export const meta = { nome: '_raiz1', tipo: 'objeto', desc: 'raiz close: tronco ranhurado + raiz lisa com sombra (separados)' };
+export const meta = { nome: '_raiz1', tipo: 'objeto', desc: 'raiz close: árvore inteira LISA, mesma textura na raiz/tronco/galhos' };
 export function construir(ctx) {
   const arv = criarArvores(ctx);
   const M = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];

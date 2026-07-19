@@ -30,11 +30,15 @@ export function criarArvores(ctx) {
     const on = hash2(x * 7 + 1, (y >> 2) * 3) > 0.48;    // liga/desliga a cada ~4px -> traços CURTOS na altura
     return groove && on ? 20 : woodBody(x);              // ranhura = 20 (#9e4539) marrom ESCURO; corpo = madeira quente
   });
-  /* casca da RAIZ: SEM ranhura + SOMBRA PINTADA. O v vem do .l pintado na baseRaiz
-     (0 = base/vão escuro -> 1 = luz): gradiente 20 escuro -> 21 médio -> 22 claro. */
-  const BARK_RAIZ = texCanvas(24, 64, (x, y) => {
-    const s = y / 63 + (hash2(x, y) - 0.5) * 0.14;
-    return s < 0.32 ? 20 : s < 0.66 ? 21 : 22;
+  /* casca da RAIZ = casca de TODA a árvore 'raiz' (raiz+tronco+galhos): UMA textura só,
+     LISA (SEM ranhura — exigência do ideador: tudo com a textura da raiz), mapeada por
+     ALTURA (vAlt) igual a BARK_SECA mas SEM a faixa ranhurada -> base aterrada escura ->
+     resto warm liso, fluindo contínuo da raiz ao topo. */
+  const BARK_RAIZ = texCanvas(32, 128, (x, y) => {
+    const f = y / 128;
+    if (f < 0.09) return 20;                          // base na terra: sombra escura
+    if (f < 0.16) return hash2(x, y) < 0.5 ? 20 : 21; // penumbra subindo (dither)
+    return woodBody(x);                               // resto: warm LISO (sem ranhura)
   });
   /* casca do TRONCO-RAIZ (loft único pé->tronco): mapeada por ALTURA (v = vAlt(y)).
      Base (v baixo) = escura (sombra de aterramento) -> raiz LISA -> tronco RANHURADO.
@@ -288,7 +292,11 @@ export function criarArvores(ctx) {
      e splaia em N dedos que ABREM na linha do chão e afinam em ponta abaixo (entrando
      na terra, y<0 escondido pelo chão). Loft por um PERFIL vertical explícito
      [y, raioBase, amplitudeDedo]: o dedo (cos(N·a)) é MÁXIMO no chão e some no topo
-     (junta no tronco) e afina embaixo (ponta na terra). Pele contínua com o tronco. */
+     (junta no tronco) e afina embaixo (ponta na terra).
+     UV por ALTURA (v = vAlt(y)) igualzinho ao galhoSeca(vAltMode) -> a casca BARK_SECA
+     é IDÊNTICA e FLUI da raiz pro tronco (base escura -> raiz lisa -> tronco ranhurado);
+     a sombra do vão/base agora vem da própria BARK_SECA (gradiente por altura), não de
+     luz pintada -> mesma textura nas duas partes (exigência do ideador). */
   function baseRaiz(m, seed) {
     const LON = 30, nRoots = 5, phase = hash2(seed * 3 + 1, 7) * TAU;
     const LV = [
@@ -300,21 +308,17 @@ export function criarArvores(ctx) {
       [-0.34, 0.27, 0.42],  // estreitando
       [-0.58, 0.09, 0.18],  // ponta na terra
     ];
-    /* cada vértice carrega LUZ pintada em .l (0=sombra,1=claro) que vira o V da textura
-       (BARK_RAIZ é gradiente vertical): escurece na BASE (f alto) E no VÃO (s baixo)
-       = o AO/reentrância entre as raízes que o ideador pediu. */
-    const mkRing = ([yy, rb, ta], f) => Array.from({ length: LON + 1 }, (_, i) => {
+    const mkRing = ([yy, rb, ta]) => Array.from({ length: LON + 1 }, (_, i) => {
       const a = i / LON * TAU, s = Math.max(0, Math.cos(nRoots * (a - phase)));   // 1 no dedo, 0 no vão
       const rr = rb + Math.pow(s, 1.5) * ta - (1 - s) * 0.03 * (ta > 0.05 ? 1 : 0);   // dedo salta; vão recua leve
-      const l = (1 - f * 0.5) * (0.4 + 0.6 * s);        // sombra pintada: base(f→1) e vão(s→0) escurecem
-      return { p: [Math.cos(a) * rr, yy, Math.sin(a) * rr], l };
+      return [Math.cos(a) * rr, yy, Math.sin(a) * rr];
     });
-    const NR = LV.length, rings = LV.map((lv, r) => mkRing(lv, r / (NR - 1)));   // f: 0 topo -> 1 base
-    for (let r = 0; r < NR - 1; r++) {
-      const up = rings[r], dn = rings[r + 1];
+    const rings = LV.map(mkRing);
+    for (let r = 0; r < rings.length - 1; r++) {
+      const up = rings[r], dn = rings[r + 1], vU = vAlt(LV[r][0]), vD = vAlt(LV[r + 1][0]);   // v pela ALTURA (mesma da BARK_SECA)
       for (let i = 0; i < LON; i++) {
-        const a = dn[i], b = dn[i + 1], c = up[i + 1], d = up[i];   // winding = addTrunk (baixo->cima, frente p/ fora)
-        quadUV(m, a.p, b.p, c.p, d.p, [i / LON * 3, a.l], [(i + 1) / LON * 3, b.l], [(i + 1) / LON * 3, c.l], [i / LON * 3, d.l], norm([a.p[0] + d.p[0], 0.25, a.p[2] + d.p[2]]));
+        const p0 = dn[i], p1 = dn[i + 1], p2 = up[i + 1], p3 = up[i];   // winding = addTrunk (baixo->cima, frente p/ fora)
+        quadUV(m, p0, p1, p2, p3, [i / LON * 4, vD], [(i + 1) / LON * 4, vD], [(i + 1) / LON * 4, vU], [i / LON * 4, vU], norm([p0[0] + p3[0], 0.25, p0[2] + p3[2]]));
       }
     }
   }
@@ -335,12 +339,13 @@ export function criarArvores(ctx) {
       // esqueleto de galhos (tubos) -> trunk (BARK ranhurada); copa vazia
       galhoSeca(trunk, [0, 0, 0], [0, 1, 0], 1.7, 0.30, 0.20, 3, S); ink = TINTA_SECA; outl = 0; toon = 0;
     } else if (especie === 'raiz') {
-      // TRONCO SEPARADO da RAIZ (o ideador preferiu — galhos mais naturais que na pé-vira-tronco):
-      // pé de raízes (canopy, BARK_RAIZ lisa com sombra pintada) + tronco/galhos como UM esqueleto
-      // galhoSeca (trunk, BARK ranhurada). O tronco começa DENTRO do pé (y=0.5, pé sobe até 0.72)
-      // -> a sobreposição esconde a emenda; galhoSeca nivel 3 dá a ramificação natural.
+      // UMA malha (canopy), UMA textura (BARK_RAIZ LISA por ALTURA) na árvore INTEIRA —
+      // exigência do ideador: tronco e galhos com a MESMÍSSIMA textura da raiz (lisa, sem
+      // ranhura). Pé de raízes + tronco/galhos (galhoSeca em vAltMode) NO MESMO mesh e MESMO
+      // mapeamento por altura -> casca idêntica que flui (base escura -> warm liso) da raiz
+      // ao topo; galhoSeca nivel 3 dá a ramificação natural. Única marca: a emenda geométrica.
       baseRaiz(canopy, S);
-      galhoSeca(trunk, [0, 0.5, 0], [0, 1, 0], 1.5, 0.31, 0.18, 3, S + 1);
+      galhoSeca(canopy, [0, 0.5, 0], [0, 1, 0], 1.5, 0.31, 0.18, 3, S + 1, null, null, true);
       ctex = BARK_RAIZ; ink = null; outl = 0; toon = 0;
     } else if (especie === 'frondosa') {
       /* a seca ramificada + COPA que SEGUE os galhos: aglomera as pontas de CIMA em
