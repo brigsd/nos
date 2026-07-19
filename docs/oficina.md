@@ -91,6 +91,8 @@ faces, e duas faces vizinhas compartilham uma.
 | **Salvar como código** | Gera o arquivo em `pecas/`. | Nome e identidade combinando com o `arvore@-13,8` do protocolo (ver `COMUNICACAO.md`). |
 | **Colisão automática** | Encaixa cilindro, caixa ou esfera. | Só nas faces marcadas como sólidas — sem isso a copa da árvore vira parede, que é o erro que a colisão de hoje evita de propósito. Sem marcação, usa o objeto inteiro. |
 
+| **Botão de configurações** | Abre os ajustes da própria ferramenta. | Reusa o painel de abas que o jogo já tem (`.painelConfig`, `.abas`). Conteúdo: tamanho da grade e do ímã, velocidade da câmera, tamanho do gizmo na tela, salvamento automático, e a tecla alternativa pro modo navegação. Guardar em `localStorage` com chave própria (`nos3_oficina`), separada da do jogo. |
+
 ## Booleano
 
 Fora de escopo por decisão. União e subtração robustas de malha são problema de
@@ -124,6 +126,82 @@ malha inteiro. O custo é não ter degradê nem pincel macio. Aceitável agora,
 mas é uma porta que fecha um pouco.
 
 ---
+
+## Formato do arquivo gerado
+
+O arquivo tem que ser uma peça normal do jogo: exporta `meta` e `construir(ctx)`,
+igual `arvore3d.js` faz hoje. A diferença é que o corpo dele é **dados**.
+
+```js
+/* PEÇA gerada pela Oficina. Editável à mão, mas o caminho normal é reabrir
+   na ferramenta — ela lê este mesmo arquivo de volta. */
+
+export const PARAMS = { troncoR: 0.34, troncoH: 1.9, lados: 8 };
+
+const PASSOS = [
+  ['cilindro', { id: 1, raio: 'troncoR', altura: 'troncoH', lados: 'lados' }],
+  ['extruda',  { face: 12, dist: 0.4 }],
+  ['moveV',    { v: 7, d: [0.1, 0, -0.05] }],
+  ['mescla',   { de: [7, 12], para: 31 }],
+  ['cor',      { faces: [3, 4, 5], cor: '#4a7c3f' }],
+  ['solido',   { faces: [0, 1, 2, 3] }],
+];
+
+export const meta = {
+  nome: 'toco',
+  tipo: 'objeto',
+  desc: 'toco de árvore',
+  /* lê o MESMO número que a geometria. Colisor declarado à parte vira segunda
+     verdade — foi assim que a borda da ilha saiu do lugar. */
+  colisao: { forma: 'cilindro', raio: PARAMS.troncoR, altura: PARAMS.troncoH },
+};
+
+export function construir(ctx) { return executar(PASSOS, PARAMS, ctx); }
+```
+
+Três coisas nesse formato merecem atenção.
+
+**Parâmetros têm nome, e os passos citam o nome, não o número.** `raio:
+'troncoR'`, não `raio: 0.34`. É isso que faz mudar um valor em `PARAMS`
+reconstruir o objeto inteiro. Sem isso o arquivo seria só uma lista de números.
+
+**`meta.colisao` lê de `PARAMS`.** Mesma regra da árvore de hoje: um número, um
+dono. A ferramenta calcula a forma ao salvar, mas escreve a referência, não a
+cópia.
+
+**Mesclar grava `de` e `para`.** Sem isso, refazer a lista quebraria assim que
+uma identidade de vértice desaparecesse.
+
+## Lista de operações
+
+| Operação | Argumentos | Observação |
+|---|---|---|
+| `cubo`, `cilindro`, `esfera`, `plano`, `cone` | `id`, medidas, `lados` | Ponto de partida. Cria vértices numerados a partir de `id`. |
+| `moveV` | `v`, `d: [x,y,z]` | Move um vértice por deslocamento, nunca por posição absoluta — assim ele acompanha quando a base muda. |
+| `moveA`, `moveF` | `a` / `f`, `d` | Aresta e face, mesma regra. |
+| `extruda` | `face`, `dist` | Cria os vértices novos e as paredes laterais. |
+| `escala` | `sel`, `fator`, `eixo?` | Sem eixo, uniforme. |
+| `rotaciona` | `sel`, `eixo`, `graus` | Pivô é o centro da seleção. |
+| `mescla` | `de: [ids]`, `para: id` | Some as faces de área zero que sobrarem. |
+| `apagaFace` | `f` | — |
+| `cor` | `faces: [ids]`, `cor` | Cor por face; vira paleta na textura gerada. |
+| `solido` | `faces: [ids]` | Marca o que entra na colisão. |
+
+Toda operação precisa ser **determinística**: mesma lista, mesmo objeto,
+sempre. Nada de aleatório sem semente escrita no passo, senão reabrir o arquivo
+dá um objeto diferente.
+
+## Onde o código mora
+
+Duas metades, e separar importa:
+
+- **`motor/oficina.js`** — só o `executar(PASSOS, PARAMS, ctx)`. Pequeno, é o
+  que o jogo carrega pra abrir uma peça. Sem interface, sem edição.
+- **`oficina.html`** — a ferramenta: câmera, gizmos, seleção, painéis. Só abre
+  quando você vai modelar.
+
+Se o replay morasse dentro da ferramenta, o jogo teria que carregar o editor
+inteiro pra desenhar um toco.
 
 ## Ordem de construção
 
