@@ -212,7 +212,26 @@ for (const grupo of document.querySelectorAll('.tiers')) {
   }
 }
 
-addEventListener('keydown', (e) => { if (e.code === 'Escape' && !paused) abrirPausa(); });
+/* Com o ponteiro travado, o navegador CONSOME o Esc pra soltar o cursor e não
+   entrega o keydown pra página — por isso o menu nunca abria. Quem avisa é o
+   pointerlockchange: perdeu a trava sem ter sido a gente, abre a pausa.
+   (O Esc de teclado continua tratado no input.js, pro caso sem trava: toque,
+   mobile, ou quando o cursor já está solto.) */
+document.addEventListener('pointerlockchange', () => {
+  if (!document.pointerLockElement && !paused) abrirPausa();
+});
+
+/* Saiu do menu e o cursor continua solto: a trava volta na 1ª tecla de jogo,
+   não na hora de fechar. Pedir no fechamento criava uma corrida — o Chrome
+   bloqueia requestPointerLock por ~1,25s depois de um Esc, e a negativa
+   derrubava a trava de novo, o que reabria o menu sozinho. Amarrado à tecla,
+   uma falha não custa nada: a próxima tecla tenta de novo. */
+const TECLAS_JOGO = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ShiftRight']);
+addEventListener('keydown', (e) => {
+  if (paused || document.pointerLockElement || !TECLAS_JOGO.has(e.code)) return;
+  if (matchMedia('(pointer: coarse)').matches) return;   // toque não tem trava
+  Promise.resolve(canvas.requestPointerLock?.()).catch(() => { /* a próxima tecla tenta */ });
+});
 
 /* ---------- jogador: câmera livre + som de passo + guarda de raio (D-61) ---------- */
 const input = criarInput({ stageEl: canvas, onPause: () => (paused ? fecharTudo() : abrirPausa()) });
