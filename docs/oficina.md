@@ -69,29 +69,132 @@ faces, e duas faces vizinhas compartilham uma.
 
 ---
 
-## Funções, e o que cada uma exige resolver
+## Funções e soluções
 
-| Função | O que faz | Problemas a resolver |
+Cada problema levantado foi resolvido antes de virar código. As linhas marcadas
+com asterisco têm a solução detalhada logo abaixo da tabela.
+
+| Função | O que faz | Solução |
 |---|---|---|
-| **Ctrl+Z / Ctrl+Y**, 15 níveis | Desfaz e refaz. | Arrastar gera centenas de eventos de mouse — todos têm que virar **um** passo, fechado ao soltar o botão. Refazer precisa de pilha própria, apagada quando você faz algo novo. O navegador rouba o Ctrl+Z: `preventDefault`. |
-| **Indicador de eixo X/Y/Z** | Bússola no canto com a orientação. | O motor desenha uma cena só por quadro. Resolver como desenho 2D por cima, com a matemática do `visor.projetar`. Não mexe no render. |
-| **Gizmo de mover** | Clica no elemento, aparecem as setas X/Y/Z, arrasta uma. | O motor não tem clique-em-objeto 3D. Resolve projetando as setas pra tela e medindo distância do cursor em 2D. Setas precisam de tamanho fixo na tela, senão somem de longe — escalar pela distância. Arrastar exige converter movimento do mouse em distância ao longo do eixo 3D: sai projetando base e ponta da seta. |
-| **R + eixo + graus + Enter** | Rotaciona digitando o valor, número visível no canto. | Precisa de estado "digitando", senão as teclas viram comando. O `mat4.js` só tem rotação em Y — falta escrever X e Z. Definir o pivô: centro do objeto ou cursor. |
-| **S para escalonar** | Redimensiona. | Escala desigual estraga a iluminação: as normais deixam de ser perpendiculares e o sombreamento sai errado. Resolve gravando a escala nos vértices ao salvar, em vez de guardar como matriz. |
-| **Tab: objeto ↔ edição** | Alterna entre o objeto todo e as partes. | Tab troca o foco no navegador: `preventDefault`. Cada modo tem seu conjunto de teclas; os dois não podem escutar ao mesmo tempo. |
-| **Ver vértices / arestas / faces** (1, 2, 3) | Mostra e seleciona as partes. | Desenhar por cima sem receber sombra nem névoa. **Já existe canal pra isso**: `visor.depurar`, feito pro debug de colisão, fica fora do passe de sombra e serve direto. Decidir se ponto atrás da superfície some ou aparece apagado. |
-| **E para extrudar** | Puxa a face, já com as setas. | Extrudar duas faces vizinhas ao mesmo tempo cria parede interna na aresta compartilhada. V1: uma face por vez. Manter a orientação das faces novas, senão o objeto vira do avesso. |
-| **Painel lateral** | Posição, rotação, dimensão e detalhes, editáveis. | "Dimensão" exige recalcular a caixa do objeto — guardar e refazer só quando muda, não a cada quadro. Digitar no painel e arrastar o gizmo brigam; um trava o outro. |
-| **Ímã (Ctrl segurado)** | Cola no vértice ou face mais próximo durante o arrasto. | Procurar o alvo mais próximo varre a cena a cada movimento; com muitos objetos precisa dividir o espaço em células. Colar em face é projetar o ponto no plano e prender dentro do triângulo. |
-| **Mesclar vértices** | Arrasta um sobre o outro e viram um. | Mexe no coração do sistema: as operações falam "vértice 7", e mesclar apaga identidades. Tem que gravar **"7 e 12 viraram 31"**, senão refazer a lista quebra. Apagar as faces que ficaram com dois cantos iguais (área zero). |
-| **Arestas** | Selecionar e mover. | Deduzida das faces, não guardada. Precisa de chave estável pros dois vértices em qualquer ordem, senão a mesma aresta vira duas. |
-| **Pintar** | Cor na malha. | Face criada por extrusão **não tem coordenada de textura**. Pintar textura exigiria desdobrar a malha — problema grande. Resolve com **cor por face**: sem coordenada nenhuma, cada face guarda sua cor e a textura gerada vira paleta. Pincel de degradê fica pra depois. |
-| **Modo navegação (botão 5 do mouse)** | Liga e desliga o voo. Ligado, aparece a mira e WASD + Q/E movem a câmera. Desligado, as mesmas teclas voltam a ser comandos de edição. | Botão 5 é `e.button === 4` no navegador, e ele dispara o "avançar" do histórico — precisa de `preventDefault` no `mousedown` e no `auxclick`. Mouse sem botão lateral precisa de tecla alternativa. Com o voo desligado, olhar em volta fica no arrastar do botão do meio. |
-| **Câmera livre** | WASD anda, Q sobe, E desce, scroll muda a velocidade. | O `render.js` já tem `freeCam` com posição, yaw e pitch — a base existe. |
-| **Salvar como código** | Gera o arquivo em `pecas/`. | Nome e identidade combinando com o `arvore@-13,8` do protocolo (ver `COMUNICACAO.md`). |
-| **Colisão automática** | Encaixa cilindro, caixa ou esfera. | Só nas faces marcadas como sólidas — sem isso a copa da árvore vira parede, que é o erro que a colisão de hoje evita de propósito. Sem marcação, usa o objeto inteiro. |
+| **Ctrl+Z / Ctrl+Y**, 15 níveis | Desfaz e refaz. | Desfazer é apagar o último passo e reexecutar a lista; refazer usa pilha própria, apagada ao fazer algo novo. O arrasto vira **um** passo só: marca no `mousedown`, aplica visualmente durante o movimento, emite a operação com o total no `mouseup`. `preventDefault` no Ctrl+Z, que o navegador rouba. |
+| **Indicador de eixo X/Y/Z** | Bússola no canto. | Canvas 2D por cima, com `visor.projetar`. Não toca no WebGL. |
+| **Gizmo de mover** * | Setas X/Y/Z arrastáveis. | Seleção e arrasto resolvidos em 2D, projetando base e ponta da seta. Fórmula abaixo. |
+| **R + eixo + graus + Enter** | Rotaciona digitando o valor. | Estado explícito `digitando`, que desvia as teclas antes de virarem comando. `rotX` e `rotZ` escritos abaixo, prontos pra colar. Pivô no centro da seleção. |
+| **S para escalonar** | Redimensiona. | A escala é aplicada **nos vértices**, não guardada como matriz. As normais são recalculadas junto, então escala desigual não quebra a iluminação. |
+| **Tab: objeto ↔ edição** | Alterna os modos. | `preventDefault` no Tab. Uma variável de modo decide qual mapa de teclas escuta; nunca os dois ao mesmo tempo. |
+| **Ver vértices / arestas / faces** (1, 2, 3) * | Mostra e seleciona as partes. | **Canvas 2D por cima, não WebGL.** O `visor.depurar` não serve: o `draw` do render usa `gl.TRIANGLES` fixo e não desenha ponto nem linha. Detalhe abaixo. |
+| **E para extrudar** * | Puxa a face. | Extrusão de região: só as arestas de **borda** da seleção ganham parede. Resolve o caso de duas faces vizinhas sem precisar restringir a uma por vez. Algoritmo abaixo. |
+| **Painel lateral** | Posição, rotação, dimensão. | A caixa do objeto fica guardada e só é refeita quando a malha muda. Enquanto o gizmo arrasta, os campos ficam de leitura — um dono por vez. |
+| **Ímã (Ctrl segurado)** | Cola no vértice ou face mais próximo. | **Varredura linear, sem estrutura espacial.** 10 mil vértices a 60 quadros por segundo dá 600 mil comparações por segundo, que é barato. Só dividir o espaço em células se passar de uns 100 mil vértices. Colar em face é projetar no plano e prender dentro do triângulo. |
+| **Mesclar vértices** | Dois viram um. | Grava `['mescla', { de: [7,12], para: 31 }]`, então o replay sobrevive à troca de identidade. Depois da mesclagem, apaga toda face que ficou com dois cantos iguais, de área zero. |
+| **Arestas** | Selecionar e mover. | Chave canônica `min(a,b) + ':' + max(a,b)`, então a mesma aresta nunca vira duas. Deduzida das faces a cada mudança de malha, não guardada. |
+| **Pintar** * | Cor na malha. | Paleta em textura: os três cantos da face recebem a **mesma** coordenada, apontando pro centro da célula de cor. Sem desdobrar malha e sem risco de vazar a cor vizinha. Detalhe abaixo. |
+| **Modo navegação (botão 5)** | Liga e desliga o voo. | `e.button === 4`, com `preventDefault` no `mousedown` e no `auxclick` pra não disparar o "avançar" do navegador. Tecla alternativa configurável pra mouse sem botão lateral. Com o voo desligado, olhar em volta fica no arrastar do botão do meio. |
+| **Câmera livre** | WASD anda, Q sobe, E desce, scroll acelera. | O `freeCam` do `render.js` já entrega posição, yaw e pitch. |
+| **Salvar como código** | Gera o arquivo em `pecas/`. | Nome vindo do campo do painel, identidade no formato do `COMUNICACAO.md`. |
+| **Colisão automática** * | Encaixa cilindro, caixa ou esfera. | Calculada só das faces marcadas como sólidas. Fórmula abaixo. |
+| **Botão de configurações** | Ajustes da ferramenta. | Reusa `.painelConfig` e `.abas` do jogo. Grade e ímã, velocidade da câmera, tamanho do gizmo, salvamento automático, tecla alternativa do modo navegação. `localStorage` em `nos3_oficina`, separado da chave do jogo. |
 
-| **Botão de configurações** | Abre os ajustes da própria ferramenta. | Reusa o painel de abas que o jogo já tem (`.painelConfig`, `.abas`). Conteúdo: tamanho da grade e do ímã, velocidade da câmera, tamanho do gizmo na tela, salvamento automático, e a tecla alternativa pro modo navegação. Guardar em `localStorage` com chave própria (`nos3_oficina`), separada da do jogo. |
+---
+
+## Soluções detalhadas
+
+### Vértices e arestas na tela: canvas 2D, não WebGL
+
+O caminho que este documento propunha antes estava errado, e vale registrar por
+quê. O `draw` do `render.js` chama `gl.drawArrays(gl.TRIANGLES, ...)` fixo, então
+o `visor.depurar` só desenha triângulos. Ponto e linha não passam por ali.
+
+A saída é melhor que a proposta original. Um canvas 2D por cima, como o minimapa
+e as etiquetas de ID já fazem: projeta cada vértice com `visor.projetar` e
+desenha um quadradinho. Vêm de graça três coisas que no WebGL dariam trabalho —
+tamanho constante na tela, destaque de seleção, e o traço das arestas.
+
+O que se perde é a oclusão: vértice atrás da superfície continua aparecendo.
+Isso vira **opção "ver através"**, que é como o Blender trata com o raio-X dele.
+Pra esconder de verdade mais tarde, o `tapado()` das etiquetas já resolve.
+
+### Gizmo: seleção e arrasto
+
+Selecionar a seta é projetar base e ponta e medir a distância do cursor até esse
+segmento, em 2D. Nenhum raycast.
+
+Arrastar é a parte que parece difícil e não é:
+
+```js
+const o2 = visor.projetar(origem);               // base da seta
+const a2 = visor.projetar(soma(origem, eixo));   // ponta, 1 unidade adiante
+const dx = a2.x - o2.x, dy = a2.y - o2.y;
+const compr = Math.hypot(dx, dy);                // px que 1 unidade ocupa na tela
+const dir = [dx / compr, dy / compr];
+// mx, my = movimento do mouse em px neste quadro
+const avanco = (mx * dir[0] + my * dir[1]) / compr;   // em unidades do mundo
+```
+
+Quando a seta aponta quase pra câmera, `compr` tende a zero e o arrasto dispara
+pro infinito. Trava: com `compr` abaixo de 12px, a seta fica apagada e não
+aceita arrasto.
+
+Tamanho constante na tela: escala o gizmo por `dist / 8`, então ele ocupa os
+mesmos pixels de perto e de longe.
+
+### Rotação em X e Z
+
+Falta no `mat4.js`. Colunas-major, no mesmo estilo do `rotY` que já existe:
+
+```js
+rotX(a) { const c = Math.cos(a), s = Math.sin(a);
+  return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]); },
+rotZ(a) { const c = Math.cos(a), s = Math.sin(a);
+  return new Float32Array([c,s,0,0, -s,c,0,0, 0,0,1,0, 0,0,0,1]); },
+```
+
+### Extrudar uma região de faces
+
+O problema era a parede interna aparecendo entre duas faces vizinhas extrudadas
+juntas. A solução padrão resolve sem restringir nada:
+
+1. Junta os vértices usados pelas faces selecionadas e duplica cada um,
+   deslocado por `dist` na direção da normal média.
+2. Religa as faces selecionadas aos vértices novos.
+3. Acha as **arestas de borda** — as usadas por exatamente **uma** face da
+   seleção. Só elas ganham parede lateral.
+
+Aresta interna, usada por duas faces selecionadas, não ganha parede. É
+exatamente o caso que estava travando a extrusão em uma face por vez.
+
+A orientação da parede sai da ordem da aresta na face de origem, então as faces
+novas nascem viradas pro lado certo sem cálculo extra.
+
+### Cor por face sem desdobrar a malha
+
+A paleta é uma textura gerada com as cores em células. Cada face recebe a
+**mesma coordenada nos três cantos**, apontando pro centro da sua célula.
+
+Como os três cantos são iguais, a coordenada interpolada é constante em toda a
+face. Ela nunca chega perto da borda da célula, então o filtro linear não tem
+como puxar a cor vizinha. O vazamento de cor, que é o problema clássico de
+paleta em textura, não pode acontecer nem em teoria.
+
+O custo é não ter degradê nem pincel macio: cada face é de uma cor só.
+
+### Encaixe automático da colisão
+
+Das faces marcadas como sólidas, pega os vértices e calcula:
+
+```
+centro = média de x e de z
+raio   = maior hipotenusa(x - centroX, z - centroZ)
+altura = maiorY - menorY
+```
+
+Isso dá o cilindro em pé, que é a forma que a colisão do jogo usa hoje. Caixa e
+esfera saem dos mesmos números. A ferramenta sugere a de menor volume
+desperdiçado e você confirma ou troca.
+
+Sem nenhuma face marcada, usa o objeto inteiro — e é aí que a copa da árvore
+viraria parede, que é o erro que a colisão de hoje evita de propósito. Por isso
+a marcação aparece em destaque na hora de salvar, e não escondida num canto.
 
 ## Booleano
 
@@ -117,11 +220,11 @@ livre** e o ímã pode usá-lo sem conflito nenhum.
 
 ## Decisões abertas
 
-**1. Mesclagem contra as identidades.** Resolvida no papel (a mesclagem grava as
-identidades que colapsaram), mas é a interação mais delicada do sistema e merece
-ser a primeira coisa testada de verdade.
+Sobrou uma. A mesclagem contra as identidades de vértice está resolvida — grava
+`de` e `para` — mas segue sendo a interação mais delicada do sistema, e é a
+primeira que deve ganhar teste de verdade.
 
-**2. Cor por face no lugar de textura pintada.** Contorna o desdobramento de
+**Cor por face no lugar de textura pintada.** Contorna o desdobramento de
 malha inteiro. O custo é não ter degradê nem pincel macio. Aceitável agora,
 mas é uma porta que fecha um pouco.
 
@@ -225,7 +328,10 @@ conhecido.
 ## O que este documento assume do motor
 
 - `visor.projetar` — mundo → tela, já existe (feito pras etiquetas de ID).
-- `visor.depurar` — camada fora do passe de sombra, já existe (debug de colisão).
+- `visor.depurar` — existe, mas **não serve pro editor**: o `draw` do render usa
+  `gl.TRIANGLES` fixo, então não desenha ponto nem linha. Vértices e arestas vão
+  pra um canvas 2D por cima. Continua útil se um dia quisermos volume sólido de
+  depuração, como o colisor.
 - `freeCam` no `render.js` — câmera livre, já existe.
 - `mat4.js` — falta rotação em X e Z.
 - Formato de vértice: posição, coordenada de textura e normal. **Não tem cor** —
