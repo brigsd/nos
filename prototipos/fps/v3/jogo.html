@@ -243,7 +243,7 @@ addEventListener('keydown', (e) => {
 const input = criarInput({ stageEl: canvas, onPause: () => (paused ? fecharTudo() : abrirPausa()) });
 input.bindSticks(document.getElementById('stickL'), document.getElementById('stickR'));
 
-const EYE = 1.7, SPEED = 5.2, MAXR = 25, LAGO = [10, -8];
+const EYE = 1.7, SPEED = 5.2, BEIRA = 0.7, LAGO = [10, -8];
 /* ?cam=x,z,yaw,pitch — ponto de vista reprodutível pra bancada/QA */
 const camQ = Q.get('cam')?.split(',').map(Number);
 let pos = camQ ? [camQ[0], 0, camQ[1]] : [-19, 0, 0];
@@ -268,8 +268,13 @@ function antesDoQuadro(dt, T) {
       const fwd = [Math.sin(yaw), Math.cos(yaw)], right = [-Math.cos(yaw), Math.sin(yaw)];
       pos[0] += (fwd[0] * mz + right[0] * mx) * speed * dt;
       pos[2] += (fwd[1] * mz + right[1] * mx) * speed * dt;
+      /* barra no contorno REAL da ilha, que varia com a direção, e não num
+         círculo fixo. A margem tira o jogador da beirada exata, senão ele fica
+         com meio pé no vazio. Continua sendo um limite radial: andar de lado
+         encostado na borda ainda desliza. */
       const d = Math.hypot(pos[0], pos[2]);
-      if (d > MAXR) { pos[0] *= MAXR / d; pos[2] *= MAXR / d; }
+      const lim = ilhaChao.raioEm(pos[0], pos[2]) - BEIRA;
+      if (d > lim) { pos[0] *= lim / d; pos[2] *= lim / d; }
       if (Math.hypot(mx, mz) > 0.12) {
         const tipo = ilhaChao.superficieEm(pos[0], pos[2]);
         const sprint = input.shiftHeld();
@@ -284,8 +289,9 @@ function antesDoQuadro(dt, T) {
 
 /* Coordenadas no topo. Só 10x por segundo: escrever no DOM a cada quadro é
    trabalho jogado fora, ninguém lê 60 números por segundo. `raio` é a distância
-   até o centro contra o MAXR — é ele que barra a saída da ilha, então ver os
-   dois lado a lado mostra na hora se a borda visual bate com o limite real.
+   até o centro contra o limite NAQUELA direção — como o contorno é irregular,
+   o segundo número muda conforme se anda, e ver os dois juntos diz na hora
+   quanto falta pra beirada.
    A string ?cam= sai pronta pra colar na URL e voltar exatamente a este ponto. */
 const elCoord = document.getElementById('coord');
 let proximoCoord = 0;
@@ -295,7 +301,8 @@ function mostrarCoords(T) {
   const r = Math.hypot(pos[0], pos[2]);
   const piso = ilhaChao.superficieEm(pos[0], pos[2]);
   const cam = `${pos[0].toFixed(1)},${pos[2].toFixed(1)},${yaw.toFixed(2)},${pitch.toFixed(2)}`;
-  elCoord.innerHTML = `x ${pos[0].toFixed(1)} · z ${pos[2].toFixed(1)} · raio ${r.toFixed(1)}/${MAXR} · ${piso}`
+  const lim = ilhaChao.raioEm(pos[0], pos[2]) - BEIRA;
+  elCoord.innerHTML = `x ${pos[0].toFixed(1)} · z ${pos[2].toFixed(1)} · raio ${r.toFixed(1)}/${lim.toFixed(1)} · ${piso}`
     + `<br><span style="opacity:.55">?cam=${cam}</span>`;
 }
 

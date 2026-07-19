@@ -6,6 +6,8 @@
    enxame). A grama volta aos 64px/UNIDADE da v2 (receita do genGrassTile:
    mancha de sol + pinceladas diagonais + touceiras + flores), o lago ganha
    praia de areia, e a névoa/far são da peça (a padrão esmagava tudo). */
+import { fbm } from '../motor/tex.js';   // raioEm precisa do mesmo ruído da malha
+
 export const meta = {
   nome: 'ilha-chao',
   tipo: 'chao',
@@ -15,6 +17,12 @@ export const meta = {
 /* geometria do lago: a malha (construir) e a consulta de superfície
    (superficieEm) leem daqui, senão a praia sonora sai do lugar da visual */
 const LAGO = { lox: 10, loz: -8, lr: 6.5, sandR: 6.5 + 1.6 };
+
+/* contorno da ilha: mesma fonte pra malha (construir) e pra colisão (raioEm).
+   Antes o jogo barrava num círculo fixo de raio 25 enquanto a borda desenhada
+   varia de 23.6 a 26.8 conforme a direção — dava pra andar 1.4u no vazio de um
+   lado e travar antes da beirada do outro. */
+const ILHA = { N: 96, R0: 28 };
 
 export function construir(ctx) {
   const { tex, geo } = ctx;
@@ -97,7 +105,7 @@ export function construir(ctx) {
     return i;
   });
   /* ---------- geometria ---------- */
-  const N = 96, R0 = 28;                 // ~56u de diâmetro = a ilha da v2
+  const { N, R0 } = ILHA;                // ~56u de diâmetro = a ilha da v2
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
   const faceNorm = (a, b, c, ref) => {
     const u = sub(b, a), v = sub(c, a);
@@ -234,4 +242,18 @@ export function superficieEm(x, z) {
   if (dist <= lr) return 'agua';
   if (dist <= sandR) return 'areia';
   return 'grama'; // padrão
+}
+
+/* até onde vai a grama NA DIREÇÃO de (x,z) — é o mesmo cálculo que gera os
+   vértices da borda em construir(), por isso lê de ILHA e usa o mesmo fbm.
+   A malha é um polígono de 96 lados e esta é a curva contínua que passa pelos
+   vértices dele; a corda entre dois vértices fica 0.015u pra dentro, o que é
+   pequeno demais pra aparecer no chão.
+   No centro exato a direção é indefinida — devolve o raio mínimo, que é o
+   único valor seguro ali. */
+export function raioEm(x, z) {
+  const d = Math.hypot(x, z);
+  if (d < 1e-6) return ILHA.R0 * 0.82;
+  const c = x / d, s = z / d;
+  return ILHA.R0 * (0.82 + 0.18 * fbm(c * 1.6 + 3.1, s * 1.6 + 3.1));
 }
