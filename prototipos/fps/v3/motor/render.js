@@ -25,14 +25,14 @@ const PACK = `
    de MUNDO (rajada corre pelo campo; tronco+copa concordam na junção). `* sc`
    escala pelo porte da instância (topo local² igual, mundo maior balança igual). */
 const WIND = `
-  uniform vec2 uWindDir;         // direção do vento no plano-xz do MUNDO (unitária), deriva devagar
-  uniform float uWindT, uWind;   // uWindT = relógio (s); uWind = amplitude POR-LOTE
+  uniform vec2 uWindDir;                 // direção do vento no plano-xz do MUNDO (unitária), deriva devagar
+  uniform float uWindT, uWind, uWindF;   // uWindT = relógio (s); uWind = amplitude POR-LOTE; uWindF = ritmo (rad/s) POR-LOTE
   vec3 vento(vec3 local, vec3 world, float sc){
     if (uWind <= 0.0) return world;               // gate coerente (grátis): chão/prédios saem aqui
     float bend = local.y * local.y;               // cantilever: base (y=0) travada, topo arqueia (y²)
     float trav = dot(world.xz, uWindDir) * 0.18;  // FASE ESPACIAL da posição BASE (λ≈35 u)
     float gust = 0.80 + 0.20 * sin(uWindT * 0.5 - trav * 0.5);   // rajada global lenta
-    float s    = sin(uWindT * 1.3 - trav);        // OSCILADOR ESCALAR ÚNICO (vaivém 1-D)
+    float s    = sin(uWindT * uWindF - trav);     // OSCILADOR 1-D; uWindF = ritmo (árvore lenta, grama rápida)
     world.xz  += uWindDir * (uWind * bend * sc * gust * s);   // * sc -> sway ∝ porte da instância
     return world;
   }`;
@@ -221,7 +221,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       const meshCache = new Map(), texCache = new Map();
       const getMesh = (m) => { let g = meshCache.get(m); if (!g) { g = glMesh(m); meshCache.set(m, g); } return g; };
       const getTex = (t) => { let g = texCache.get(t); if (!g) { g = glTex(t); texCache.set(t, g); } return g; };
-      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0, wind: L.wind || 0 }));
+      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0, wind: L.wind || 0, windF: L.windF || 1.3 }));
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -243,12 +243,14 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         const uR = gl.getUniformLocation(prg, 'uRim');   // null no passe de profundidade
         const uTo = gl.getUniformLocation(prg, 'uToon');
         const uWnd = gl.getUniformLocation(prg, 'uWind');   // VENTO: existe nos DOIS passes (cena+depth)
+        const uWF = gl.getUniformLocation(prg, 'uWindF');   // VENTO: ritmo por lote
         const all = semPalco ? lotes : [stage, ...lotes];
         for (const L of all) {
           gl.uniformMatrix4fv(uM, false, L.matriz);
           if (uR) gl.uniform1f(uR, L.rim || 0);          // contorno por lote
           if (uTo) gl.uniform1f(uTo, L.toon || 0);       // cel-shading por lote
           if (uWnd) gl.uniform1f(uWnd, L.wind || 0);     // VENTO: amplitude por lote (chão/prédio = 0)
+          if (uWF) gl.uniform1f(uWF, L.windF || 1.3);    // VENTO: ritmo por lote (árvore 0.9, grama 2.6)
           gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex);   // ambos os passes: alfa p/ recorte
           gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
           gl.enableVertexAttribArray(aL.pos); gl.vertexAttribPointer(aL.pos, 3, gl.FLOAT, false, 32, 0);
@@ -323,7 +325,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
               gl.uniform3f(uInkL, ink[0], ink[1], ink[2]);
               gl.uniformMatrix4fv(gl.getUniformLocation(outline, 'uModel'), false, L.matriz);
               gl.uniform1f(gl.getUniformLocation(outline, 'uW'), L.outline);
-              gl.uniform1f(gl.getUniformLocation(outline, 'uWind'), L.wind || 0);   // VENTO: amplitude do lote
+              gl.uniform1f(gl.getUniformLocation(outline, 'uWind'), L.wind || 0);    // VENTO: amplitude do lote
+              gl.uniform1f(gl.getUniformLocation(outline, 'uWindF'), L.windF || 1.3);  // VENTO: ritmo do lote (senão a tinta desincroniza)
               gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
               gl.enableVertexAttribArray(OL.pos); gl.vertexAttribPointer(OL.pos, 3, gl.FLOAT, false, 32, 0);
               gl.enableVertexAttribArray(OL.nrm); gl.vertexAttribPointer(OL.nrm, 3, gl.FLOAT, false, 32, 20);
