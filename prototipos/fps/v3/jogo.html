@@ -8,10 +8,12 @@
   :root { --line: #3a3350; --accent: #a884f3; }
   html, body { margin: 0; height: 100%; background: #0c0f16; overflow: hidden; font-family: ui-monospace, Menlo, monospace; }
   #c { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; }
-  #hud { position: fixed; top: 8px; left: 10px; font-size: 11px; color: #cddf6c; text-shadow: 0 1px 2px #000; pointer-events: none; line-height: 1.5; }
+  /* z acima do mapa (16): o texto é pequeno e o mapa é opaco — se ficasse
+     por baixo, sumiria inteiro no canto onde o minimapa estivesse */
+  #hud { z-index: 17; position: fixed; top: 8px; left: 10px; font-size: 11px; color: #cddf6c; text-shadow: 0 1px 2px #000; pointer-events: none; line-height: 1.5; }
   /* coordenadas: topo ao centro, pra ler de relance e citar uma posição.
      Tabular-nums trava a largura dos dígitos, senão o texto dança a cada passo. */
-  #coord { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); font-size: 11px;
+  #coord { z-index: 17; position: fixed; top: 8px; left: 50%; transform: translateX(-50%); font-size: 11px;
     font-variant-numeric: tabular-nums; color: #cddf6c; text-shadow: 0 1px 2px #000;
     pointer-events: none; white-space: nowrap; user-select: text; }
   /* erro no loop de quadro mata o render e deixa a tela preta, sem nada na
@@ -19,7 +21,14 @@
   /* mapa (tecla M). Canvas 2D solto por cima — não encosta no WebGL. */
   #mapa { position: fixed; z-index: 16; display: none; pointer-events: none;
     border: 1px solid var(--line); border-radius: 6px; background: rgba(12,10,20,.72); }
-  #mapa.mini { right: 10px; bottom: 10px; width: 168px; height: 168px; }
+  /* o minimapa nasce no canto de baixo à esquerda e vai pra qualquer um dos
+     quatro. Só uma medida por eixo em cada classe: definir os quatro lados
+     deixaria o navegador esticar o elemento em vez de encostá-lo no canto. */
+  #mapa.mini { width: 168px; height: 168px; }
+  #mapa.mini.c1 { left: 10px;  top: 10px; }
+  #mapa.mini.c2 { right: 10px; top: 10px; }
+  #mapa.mini.c3 { left: 10px;  bottom: 10px; }
+  #mapa.mini.c4 { right: 10px; bottom: 10px; }
   #mapa.grande { left: 50%; top: 50%; transform: translate(-50%,-50%);
     width: min(74vh, 74vw); height: min(74vh, 74vw); }
   /* etiquetas de ID (tecla I). O container nunca some do DOM; o que some são
@@ -36,7 +45,7 @@
   #erro { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: none;
     background: rgba(120,20,30,.92); color: #fdcbb0; font-size: 12px; padding: 10px 14px;
     white-space: pre-wrap; user-select: text; }
-  #hint { position: fixed; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #9b93a8; text-shadow: 0 1px 2px #000; pointer-events: none; }
+  #hint { z-index: 17; position: fixed; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #9b93a8; text-shadow: 0 1px 2px #000; pointer-events: none; }
   #pauseBtn { position: fixed; top: 10px; right: 10px; width: 38px; height: 38px; border-radius: 50%;
     background: rgba(23,18,33,.7); color: #eaaded; border: 1px solid var(--line); font-size: 16px; cursor: pointer; z-index: 15; }
 
@@ -107,6 +116,7 @@
     <div class="abas">
       <button class="aba on" data-aba="som">som</button>
       <button class="aba" data-aba="graficos">gráficos</button>
+      <button class="aba" data-aba="hud">HUD</button>
       <button class="aba" data-aba="controles">controles</button>
       <button class="aba" data-aba="lingua">idioma</button>
     </div>
@@ -151,12 +161,30 @@
       <p class="gnote">2× tira serrilha sem borrar, mas pesa. Reconstrução ajuda em resolução baixa · só textura recarrega</p>
     </div>
 
+    <div class="painelAba" id="abaHud" hidden>
+      <div class="linha"><span>minimapa</span><div class="tiers" data-cfg="mapaCanto">
+        <button class="opt" data-v="0">Nenhum</button><button class="opt" data-v="1">↖</button
+        ><button class="opt" data-v="2">↗</button><button class="opt" data-v="3">↙</button
+        ><button class="opt" data-v="4">↘</button>
+      </div></div>
+      <p class="gnote">canto da tela onde o minimapa fica · M ainda abre o mapa grande</p>
+      <div class="linha"><span>textos</span><div class="tiers" data-cfg="hudTexto">
+        <button class="opt" data-v="0">Ocultos</button><button class="opt" data-v="1">Visíveis</button>
+      </div></div>
+      <p class="gnote">o título, os fps e a linha de coordenadas do topo</p>
+    </div>
+
     <div class="painelAba" id="abaControles" hidden>
       <div class="controlesLista">
         <div><b>W A S D</b> andar</div>
+        <div><b>SHIFT</b> correr</div>
         <div><b>mouse</b> olhar (clique pra travar o cursor)</div>
         <div><b>alavancas</b> andar / olhar (celular)</div>
         <div><b>ESC</b> pausar</div>
+        <div><b>M</b> mapa: minimapa → mapa grande → nenhum</div>
+        <div><b>I</b> etiquetas de ID nos objetos</div>
+        <div><b>O</b> áreas de colisão</div>
+        <div><b>=</b> copiar o link desta vista</div>
       </div>
     </div>
 
@@ -203,7 +231,10 @@ addEventListener('unhandledrejection', (ev) => mostrarErro(ev.reason));
 /* res = largura do quadro interno. 0 significa "nativa": acompanha a janela,
    limitada a 2560 pra ninguém pedir sem querer um quadro gigante num monitor
    de altíssima resolução e achar que o jogo travou. */
-const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0, recon: 0, auto: 0 };
+/* mapaCanto: 0 nenhum · 1 ↖ · 2 ↗ · 3 ↙ · 4 ↘. Nasce em 3 (canto de baixo à
+   esquerda): o minimapa passou a ser parte fixa do HUD, não algo a descobrir. */
+const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0, recon: 0, auto: 0,
+  mapaCanto: 3, hudTexto: 1 };
 const larguraInterna = (r) => (r > 0 ? r : Math.min(2560, Math.round(innerWidth * (devicePixelRatio || 1))));
 const Q = new URLSearchParams(location.search);
 function lerCfg() {
@@ -289,6 +320,7 @@ function recarregarMantendoLugar() {
    na hora — o jogador vê a diferença enquanto olha pro mesmo lugar, que é o
    único jeito de comparar duas opções de verdade. */
 const TIERS_AO_VIVO = new Set(['luz', 'sombra', 'particulas', 'res', 'aa', 'recon']);
+const TIERS_DE_HUD = new Set(['mapaCanto', 'hudTexto']);
 
 /* Baixo e Médio ficam em pixel duro: é o visual do projeto e não custa nada.
    Alto usa supersampling 2×, e não a suavização "Suave" — esta borra o pixel
@@ -325,6 +357,15 @@ for (const grupo of document.querySelectorAll('.tiers[data-cfg]')) {
   for (const btn of grupo.querySelectorAll('.opt')) {
     btn.addEventListener('click', () => {
       const valor = Number(btn.dataset.v);
+      /* HUD e coisa de tela, não de motor: aplica na hora e não mexe no
+         preset dinâmico, que cuida só de desempenho. */
+      if (TIERS_DE_HUD.has(chave)) {
+        salvarCfg({ ...lerCfg(), [chave]: valor });
+        if (chave === 'mapaCanto') mapaModo = valor ? (mapaModo === 2 ? 2 : 1) : 0;
+        aplicarHud();
+        marcarBotoes();
+        return;
+      }
       desligarAuto();
       salvarCfg({ ...lerCfg(), [chave]: valor });
       if (!TIERS_AO_VIVO.has(chave)) { recarregarMantendoLugar(); return; }
@@ -591,7 +632,17 @@ const MAPA_PX = 420;
 const CORES_MAPA = { grama: [35, 144, 99], areia: [251, 185, 84], agua: [11, 138, 143] };
 const elMapa = document.getElementById('mapa');
 const ctxMapa = elMapa.getContext('2d');
-let mapaModo = 0, mapaFundo = null;   // 0 nenhum · 1 mini · 2 grande
+/* 0 nenhum · 1 mini · 2 grande. Começa no que a aba HUD mandar: o minimapa é
+   estado do HUD, e o M só passeia por cima disso durante a partida. */
+let mapaModo = cfg.mapaCanto ? 1 : 0, mapaFundo = null;
+
+function aplicarHud() {
+  const c = lerCfg();
+  elMapa.className = mapaModo === 2 ? 'grande' : mapaModo === 1 ? `mini c${c.mapaCanto || 3}` : '';
+  elMapa.style.display = mapaModo ? 'block' : 'none';
+  const ver = c.hudTexto !== 0 ? 'block' : 'none';
+  for (const id of ['hud', 'coord', 'hint']) document.getElementById(id).style.display = ver;
+}
 
 const paraTela = (v) => ((v + ilhaChao.EXTENSAO) / (2 * ilhaChao.EXTENSAO)) * MAPA_PX;
 
@@ -655,10 +706,11 @@ function desenharMapa() {
 addEventListener('keydown', (e) => {
   if (e.code !== 'KeyM' || paused) return;
   mapaModo = (mapaModo + 1) % 3;
-  elMapa.className = mapaModo === 1 ? 'mini' : mapaModo === 2 ? 'grande' : '';
-  elMapa.style.display = mapaModo ? 'block' : 'none';
+  aplicarHud();
   avisar(['mapa desligado', 'minimapa', 'mapa com setores'][mapaModo]);
 });
+
+aplicarHud();   // estado inicial do HUD: canto do minimapa e textos
 
 /* ---------- etiquetas de ID (tecla I) ----------
    Porta o protocolo do COMUNICACAO.md: apontar objeto pelo nome em vez de

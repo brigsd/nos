@@ -94,6 +94,12 @@ o mesmo erro que já custou caro no código.
   As cores do terreno saem de `superficieEm`, a mesma função que escolhe o som
   do passo — superfície nova aparece no mapa sozinha.
 - **Tecla `O`** liga e desliga a visualização das áreas de colisão.
+- **Tecla `=`** copia o link da vista atual.
+
+A aba **HUD** das configurações escolhe em qual dos quatro cantos o minimapa
+fica (ou nenhum) e oculta os textos da tela. O minimapa vem ligado por padrão
+no canto de baixo à esquerda. Os textos ficam por cima do mapa: são pequenos, e
+por baixo sumiriam no canto onde o minimapa estivesse.
 
 ## IDs de objeto na v3
 
