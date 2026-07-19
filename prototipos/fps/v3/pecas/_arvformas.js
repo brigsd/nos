@@ -1,7 +1,7 @@
 /* scratch: variações de FORMATO de árvore (não versionar/publicar).
    Builder paramétrico: tronco + copa (oval / cone / multi-blob), rampa de cor
    por espécie. 6 formas lado a lado pra o ideador escolher o elenco. */
-export const meta = { nome: '_arvformas', tipo: 'objeto', desc: 'formatos: oval, alta, larga, pinheiro, cerejeira, copada' };
+export const meta = { nome: '_arvformas', tipo: 'objeto', desc: 'formatos: oval, larga, pinheiro, cerejeira, copada' };
 
 export function construir(ctx) {
   const { tex, geo } = ctx;
@@ -127,20 +127,20 @@ export function construir(ctx) {
     }
   }
 
-  /* ---- as 6 formas ---- */
+  /* ---- as 5 formas principais (ESPÉCIES distintas). A "alta/esguia" saiu:
+     é a oval #1 esticada = variação de ALTURA da oval, não espécie própria
+     (vai pro mostruário de variações da oval, como fizemos com os pinheiros) ---- */
   const forms = [];
   const push = (mesh, tex) => forms.push({ mesh, tex });
   // 1 carvalho (oval média)
   addTrunk(-9, 1.9); { const m = Mesh(); blobOval(m, [-9, 1.9 + 2.0 * 0.92, 0], 1.35, 2.0, 0.34); push(m, GREEN); }
-  // 2 esguia (alta e estreita, tronco alto)
-  addTrunk(-5.4, 2.7, 0.26, 0.1); { const m = Mesh(); blobOval(m, [-5.4, 2.7 + 1.9 * 0.92, 0], 1.0, 1.9, 0.3, 3); push(m, GREEN); }
-  // 3 larga (baixa e espalhada, tronco curto)
-  addTrunk(-1.8, 1.3, 0.4, 0.16); { const m = Mesh(); blobOval(m, [-1.8, 1.3 + 1.35 * 0.92, 0], 2.05, 1.3, 0.36, 7); push(m, GREEN); }
-  // 4 pinheiro (NÍVEIS em escada, verde escuro de agulha, tronco curto)
-  addTrunk(1.8, 0.85, 0.28, 0.11); { const m = Mesh(); pinheiroTiers(m, 1.8, 0.7, 1.65, 4.0, 5); push(m, PINE); }
-  // 5 cerejeira (oval redonda, rosa)
-  addTrunk(5.4, 1.7, 0.3, 0.12); { const m = Mesh(); blobOval(m, [5.4, 1.7 + 1.6 * 0.92, 0], 1.6, 1.6, 0.3, 11); push(m, CHERRY); }
-  // 6 copada (multi-lóbulo bushy): blob central dominante ANCORADO no topo do
+  // 2 larga (baixa e espalhada, tronco curto)
+  addTrunk(-4.5, 1.3, 0.4, 0.16); { const m = Mesh(); blobOval(m, [-4.5, 1.3 + 1.35 * 0.92, 0], 2.05, 1.3, 0.36, 7); push(m, GREEN); }
+  // 3 pinheiro (NÍVEIS em escada, verde escuro de agulha, tronco curto)
+  addTrunk(0, 0.85, 0.28, 0.11); { const m = Mesh(); pinheiroTiers(m, 0, 0.7, 1.65, 4.0, 5); push(m, PINE); }
+  // 4 cerejeira (oval redonda, rosa)
+  addTrunk(4.5, 1.7, 0.3, 0.12); { const m = Mesh(); blobOval(m, [4.5, 1.7 + 1.6 * 0.92, 0], 1.6, 1.6, 0.3, 11); push(m, CHERRY); }
+  // 5 copada (multi-lóbulo bushy): blob central dominante ANCORADO no topo do
   // tronco + satélites MENORES encaixados (offsets pequenos -> a silhueta funde
   // num maciço em vez de 4 bolas soltas; base desce sobre o tronco, sem flutuar)
   addTrunk(9, 1.7, 0.34, 0.13);
