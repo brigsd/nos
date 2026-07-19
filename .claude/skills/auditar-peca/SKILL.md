@@ -39,6 +39,38 @@ arte de verdade**. Mas cada um tem um piso honesto:
 acontece — foi um `[cpu]` que pegou o bug do `hash2`, D-58). Não são olho
 artístico nem pegam o sutil no limite; "bonito" continua sendo do ideador.
 
+## Visão de GEOMETRIA — pra julgar FORMA (D-65)
+
+Os críticos [cpu] pegam malha/paleta com número. Mas **forma** — costura,
+faceta, junção seca, silhueta — SOME sob a textura em 640px. Eu já concluí
+"ficou bom" olhando casca de baixa-res e **errei, repetido** (o ideador via o
+defeito, eu não). Mesma tese: sinal externo. Aqui o sinal é **tirar a textura
+e subir a resolução** — a bancada faz:
+
+```bash
+npm run peca -- <peca> --res=1400 --geo=normais    # normais em cor: EMENDA/FACETA saltam
+npm run peca -- <peca> --res=1400 --geo=flat       # cinza + luz: SILHUETA/volume (sem textura)
+npm run peca -- <peca> --res=1400 --giro=8         # 8 ângulos (defeito que só aparece de um lado)
+npm run peca -- <peca> --res=1600 --e=<h> --r=<d>  # CLOSE colado na junção
+```
+
+- **normais**: cada normal vira cor. Duas superfícies que se encontram mal (ex.
+  loft liso 24-lados × tubo 6-lados) dão um **salto de cor** na junção = a
+  costura que a textura escondia. Faceta grosseira = blocos de cor.
+- **flat**: cinza chapado + luz, sem textura — pra silhueta e volume (o pé
+  abre? o garfo lê natural? a junção é seca?).
+
+## Regra de COMPORTAMENTO — forma é do ideador, e eu NÃO concluo
+
+Julgamento de FORMA (não de malha/paleta, que têm número objetivo):
+1. **Nunca** dizer sozinho "ficou bom / tá no ponto / fechamos / resolvido".
+   Isso é me enganar — o histórico prova que erro pra otimista no que **acabei
+   de criar**. Concluir é do ideador.
+2. Antes de mostrar, rodar a **visão de geometria** (`--geo`) e **apontar os
+   defeitos que EU vejo** ("a junção loft→galho salta", "faceta no garfo",
+   "base do galho torcida") — não vender sucesso.
+3. Eu entrego + listo o que **ainda está ruim**; o ideador decide o "bonito".
+
 ## Se mexeu no MOTOR ou nas mutações
 
 Rode o benchmark e confirme que nada regrediu:

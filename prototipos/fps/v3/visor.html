@@ -32,14 +32,15 @@ const TS = Math.max(1, (parseInt(P.get('ts')) || 4) | 0);
 const res = Math.max(160, (parseInt(P.get('res')) || 640) | 0);
 const camOrbita = !P.has('a');
 const cam = { a: parseFloat(P.get('a')) * Math.PI / 180, e: P.has('e') ? parseFloat(P.get('e')) : undefined, r: P.has('r') ? parseFloat(P.get('r')) : undefined };
+const DBG = { normais: 1, flat: 2 }[P.get('debug')] || (parseInt(P.get('debug')) || 0);   // ?debug=normais|flat|1|2 -> visão de GEOMETRIA (D-65)
 
 const hudNome = document.getElementById('nome'), hudFps = document.getElementById('fps'), hudDev = document.getElementById('dev');
 try {
   const mod = await import(`./pecas/${nome}.js`);
   hudNome.textContent = `${mod.meta.nome} (${mod.meta.tipo}) — ${mod.meta.desc}`;
-  const visor = criarVisor({ canvas: document.getElementById('c'), res, camOrbita, cam });
+  const visor = criarVisor({ canvas: document.getElementById('c'), res, camOrbita, cam, debug: DBG });
   visor.carregar(mod.construir({ TS, tex, geo, m4 }));
-  hudDev.textContent = `${visor.info} · tex ${16*TS}px · ${visor.renderer}`;
+  hudDev.textContent = `${visor.info} · tex ${16*TS}px${DBG ? ' · GEO' : ''} · ${visor.renderer}`;
   visor.rodar((fps) => { hudFps.textContent = fps + ' fps'; });
   window.__ready = true;
 } catch (e) {

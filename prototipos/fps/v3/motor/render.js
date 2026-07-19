@@ -37,7 +37,8 @@ const WIND = `
     return world;
   }`;
 
-export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, sombra = 1, particulasN = 320, luz = 1 }) {
+export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, sombra = 1, particulasN = 320, luz = 1, debug = 0 }) {
+  const DEBUG = debug | 0;   // 0 normal, 1 normais (geometria), 2 flat (forma sem textura)
   const IW = Math.max(160, res | 0), IH = Math.round(IW * 9 / 16);
   const SM = SOMBRA_SM[sombra] ?? 1024, sombraOn = sombra > 0;
   const LT = LUZ_TIER[luz] ?? LUZ_TIER[1];
@@ -72,7 +73,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP; varying vec3 vW;
     uniform sampler2D uTex, uShadow;
     uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; uniform vec3 uCam; uniform float uRim; ${PACK}
-    uniform float uShadowTexel, uDiffOn, uBounce, uToon;
+    uniform float uShadowTexel, uDiffOn, uBounce, uToon, uDebug;
     float shadow(){
       vec3 lc = vLP.xyz / vLP.w * 0.5 + 0.5;
       if (lc.x < 0.0 || lc.x > 1.0 || lc.y < 0.0 || lc.y > 1.0 || lc.z > 1.0) return 1.0;
@@ -99,7 +100,12 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       }
       vec3 sky = uSkyHz; /* derrete pro tom do HORIZONTE do fundo (sem degrau) */
       float fog = clamp(1.0 - (vD - uFog.x)/uFog.y, 0.0, 1.0);
-      gl_FragColor = vec4(mix(sky, lit, fog), 1.0);
+      vec3 outc = mix(sky, lit, fog);
+      // MODO DEBUG (D-65): tira a textura pra a GEOMETRIA aparecer (emenda/faceta/junção
+      // que a casca esconde). 1 = normais cruas (N*.5+.5); 2 = flat cinza (só forma+luz).
+      if (uDebug > 0.5 && uDebug < 1.5) outc = N * 0.5 + 0.5;
+      else if (uDebug > 1.5) outc = mix(sky, vec3(0.8) * (amb + uSunCol * sunL), fog);
+      gl_FragColor = vec4(outc, 1.0);
     }`);
 
   const bg = prog(`attribute vec2 aPos; varying vec2 vUV; void main(){ vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.0,1.0);} `,
@@ -310,6 +316,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         gl.uniform2f(gl.getUniformLocation(scene,'uWindDir'), windDir[0], windDir[1]);   // VENTO
         gl.uniform1f(gl.getUniformLocation(scene,'uWindT'), windT);                        // VENTO
         gl.uniform1i(gl.getUniformLocation(scene,'uTex'), 0); gl.uniform1i(gl.getUniformLocation(scene,'uShadow'), 1);
+        gl.uniform1f(gl.getUniformLocation(scene,'uDebug'), DEBUG);   // modo geometria (D-65)
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, shadowFBO.tex);
         // 2a: CONTORNO (casca invertida) — só lotes com outline>0, ANTES da cena
         { const outLotes = lotes.filter((L) => L.outline > 0);
