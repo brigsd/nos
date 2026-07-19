@@ -149,11 +149,11 @@ export function construir(ctx) {
      é a oval #1 esticada = variação de ALTURA da oval, não espécie própria
      (vai pro mostruário de variações da oval, como fizemos com os pinheiros) ---- */
   const forms = [];
-  const push = (mesh, tex) => forms.push({ mesh, tex });
+  const push = (mesh, tex, rim = 0, outline = 0) => forms.push({ mesh, tex, rim, outline });   // outline>0 = contorno casca (D-63)
   // 1 carvalho (oval média)
   addTrunk(-9, 1.9); { const m = Mesh(); blobOval(m, [-9, 1.9 + 2.0 * 0.92, 0], 1.35, 2.0, 0.34); push(m, GREEN); }
-  // 2 larga (baixa e espalhada, copa ÚNICA) — verde claro + curvas de cacho variadas
-  addTrunk(-4.5, 1.3, 0.4, 0.16); { const m = Mesh(); blobOval(m, [-4.5, 1.3 + 1.35 * 0.92, 0], 2.05, 1.3, 0.36, 7); push(m, VERDE_CARTOON); }
+  // 2 larga (copa ÚNICA BOMBADA, estilo arbusto cartoon) — silhueta caroçuda + CONTORNO casca (D-63) + curvas de cacho
+  addTrunk(-4.5, 1.3, 0.4, 0.16); { const m = Mesh(); blobOval(m, [-4.5, 1.3 + 1.5 * 0.92, 0], 2.0, 1.5, 0.5, 7); push(m, VERDE_CARTOON, 0, 0.05); }
   // 3 pinheiro (NÍVEIS em escada, verde escuro de agulha, tronco curto)
   addTrunk(0, 0.85, 0.28, 0.11); { const m = Mesh(); pinheiroTiers(m, 0, 0.7, 1.65, 4.0, 5); push(m, PINE); }
   // 4 cerejeira (oval redonda, rosa)

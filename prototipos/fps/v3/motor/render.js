@@ -64,7 +64,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       vec3 amb = mix(uGround, mix(uSkyHz, uSkyTop, clamp(N.y,0.0,1.0)), N.y*0.5+0.5) * 0.5;
       amb += uGround * uBounce * max(0.0, -N.y);   // rebote falso embaixo de copas/beirais (tier Alto)
       vec3 lit = tx.rgb * (amb + uSunCol * diff * shadow());
-      if (uRim > 0.0) {   // contorno de tinta FINO: só a borda mais rasante à vista
+      if (uRim > 0.0) {   // contorno de tinta FINO (fresnel): só a borda mais rasante à vista
         float r = 1.0 - abs(dot(N, normalize(uCam - vW)));
         lit = mix(lit, vec3(0.11, 0.09, 0.12), uRim * smoothstep(0.78, 0.97, r));
       }
@@ -93,8 +93,19 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
   const blit = prog(`attribute vec2 aPos; varying vec2 vUV; void main(){ vUV=aPos*0.5+0.5; gl_Position=vec4(aPos,0.0,1.0);} `,
     `precision mediump float; varying vec2 vUV; uniform sampler2D uTex; void main(){ gl_FragColor = texture2D(uTex, vUV);} `);
 
+  /* CONTORNO por-lote (casca invertida, D-63): infla a malha ao longo da normal
+     e pinta chapado de verde-escuro; desenhada com as faces DA FRENTE culled (só
+     as de TRÁS) ANTES da cena -> sobra só na silhueta = contorno firme e uniforme
+     (toon), independente da luz. Ligado por lote via L.outline (largura em
+     unidades de mundo); 0 = sem contorno (as outras peças seguem iguais). */
+  const outline = prog(`
+    attribute vec3 aPos; attribute vec3 aNrm; uniform mat4 uMVP, uModel; uniform float uW;
+    void main(){ vec4 w = uModel * vec4(aPos + normalize(aNrm) * uW, 1.0); gl_Position = uMVP * w; }`,
+    `precision mediump float; uniform vec3 uInk; void main(){ gl_FragColor = vec4(uInk, 1.0); }`);
+
   const AL = { pos: gl.getAttribLocation(scene,'aPos'), uv: gl.getAttribLocation(scene,'aUV'), nrm: gl.getAttribLocation(scene,'aNrm') };
   const DL = { pos: gl.getAttribLocation(depthProg,'aPos'), uv: gl.getAttribLocation(depthProg,'aUV') };
+  const OL = { pos: gl.getAttribLocation(outline,'aPos'), nrm: gl.getAttribLocation(outline,'aNrm') };
 
   /* uniforms de TIER são fixos pela vida do visor (tier muda = recarrega a
      página, como o D-49 já faz pro ?res — evita geri-los por quadro) */
@@ -180,7 +191,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       const meshCache = new Map(), texCache = new Map();
       const getMesh = (m) => { let g = meshCache.get(m); if (!g) { g = glMesh(m); meshCache.set(m, g); } return g; };
       const getTex = (t) => { let g = texCache.get(t); if (!g) { g = glTex(t); texCache.set(t, g); } return g; };
-      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0 }));
+      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0 }));
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -254,6 +265,23 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         gl.uniform2f(gl.getUniformLocation(scene,'uFog'), fogCfg[0], fogCfg[1]);
         gl.uniform1i(gl.getUniformLocation(scene,'uTex'), 0); gl.uniform1i(gl.getUniformLocation(scene,'uShadow'), 1);
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, shadowFBO.tex);
+        // 2a: CONTORNO (casca invertida) — só lotes com outline>0, ANTES da cena
+        { const outLotes = lotes.filter((L) => L.outline > 0);
+          if (outLotes.length) {
+            gl.useProgram(outline);
+            gl.uniformMatrix4fv(gl.getUniformLocation(outline, 'uMVP'), false, mvpf);
+            gl.uniform3f(gl.getUniformLocation(outline, 'uInk'), 0.05, 0.17, 0.11);
+            gl.enable(gl.CULL_FACE); gl.cullFace(gl.FRONT);   // desenha só as faces de TRÁS da casca inflada
+            for (const L of outLotes) {
+              gl.uniformMatrix4fv(gl.getUniformLocation(outline, 'uModel'), false, L.matriz);
+              gl.uniform1f(gl.getUniformLocation(outline, 'uW'), L.outline);
+              gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
+              gl.enableVertexAttribArray(OL.pos); gl.vertexAttribPointer(OL.pos, 3, gl.FLOAT, false, 32, 0);
+              gl.enableVertexAttribArray(OL.nrm); gl.vertexAttribPointer(OL.nrm, 3, gl.FLOAT, false, 32, 20);
+              gl.drawArrays(gl.TRIANGLES, 0, L.mesh.n);
+            }
+            gl.disable(gl.CULL_FACE); gl.useProgram(scene);
+          } }
         draw(scene, AL);
         // partículas (pólen do palco — paisagens desligam)
         if (!semParts) {
