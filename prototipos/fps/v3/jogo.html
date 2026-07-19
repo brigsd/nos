@@ -147,7 +147,8 @@
       <div class="linha"><span>resolução</span><div class="tiers" data-cfg="res">
         <button class="opt" data-v="480">480</button><button class="opt" data-v="640">640</button
         ><button class="opt" data-v="960">960</button><button class="opt" data-v="1440">1440</button
-        ><button class="opt" data-v="1920">1920</button><button class="opt" data-v="0">Nativa</button>
+        ><button class="opt" data-v="1920">1920</button><button class="opt" data-v="2560">2560</button
+        ><button class="opt" data-v="3440">3440</button>
       </div></div>
       <div class="linha"><span>suavização</span><div class="tiers" data-cfg="aa">
         <button class="opt" data-v="0">Pixel duro</button><button class="opt" data-v="1">Suave</button
@@ -226,14 +227,18 @@ addEventListener('error', (ev) => mostrarErro(ev.error || ev.message));
 addEventListener('unhandledrejection', (ev) => mostrarErro(ev.reason));
 
 
-/* res = largura do quadro interno. 0 significa "nativa": acompanha a janela,
-   limitada a 2560 pra ninguém pedir sem querer um quadro gigante num monitor
-   de altíssima resolução e achar que o jogo travou. */
+/* res = largura do quadro interno, em pixels. Havia uma opção "Nativa" que
+   acompanhava a janela mas era limitada a 2560 — num monitor de 3440 ela
+   entregava MENOS que o nativo e ninguém tinha como perceber. Trocada por
+   números explícitos: o que se pede é o que se recebe.
+   Passar da largura da janela é desperdício: o quadro é reduzido na cópia final
+   e o detalhe extra vai pro lixo — a não ser com a suavização 2×, que é
+   supersampling e existe justamente pra aproveitar isso. */
 /* mapaCanto: 0 nenhum · 1 ↖ · 2 ↗ · 3 ↙ · 4 ↘. Nasce em 3 (canto de baixo à
    esquerda): o minimapa passou a ser parte fixa do HUD, não algo a descobrir. */
 const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0, recon: 0, auto: 0,
   mapaCanto: 3, hudTexto: 1 };
-const larguraInterna = (r) => (r > 0 ? r : Math.min(2560, Math.round(innerWidth * (devicePixelRatio || 1))));
+const larguraInterna = (r) => Math.max(160, r | 0);
 const Q = new URLSearchParams(location.search);
 function lerCfg() {
   let c;
