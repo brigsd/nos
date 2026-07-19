@@ -377,9 +377,8 @@ export function criarArvores(ctx) {
       // ao topo; galhoSeca nivel 3 dá a ramificação natural. Única marca: a emenda geométrica.
       // PÉ DE ELEFANTE integrado na base do tronco (uma malha só, sem emenda): o tronco
       // galhoSeca começa em y=0.72 e o pe=true prepende o pé flarado abaixo, MESMO nº de
-      // lados (10 = estrela de 5 pontas, múltiplo de 5 -> dedos nos vértices; menos redondo
-      // que 15). Tronco, pé e galhos = uma superfície contínua.
-      galhoSeca(canopy, [0, 0.72, 0], [0, 1, 0], 1.5, 0.29, 0.16, 3, S + 1, null, null, true, 10, true);
+      // lados (15 = estrela de 5 pontas). Tronco, pé e galhos = uma superfície contínua.
+      galhoSeca(canopy, [0, 0.72, 0], [0, 1, 0], 1.5, 0.29, 0.16, 3, S + 1, null, null, true, 15, true);
       ctex = BARK_RAIZ; ink = null; outl = 0; toon = 0;
     } else if (especie === 'frondosa') {
       /* a seca ramificada + COPA que SEGUE os galhos: aglomera as pontas de CIMA em
