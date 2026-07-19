@@ -19,11 +19,13 @@ export function criarArvores(ctx) {
   const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 
   /* ---------- texturas (compartilhadas por TODAS as árvores) ---------- */
+  /* casca CARTOON (D-63): UMA cor marrom clara (22 #e6904e) + RANHURAS verticais
+     finas e frequentes (24 escuro) que ondulam de leve por linha — sem os manchões
+     escuros do fbm. Casca limpa, casa com o fill das copas. */
   const BARK = texCanvas(32, 64, (x, y) => {
-    const n = fbm(x / 5, y / 11);
-    let i = n > 0.6 ? 4 : n > 0.4 ? 21 : n > 0.24 ? 20 : 24;
-    if ((x + (fbm(x / 3, y / 22) * 3 | 0)) % 5 === 0) i = 24;
-    return i;
+    const wob = (fbm(y * 0.12 + 1, 5) - 0.5) * 2.4;      // ranhuras ondulam levemente
+    const c = ((Math.round(x - wob) % 32) + 32) % 32;
+    return hash2(c, 7) < 0.22 ? 24 : 22;                 // ~22% das colunas = ranhura fina escura
   });
   /* textura CARTOON: base chapada + curvas de cacho "‿" (curva + sombra), arcos
      de inclinação/abertura variadas. base/curva/sombra = índices da paleta. */

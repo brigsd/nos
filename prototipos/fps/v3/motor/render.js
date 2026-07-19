@@ -148,20 +148,18 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
   const PA = gl.getAttribLocation(parts, 'aSeed');
   const BA = gl.getAttribLocation(blit, 'aPos'), BT = gl.getUniformLocation(blit, 'uTex');
 
-  /* PALCO padrão: chão de grama (a peça entra por cima dele) */
-  const GRASS = texCanvas(64, 64, (x, y) => {
-    const bx = x/4, by = y/4; const n = fbm(bx*0.9+1, by*0.9+1);
-    let i = n > 0.7 ? 33 : n > 0.46 ? 32 : n > 0.22 ? 31 : 30;
-    if (fbm(bx*3.1, by*0.7) > 0.72) i = 32;
-    const h = hash2(x*7, y*7); if (h < 0.006) i = 28; else if (h < 0.012) i = 63;
-    return i;
-  });
+  /* PALCO padrão: chão de grama CARTOON (D-63) — CHAPADO (um verde só, 31). Com
+     NEAREST + o line-art das árvores, qualquer ruído/2-tom vira camuflagem de
+     borda dura que briga com o fill limpo das copas; o chão chapado CASA. A
+     "grama de verdade" (tufos com caráter) deve vir por GEOMETRIA no idioma
+     cartoon (billboard flat + contorno), não por textura — fica pra depois. */
+  const GRASS = texCanvas(4, 4, () => 32);   // verde chapado (#91db69) — menos limão, um tico mais escuro
   const stage = { mesh: null, tex: glTex(GRASS), matriz: m4.ident() };
   {
-    const g = { v: [] };
+    const g = { v: [] }, T = 10;   // T = ladrilhos da grama no palco (era 36; menos = menos padrão repetido)
     const push = (p, u, v) => g.v.push(p[0], p[1], p[2], u, v, 0, 1, 0);
-    push([-18,0,18],0,36); push([18,0,18],36,36); push([18,0,-18],36,0);
-    push([-18,0,18],0,36); push([18,0,-18],36,0); push([-18,0,-18],0,0);
+    push([-18,0,18],0,T); push([18,0,18],T,T); push([18,0,-18],T,0);
+    push([-18,0,18],0,T); push([18,0,-18],T,0); push([-18,0,-18],0,0);
     stage.mesh = glMesh(g);
   }
 

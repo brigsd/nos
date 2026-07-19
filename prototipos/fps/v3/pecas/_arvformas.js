@@ -11,11 +11,12 @@ export function construir(ctx) {
   const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 
   /* casca (compartilhada) */
+  /* casca CARTOON (D-63): uma cor marrom clara (22) + ranhuras verticais finas e
+     frequentes (24), sem os manchões fbm. */
   const BARK = texCanvas(32, 64, (x, y) => {
-    const n = fbm(x / 5, y / 11);
-    let i = n > 0.6 ? 4 : n > 0.4 ? 21 : n > 0.24 ? 20 : 24;
-    if ((x + (fbm(x / 3, y / 22) * 3 | 0)) % 5 === 0) i = 24;
-    return i;
+    const wob = (fbm(y * 0.12 + 1, 5) - 0.5) * 2.4;
+    const c = ((Math.round(x - wob) % 32) + 32) % 32;
+    return hash2(c, 7) < 0.22 ? 24 : 22;
   });
   /* folhagem paramétrica: R = [c0 escuro, c1, c2, c3, c4 claro, glint].
      CACHOS IRREGULARES (posição por hash puro — sem a grade 8×8 que lia como

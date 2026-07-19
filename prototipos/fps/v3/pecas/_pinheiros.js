@@ -12,11 +12,11 @@ export function construir(ctx) {
   const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 
   /* casca quente (tronco de pinheiro: castanho-avermelhado) */
+  /* casca CARTOON (D-63): uma cor marrom clara (22) + ranhuras verticais finas (24) */
   const BARK = texCanvas(32, 64, (x, y) => {
-    const n = fbm(x / 5, y / 11);
-    let i = n > 0.6 ? 21 : n > 0.4 ? 20 : n > 0.24 ? 24 : 1;
-    if ((x + (fbm(x / 3, y / 22) * 3 | 0)) % 5 === 0) i = 1;
-    return i;
+    const wob = (fbm(y * 0.12 + 1, 5) - 0.5) * 2.4;
+    const c = ((Math.round(x - wob) % 32) + 32) % 32;
+    return hash2(c, 7) < 0.22 ? 24 : 22;
   });
   /* pinheiro CARTOON (D-63): verde-escuro chapado em faixas por nível (topo do
      nível 31, corpo 30, rebordo escuro 29 = sombra sob cada camada). Casa com as
