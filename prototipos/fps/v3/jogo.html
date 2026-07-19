@@ -9,6 +9,11 @@
   html, body { margin: 0; height: 100%; background: #0c0f16; overflow: hidden; font-family: ui-monospace, Menlo, monospace; }
   #c { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; }
   #hud { position: fixed; top: 8px; left: 10px; font-size: 11px; color: #cddf6c; text-shadow: 0 1px 2px #000; pointer-events: none; line-height: 1.5; }
+  /* coordenadas: topo ao centro, pra ler de relance e citar uma posição.
+     Tabular-nums trava a largura dos dígitos, senão o texto dança a cada passo. */
+  #coord { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); font-size: 11px;
+    font-variant-numeric: tabular-nums; color: #cddf6c; text-shadow: 0 1px 2px #000;
+    pointer-events: none; white-space: nowrap; user-select: text; }
   #hint { position: fixed; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #9b93a8; text-shadow: 0 1px 2px #000; pointer-events: none; }
   #pauseBtn { position: fixed; top: 10px; right: 10px; width: 38px; height: 38px; border-radius: 50%;
     background: rgba(23,18,33,.7); color: #eaaded; border: 1px solid var(--line); font-size: 16px; cursor: pointer; z-index: 15; }
@@ -55,6 +60,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="hud">NÓS · v3 — o alicerce (D-61)<br><b id="fps">— fps</b> · <span id="dev">—</span></div>
+<div id="coord">—</div>
 <div id="hint">clique: mirar (ESC pausa) · WASD anda</div>
 <button id="pauseBtn" title="pausa (ESC)">⏸</button>
 <div id="stickL" class="stick"><div class="knob"></div></div>
@@ -273,6 +279,24 @@ function antesDoQuadro(dt, T) {
   }
   som.proximidadeAgua(Math.hypot(pos[0] - LAGO[0], pos[2] - LAGO[1]));
   visor.setCam([pos[0], EYE, pos[2]], yaw, pitch);
+  mostrarCoords(T);
+}
+
+/* Coordenadas no topo. Só 10x por segundo: escrever no DOM a cada quadro é
+   trabalho jogado fora, ninguém lê 60 números por segundo. `raio` é a distância
+   até o centro contra o MAXR — é ele que barra a saída da ilha, então ver os
+   dois lado a lado mostra na hora se a borda visual bate com o limite real.
+   A string ?cam= sai pronta pra colar na URL e voltar exatamente a este ponto. */
+const elCoord = document.getElementById('coord');
+let proximoCoord = 0;
+function mostrarCoords(T) {
+  if (T < proximoCoord) return;
+  proximoCoord = T + 0.1;
+  const r = Math.hypot(pos[0], pos[2]);
+  const piso = ilhaChao.superficieEm(pos[0], pos[2]);
+  const cam = `${pos[0].toFixed(1)},${pos[2].toFixed(1)},${yaw.toFixed(2)},${pitch.toFixed(2)}`;
+  elCoord.innerHTML = `x ${pos[0].toFixed(1)} · z ${pos[2].toFixed(1)} · raio ${r.toFixed(1)}/${MAXR} · ${piso}`
+    + `<br><span style="opacity:.55">?cam=${cam}</span>`;
 }
 
 visor.rodar((fps) => { document.getElementById('fps').textContent = fps + ' fps'; }, antesDoQuadro);
