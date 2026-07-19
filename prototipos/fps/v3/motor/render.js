@@ -47,7 +47,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP; varying vec3 vW;
     uniform sampler2D uTex, uShadow;
     uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; uniform vec3 uCam; uniform float uRim; ${PACK}
-    uniform float uShadowTexel, uDiffOn, uBounce;
+    uniform float uShadowTexel, uDiffOn, uBounce, uToon;
     float shadow(){
       vec3 lc = vLP.xyz / vLP.w * 0.5 + 0.5;
       if (lc.x < 0.0 || lc.x > 1.0 || lc.y < 0.0 || lc.y > 1.0 || lc.z > 1.0) return 1.0;
@@ -63,7 +63,11 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       float diff = max(0.0, dot(N, uSun)) * uDiffOn;
       vec3 amb = mix(uGround, mix(uSkyHz, uSkyTop, clamp(N.y,0.0,1.0)), N.y*0.5+0.5) * 0.5;
       amb += uGround * uBounce * max(0.0, -N.y);   // rebote falso embaixo de copas/beirais (tier Alto)
-      vec3 lit = tx.rgb * (amb + uSunCol * diff * shadow());
+      float sunL = diff * shadow();
+      // CEL (toon, D-63): quantiza a luz do sol em 3 DEGRAUS duros — a faixa clara
+      // é o "brilho" e SEGUE o sol (some de noite/contraluz), sem baked na textura.
+      if (uToon > 0.5) sunL = sunL > 0.6 ? 1.15 : sunL > 0.24 ? 0.55 : 0.0;
+      vec3 lit = tx.rgb * (amb + uSunCol * sunL);
       if (uRim > 0.0) {   // contorno de tinta FINO (fresnel): só a borda mais rasante à vista
         float r = 1.0 - abs(dot(N, normalize(uCam - vW)));
         lit = mix(lit, vec3(0.11, 0.09, 0.12), uRim * smoothstep(0.78, 0.97, r));
@@ -191,7 +195,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       const meshCache = new Map(), texCache = new Map();
       const getMesh = (m) => { let g = meshCache.get(m); if (!g) { g = glMesh(m); meshCache.set(m, g); } return g; };
       const getTex = (t) => { let g = texCache.get(t); if (!g) { g = glTex(t); texCache.set(t, g); } return g; };
-      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null }));
+      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0 }));
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -211,10 +215,12 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       const draw = (prg, aL) => {
         const uM = gl.getUniformLocation(prg, 'uModel');
         const uR = gl.getUniformLocation(prg, 'uRim');   // null no passe de profundidade
+        const uTo = gl.getUniformLocation(prg, 'uToon');
         const all = semPalco ? lotes : [stage, ...lotes];
         for (const L of all) {
           gl.uniformMatrix4fv(uM, false, L.matriz);
           if (uR) gl.uniform1f(uR, L.rim || 0);          // contorno por lote
+          if (uTo) gl.uniform1f(uTo, L.toon || 0);       // cel-shading por lote
           gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex);   // ambos os passes: alfa p/ recorte
           gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
           gl.enableVertexAttribArray(aL.pos); gl.vertexAttribPointer(aL.pos, 3, gl.FLOAT, false, 32, 0);

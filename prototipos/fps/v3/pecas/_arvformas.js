@@ -144,7 +144,7 @@ export function construir(ctx) {
      é a oval #1 esticada = variação de ALTURA da oval, não espécie própria
      (vai pro mostruário de variações da oval, como fizemos com os pinheiros) ---- */
   const forms = [];
-  const push = (mesh, tex, rim = 0, outline = 0, outlineInk = null) => forms.push({ mesh, tex, rim, outline, outlineInk });   // outline>0 = contorno casca (D-63)
+  const push = (mesh, tex, rim = 0, outline = 0, outlineInk = null) => forms.push({ mesh, tex, rim, outline, outlineInk, toon: 1 });   // outline = contorno casca; toon = cel-shading (D-63)
   const TINTA_ROSA = [0.20, 0.10, 0.18];   // contorno da cerejeira (ameixa escura, não verde)
   // 1 carvalho (oval) — CARTOON: base clara + curvas + contorno
   addTrunk(-9, 1.9); { const m = Mesh(); blobOval(m, [-9, 1.9 + 2.0 * 0.92, 0], 1.35, 2.0, 0.44); push(m, VERDE_CARTOON, 0, 0.05); }
