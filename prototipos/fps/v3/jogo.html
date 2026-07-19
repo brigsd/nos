@@ -245,7 +245,11 @@ function antesDoQuadro(dt, T) {
       pos[2] += (fwd[1] * mz + right[1] * mx) * speed * dt;
       const d = Math.hypot(pos[0], pos[2]);
       if (d > MAXR) { pos[0] *= MAXR / d; pos[2] *= MAXR / d; }
-      if (Math.hypot(mx, mz) > 0.12) som.passo(T);
+      if (Math.hypot(mx, mz) > 0.12) {
+        const tipo = ilhaChao.superficieEm(pos[0], pos[2]);
+        const sprint = input.shiftHeld();
+        som.passo(T, tipo, sprint);
+      }
     }
   }
   som.proximidadeAgua(Math.hypot(pos[0] - LAGO[0], pos[2] - LAGO[1]));

@@ -12,6 +12,10 @@ export const meta = {
   desc: 'a ilha de casa + ilhas grandes craggy longe no horizonte, em bruma',
 };
 
+/* geometria do lago: a malha (construir) e a consulta de superfície
+   (superficieEm) leem daqui, senão a praia sonora sai do lugar da visual */
+const LAGO = { lox: 10, loz: -8, lr: 6.5, sandR: 6.5 + 1.6 };
+
 export function construir(ctx) {
   const { tex, geo } = ctx;
   const { texCanvas, fbm, vnoise, hash2 } = tex;
@@ -129,7 +133,7 @@ export function construir(ctx) {
   }
 
   // LAGO com PRAIA: anel de areia (grama->água) + disco d'água por cima
-  const lox = 10, loz = -8, lr = 6.5, sandR = lr + 1.6;
+  const { lox, loz, lr, sandR } = LAGO;
   const ringUV = (ang, rr, base) => [0.5 + 0.5 * Math.cos(ang) * rr / base, 0.5 + 0.5 * Math.sin(ang) * rr / base];
   for (let i = 0; i < N; i++) {
     const a = i / N * TAU, a2 = (i + 1) / N * TAU;
@@ -216,4 +220,18 @@ export function construir(ctx) {
       { mesh: water, tex: WATER },
     ],
   };
+}
+
+/* Função auxiliar para consultar o tipo de superfície em uma coordenada (x, z)
+   (unidades do mundo). Retorna 'agua', 'areia' ou 'grama' (padrão).
+   Esta implementação é baseada na geometria fixa do lago e areia.
+   Para estender a pisos de madeira/pedra (futuro), pode-se consultar
+   os lotes de construção ou adicionar uma grade de tipos. */
+export function superficieEm(x, z) {
+  const { lox, loz, lr, sandR } = LAGO;
+  const dx = x - lox, dz = z - loz;
+  const dist = Math.hypot(dx, dz);
+  if (dist <= lr) return 'agua';
+  if (dist <= sandR) return 'areia';
+  return 'grama'; // padrão
 }
