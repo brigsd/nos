@@ -2,6 +2,16 @@
 
 > Este arquivo é o "save game" do desenvolvimento. Toda sessão começa lendo-o e termina atualizando-o.
 
+## Sessão 2026-07-19 (parte 37) — vegetação plantável (D-64); a bancada ganha OLHO DE FORMA + regra de não-concluir (D-65); seca/frondosa/raiz fecham o elenco (D-66)
+
+- **Vegetação cartoon plantável** (D-64): `vegetacao-cartoon.js` (arbusto + flor + tufo) + **vento por-lote no motor** (`windF`: grama rápida, flor média, arbusto/árvore 0.9) — a cena respira em camadas.
+- **A meta-virada da sessão (D-65):** o ideador flagrou o padrão — eu concluía "ficou bom" e ele via defeito; a causa era o INSTRUMENTO (screenshot texturizado 640px esconde emenda/faceta/junção). A bancada ganhou **visão de geometria**: `?debug=normais|flat` no visor (normais como cor / cinza+luz sem textura), `--geo`, `--giro=N` e viewport que acompanha `--res` no `olhar-peca`. E a skill `auditar-peca` ganhou a **regra de comportamento**: nunca concluir FORMA sozinho; rodar `--geo` antes de mostrar e apontar os defeitos que eu vejo; o "bonito" é do ideador. A visão já pagou: revelou o garfo facetado da 'raiz' e matou o experimento "pé de elefante nas duas pontas" (lia como vaso) em 1 render.
+- **3 espécies novas no carimbo (D-66):** **'seca'** (esqueleto `galhoSeca`: tubos hex, parallel-transport, filhos embutidos com colar 1.5; sem contorno — o "preto" era a casca invertida); **'frondosa'** (pontas de cima → lóbulos **fundidos por SDF+smin** via surface-nets, K fino "quase não conectadas", verde chapado — as curvas "‿" quebravam na superfície fundida); **'raiz'** ("pé vira tronco": loft ÚNICO raízes→tronco com perfil côncavo agressivo + `BARK_SECA` por altura (`vAlt`) → transição raiz↔tronco SEM emenda; ranhuras retas só do tronco pra cima; galhos brotam do topo).
+- **A junção loft↔galhos** (o defeito que a visão de geometria expôs) agora é disfarçada por **PENUMBRA na textura**: faixa escura na altura da forquilha (v≈0.46–0.61) — loft e galhos compartilham o `vAlt`, escurecem juntos e a linha de interseção fica dentro de área escura. **Honesto:** mascara COR, não silhueta — o garfo segue facetado no `--geo` e há um nó onde os colares se cruzam. **O ideador ainda não julgou a penumbra.**
+- **Rejeitados registrados** (não repetir): fusão SDF da árvore inteira (redonda + textura distorcida), teia na forquilha (z-fight), colar 2.1, loft de duas pontas (vaso).
+- **Mostruário `arvore-cartoon`**: só empurra lote com malha de verdade (seca sem copa / raiz sem trunk geravam "malha vazia" no auditar). Banding do PINE segue (by design, D-63).
+- **PRÓXIMO:** ideador julga a penumbra da forquilha (e a 'frondosa'); integrar carimbo+vegetação na ilha/`jogo.html` (pendência desde D-63); talvez allowlist do banding-PINE no critic; LOD/impostor pra floresta densa.
+
 ## Sessão 2026-07-19 (parte 36) — virada CARTOON das árvores do v3 + toon no motor + carimbo plantável (D-63)
 
 - **Linguagem cartoon fixada** (iteração longa de arte no `_arvformas`): folhagem foi do mosqueado → limpo → **cor única chapada + curvas de cacho "‿"**. O ideador mandou uma **referência** de arbusto cartoon e o alvo travou: massa bombada + contorno grosso + cel + brilho.
