@@ -18,7 +18,17 @@ const PACK = `
   vec4 packDepth(float d){ vec4 e = fract(d * vec4(1.0,255.0,65025.0,16581375.0)); e -= e.yzww * (1.0/255.0); return e; }
   float unpackDepth(vec4 c){ return dot(c, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0)); }`;
 
-export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, sombra = 1, particulasN = 320, luz = 1 }) {
+export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, sombra = 1, particulasN = 320, luz = 1, aa = 0 }) {
+  /* ANTISSERRILHADO. WebGL1 nao tem MSAA em framebuffer (isso e WebGL2), e o
+     serrilhado daqui nem vem das bordas de poligono: vem da AMPLIACAO do quadro
+     interno com pixel duro — o mesmo efeito que da a cara de pixel art. Sobram
+     dois caminhos honestos, e sao os tiers:
+       0  pixel duro. O visual do projeto. Serrilha e nao custa nada.
+       1  ampliacao suave (LINEAR no blit). De graca, mas borra o pixel art.
+       2  supersampling 2x: desenha no dobro e reduz. Antisserrilhado de
+          verdade, e o unico que suaviza SEM borrar — ao custo de 4x pixels. */
+  const AA_ESCALA = aa >= 2 ? 2 : 1;
+  const AA_SUAVE = aa >= 1;
   /* O quadro interno segue a PROPORÇÃO DA JANELA, não 16:9 fixo. Antes a cena
      era desenhada em 16:9 e esticada pra tela inteira no blit final: num
      ultrawide 21:9 tudo saía 33% mais largo, círculo virava oval. Como a
@@ -26,7 +36,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
      mais dos lados, que é o comportamento certo — e não deformar o mesmo
      enquadramento. `res` é a largura interna; a altura sai da proporção. */
   const propJanela = () => Math.max(0.5, Math.min(3.5, innerWidth / Math.max(1, innerHeight)));
-  const IW = Math.max(160, res | 0);
+  const IW = Math.max(160, res | 0) * AA_ESCALA;
   let IH = Math.max(90, Math.round(IW / propJanela()));
   const SM = SOMBRA_SM[sombra] ?? 1024, sombraOn = sombra > 0;
   const LT = LUZ_TIER[luz] ?? LUZ_TIER[1];
@@ -120,10 +130,17 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); return t; }
   function glMesh(m) { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(m.v), gl.STATIC_DRAW); return { buf: b, n: m.v.length / 8 }; }
-  function makeFBO(w, h) {
+  function makeFBO(w, h, suave) {
+    /* O filtro vale SÓ pro quadro final da cena. As texturas das peças seguem
+       NEAREST sempre — suavizar elas apagaria o pixel art na origem.
+       E o SHADOW MAP nunca pode vir suave: ele guarda profundidade empacotada
+       em RGBA, e interpolar os canais mistura bits de casas decimais
+       diferentes, o que vira sombra suja. Por isso `suave` só é passado no
+       sceneFBO, e o shadowFBO chama sem o argumento. */
+    const f = suave ? gl.LINEAR : gl.NEAREST;
     const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     const rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
     const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
@@ -131,7 +148,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
     return { fb, tex };
   }
-  let sceneFBO = makeFBO(IW, IH);
+  let sceneFBO = makeFBO(IW, IH, AA_SUAVE);
   const shadowFBO = makeFBO(SM, SM);
   /* girar a tela ou arrastar a janela muda a proporcao: o quadro interno tem
      que ser refeito, senao volta a esticar. Sem isso o conserto do ultrawide
@@ -141,7 +158,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     if (novo === IH) return;
     IH = novo;
     gl.deleteFramebuffer(sceneFBO.fb); gl.deleteTexture(sceneFBO.tex);
-    sceneFBO = makeFBO(IW, IH);
+    sceneFBO = makeFBO(IW, IH, AA_SUAVE);
   }
 
   const quadVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);

@@ -136,6 +136,13 @@
         ><button class="opt" data-v="960">960</button><button class="opt" data-v="1440">1440</button
         ><button class="opt" data-v="1920">1920</button><button class="opt" data-v="0">Nativa</button>
       </div></div>
+      <div class="linha"><span>suavização</span><div class="tiers" data-cfg="aa">
+        <button class="opt" data-v="0">Pixel duro</button><button class="opt" data-v="1">Suave</button
+        ><button class="opt" data-v="2">2× (SSAA)</button>
+      </div></div>
+      <p class="gnote">suavização: <b>pixel duro</b> é o visual do projeto — serrilha e não custa nada.
+        <b>Suave</b> borra a ampliação de graça, mas apaga o pixel. <b>2×</b> desenha no dobro e reduz:
+        é o único que tira serrilha SEM borrar, ao custo de 4× pixels (equivale a dobrar a resolução).</p>
       <p class="gnote">resolução é a LARGURA do quadro interno; a altura sai da proporção da janela.
         Baixa = pixel grande (a cara do jogo) e barato; Nativa acompanha a tela — em monitor grande
         pesa, porque o custo do render vem daqui e não do tamanho da janela. Aplica recarregando.</p>
@@ -175,7 +182,7 @@ import * as arvore3d from './pecas/arvore3d.js';
 /* res = largura do quadro interno. 0 significa "nativa": acompanha a janela,
    limitada a 2560 pra ninguém pedir sem querer um quadro gigante num monitor
    de altíssima resolução e achar que o jogo travou. */
-const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640 };
+const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0 };
 const larguraInterna = (r) => (r > 0 ? r : Math.min(2560, Math.round(innerWidth * (devicePixelRatio || 1))));
 const Q = new URLSearchParams(location.search);
 function lerCfg() {
@@ -206,7 +213,7 @@ const cena = { ...ilha, particulas: true, lotes: [...ilha.lotes, ...loteArvores]
 /* ---------- visor: câmera LIVRE, tiers do jogador ---------- */
 const canvas = document.getElementById('c');
 const visor = criarVisor({
-  canvas, res: larguraInterna(cfg.res), camOrbita: false,
+  canvas, res: larguraInterna(cfg.res), aa: cfg.aa, camOrbita: false,
   sombra: cfg.sombra, particulasN: PARTICULAS_N[cfg.particulas] ?? 320, luz: cfg.luz,
 });
 visor.carregar(cena);
