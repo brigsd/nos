@@ -16,6 +16,12 @@
     pointer-events: none; white-space: nowrap; user-select: text; }
   /* erro no loop de quadro mata o render e deixa a tela preta, sem nada na
      tela dizendo o porquê — a mensagem tem que aparecer AQUI, não só no console */
+  /* mapa (tecla M). Canvas 2D solto por cima — não encosta no WebGL. */
+  #mapa { position: fixed; z-index: 16; display: none; pointer-events: none;
+    border: 1px solid var(--line); border-radius: 6px; background: rgba(12,10,20,.72); }
+  #mapa.mini { right: 10px; bottom: 10px; width: 168px; height: 168px; }
+  #mapa.grande { left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: min(74vh, 74vw); height: min(74vh, 74vw); }
   /* etiquetas de ID (tecla I). O container nunca some do DOM; o que some são
      as etiquetas. pointer-events:none pra não roubar clique do jogo. */
   #tags { position: fixed; inset: 0; z-index: 15; pointer-events: none; }
@@ -77,6 +83,7 @@
 <canvas id="c"></canvas>
 <div id="hud">NÓS · v3 — o alicerce (D-61)<br><b id="fps">— fps</b> · <span id="dev">—</span></div>
 <div id="coord">—</div>
+<canvas id="mapa" width="420" height="420"></canvas>
 <div id="tags"></div>
 <div id="aviso"></div>
 <div id="erro"></div>
@@ -326,6 +333,7 @@ function antesDoQuadro(dt, T) {
   /* etiquetas acompanham a câmera, então é todo quadro — mas só quando ligadas.
      Desligadas, esta linha é uma comparação e mais nada. */
   if (verTags) mostrarTags();
+  if (mapaModo) desenharMapa();
 }
 
 /* Coordenadas no topo. Só 10x por segundo: escrever no DOM a cada quadro é
@@ -387,6 +395,91 @@ function avisar(texto, segundos = 2.5) {
   clearTimeout(timerAviso);
   timerAviso = setTimeout(() => { el.style.display = 'none'; }, segundos * 1000);
 }
+
+/* ---------- mapa (tecla M) ----------
+   Cicla mapa nenhum → minimapa → mapa grande com setores, como na v2.
+
+   O desenho é dividido em duas camadas por um motivo de custo: a ilha, a
+   água, a areia e as árvores NÃO mudam, então saem uma vez só num canvas
+   guardado; por quadro só se copia essa imagem e se desenha a seta do jogador.
+   Redesenhar o terreno inteiro a 60 quadros por segundo seria varrer 175 mil
+   pixels à toa.
+
+   As cores do terreno saem de `superficieEm`, a MESMA função que escolhe o som
+   do passo. Superfície nova aparece no mapa sozinha, sem ninguém lembrar de
+   atualizar dois lugares. */
+const MAPA_PX = 420;
+const CORES_MAPA = { grama: [35, 144, 99], areia: [251, 185, 84], agua: [11, 138, 143] };
+const elMapa = document.getElementById('mapa');
+const ctxMapa = elMapa.getContext('2d');
+let mapaModo = 0, mapaFundo = null;   // 0 nenhum · 1 mini · 2 grande
+
+const paraTela = (v) => ((v + ilhaChao.EXTENSAO) / (2 * ilhaChao.EXTENSAO)) * MAPA_PX;
+
+function montarFundoDoMapa() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = MAPA_PX;
+  const g = cv.getContext('2d');
+  const E = ilhaChao.EXTENSAO, img = g.createImageData(MAPA_PX, MAPA_PX);
+  for (let j = 0; j < MAPA_PX; j++) for (let i = 0; i < MAPA_PX; i++) {
+    const x = ((i + 0.5) / MAPA_PX) * 2 * E - E, z = ((j + 0.5) / MAPA_PX) * 2 * E - E;
+    if (Math.hypot(x, z) > ilhaChao.raioEm(x, z)) continue;   // fora da ilha fica transparente
+    const c = CORES_MAPA[ilhaChao.superficieEm(x, z)] || CORES_MAPA.grama;
+    const o = (j * MAPA_PX + i) * 4;
+    img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 240;
+  }
+  g.putImageData(img, 0, 0);
+  g.fillStyle = '#165a4c';
+  for (const o of OBJETOS) {
+    g.beginPath(); g.arc(paraTela(o.x), paraTela(o.z), MAPA_PX * 0.012, 0, Math.PI * 2); g.fill();
+  }
+  return cv;
+}
+
+function grade(g) {
+  const p = MAPA_PX / 8;
+  g.strokeStyle = 'rgba(199,188,216,.28)'; g.lineWidth = 1;
+  for (let i = 1; i < 8; i++) {
+    g.beginPath(); g.moveTo(i * p, 0); g.lineTo(i * p, MAPA_PX); g.stroke();
+    g.beginPath(); g.moveTo(0, i * p); g.lineTo(MAPA_PX, i * p); g.stroke();
+  }
+  // setor atual em destaque, pra casar com o que o HUD escreve
+  const s = setorEm(pos[0], pos[2]);
+  const col = 'ABCDEFGH'.indexOf(s[0]), lin = Number(s[1]) - 1;
+  g.fillStyle = 'rgba(249,194,43,.16)'; g.fillRect(col * p, lin * p, p, p);
+  g.fillStyle = '#c7bcd8'; g.font = `${Math.round(MAPA_PX * 0.032)}px system-ui, sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  for (let i = 0; i < 8; i++) {
+    g.fillText('ABCDEFGH'[i], (i + 0.5) * p, 3);
+    g.fillText(String(i + 1), 8, (i + 0.5) * p - MAPA_PX * 0.016);
+  }
+}
+
+function desenharMapa() {
+  if (!mapaFundo) mapaFundo = montarFundoDoMapa();
+  ctxMapa.clearRect(0, 0, MAPA_PX, MAPA_PX);
+  ctxMapa.drawImage(mapaFundo, 0, 0);
+  if (mapaModo === 2) grade(ctxMapa);
+
+  /* seta do jogador: aponta pra onde se olha. No mundo a frente é
+     (sin yaw, cos yaw); no mapa o x cresce pra direita e o z pra baixo, então
+     o vetor vai igual, sem inversão. */
+  const px = paraTela(pos[0]), py = paraTela(pos[2]);
+  const fx = Math.sin(yaw), fz = Math.cos(yaw), L = MAPA_PX * 0.028;
+  ctxMapa.fillStyle = '#f9c22b';
+  ctxMapa.beginPath();
+  ctxMapa.moveTo(px + fx * L * 1.6, py + fz * L * 1.6);
+  ctxMapa.lineTo(px - fz * L - fx * L * 0.4, py + fx * L - fz * L * 0.4);
+  ctxMapa.lineTo(px + fz * L - fx * L * 0.4, py - fx * L - fz * L * 0.4);
+  ctxMapa.closePath(); ctxMapa.fill();
+}
+
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyM' || paused) return;
+  mapaModo = (mapaModo + 1) % 3;
+  elMapa.className = mapaModo === 1 ? 'mini' : mapaModo === 2 ? 'grande' : '';
+  elMapa.style.display = mapaModo ? 'block' : 'none';
+  avisar(['mapa desligado', 'minimapa', 'mapa com setores'][mapaModo]);
+});
 
 /* ---------- etiquetas de ID (tecla I) ----------
    Porta o protocolo do COMUNICACAO.md: apontar objeto pelo nome em vez de

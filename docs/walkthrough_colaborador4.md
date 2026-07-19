@@ -112,7 +112,19 @@ ID no formato **`arvore@-13,8`**, derivado da posição e não de índice na lis
 reordenar as árvores não renomeia nada. Difere do `tipo-XxY` da v2 porque lá o
 mundo era grade de tiles positivos e aqui são unidades com sinal.
 
-**Ainda falta** a tecla `M` (mapa com a grade de setores).
+**Tecla `M` — mapa.** Cicla nenhum → minimapa → mapa grande com a grade de
+setores e o atual em destaque. Canvas 2D solto por cima; não encosta no WebGL.
+
+O desenho é dividido em duas camadas por custo: ilha, água, areia e árvores não
+mudam, então saem uma vez num canvas guardado (25ms, no primeiro `M`); por quadro
+só se copia essa imagem e se desenha a seta do jogador. Redesenhar o terreno a
+60fps seria varrer 175 mil pixels à toa.
+
+As cores do terreno saem de `superficieEm` — a mesma função que escolhe o som do
+passo. Superfície nova aparece no mapa sozinha, sem ninguém lembrar de atualizar
+dois lugares.
+
+Com isso o protocolo do `COMUNICACAO.md` está portado por inteiro.
 
 **Faixa de erro no rodapé.** Uma exceção dentro do `antesDoQuadro` derrubava o
 `rAF` inteiro: tela preta, sem movimento, e o som seguindo normal (Web Audio roda
