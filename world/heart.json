@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 140,
-    "worldTime": 8400
+    "tickCount": 141,
+    "worldTime": 8460
   },
   "width": 64,
   "height": 64,
@@ -5550,6 +5550,25 @@
       "type": "core_pulse",
       "tick": 140,
       "worldTime": 8400
+    },
+    {
+      "type": "native_spoke",
+      "tick": 141,
+      "worldTime": 8460,
+      "nativeId": "brasa",
+      "message": "o cheiro do pão não engana. venham se aquecer, todos."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 141,
+      "worldTime": 8460,
+      "nativeId": "quilha",
+      "message": "O pão quentinho nos chama, venham contar suas histórias!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 141,
+      "worldTime": 8460
     }
   ],
   "natives": {
@@ -5557,7 +5576,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 6,
+        "x": 7,
         "y": 1
       },
       "behaviorTree": "wanderer",
