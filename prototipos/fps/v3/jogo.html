@@ -140,7 +140,7 @@
         <button class="opt" data-v="0">Pixel duro</button><button class="opt" data-v="1">Suave</button
         ><button class="opt" data-v="2">2× (SSAA)</button>
       </div></div>
-      <p class="gnote">2× tira serrilha sem borrar, mas pesa como o dobro da resolução · aplica recarregando</p>
+      <p class="gnote">2× tira serrilha sem borrar, mas pesa como o dobro da resolução · só textura recarrega</p>
     </div>
 
     <div class="painelAba" id="abaControles" hidden>
@@ -258,13 +258,26 @@ function recarregarMantendoLugar() {
   location.replace(`${location.pathname}?${q}`);
 }
 
+/* Só a TEXTURA recarrega, porque ela é das peças: mudar o tier manda
+   reconstruir a textura de tudo que está na cena. O resto é do visor e troca
+   na hora — o jogador vê a diferença enquanto olha pro mesmo lugar, que é o
+   único jeito de comparar duas opções de verdade. */
+const TIERS_AO_VIVO = new Set(['luz', 'sombra', 'particulas', 'res', 'aa']);
+
 for (const grupo of document.querySelectorAll('.tiers')) {
   const chave = grupo.dataset.cfg;
   for (const btn of grupo.querySelectorAll('.opt')) {
     btn.classList.toggle('on', String(cfg[chave]) === btn.dataset.v);
     btn.addEventListener('click', () => {
-      salvarCfg({ ...lerCfg(), [chave]: Number(btn.dataset.v) });
-      recarregarMantendoLugar();
+      const valor = Number(btn.dataset.v);
+      salvarCfg({ ...lerCfg(), [chave]: valor });
+      if (!TIERS_AO_VIVO.has(chave)) { recarregarMantendoLugar(); return; }
+      for (const b of grupo.querySelectorAll('.opt')) b.classList.toggle('on', b === btn);
+      visor.aplicarTiers({
+        [chave]: chave === 'res' ? larguraInterna(valor)
+          : chave === 'particulas' ? PARTICULAS_N[valor] ?? PARTICULAS_N[1]
+          : valor,
+      });
     });
   }
 }

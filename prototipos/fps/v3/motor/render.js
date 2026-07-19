@@ -27,8 +27,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
        1  ampliacao suave (LINEAR no blit). De graca, mas borra o pixel art.
        2  supersampling 2x: desenha no dobro e reduz. Antisserrilhado de
           verdade, e o unico que suaviza SEM borrar — ao custo de 4x pixels. */
-  const AA_ESCALA = aa >= 2 ? 2 : 1;
-  const AA_SUAVE = aa >= 1;
+  let AA_ESCALA = aa >= 2 ? 2 : 1;
+  let AA_SUAVE = aa >= 1;
   /* O quadro interno segue a PROPORÇÃO DA JANELA, não 16:9 fixo. Antes a cena
      era desenhada em 16:9 e esticada pra tela inteira no blit final: num
      ultrawide 21:9 tudo saía 33% mais largo, círculo virava oval. Como a
@@ -36,10 +36,11 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
      mais dos lados, que é o comportamento certo — e não deformar o mesmo
      enquadramento. `res` é a largura interna; a altura sai da proporção. */
   const propJanela = () => Math.max(0.5, Math.min(3.5, innerWidth / Math.max(1, innerHeight)));
-  const IW = Math.max(160, res | 0) * AA_ESCALA;
+  let RES = Math.max(160, res | 0);
+  let IW = RES * AA_ESCALA;
   let IH = Math.max(90, Math.round(IW / propJanela()));
-  const SM = SOMBRA_SM[sombra] ?? 1024, sombraOn = sombra > 0;
-  const LT = LUZ_TIER[luz] ?? LUZ_TIER[1];
+  let SM = SOMBRA_SM[sombra] ?? 1024, sombraOn = sombra > 0;
+  let LT = LUZ_TIER[luz] ?? LUZ_TIER[1];
   const gl = canvas.getContext('webgl', { antialias: false, depth: true });
   if (!gl) throw new Error('WebGL indisponível');
 
@@ -114,12 +115,19 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
   const AL = { pos: gl.getAttribLocation(scene,'aPos'), uv: gl.getAttribLocation(scene,'aUV'), nrm: gl.getAttribLocation(scene,'aNrm') };
   const DL = { pos: gl.getAttribLocation(depthProg,'aPos'), uv: gl.getAttribLocation(depthProg,'aUV') };
 
-  /* uniforms de TIER são fixos pela vida do visor (tier muda = recarrega a
-     página, como o D-49 já faz pro ?res — evita geri-los por quadro) */
-  gl.useProgram(scene);
-  gl.uniform1f(gl.getUniformLocation(scene, 'uShadowTexel'), 1 / SM);
-  gl.uniform1f(gl.getUniformLocation(scene, 'uDiffOn'), LT.diff);
-  gl.uniform1f(gl.getUniformLocation(scene, 'uBounce'), LT.bounce);
+  /* uniforms de TIER: escritos aqui e sempre que um tier muda (aplicarTiers).
+     Ficam fora do laço de quadro de propósito — mudam por escolha do jogador,
+     não a 60 vezes por segundo. */
+  const U_TEXEL = gl.getUniformLocation(scene, 'uShadowTexel');
+  const U_DIFF = gl.getUniformLocation(scene, 'uDiffOn');
+  const U_BOUNCE = gl.getUniformLocation(scene, 'uBounce');
+  function subirUniformesDeTier() {
+    gl.useProgram(scene);
+    gl.uniform1f(U_TEXEL, 1 / SM);
+    gl.uniform1f(U_DIFF, LT.diff);
+    gl.uniform1f(U_BOUNCE, LT.bounce);
+  }
+  subirUniformesDeTier();
 
   const isPOT = (n) => (n & (n - 1)) === 0;
   function glTex(cv) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
@@ -146,26 +154,39 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
-    return { fb, tex };
+    return { fb, tex, rb };   // rb vai junto: sem ele, refazer o FBO vaza o renderbuffer
+  }
+  function descartarFBO(f) {
+    if (!f) return;
+    gl.deleteFramebuffer(f.fb); gl.deleteTexture(f.tex); gl.deleteRenderbuffer(f.rb);
   }
   let sceneFBO = makeFBO(IW, IH, AA_SUAVE);
-  const shadowFBO = makeFBO(SM, SM);
+  let shadowFBO = makeFBO(SM, SM);
+
+  function refazerCena() {
+    IH = Math.max(90, Math.round(IW / propJanela()));
+    descartarFBO(sceneFBO);
+    sceneFBO = makeFBO(IW, IH, AA_SUAVE);
+  }
   /* girar a tela ou arrastar a janela muda a proporcao: o quadro interno tem
      que ser refeito, senao volta a esticar. Sem isso o conserto do ultrawide
      so valeria ate o primeiro redimensionamento. */
   function ajustarProporcao() {
-    const novo = Math.max(90, Math.round(IW / propJanela()));
-    if (novo === IH) return;
-    IH = novo;
-    gl.deleteFramebuffer(sceneFBO.fb); gl.deleteTexture(sceneFBO.tex);
-    sceneFBO = makeFBO(IW, IH, AA_SUAVE);
+    if (Math.max(90, Math.round(IW / propJanela())) === IH) return;
+    refazerCena();
   }
 
   const quadVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-  const NP = Math.max(0, particulasN | 0), seeds = new Float32Array(NP * 3);
-  for (let i = 0; i < NP; i++) { seeds[i*3] = (hash2(i,1)*2-1)*4.5; seeds[i*3+1] = hash2(i,2)*2.2; seeds[i*3+2] = hash2(i,3); }
-  const partVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, partVBO); gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
+  let NP = Math.max(0, particulasN | 0);
+  let seeds = new Float32Array(NP * 3);
+  const partVBO = gl.createBuffer();
+  function subirSementes() {
+    seeds = new Float32Array(NP * 3);
+    for (let i = 0; i < NP; i++) { seeds[i*3] = (hash2(i,1)*2-1)*4.5; seeds[i*3+1] = hash2(i,2)*2.2; seeds[i*3+2] = hash2(i,3); }
+    gl.bindBuffer(gl.ARRAY_BUFFER, partVBO); gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
+  }
+  subirSementes();
   const PA = gl.getAttribLocation(parts, 'aSeed');
   const BA = gl.getAttribLocation(blit, 'aPos'), BT = gl.getUniformLocation(blit, 'uTex');
 
@@ -259,6 +280,37 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         y: (1 - (y * 0.5 + 0.5)) * canvas.clientHeight,
         dist: c ? Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]) : 0,
       };
+    },
+    /* troca tiers AO VIVO, sem recarregar a página. Só o de TEXTURA fica de
+       fora: aquele é das PEÇAS, não do visor — mudar exige reconstruir as
+       texturas de tudo, e quem faz isso é quem monta a cena.
+       Cada campo é opcional; o que não vier fica como está. */
+    aplicarTiers({ luz, sombra, particulas, res, aa } = {}) {
+      let refazQuadro = false;
+      if (luz !== undefined) LT = LUZ_TIER[luz] ?? LT;
+      if (sombra !== undefined) {
+        const novoSM = SOMBRA_SM[sombra] ?? SM;
+        sombraOn = sombra > 0;
+        if (novoSM !== SM) {
+          SM = novoSM;
+          descartarFBO(shadowFBO);
+          shadowFBO = makeFBO(SM, SM);   // sem `suave`: profundidade empacotada não pode interpolar
+        }
+      }
+      if (particulas !== undefined) {
+        const n = Math.max(0, particulas | 0);
+        if (n !== NP) { NP = n; subirSementes(); }
+      }
+      if (res !== undefined) {
+        const r = Math.max(160, res | 0);
+        if (r !== RES) { RES = r; refazQuadro = true; }
+      }
+      if (aa !== undefined) {
+        const esc = aa >= 2 ? 2 : 1, suave = aa >= 1;
+        if (esc !== AA_ESCALA || suave !== AA_SUAVE) { AA_ESCALA = esc; AA_SUAVE = suave; refazQuadro = true; }
+      }
+      if (refazQuadro) { IW = RES * AA_ESCALA; refazerCena(); }
+      subirUniformesDeTier();
     },
     /* camada de depuração desenhada por cima da cena. Passe [] (ou nada) pra
        desligar: a lista some do laço de desenho, então DESLIGADA não custa
