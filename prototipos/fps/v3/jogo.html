@@ -244,15 +244,27 @@ slA.addEventListener('input', () => som.setVolumes({ ambiente: slA.value / 100 }
 slP.addEventListener('input', () => som.setVolumes({ passos: slP.value / 100 }));
 
 /* gráficos: tiers reais de motor — recarrega a página pra aplicar (mesmo
-   padrão do D-49 na v2: ?res troca de preset recarregando limpo) */
+   padrão do D-49 na v2: ?res troca de preset recarregando limpo).
+
+   Recarregar jogava o jogador de volta no spawn, olhando pro outro lado, com o
+   menu fechado: comparar duas opções virava caminhar até o mesmo lugar de novo
+   a cada toque. Agora a volta é no MESMO ponto e com o painel aberto na mesma
+   aba, reaproveitando o ?cam= que o jogo já sabia ler. */
+function recarregarMantendoLugar() {
+  const q = new URLSearchParams(location.search);
+  q.set('cam', camAtual());
+  const aba = document.querySelector('.aba.on')?.dataset.aba;
+  if (telaConfig.classList.contains('show') && aba) q.set('cfg', aba);
+  location.replace(`${location.pathname}?${q}`);
+}
+
 for (const grupo of document.querySelectorAll('.tiers')) {
   const chave = grupo.dataset.cfg;
   for (const btn of grupo.querySelectorAll('.opt')) {
     btn.classList.toggle('on', String(cfg[chave]) === btn.dataset.v);
     btn.addEventListener('click', () => {
-      const novo = { ...lerCfg(), [chave]: Number(btn.dataset.v) };
-      salvarCfg(novo);
-      location.reload();
+      salvarCfg({ ...lerCfg(), [chave]: Number(btn.dataset.v) });
+      recarregarMantendoLugar();
     });
   }
 }
@@ -295,6 +307,12 @@ const camQ = Q.get('cam')?.split(',').map(Number);
 let pos = camQ ? [camQ[0], 0, camQ[1]] : [-19, 0, 0];
 let yaw = camQ ? camQ[2] : 1.85, pitch = camQ ? (camQ[3] ?? 0) : 0;
 if (Q.get('pausado') === '1') abrirPausa();   // QA: capturar o menu direto
+/* volta do recarregamento de configuração já no painel, na aba de onde saiu */
+if (Q.get('cfg')) {
+  abrirPausa();
+  telaPausa.classList.remove('show'); telaConfig.classList.add('show');
+  document.querySelector(`.aba[data-aba="${CSS.escape(Q.get('cfg'))}"]`)?.click();
+}
 
 function antesDoQuadro(dt, T) {
   input.guard();
