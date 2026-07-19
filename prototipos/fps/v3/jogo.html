@@ -45,7 +45,6 @@
   #erro { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: none;
     background: rgba(120,20,30,.92); color: #fdcbb0; font-size: 12px; padding: 10px 14px;
     white-space: pre-wrap; user-select: text; }
-  #hint { z-index: 17; position: fixed; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #9b93a8; text-shadow: 0 1px 2px #000; pointer-events: none; }
   #pauseBtn { position: fixed; top: 10px; right: 10px; width: 38px; height: 38px; border-radius: 50%;
     background: rgba(23,18,33,.7); color: #eaaded; border: 1px solid var(--line); font-size: 16px; cursor: pointer; z-index: 15; }
 
@@ -96,7 +95,6 @@
 <div id="tags"></div>
 <div id="aviso"></div>
 <div id="erro"></div>
-<div id="hint">clique: mirar (ESC pausa) · WASD anda</div>
 <button id="pauseBtn" title="pausa (ESC)">⏸</button>
 <div id="stickL" class="stick"><div class="knob"></div></div>
 <div id="stickR" class="stick"><div class="knob"></div></div>
@@ -588,7 +586,7 @@ function mostrarCoords(T) {
   document.getElementById('dev').textContent = `${visor.info()} · tex ${16 * lerCfg().ts}px`;
   elCoord.innerHTML = `setor ${setorEm(pos[0], pos[2])} · x ${pos[0].toFixed(1)} · z ${pos[2].toFixed(1)}`
     + ` · raio ${r.toFixed(1)}/${lim.toFixed(1)} · ${piso}`
-    + `<br><span style="opacity:.55">?cam=${camAtual()} · [=] copia o link</span>`;
+    + `<br><span style="opacity:.55">?cam=${camAtual()}</span>`;
 }
 
 /* tecla = copia a URL PRONTA, não só os números: colar no navegador já abre
@@ -641,7 +639,7 @@ function aplicarHud() {
   elMapa.className = mapaModo === 2 ? 'grande' : mapaModo === 1 ? `mini c${c.mapaCanto || 3}` : '';
   elMapa.style.display = mapaModo ? 'block' : 'none';
   const ver = c.hudTexto !== 0 ? 'block' : 'none';
-  for (const id of ['hud', 'coord', 'hint']) document.getElementById(id).style.display = ver;
+  for (const id of ['hud', 'coord']) document.getElementById(id).style.display = ver;
 }
 
 const paraTela = (v) => ((v + ilhaChao.EXTENSAO) / (2 * ilhaChao.EXTENSAO)) * MAPA_PX;
