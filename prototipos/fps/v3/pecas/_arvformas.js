@@ -63,10 +63,10 @@ export function construir(ctx) {
   const GREEN = leafTex([29, 30, 31, 32, 33, 28]);
   const PINE = pineTex();
   const CHERRY = leafTex([54, 55, 56, 57, 63, 9]);
-  /* verde CLARO e LISO (larga): rampa curta em 31/32/33 (só 3 tons próximos e
-     claros) e glint = 33 em vez de amarelo -> pouca variação de cor, mais claro.
-     A forma vem da luz sobre a copa, não do contraste da textura. */
-  const GREEN_CLARA = leafTex([31, 32, 33, 33, 33, 33]);
+  /* verde CLARO e LISO (larga): rampa curta 30/31/32 — SEM o 33 (#cddf6c) nem o
+     glint 28, que puxavam pro amarelado. 32 (#91db69) é o verde claro mais alto
+     que ainda é verde. Pouca variação de cor; a forma vem da luz sobre a copa. */
+  const GREEN_CLARA = leafTex([30, 31, 32, 32, 32, 32]);
 
   const quad4 = (m, P, UV, N) => {
     const push = (i) => m.v.push(P[i][0], P[i][1], P[i][2], UV[i][0], UV[i][1], N[i][0], N[i][1], N[i][2]);
