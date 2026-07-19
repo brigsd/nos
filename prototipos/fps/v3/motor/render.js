@@ -18,6 +18,25 @@ const PACK = `
   vec4 packDepth(float d){ vec4 e = fract(d * vec4(1.0,255.0,65025.0,16581375.0)); e -= e.yzww * (1.0/255.0); return e; }
   float unpackDepth(vec4 c){ return dot(c, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0)); }`;
 
+/* VENTO GLOBAL (D-64): curva a vegetação no VERTEX shader. Injetado IDÊNTICO nos
+   3 VS (cena, profundidade/sombra, contorno) -> planta, sombra e line-art curvam
+   JUNTOS. Gate por-lote via uWind (0 = chão/prédio não balança). O deslocamento é
+   uWindDir (vetor) × ESCALAR -> vaivém 1-D (nunca círculo); a fase vem da posição
+   de MUNDO (rajada corre pelo campo; tronco+copa concordam na junção). `* sc`
+   escala pelo porte da instância (topo local² igual, mundo maior balança igual). */
+const WIND = `
+  uniform vec2 uWindDir;         // direção do vento no plano-xz do MUNDO (unitária), deriva devagar
+  uniform float uWindT, uWind;   // uWindT = relógio (s); uWind = amplitude POR-LOTE
+  vec3 vento(vec3 local, vec3 world, float sc){
+    if (uWind <= 0.0) return world;               // gate coerente (grátis): chão/prédios saem aqui
+    float bend = local.y * local.y;               // cantilever: base (y=0) travada, topo arqueia (y²)
+    float trav = dot(world.xz, uWindDir) * 0.18;  // FASE ESPACIAL da posição BASE (λ≈35 u)
+    float gust = 0.80 + 0.20 * sin(uWindT * 0.5 - trav * 0.5);   // rajada global lenta
+    float s    = sin(uWindT * 1.3 - trav);        // OSCILADOR ESCALAR ÚNICO (vaivém 1-D)
+    world.xz  += uWindDir * (uWind * bend * sc * gust * s);   // * sc -> sway ∝ porte da instância
+    return world;
+  }`;
+
 export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, sombra = 1, particulasN = 320, luz = 1 }) {
   const IW = Math.max(160, res | 0), IH = Math.round(IW * 9 / 16);
   const SM = SOMBRA_SM[sombra] ?? 1024, sombraOn = sombra > 0;
@@ -32,7 +51,10 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
 
   const depthProg = prog(`
     attribute vec3 aPos; attribute vec2 aUV; uniform mat4 uLMVP, uModel; varying float vZ; varying vec2 vUV;
-    void main(){ vec4 p = uLMVP * uModel * vec4(aPos,1.0); gl_Position = p; vZ = p.z / p.w * 0.5 + 0.5; vUV = aUV; }`,
+    ${WIND}
+    void main(){ vec4 w = uModel * vec4(aPos,1.0);
+      w.xyz = vento(aPos, w.xyz, length(uModel[0].xyz));   // MESMO deslocamento da cena -> sombra acompanha
+      vec4 p = uLMVP * w; gl_Position = p; vZ = p.z / p.w * 0.5 + 0.5; vUV = aUV; }`,
     `precision highp float; varying float vZ; varying vec2 vUV; uniform sampler2D uTex; ${PACK}
      void main(){ if (texture2D(uTex, vUV).a < 0.5) discard; gl_FragColor = packDepth(vZ); }`);
 
@@ -40,7 +62,10 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     attribute vec3 aPos; attribute vec2 aUV; attribute vec3 aNrm;
     uniform mat4 uMVP, uLMVP, uModel; uniform vec3 uCam;
     varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP; varying vec3 vW;
-    void main(){ vec4 w = uModel * vec4(aPos,1.0); vW = w.xyz;
+    ${WIND}
+    void main(){ vec4 w = uModel * vec4(aPos,1.0);
+      w.xyz = vento(aPos, w.xyz, length(uModel[0].xyz));   // curva no MUNDO antes de tudo
+      vW = w.xyz;
       gl_Position = uMVP * w; vUV = aUV; vN = mat3(uModel) * aNrm;
       vD = distance(w.xyz, uCam); vLP = uLMVP * w; }`, `
     precision highp float;
@@ -104,7 +129,10 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
      unidades de mundo); 0 = sem contorno (as outras peças seguem iguais). */
   const outline = prog(`
     attribute vec3 aPos; attribute vec3 aNrm; uniform mat4 uMVP, uModel; uniform float uW;
-    void main(){ vec4 w = uModel * vec4(aPos + normalize(aNrm) * uW, 1.0); gl_Position = uMVP * w; }`,
+    ${WIND}
+    void main(){ vec4 w = uModel * vec4(aPos + normalize(aNrm) * uW, 1.0);
+      w.xyz = vento(aPos, w.xyz, length(uModel[0].xyz));   // contorno curva junto (aPos LOCAL no bend)
+      gl_Position = uMVP * w; }`,
     `precision mediump float; uniform vec3 uInk; void main(){ gl_FragColor = vec4(uInk, 1.0); }`);
 
   const AL = { pos: gl.getAttribLocation(scene,'aPos'), uv: gl.getAttribLocation(scene,'aUV'), nrm: gl.getAttribLocation(scene,'aNrm') };
@@ -193,7 +221,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       const meshCache = new Map(), texCache = new Map();
       const getMesh = (m) => { let g = meshCache.get(m); if (!g) { g = glMesh(m); meshCache.set(m, g); } return g; };
       const getTex = (t) => { let g = texCache.get(t); if (!g) { g = glTex(t); texCache.set(t, g); } return g; };
-      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0 }));
+      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0, wind: L.wind || 0 }));
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -214,11 +242,13 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         const uM = gl.getUniformLocation(prg, 'uModel');
         const uR = gl.getUniformLocation(prg, 'uRim');   // null no passe de profundidade
         const uTo = gl.getUniformLocation(prg, 'uToon');
+        const uWnd = gl.getUniformLocation(prg, 'uWind');   // VENTO: existe nos DOIS passes (cena+depth)
         const all = semPalco ? lotes : [stage, ...lotes];
         for (const L of all) {
           gl.uniformMatrix4fv(uM, false, L.matriz);
           if (uR) gl.uniform1f(uR, L.rim || 0);          // contorno por lote
           if (uTo) gl.uniform1f(uTo, L.toon || 0);       // cel-shading por lote
+          if (uWnd) gl.uniform1f(uWnd, L.wind || 0);     // VENTO: amplitude por lote (chão/prédio = 0)
           gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex);   // ambos os passes: alfa p/ recorte
           gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
           gl.enableVertexAttribArray(aL.pos); gl.vertexAttribPointer(aL.pos, 3, gl.FLOAT, false, 32, 0);
@@ -229,6 +259,12 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       };
       const frame = (now) => {
         const T = now / 1000;
+        /* VENTO GLOBAL (D-64): direção que DERIVA devagar (linear lento + 2 senos)
+           + relógio do balanço. θ̇ ~0.003–0.037 rad/s << ω=1.3 -> re-aponta o eixo
+           adiabaticamente, nunca rodopia. Varre ~90–130°/min. */
+        const windAngle = T * 0.02 + 0.45 * Math.sin(T * 0.021) + 0.20 * Math.sin(T * 0.037 + 2.1);
+        const windDir = [Math.cos(windAngle), Math.sin(windAngle)];   // unitário no plano xz do MUNDO
+        const windT = T;
         const dt = Math.min(0.1, (now - tPrev) / 1000); tPrev = now;   // trava dt (aba em 2º plano não "pula")
         if (antesDoQuadro) antesDoQuadro(dt, T);
         if (animar) animar(T, lotes);
@@ -251,6 +287,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         if (sombraOn) {
           gl.useProgram(depthProg); gl.uniformMatrix4fv(gl.getUniformLocation(depthProg,'uLMVP'), false, lMVPf);
           gl.uniform1i(gl.getUniformLocation(depthProg,'uTex'), 0);
+          gl.uniform2f(gl.getUniformLocation(depthProg,'uWindDir'), windDir[0], windDir[1]);   // VENTO
+          gl.uniform1f(gl.getUniformLocation(depthProg,'uWindT'), windT);                        // VENTO
           draw(depthProg, DL);
         }
         // 2: cena
@@ -267,6 +305,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
         gl.uniform3fv(gl.getUniformLocation(scene,'uSkyTop'), SKY_TOP); gl.uniform3fv(gl.getUniformLocation(scene,'uSkyHz'), SKY_HZ);
         gl.uniform3fv(gl.getUniformLocation(scene,'uGround'), GROUND_AMB);
         gl.uniform2f(gl.getUniformLocation(scene,'uFog'), fogCfg[0], fogCfg[1]);
+        gl.uniform2f(gl.getUniformLocation(scene,'uWindDir'), windDir[0], windDir[1]);   // VENTO
+        gl.uniform1f(gl.getUniformLocation(scene,'uWindT'), windT);                        // VENTO
         gl.uniform1i(gl.getUniformLocation(scene,'uTex'), 0); gl.uniform1i(gl.getUniformLocation(scene,'uShadow'), 1);
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, shadowFBO.tex);
         // 2a: CONTORNO (casca invertida) — só lotes com outline>0, ANTES da cena
@@ -274,6 +314,8 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
           if (outLotes.length) {
             gl.useProgram(outline);
             gl.uniformMatrix4fv(gl.getUniformLocation(outline, 'uMVP'), false, mvpf);
+            gl.uniform2f(gl.getUniformLocation(outline, 'uWindDir'), windDir[0], windDir[1]);   // VENTO
+            gl.uniform1f(gl.getUniformLocation(outline, 'uWindT'), windT);                        // VENTO
             const uInkL = gl.getUniformLocation(outline, 'uInk');
             gl.enable(gl.CULL_FACE); gl.cullFace(gl.FRONT);   // desenha só as faces de TRÁS da casca inflada
             for (const L of outLotes) {
@@ -281,6 +323,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
               gl.uniform3f(uInkL, ink[0], ink[1], ink[2]);
               gl.uniformMatrix4fv(gl.getUniformLocation(outline, 'uModel'), false, L.matriz);
               gl.uniform1f(gl.getUniformLocation(outline, 'uW'), L.outline);
+              gl.uniform1f(gl.getUniformLocation(outline, 'uWind'), L.wind || 0);   // VENTO: amplitude do lote
               gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
               gl.enableVertexAttribArray(OL.pos); gl.vertexAttribPointer(OL.pos, 3, gl.FLOAT, false, 32, 0);
               gl.enableVertexAttribArray(OL.nrm); gl.vertexAttribPointer(OL.nrm, 3, gl.FLOAT, false, 32, 20);

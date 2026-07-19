@@ -32,8 +32,8 @@ export function construir(ctx) {
     const s = 0.8 + hash2(gx * 5, gz * 7) * 0.55;          // porte varia
     const yaw = hash2(gx * 17, gz * 13) * Math.PI * 2;     // giro varia (o lado do sol muda)
     const M = inst(x, z, s, yaw);
-    lotes.push({ mesh: v.trunk, tex: BARK, matriz: M });
-    lotes.push({ mesh: v.canopy, tex: v.tex, matriz: M, outline: v.outline, toon: v.toon, outlineInk: v.outlineInk });
+    lotes.push({ mesh: v.trunk, tex: BARK, matriz: M, wind: 0.006 });                                                           // MESMO wind do tronco+copa
+    lotes.push({ mesh: v.canopy, tex: v.tex, matriz: M, outline: v.outline, toon: v.toon, outlineInk: v.outlineInk, wind: 0.006 });
   }
 
   return { lotes, camera: { e: 5.5, r: 26 }, fog: [48, 40], far: 120 };
