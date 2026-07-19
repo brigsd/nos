@@ -76,31 +76,39 @@ o mesmo erro que já custou caro no código.
   norte a sul, `E5` no centro da ilha. A grade sai da **extensão declarada pela
   peça** (`ilhaChao.EXTENSAO`, hoje 28), dando setor de 7 unidades. Se a ilha
   mudar de tamanho, os setores acompanham sozinhos.
-- **HUD sempre visível** no topo ao centro (na v2 dependia da tecla `I`):
+- **Linha de coordenadas** no topo ao centro, ligada por padrão:
   `setor E5 · x -19.0 · z 0.0 · raio 19.0/24.3 · grama`.
   O `raio` é a distância ao centro contra o limite de colisão **naquela
   direção** — a borda da ilha é irregular, então o 2º número muda conforme se
-  anda.
+  anda. Dá pra ocultar na aba HUD (ver abaixo), útil pra print limpo.
 - **`?cam=x,z,yaw,pitch`** — quatro números, não três. A v2 é plana (`x,y,a`);
   a v3 tem altura de olhar, daí o `pitch` a mais. O `z` da v3 corresponde ao
   `y` da v2, e o `yaw` ao `a`.
-- **Tecla `=` copia o link pronto** pra área de transferência — a URL inteira,
-  não só os números. Aperta e cola. (Na v2 era digitar à mão.)
-- **Tecla `I` liga as etiquetas de ID**, como na v2: os 12 objetos mais
-  próximos (até 14 unidades) ganham etiqueta ancorada no topo do tronco, e
-  objeto tapado por outro não mostra etiqueta.
-- **Tecla `M` abre e fecha o mapa grande**, com a grade de setores e o atual em
-  destaque. Diferente da v2, ela NÃO cicla o minimapa: aquele é estado do HUD,
-  configurado na aba HUD, e o M não desfaz a escolha do jogador.
-  As cores do terreno saem de `superficieEm`, a mesma função que escolhe o som
-  do passo — superfície nova aparece no mapa sozinha.
-- **Tecla `O`** liga e desliga a visualização das áreas de colisão.
-- **Tecla `=`** copia o link da vista atual.
 
-A aba **HUD** das configurações escolhe em qual dos quatro cantos o minimapa
-fica (ou nenhum) e oculta os textos da tela. O minimapa vem ligado por padrão
-no canto de baixo à esquerda. Os textos ficam por cima do mapa: são pequenos, e
-por baixo sumiriam no canto onde o minimapa estivesse.
+## Teclas
+
+| tecla | o que faz |
+|---|---|
+| `=` | copia o **link pronto** da vista atual pra área de transferência — a URL inteira, não só os números. Na v2 era digitar à mão. |
+| `I` | etiquetas de ID nos objetos: os 12 mais próximos, até 14 unidades, e objeto tapado por outro não mostra etiqueta. |
+| `M` | abre e fecha o **mapa grande**, com a grade de setores e o atual em destaque. Diferente da v2, NÃO cicla o minimapa — aquele é estado do HUD, e a tecla não desfaz a escolha de quem joga. |
+| `O` | mostra as áreas de colisão. |
+
+As cores do terreno no mapa saem de `superficieEm`, a mesma função que escolhe
+o som do passo: superfície nova aparece no mapa sozinha.
+
+## Aba HUD (configurações)
+
+Escolhe em qual dos quatro cantos o **minimapa** fica, ou nenhum. Vem ligado no
+canto de baixo à esquerda — ele é parte fixa do HUD, não algo a descobrir
+apertando tecla.
+
+Também oculta de uma vez os **textos da tela** (título, fps e a linha de
+coordenadas). Serve pra print sem interface por cima. Ligados, eles ficam
+ACIMA do minimapa: são pequenos, e por baixo sumiriam no canto onde ele
+estivesse.
+
+O protocolo da v2 está portado por inteiro.
 
 ## IDs de objeto na v3
 
@@ -115,8 +123,6 @@ mesma coisa é exatamente o que já causou bug aqui.
 
 Em código, as árvores de hoje estão em `ARVORE_POS` no `jogo.html`; quando
 virarem geração por posição, o ID continua valendo sem mudar nada.
-
-O protocolo da v2 está portado por inteiro.
 
 ## Ideias futuras (não implementadas)
 
