@@ -37,7 +37,9 @@ O que se ganha com essa escolha, sem trabalho extra nenhum:
   de novo, e os arrastos manuais acompanham. É o que a árvore de hoje faz, onde
   mudar a espessura move a colisão junto. Uma lista de vértices perderia isso.
 - **Desfazer sai de graça.** Apagar o último passo e reexecutar. Não precisa de
-  sistema separado.
+  sistema separado. Pra Ctrl+Z seguido não engasgar, o executor guarda uma cópia
+  do estado a cada 10 passos e reexecuta a partir da cópia mais próxima, em vez
+  de refazer tudo desde o começo.
 - **O histórico é editável.** Dá pra voltar num passo do meio, mudar, e o resto
   se refaz sozinho.
 
@@ -259,10 +261,16 @@ igual `arvore3d.js` faz hoje. A diferença é que o corpo dele é **dados**.
 ```js
 /* PEÇA gerada pela Oficina. Editável à mão, mas o caminho normal é reabrir
    na ferramenta — ela lê este mesmo arquivo de volta. */
+import { executar, colisaoDe } from '../motor/oficina.js';
 
-export const PARAMS = { troncoR: 0.34, troncoH: 1.9, lados: 8 };
+/* dimensionais: mudar à vontade, não alteram a contagem de vértices */
+export const PARAMS = { troncoR: 0.34, troncoH: 1.9 };
+/* topológicos: mudar RECONSTRÓI e pode órfãos os passos seguintes */
+export const TOPO = { lados: 8 };
 
-const PASSOS = [
+/* exportado, e não `const`: a ferramenta precisa ler a lista de volta pra
+   você continuar editando. Sem o export, o arquivo só roda, não reabre. */
+export const PASSOS = [
   ['cilindro', { id: 1, raio: 'troncoR', altura: 'troncoH', lados: 'lados' }],
   ['extruda',  { face: 12, dist: 0.4 }],
   ['moveV',    { v: 7, d: [0.1, 0, -0.05] }],
@@ -275,26 +283,71 @@ export const meta = {
   nome: 'toco',
   tipo: 'objeto',
   desc: 'toco de árvore',
-  /* lê o MESMO número que a geometria. Colisor declarado à parte vira segunda
-     verdade — foi assim que a borda da ilha saiu do lugar. */
-  colisao: { forma: 'cilindro', raio: PARAMS.troncoR, altura: PARAMS.troncoH },
+  /* CALCULADA, não guardada. O jogo lê isto no carregamento do módulo, antes
+     de `construir()` rodar, então `colisaoDe` faz só a geometria — sem textura,
+     sem pincel. Guardar o número medido recriaria a segunda verdade que já
+     tirou a borda da ilha do lugar. */
+  colisao: colisaoDe(PASSOS, PARAMS, TOPO),
 };
 
-export function construir(ctx) { return executar(PASSOS, PARAMS, ctx); }
+export function construir(ctx) { return executar(PASSOS, PARAMS, TOPO, ctx); }
 ```
 
-Três coisas nesse formato merecem atenção.
+Cinco coisas nesse formato merecem atenção.
 
 **Parâmetros têm nome, e os passos citam o nome, não o número.** `raio:
 'troncoR'`, não `raio: 0.34`. É isso que faz mudar um valor em `PARAMS`
 reconstruir o objeto inteiro. Sem isso o arquivo seria só uma lista de números.
 
-**`meta.colisao` lê de `PARAMS`.** Mesma regra da árvore de hoje: um número, um
-dono. A ferramenta calcula a forma ao salvar, mas escreve a referência, não a
-cópia.
+**`PASSOS` é exportado.** Parece detalhe e não é: sem o export, a Oficina não
+consegue ler a lista de volta, e o arquivo salvo nunca mais reabre pra edição.
+
+**A colisão é calculada, não guardada.** O `jogo.html` lê `meta.colisao` no
+carregamento do módulo, antes de `construir()` rodar. E o raio encaixado sai da
+malha final, depois das extrusões — quase nunca é igual a um parâmetro, então
+`raio: PARAMS.troncoR` estaria errado no caso geral. Por isso `colisaoDe` roda
+só a parte geométrica dos passos, sem textura nem pincel: é barato o bastante
+pra rodar no carregamento e mantém um número com um dono só.
+
+**Parâmetros são de dois tipos, e isso não é firula.** Raio e altura mudam a
+forma sem mudar a contagem de vértices, então os passos seguintes continuam
+apontando pros mesmos pontos. Já `lados` muda quantos vértices existem: passar
+de 8 pra 12 faz o "vértice 7" de um passo antigo virar outro ponto, e o arrasto
+gravado depois vai parar no lugar errado. Por isso `TOPO` fica separado —
+mudar algo ali reconstrói, e a ferramenta **avisa quais passos ficaram órfãos**
+em vez de estragar em silêncio. O Blender tem exatamente esse problema na pilha
+de modificadores dele.
 
 **Mesclar grava `de` e `para`.** Sem isso, refazer a lista quebraria assim que
 uma identidade de vértice desaparecesse.
+
+### Numeração dos vértices criados no meio do caminho
+
+Extrudar cria vértices novos, e eles precisam de número **previsível**. Se a
+numeração depender de qualquer coisa que varie entre execuções, o `moveV`
+gravado depois aponta pro lugar errado ao reabrir.
+
+Regra: o contador de identidade depende só da **posição do passo na lista**.
+Passo 4 sempre começa a numerar no mesmo lugar, rodando hoje ou daqui a um ano.
+
+### Salvar: o navegador não escreve arquivo
+
+Uma página web não grava em disco. Ela pode baixar pra pasta de downloads, ou
+pedir permissão pra uma pasta com a File System Access API, que só o Chrome tem.
+
+A saída limpa já está meio pronta: o **servidor de desenvolvimento** que passou
+a mandar `no-store` (ver `walkthrough_colaborador4.md`) ganha uma rota que
+aceita POST e grava o arquivo. Salvar na Oficina escreve direto em `pecas/`,
+sem você mover nada de lugar.
+
+Sem o servidor no ar, cai pro download comum — funciona, mas você move o arquivo
+à mão.
+
+### A Oficina só reabre o que ela criou
+
+`arvore3d.js` e as outras peças de hoje são código escrito à mão, não lista de
+passos. Elas não abrem na ferramenta, e isso não é limitação a consertar: são
+duas formas legítimas de fazer peça, e as duas continuam valendo.
 
 ## Lista de operações
 
@@ -308,24 +361,62 @@ uma identidade de vértice desaparecesse.
 | `rotaciona` | `sel`, `eixo`, `graus` | Pivô é o centro da seleção. |
 | `mescla` | `de: [ids]`, `para: id` | Some as faces de área zero que sobrarem. |
 | `apagaFace` | `f` | — |
-| `pincel` | `modo`, `cor`, e o alvo conforme o modo | `modo: 'face'` preenche faces inteiras; `modo: 'livre'` recebe `raio`, `dureza` e `pontos: [[u,v],...]`. Os dois pintam na mesma textura. |
+| `pincel` | `modo`, `cor`, e o alvo conforme o modo | `modo: 'face'` preenche faces inteiras. `modo: 'livre'` recebe `raio`, `dureza` e `pontos: [{ f, a, b }]` — face e posição DENTRO dela, não coordenada de textura crua. Assim mover um vértice depois leva a tinta junto, em vez de deslizar. |
+| `liso` | `faces: [ids]` | Sombreado macio nessas faces. O padrão é chapado. |
 | `solido` | `faces: [ids]` | Marca o que entra na colisão. |
 
 Toda operação precisa ser **determinística**: mesma lista, mesmo objeto,
 sempre. Nada de aleatório sem semente escrita no passo, senão reabrir o arquivo
-dá um objeto diferente.
+dá um objeto diferente. Isso vale também pra numeração dos vértices criados no
+meio do caminho, como explicado acima.
 
 ## Onde o código mora
 
 Duas metades, e separar importa:
 
-- **`motor/oficina.js`** — só o `executar(PASSOS, PARAMS, ctx)`. Pequeno, é o
-  que o jogo carrega pra abrir uma peça. Sem interface, sem edição.
+- **`motor/oficina.js`** — `executar(PASSOS, PARAMS, TOPO, ctx)` e
+  `colisaoDe(...)`. Pequeno, é o que o jogo carrega pra abrir uma peça. Sem
+  interface, sem edição. O `colisaoDe` roda só a geometria, porque é chamado no
+  carregamento do módulo.
 - **`oficina.html`** — a ferramenta: câmera, gizmos, seleção, painéis. Só abre
   quando você vai modelar.
 
 Se o replay morasse dentro da ferramenta, o jogo teria que carregar o editor
 inteiro pra desenhar um toco.
+
+**A medir quando existir:** o jogo passa a executar pinceladas na hora de abrir
+uma peça. As peças de hoje já geram textura por código, então o custo deve ser
+parecido — mas é suposição, não medição. Se uma floresta de objetos pintados
+pesar no carregamento, a saída é guardar a textura pronta em cache no navegador,
+sem virar arquivo no repositório.
+
+## Normais: chapado por padrão
+
+O documento não tratava disso e muda muito a aparência. Face chapada usa uma
+normal só por face; face lisa usa a média das faces vizinhas em cada vértice.
+
+**Padrão chapado**, que é o que a árvore de hoje faz e o que combina com o
+estilo do jogo. Opção de marcar faces como lisas depois, gravada como operação
+igual ao resto (`['liso', { faces: [...] }]`).
+
+Sem decidir isso, cada objeto sairia com um sombreado diferente sem ninguém
+entender por quê.
+
+## Conforto que evita retrabalho
+
+Três coisas baratas que economizam dor mais tarde:
+
+**Silhueta de referência na cena, ligada por padrão.** Um contorno com a altura
+do jogador. Modelar sem referência de escala é desenhar sem régua — o erro só
+aparece quando o objeto é plantado no jogo e está do tamanho errado.
+
+**Salvamento automático em `localStorage`.** Como o arquivo é só a lista de
+passos, guardar a cada mudança é quase de graça, e a aba caindo deixa de custar
+o trabalho todo.
+
+**Bancada sem interface pro `executar`.** O projeto já tem `tools/bancadas/`.
+Uma bancada que roda uma lista de passos e confere o resultado testa o replay —
+que é o coração de tudo — sem precisar abrir o editor nem clicar em nada.
 
 ## Ordem de construção
 
@@ -338,8 +429,12 @@ inteiro pra desenhar um toco.
 7. Extrudar.
 8. Mesclar e ímã.
 9. Textura por objeto com projeção em caixa, e o pincel no modo "face".
-10. Exportar código e colisão automática.
+10. Exportar código pelo servidor de desenvolvimento, e colisão automática.
 11. Modos livres do pincel: raio, dureza, degradê. Acrescenta, não substitui.
+
+A bancada sem interface do `executar` entra junto com o passo 1, não no fim:
+ela é o que deixa provar que o replay está certo antes de existir tela pra
+olhar.
 
 Os passos 1 e 4 são o teste da ideia inteira. Quando arrastar um vértice
 funcionar e o arquivo de passos refizer o objeto igual, o resto é trabalho
@@ -355,7 +450,10 @@ conhecido.
   pra um canvas 2D por cima. Continua útil se um dia quisermos volume sólido de
   depuração, como o colisor.
 - `freeCam` no `render.js` — câmera livre, já existe.
-- `mat4.js` — falta rotação em X e Z.
+- `mat4.js` — falta rotação em X e Z (escritas neste documento, prontas).
+- **Servidor de desenvolvimento com rota de gravação** — não existe ainda. É o
+  que permite salvar em `pecas/` sem passar pela pasta de downloads. O servidor
+  `no-store` da investigação de cache é a base.
 - Formato de vértice: posição, coordenada de textura e normal. **Não tem cor** —
   daí a pintura ir pra textura gerada por objeto, em vez de mexer no
   `render.js`, que é território de quem cuida de gráficos.
