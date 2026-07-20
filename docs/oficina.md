@@ -83,7 +83,7 @@ com asterisco têm a solução detalhada logo abaixo da tabela.
 | **Gizmo de mover** * | Setas X/Y/Z arrastáveis. | Seleção e arrasto resolvidos em 2D, projetando base e ponta da seta. Fórmula abaixo. |
 | **R + eixo + graus + Enter** | Rotaciona digitando o valor. | Estado explícito `digitando`, que desvia as teclas antes de virarem comando. `rotX` e `rotZ` escritos abaixo, prontos pra colar. Pivô no centro da seleção. |
 | **S para escalonar** | Redimensiona. | A escala é aplicada **nos vértices**, não guardada como matriz. As normais são recalculadas junto, então escala desigual não quebra a iluminação. |
-| **Tab: objeto ↔ edição** | Alterna os modos. | `preventDefault` no Tab. Uma variável de modo decide qual mapa de teclas escuta; nunca os dois ao mesmo tempo. |
+| **Tab: objeto → edição → pintura** | Cicla os modos dentro da aba Objeto. | `preventDefault` no Tab. Uma variável de modo decide qual mapa de teclas escuta; nunca dois ao mesmo tempo. Pintura é modo e não aba, pra não perder câmera e seleção a cada troca. |
 | **Ver vértices / arestas / faces** (1, 2, 3) * | Mostra e seleciona as partes. | **Canvas 2D por cima, não WebGL.** O `visor.depurar` não serve: o `draw` do render usa `gl.TRIANGLES` fixo e não desenha ponto nem linha. Detalhe abaixo. |
 | **E para extrudar** * | Puxa a face. | Extrusão de região: só as arestas de **borda** da seleção ganham parede. Resolve o caso de duas faces vizinhas sem precisar restringir a uma por vez. Algoritmo abaixo. |
 | **Painel lateral** | Posição, rotação, dimensão. | A caixa do objeto fica guardada e só é refeita quando a malha muda. Enquanto o gizmo arrasta, os campos ficam de leitura — um dono por vez. |
@@ -93,7 +93,7 @@ com asterisco têm a solução detalhada logo abaixo da tabela.
 | **Pintar** * | Cor e pincel na malha. | **Projeção em caixa** gera a coordenada de textura sozinha, sem desdobrar malha. Cor por face é o primeiro modo do pincel, não um sistema à parte — assim o pincel macio entra depois sem jogar nada fora. Detalhe abaixo. |
 | **Modo navegação (botão 5)** | Liga e desliga o voo. | `e.button === 4`, com `preventDefault` no `mousedown` e no `auxclick` pra não disparar o "avançar" do navegador. Tecla alternativa configurável pra mouse sem botão lateral. Com o voo desligado, olhar em volta fica no arrastar do botão do meio. |
 | **Câmera livre** | WASD anda, Q sobe, E desce, scroll acelera. | O `freeCam` do `render.js` já entrega posição, yaw e pitch. |
-| **Salvar como código** | Gera o arquivo em `pecas/`. | Nome vindo do campo do painel, identidade no formato do `COMUNICACAO.md`. |
+| **Salvar e abrir do repositório** | Navegador de pastas dentro da ferramenta. | Três rotas no servidor de desenvolvimento: listar, ler e gravar. A página web não escreve em disco sozinha. Sem servidor, cai pra arrastar-e-soltar e download. |
 | **Colisão automática** * | Encaixa cilindro, caixa ou esfera. | Calculada só das faces marcadas como sólidas. Fórmula abaixo. |
 | **Botão de configurações** | Ajustes da ferramenta. | Reusa `.painelConfig` e `.abas` do jogo. Grade e ímã, velocidade da câmera, tamanho do gizmo, salvamento automático, tecla alternativa do modo navegação. `localStorage` em `nos3_oficina`, separado da chave do jogo. |
 
@@ -253,6 +253,131 @@ Nenhuma. As três que este documento carregava foram fechadas:
 
 ---
 
+## As duas abas
+
+**Desenho** e **Objeto**. Duas, não três.
+
+Desenho é contexto de verdade diferente: tela plana, sem câmera, sem 3D.
+
+Pintura **não** é aba. Você pinta em cima do modelo, no mesmo visor, com a mesma
+câmera e a mesma seleção — virar aba faria perder as duas a cada troca, atrito
+sem ganho. Ela entra como terceiro modo do Tab, junto com objeto e edição. É a
+mesma divisão do Blender, onde pintar é modo e o editor de imagem é janela
+separada, e pelo mesmo motivo.
+
+Então: `Tab` cicla **objeto → edição → pintura** dentro da aba Objeto.
+
+## Aba Desenho
+
+Canvas 2D pra traçar contornos fechados: clicar põe ponto, arrastar move,
+fechar o polígono termina. Nada de malha, nada de identidade de vértice — é o
+subsistema mais independente da ferramenta inteira.
+
+Serve a três coisas, e é por isso que vale construir cedo.
+
+**Mandar contorno pra IA.** O `nos-Craft` já tem o canal: `forja trace <img>`
+converte desenho ou foto em polígono. Só que ele adivinha os pontos a partir de
+pixels. Desenhando aqui você produz o polígono exato, com os pontos onde quer, e
+arrasta cada um depois. Pula uma etapa que perde informação.
+
+**Virar volume direto.** Dois contornos — o de lado (z×y) e o de cima (z×x) —
+alimentam o `inflate` e viram corpo 3D na aba Objeto. Você desenha, vira massa,
+e refina à mão a partir dali. Convenção igual à do `nos-Craft`, senão vira
+tradução na cabeça: y pra cima, lado é z×y, cima é z×x, frente é x×y.
+
+**Servir de gabarito ao vivo.** O `nos-Craft` mede silhueta renderizada contra
+polígono de referência e devolve o IoU, a fração de área que as duas dividem.
+A mesma conta roda aqui **enquanto você modela**, com a porcentagem na tela.
+Sai de "acho que ficou parecido" pra um número.
+
+## Trazer e levar do repositório
+
+A Oficina precisa dos dois sentidos: abrir o que a IA gerou pra você auditar, e
+mandar de volta o que você fez.
+
+Os dois passam pelo mesmo lugar — o **servidor de desenvolvimento** que já
+precisa existir pra gravar arquivo (a página web não escreve em disco). Três
+rotas pequenas resolvem tudo:
+
+```
+GET  /pecas/            lista os arquivos da pasta
+GET  /pecas/<nome>.js   devolve o conteúdo
+POST /pecas/<nome>.js   grava
+```
+
+Com isso a ferramenta ganha um navegador de pastas igual ao do editor de código:
+você vê o que existe, abre, inspeciona, mexe, salva. Sem baixar nada, sem mover
+arquivo à mão.
+
+Sem o servidor no ar, sobra abrir por arrastar-e-soltar e salvar por download.
+Funciona, mas é o modo desconfortável.
+
+## O contrato com a IA
+
+Aqui tem uma armadilha que precisa ficar escrita, porque ela morde justamente no
+caso que motivou tudo isto.
+
+**A Oficina só abre lista de passos.** Ela não interpreta código procedural. O
+`arvore3d.js` de hoje é JavaScript escrito à mão, com laços e condições — abrir
+aquilo exigiria executar código arbitrário e adivinhar o que virou o quê.
+
+Então, pra você conseguir auditar visualmente o que a IA gerar, **a IA tem que
+emitir lista de passos**, não código livre. Isso não é limitação, é o que torna
+o objeto inspecionável, editável e paramétrico. Código livre continua valendo
+pra peça escrita à mão; ele só não passa pela Oficina.
+
+O que a IA emite bem, e o que emite mal, já está medido no `nos-Craft` e está
+escrito no `silhouette.js` de lá: autorar coordenada 3D crua usa a IA na
+fraqueza dela; raciocinar sobre forma em 2D usa a força. Consequência prática
+pro nosso formato: **`moveV v:7 d:[0.1,0,-0.05]` é operação pra humano
+arrastando, não pra IA gerando.** Os passos que a IA deve usar são os
+descritivos — `loft`, `inflate`, `lathe` e as primitivas.
+
+Por isso os tipos de nó do `nos-Craft` entram como operações da lista, e não
+como formato concorrente: um objeto que a IA escreveu abre na Oficina e você
+refina à mão; o que você modelou continua legível pra ela. Um formato, dois
+caminhos de autoria. Sem isso o jogo termina com dois sistemas de objeto
+paralelos.
+
+O `nos-Craft` **segue existindo em paralelo** — decisão do ideador. O que vem de
+lá são algoritmos e ideias, não dependência.
+
+### O que transfere de lá, e o que não
+
+Transfere bem, porque o acoplamento com three.js é raso — `Vector3`, `Color` e
+`BufferGeometry` só nas bordas, e a matemática no meio é pura:
+
+- **`loft`** e **`inflate`** — os dois mais valiosos: uma árvore inteira vira um
+  passo só.
+- **`lathe`**, **`displace`**, **`chamferBox`** — pequenos e diretos.
+- O padrão do **`validateModelData`**: validar antes de renderizar, com mensagem
+  que diz onde está o erro.
+- O **`forja.mjs`** com folhas de contato 360° — é a bancada sem interface que
+  este documento pedia, só que já escrita e melhor, porque **renderiza**. A IA
+  consegue ver o que fez em vez de adivinhar.
+
+Não transfere sem mexer no motor:
+
+- **`countershade`, `paintVerts`, AO falso** — dependem de cor por vértice, e o
+  formato de vértice da v3 não tem esse espaço. No `nos-Craft` é o principal
+  recurso de iluminação; aqui o equivalente é a textura com projeção em caixa.
+  **Objeto trazido de lá vai parecer diferente até isso ser resolvido**, e é o
+  descompasso mais visível entre os dois projetos.
+
+## Ainda a combinar
+
+Nada aqui bloqueia começar, mas nenhuma destas está decidida:
+
+- Quantos objetos por arquivo — um só, ou uma cena com vários?
+- Onde ficam os desenhos: junto da peça, ou numa pasta de referência como o
+  `qa/ref/silhuetas.json` do `nos-Craft`?
+- A Oficina roda dentro do `jogo.html` ou em página própria (`oficina.html`)?
+  Este documento assume página própria.
+- Unidade e escala: a silhueta de referência é o jogador, mas falta fixar quanto
+  vale uma unidade em metros.
+- Se um objeto da Oficina pode ser instanciado várias vezes com parâmetros
+  diferentes, como as árvores de hoje fazem com `seed`.
+
 ## Formato do arquivo gerado
 
 O arquivo tem que ser uma peça normal do jogo: exporta `meta` e `construir(ctx)`,
@@ -343,12 +468,6 @@ sem você mover nada de lugar.
 Sem o servidor no ar, cai pro download comum — funciona, mas você move o arquivo
 à mão.
 
-### A Oficina só reabre o que ela criou
-
-`arvore3d.js` e as outras peças de hoje são código escrito à mão, não lista de
-passos. Elas não abrem na ferramenta, e isso não é limitação a consertar: são
-duas formas legítimas de fazer peça, e as duas continuam valendo.
-
 ## Lista de operações
 
 | Operação | Argumentos | Observação |
@@ -431,6 +550,11 @@ que é o coração de tudo — sem precisar abrir o editor nem clicar em nada.
 9. Textura por objeto com projeção em caixa, e o pincel no modo "face".
 10. Exportar código pelo servidor de desenvolvimento, e colisão automática.
 11. Modos livres do pincel: raio, dureza, degradê. Acrescenta, não substitui.
+
+A **aba Desenho** não depende de nada disso e pode ser construída a qualquer
+momento, inclusive primeiro: é polígono em canvas 2D, sem malha e sem
+identidades. Mesmo sem a modelagem pronta, ela já paga sozinha — você passa a
+mandar contorno exato pra IA em vez de imagem pra ser traçada.
 
 A bancada sem interface do `executar` entra junto com o passo 1, não no fim:
 ela é o que deixa provar que o replay está certo antes de existir tela pra
