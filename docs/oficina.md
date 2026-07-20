@@ -364,19 +364,154 @@ Não transfere sem mexer no motor:
   **Objeto trazido de lá vai parecer diferente até isso ser resolvido**, e é o
   descompasso mais visível entre os dois projetos.
 
-## Ainda a combinar
+## Decidido nesta rodada
 
-Nada aqui bloqueia começar, mas nenhuma destas está decidida:
+- **Cena com um ou vários objetos** — vários.
+- **Desenhos em pasta separada**, não junto da peça: o mesmo desenho serve de
+  gabarito pra várias peças, e é ele que vai pra IA.
+- **A Oficina roda dentro do jogo e isolada.** Carregada sob demanda com
+  `import()`, então quem só joga nunca paga o custo dela; o `oficina.html`
+  carrega o mesmo módulo direto. Condição: a Oficina **não lê estado do jogo**.
+  Ela recebe o que precisa, não busca.
+- **1 unidade = 1 metro.** Já era assim sem estar escrito: no `jogo.html`,
+  `EYE = 1.7` é altura dos olhos, `SPEED = 5.2` é corrida em metros por segundo,
+  `JOGADOR_R = 0.35` dá uns 70cm de ombro a ombro. Escrever fecha a porta pra
+  alguém supor outra coisa.
+- **Objeto pode ser instanciado com parâmetros diferentes**, e desde o começo.
+  O jogo já faz isso por tipo (`VARIANTES` com 4 sementes); o que falta é por
+  objeto. Como os parâmetros já têm nome, basta `construir()` aceitar valores
+  que substituem os do `PARAMS`.
 
-- Quantos objetos por arquivo — um só, ou uma cena com vários?
-- Onde ficam os desenhos: junto da peça, ou numa pasta de referência como o
-  `qa/ref/silhuetas.json` do `nos-Craft`?
-- A Oficina roda dentro do `jogo.html` ou em página própria (`oficina.html`)?
-  Este documento assume página própria.
-- Unidade e escala: a silhueta de referência é o jogador, mas falta fixar quanto
-  vale uma unidade em metros.
-- Se um objeto da Oficina pode ser instanciado várias vezes com parâmetros
-  diferentes, como as árvores de hoje fazem com `seed`.
+## Editar objeto de dentro do jogo
+
+O caminho principal de uso, decidido pelo ideador.
+
+Jogando, você aperta `I` pra ver as etiquetas, mira num objeto e clica. Aparece
+**"Abrir objeto na oficina?"** com sim e não. Dizendo sim, a Oficina abre já com
+aquele objeto carregado. Você mexe, e clica em **"Aplicar para o jogo"**.
+
+Aí vem a pergunta que importa:
+
+> Há mais de um objeto do mesmo tipo. Escolha:
+> 1. Aplicar só no objeto desta etiqueta
+> 2. Aplicar em todos do mesmo tipo
+> 3. Mostrar lista
+
+A lista é rolável, uma linha por objeto, com botão de aplicar em cada uma. Ao
+lado dela, o **mapa do mapa atual** com as etiquetas: clicar no mapa destaca a
+linha na lista, clicar na linha destaca no mapa. Os dois sentidos.
+
+Quando existir mais de um mapa, aparecem os botões de anterior e próximo pra
+percorrer. **Enquanto só houver um, eles ficam ocultos** — botão que não faz
+nada ensina errado.
+
+### As três opções são três arquivos
+
+Por baixo, a escolha do aviso é sobre **qual arquivo escrever**, e enxergar isso
+evita confusão depois:
+
+- **Todos do mesmo tipo** reescreve a peça, `pecas/toco.js`.
+- **Só este** escreve na entrada individual daquele objeto, que não pode morar
+  na peça — se morasse, viraria outro tipo.
+- **Lista** é só a interface pra escolher quais entradas individuais recebem.
+
+### Três coisas que isso exige e hoje não existem
+
+**Objeto plantado precisa poder ter valores próprios.** Hoje `arvore3d.js` é uma
+peça só, `ARVORE_POS` é uma lista de posições, e quatro variantes nascem de
+sementes diferentes — nenhuma árvore tem dado próprio. Pra "aplicar só nesta",
+cada objeto plantado precisa carregar valores que substituem os do `PARAMS`.
+
+**O mapa precisa virar dado.** As posições estão escritas à mão dentro do
+`jogo.html`. Pra Oficina listar, marcar no mapa e gravar alteração em uma
+árvore, isso vira arquivo de posicionamento: posição, tipo e os valores próprios
+de cada objeto. É o `props.js` do `nos-Craft`. E é o que faz os botões de mapa
+anterior e próximo terem sentido — cada mapa é um desses arquivos.
+
+**Clicar na etiqueta com o ponteiro travado.** As etiquetas de hoje têm
+`pointer-events: none` e o jogo trava o cursor, então não há seta pra clicar.
+Solução sem quebrar o controle: a etiqueta mais próxima do centro da tela se
+destaca e o clique esquerdo abre o aviso. **Você mira, não aponta** — coerente
+com o resto do jogo, e o ponteiro continua travado.
+
+### Ao aplicar, refazer a colisão
+
+O `COLISORES` do jogo sai de `meta.colisao`. Mudar a espessura de um tronco sem
+recalcular deixaria você esbarrando no ar, ou atravessando madeira. A aplicação
+ao vivo refaz malha, textura **e** colisão. O `visor.aplicarTiers` já é
+precedente de troca ao vivo sem recarregar.
+
+## O que preparar no motor agora
+
+Estas são baratas hoje e caras depois. A ordem é por quanto doeria adiar.
+
+### 1. Espaço pra cor no formato de vértice
+
+O formato tem posição, coordenada de textura e normal — 32 bytes, sem cor. Isso
+já bloqueou coisa três vezes neste documento: o `countershade`, o `paintVerts` e
+o AO falso do `nos-Craft`, que são o principal recurso de iluminação de lá.
+
+Acrescentar agora é uma mudança de stride, uma linha no shader e um atributo.
+Acrescentar depois é mexer em toda peça existente, no `geo.js`, no `render.js` e
+em cada shader ao mesmo tempo.
+
+Ganho direto: os objetos vindos do `nos-Craft` passam a **parecer os mesmos**, em
+vez de perder o sombreado. E o pincel ganha um caminho a mais, mais barato que
+textura pra detalhe suave.
+
+**Custo real:** 12 bytes por vértice e uma multiplicação no shader.
+
+Isto encosta no `render.js`, que é território de quem cuida de gráficos —
+precisa ser combinado, não feito por cima.
+
+### 2. `draw` aceitar o tipo de primitiva
+
+Hoje é `gl.drawArrays(gl.TRIANGLES, ...)` fixo. Trocar por
+`L.modo ?? gl.TRIANGLES` é uma linha e destrava linha e ponto pra sempre —
+gizmo em 3D, contorno, grade, depuração. Foi exatamente isso que obrigou os
+vértices do editor a irem pra canvas 2D.
+
+### 3. Posicionamento como dado, já
+
+Enquanto são 12 árvores escritas à mão, mover pra arquivo é uma tarde. Depois de
+três mapas povoados, é uma migração.
+
+### 4. Tensão entre valores próprios e instanciamento
+
+Vale saber antes de esbarrar: desenhar muitos objetos iguais de uma vez
+(instanciamento) exige que sejam **iguais**. Se cada árvore tiver valores
+próprios, cada uma vira uma malha distinta e o ganho evapora.
+
+Resolução: valores próprios são exceção, não regra. O jogo agrupa por assinatura
+— quem não tem alteração cai no grupo do tipo e desenha junto; quem tem sai do
+grupo. Basta a estrutura de dados permitir esse agrupamento desde o começo.
+
+## Sobre three.js e híbrido
+
+Pergunta do ideador: usar three.js junto, ou um conversor, traria ganho?
+
+**Como motor, não.** Adotar significaria reescrever o render, e os objetos
+passariam a ser desenhados com a iluminação e os shaders de lá — o que você
+modela deixa de se parecer com o que aparece no jogo. Num jogo onde o visual
+estilizado é o ponto, isso custa mais do que entrega. As funcionalidades que
+viriam de graça, na maioria, são coisas que ainda não precisamos.
+
+**Como conversor em tempo de execução, também não.** Converter a saída do
+`nos-Craft` no navegador significa carregar o three.js junto com o jogo, e o
+projeto inteiro é construído em cima de não ter dependência.
+
+**Como fonte de algoritmo, sim, e muito.** O acoplamento com three.js lá é raso:
+`Vector3`, `Color` e `BufferGeometry` só nas bordas, com matemática pura no meio.
+Portar `loft`, `inflate`, `lathe` e `displace` é trocar vetor por arranjo — umas
+centenas de linhas, sem dependência nova.
+
+Sobre outras linguagens (WebAssembly e afins): não neste tamanho. As operações de
+malha aqui são milhares de vértices, não milhões, e JavaScript dá conta com
+folga. Seria complexidade paga sem retorno.
+
+**A limitação real do motor hoje não é a linguagem nem a biblioteca** — é o
+formato de vértice sem cor e o `draw` preso em triângulos. Os dois itens acima.
+Resolvidos, some quase todo o motivo que faria alguém querer trocar de motor.
 
 ## Formato do arquivo gerado
 
@@ -569,15 +704,15 @@ conhecido.
 ## O que este documento assume do motor
 
 - `visor.projetar` — mundo → tela, já existe (feito pras etiquetas de ID).
-- `visor.depurar` — existe, mas **não serve pro editor**: o `draw` do render usa
+- `visor.depurar` — existe, mas hoje **não serve pro editor**: o `draw` usa
   `gl.TRIANGLES` fixo, então não desenha ponto nem linha. Vértices e arestas vão
-  pra um canvas 2D por cima. Continua útil se um dia quisermos volume sólido de
-  depuração, como o colisor.
+  pra canvas 2D por cima. Ver "O que preparar no motor agora": uma linha resolve.
 - `freeCam` no `render.js` — câmera livre, já existe.
 - `mat4.js` — falta rotação em X e Z (escritas neste documento, prontas).
 - **Servidor de desenvolvimento com rota de gravação** — não existe ainda. É o
   que permite salvar em `pecas/` sem passar pela pasta de downloads. O servidor
   `no-store` da investigação de cache é a base.
 - Formato de vértice: posição, coordenada de textura e normal. **Não tem cor** —
-  daí a pintura ir pra textura gerada por objeto, em vez de mexer no
-  `render.js`, que é território de quem cuida de gráficos.
+  é a limitação nº 1 a resolver (ver "O que preparar no motor agora"). Enquanto
+  não for, a pintura vive na textura gerada por objeto. Mexer nisso é território
+  de quem cuida de gráficos, então precisa ser combinado, não feito por cima.
