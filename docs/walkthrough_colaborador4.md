@@ -328,3 +328,62 @@ Isso produziu um `jogo.html` novo rodando com um `ilha-chao.js` velho: tela pret
 e `raioEm is not a function`, sem erro nenhum no carregamento. Como cada peça é um
 arquivo separado, é questão de tempo até duas ficarem em versões diferentes de
 novo. Servidor de desenvolvimento deveria mandar `no-store`.
+
+---
+
+## Decisões de motor tomadas no planejamento da Oficina
+
+Nada disto está implementado. Está aqui porque **encosta direto no `render.js`** e
+foi decidido enquanto se projetava o editor de objetos (`docs/oficina.md`). Quem
+cuida de gráficos precisa saber antes de mexer no formato de vértice ou nos
+shaders, senão o trabalho colide.
+
+**Migrar pra WebGL 2, e antes do resto.** Decisão do ideador. A troca é
+mecânica: contexto `webgl2` e shaders em `#version 300 es` — `attribute` vira
+`in`, `varying` vira `in`/`out`, `gl_FragColor` vira saída declarada,
+`texture2D` vira `texture`. As peças não são tocadas, porque geram arranjos de
+vértice e não sabem de shader.
+
+Destrava, em ordem de impacto: **instanciamento nativo** (hoje cada árvore
+plantada é um desenho próprio — uma floresta de 500 viraria mil desenhos por
+quadro); **textura de profundidade de verdade** na sombra, aposentando o `PACK`
+em RGBA e a perda de precisão junto; múltiplos alvos de render; textura de
+tamanho livre com repetição e mipmap; e mais uniformes, que o esqueleto da
+animação vai precisar.
+
+**Formato de vértice ganha cor E peso de osso, na MESMA passada.** Hoje são 32
+bytes: posição, coordenada de textura e normal. Falta cor, que já bloqueou três
+coisas — `countershade`, `paintVerts` e AO falso, que são o principal recurso de
+iluminação do `nos-Craft` e hoje não transferem. E falta índice e peso de osso,
+pro esqueleto.
+
+O aviso importante: **mudar o formato de vértice duas vezes é pagar a migração
+duas vezes.** Reservar o espaço não custa nada agora; a segunda migração custa
+toda peça, o `geo.js`, o `render.js` e cada shader ao mesmo tempo. Decidir os
+dois juntos, mesmo que o esqueleto só seja usado meses depois.
+
+**`draw` aceitar o tipo de primitiva.** Hoje é `gl.drawArrays(gl.TRIANGLES, ...)`
+fixo. Trocar por `L.modo ?? gl.TRIANGLES` é uma linha e destrava linha e ponto
+pra sempre — gizmo em 3D, contorno, grade, depuração. Foi exatamente isso que
+obrigou os vértices do editor a irem pra canvas 2D em vez de usarem o
+`visor.depurar`.
+
+**Materiais por parâmetro no lote, não por grafo de nós.** Grafo exigiria gerar
+shader em tempo de execução, um sistema inteiro. Um shader com parâmetros por
+lote cobre quase tudo, e já há precedente: o `uRim` é exatamente isso.
+Propostos: `cor`, `emissivo`, `contorno`, `aspereza`, `semLuz` e `mistura`.
+
+Só o `mistura: transparente` pede trabalho de verdade — uma passada extra depois
+dos opacos, ordenada de trás pra frente. É o que destrava vidro, fumaça e água
+com profundidade, hoje impossíveis porque o passe da cena roda com
+`gl.disable(BLEND)` e só recorte por alfa.
+
+**three.js foi avaliado e recusado.** Não como veto ao que ele faz, mas porque
+nada do que se quer é impossível no motor próprio — é trabalho, não barreira — e
+porque o que ele tem de único (ecossistema e carregar `.glb`) é justamente o que
+o projeto não usa: cada mundo federado tem o cliente dele
+(`docs/PORTALS_PROTOCOL.md`, campo `clientHint`), então nosso renderizador nunca
+carrega modelo de estranho. O sinal pra reconsiderar: se o tempo passar a ir todo
+pra encanamento de renderizador em vez de pro mundo.
+
+Detalhe e razões completas em [`docs/oficina.md`](oficina.md).

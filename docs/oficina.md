@@ -532,7 +532,36 @@ itens acima. Resolvidos, some quase todo o motivo que faria alguém querer troca
 
 **Decisão do ideador: WebGL 2, sem three.js.** Nada do que foi pedido —
 materiais, animação, esqueleto — é impossível no motor próprio. É trabalho, não
-barreira.
+barreira. O renderizador é a parte pequena do que se está construindo; o grande
+é a Oficina, o formato de passos e a federação, e nada disso muda conforme quem
+desenha o triângulo.
+
+### Dois mal-entendidos que não devem voltar
+
+**three.js não exige arquivo.** Ele é biblioteca de renderização; dá pra usar
+gerando tudo por código, zero arquivo, como o Nós faz. Os carregadores de `.glb`
+e afins são capacidade disponível, não obrigação. A frase "precisaríamos do
+three.js pra trazer coisa de fora" era condicional, e a condição não se aplica.
+
+**Trazer objeto de fora já tem lugar previsto.** No `docs/PORTALS_PROTOCOL.md`,
+o campo `clientHint` existe pra um mundo federado avisar que precisa de outro
+cliente ou tem mecânica própria. Como cada repositório é um planeta com o
+cliente dele, **nosso renderizador nunca carrega `.glb` de estranho**.
+
+### O sinal pra reconsiderar
+
+Se daqui a alguns meses o tempo estiver indo todo pra encanamento de
+renderizador em vez de pro mundo, trocar passa a valer. Enquanto o motor não for
+o gargalo, ele não é o problema.
+
+### Por que o formato em texto importa aqui
+
+A colaboração no metaverso passa por Pull Request: cada repositório é um mundo,
+e quem quiser ajudar bifurca e propõe. **Lista de passos em texto mostra
+exatamente o que mudou numa revisão. Um `.glb` binário não mostra nada.**
+
+Isso não foi projetado de propósito — caiu no colo por causa da federação por
+repositório — mas é um argumento forte a favor do formato escolhido.
 
 ## WebGL 2
 
@@ -776,25 +805,62 @@ sempre. Nada de aleatório sem semente escrita no passo, senão reabrir o arquiv
 dá um objeto diferente. Isso vale também pra numeração dos vértices criados no
 meio do caminho, como explicado acima.
 
-## Onde o código mora
+## Onde o código mora: três camadas
 
-Duas metades, e separar importa:
+A separação existe por dois motivos ao mesmo tempo — o jogo não pode carregar o
+editor pra desenhar um toco, e outro criador precisa conseguir usar a Oficina no
+mundo dele sem copiar o nosso motor junto.
 
-- **`motor/oficina.js`** — `executar(PASSOS, PARAMS, TOPO, ctx)` e
-  `colisaoDe(...)`. Pequeno, é o que o jogo carrega pra abrir uma peça. Sem
-  interface, sem edição. O `colisaoDe` roda só a geometria, porque é chamado no
-  carregamento do módulo.
-- **`oficina.html`** — a ferramenta: câmera, gizmos, seleção, painéis. Só abre
-  quando você vai modelar.
+**Núcleo** — sabe o que é vértice e face. Guarda a lista de passos, executa, e
+devolve o objeto em números: onde está cada ponto, quais pontos formam cada face,
+que cor e que material tem cada uma. **Não sabe desenhar e não precisa.**
 
-Se o replay morasse dentro da ferramenta, o jogo teria que carregar o editor
-inteiro pra desenhar um toco.
+**Adaptador** — pega esses números e monta no formato do motor. O nosso monta os
+triângulos soltos da v3. Quem usa outro motor escreve o dele, umas vinte linhas.
+É a única peça que muda de mundo pra mundo.
 
-**A medir quando existir:** o jogo passa a executar pinceladas na hora de abrir
-uma peça. As peças de hoje já geram textura por código, então o custo deve ser
-parecido — mas é suposição, não medição. Se uma floresta de objetos pintados
-pesar no carregamento, a saída é guardar a textura pronta em cache no navegador,
-sem virar arquivo no repositório.
+**Interface** — a tela: câmera, gizmo, painéis, botões.
+
+O caminho de um arrasto, pra ficar concreto: a **interface** percebe o arrasto e
+avisa; o **núcleo** grava a operação e recalcula as posições; o **adaptador**
+transforma em malha do motor pra aparecer.
+
+### A decisão de agora
+
+Na versão descuidada, o núcleo montaria a malha da v3 direto. Na organizada, ele
+**devolve números** e o adaptador monta. Mesmo resultado, mesmas funções, mesma
+velocidade — é arrumação interna, não concessão. **Não se abre mão de nada.**
+
+O efeito colateral é que o adaptador fica trocável.
+
+Custo real: um laço sobre os vértices, uma vez na construção do objeto, não por
+quadro. E se um dia a v3 quiser algo que o formato neutro não expressa, o
+adaptador é o lugar de acrescentar — ele lê o neutro e põe o nosso por cima.
+
+Pela mesma lógica da lista de passos: barato agora, caro depois.
+
+### Uma cópia, não duas
+
+Foi considerado manter duas versões da Oficina, uma "portátil" e uma nossa,
+customizada. **Rejeitado.** Todo defeito viraria dois, as duas divergem em
+semanas, e a portátil apodrece porque ninguém a usa no dia a dia — sobra uma boa
+e uma quebrada.
+
+A separação em três camadas existe justamente pra que **uma base só** sirva os
+dois casos.
+
+### Nos arquivos
+
+- **`motor/oficina.js`** — núcleo e adaptador da v3: `executar(...)` e
+  `colisaoDe(...)`. Pequeno, é o que o jogo carrega. Sem interface, sem edição.
+  O `colisaoDe` roda só a geometria, porque é chamado no carregamento do módulo.
+- **`oficina.html`** — a interface. Só abre quando se vai modelar, carregada sob
+  demanda com `import()`.
+
+**A medir quando existir:** o jogo passa a executar pinceladas ao abrir uma peça.
+As peças de hoje já geram textura por código, então o custo deve ser parecido —
+mas é suposição, não medição. Se pesar, a saída é guardar a textura pronta em
+cache no navegador, sem virar arquivo no repositório.
 
 ## Normais: chapado por padrão
 
