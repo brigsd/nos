@@ -900,6 +900,88 @@ Material por **nome**, não por face solta: assim mudar a casca muda toda a casc
 do objeto de uma vez. É a mesma regra de um número com um dono só que vale pra
 `PARAMS` e pra colisão.
 
+## Partículas e fluidos
+
+Terreno novo — nada disto está no formato de passos ainda. Partícula e fluido
+são **sistema** (parâmetros + atualização por quadro), não geometria de
+vértice — mesma distinção que separou o "comportamento contínuo" na Aba Som.
+
+### O que o motor já tem
+
+Um sistema de partículas só: o **pólen** ambiente (`render.js`). Pontinhos que
+derivam, sobem em laço e piscam, animados 100% no vertex shader a partir de
+sementes fixas — o buffer sobe uma vez, o tempo faz o resto. Contagem por tier
+(80/320/800), blend aditivo, desligável com `particulas:false` em paisagem.
+Barato e elegante, mas é UM efeito fixo, não um emissor configurável. De
+fluido, o motor não tem nada visual: a água hoje vive só no `som.js` (bolhas e
+lambidas); na tela é o chão chapado.
+
+### Partículas: generalizar o pólen num emissor
+
+O caminho é estender o que já existe, não tecnologia nova. Um **emissor** com
+parâmetros: taxa de emissão, vida, velocidade e direção, gravidade, tamanho e
+cor ao longo da vida, textura. Determinístico com semente, como todo o resto.
+Na Oficina é um **painel de parâmetros com preview ao vivo** (igual o
+Material), não edição de vértice — e pode ser peça de efeito própria ou
+grudada numa `parte` do objeto (fumaça saindo da chaminé). O WebGL 2 +
+instanciamento que já está no plano é exatamente o que um emissor quer.
+
+### Fluidos: fingir, não simular
+
+Simulação de fluido de verdade fica **fora de escopo**, mesma categoria do
+booleano — grau de pesquisa, cara, falha em caso ruim. Num jogo estilizado se
+finge, e o bom é que fluido se decompõe em coisas que este documento já
+planeja:
+
+- **superfície de água** = malha com onda no vértice (o `WIND` do `render.js`
+  já é esse truque: deslocamento senoidal no vertex shader) + textura rolando;
+- **profundidade/transparência** = o modo `transparente` do espaço Material;
+- **respingo, gota, spray** = partícula (o emissor acima);
+- **rio** = textura rolando na malha + spray nas corredeiras.
+
+Fluido não é subsistema novo — é onda-no-vértice + material transparente +
+textura animada + spray de partícula.
+
+## Presets: partir de algo pronto, não do zero
+
+Pedido do ideador, e é a coisa certa: como o cubo padrão do Blender, a Oficina
+deve **vir com um exemplar pronto de cada natureza** — um de cada tipo de
+partícula (fumaça, faísca, poeira, respingo, brilho), um objeto-base, um
+material-base, um som-base — pra você **variar em cima** com controles, em vez
+de criar do zero.
+
+Por que isto é natural, e não firula:
+
+- **É como o jogo já funciona.** As árvores nascem de espécie + semente
+  (`VARIANTES`); os passos pisam em `PISOS` (grama, areia, madeira, pedra); os
+  materiais rascunhados são `MATERIAIS` (casca, brasa). Isso **já são
+  presets** — o ideador já trabalha variando o que existe. Esta seção só
+  promove o padrão a princípio geral.
+- **Não é mecanismo novo.** Um preset é só uma **peça inicial** no formato de
+  sempre (lista de passos + `PARAMS`). "Abrir e variar" é literalmente como
+  toda a Oficina funciona; o preset é o ponto de partida, não uma engrenagem à
+  parte.
+- **Os controles saem de graça.** Como os parâmetros já têm nome, a interface
+  mostra **um controle por parâmetro** sozinha. Faz o painel genérico uma vez,
+  e todo preset ganha controle automaticamente — não se desenha controle
+  preset por preset.
+
+Duas regras pra não virar armadilha:
+
+- **Preset é ponto de partida que você DONO, não gabarito trancado.** Ao abrir,
+  ele vira sua peça — dá pra mexer nos controles e também **descer abaixo
+  deles**, pros parâmetros crus ou pra própria lista de passos. Preset que só
+  deixa girar três botões e nada além é beco sem saída; este não é.
+- **Abrir um preset é copiar, não mutar o original.** Salva como peça sua; o
+  preset compartilhado fica intacto pro próximo uso. Mesma lógica do "abrir e
+  refinar" já decidida.
+
+Onde moram: peças numa pasta de presets (como as de rascunho com prefixo `_`
+já fazem hoje). O trabalho real aqui **não é o mecanismo** — é **curar o
+conjunto certo**: um punhado de arquétipos que cobrem o espaço sem inchar.
+Poucos demais deixam buraco; muitos viram manutenção. Essa é decisão de gosto
+e cobertura, e é onde o esforço vai.
+
 ## Formato do arquivo gerado
 
 O arquivo tem que ser uma peça normal do jogo: exporta `meta` e `construir(ctx)`,
