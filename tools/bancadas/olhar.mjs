@@ -18,6 +18,7 @@
  * screenshot que ninguém olha é ruído.
  */
 import { createServer } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
@@ -63,7 +64,7 @@ const base = `http://127.0.0.1:${server.address().port}/`;
    rode `cd site && npm ci` uma vez antes de usar a bancada. */
 const PW = join(REPO, 'site/node_modules/playwright/index.js');
 if (!existsSync(PW)) { console.error('olhar: Playwright não encontrado. Rode uma vez: cd site && npm ci   (a bancada usa o Playwright/Chromium do site).'); process.exit(1); }
-const pw = (await import(PW)).default;
+const pw = (await import(pathToFileURL(PW).href)).default;
 const browser = await pw.chromium.launch();
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 mkdirSync(OUT, { recursive: true });

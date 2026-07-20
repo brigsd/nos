@@ -18,6 +18,7 @@
  * Sem rede externa (mundo inline, server local, Chromium do sandbox), igual olhar.
  */
 import { createServer } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
@@ -63,7 +64,7 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 /* dependência oculta: o Playwright vive em site/node_modules (rode `cd site && npm ci` uma vez) */
 const PW = join(REPO, 'site/node_modules/playwright/index.js');
 if (!existsSync(PW)) { console.error('ouvir: Playwright não encontrado. Rode uma vez: cd site && npm ci   (a bancada usa o Playwright/Chromium do site).'); process.exit(1); }
-const pw = (await import(PW)).default;
+const pw = (await import(pathToFileURL(PW).href)).default;
 const browser = await pw.chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 
 /* mede um ponto: destrava o som, espera o glide da proximidade assentar, lê o

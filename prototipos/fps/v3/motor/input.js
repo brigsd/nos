@@ -19,6 +19,8 @@ export function criarInput({ stageEl, onPause }) {
 
   /* olhar por mouse (pointer lock, desktop) */
   let mdx = 0, mdy = 0;
+  /* sobra do quadro anterior, do amortecimento em `mouseLookDelta` */
+  let restoX = 0, restoY = 0;
   const isLocked = () => document.pointerLockElement === stageEl;
   stageEl.addEventListener('click', () => { if (!isTouch) stageEl.requestPointerLock?.(); });
   addEventListener('mousemove', (e) => { if (isLocked()) { mdx += e.movementX; mdy += e.movementY; } });
@@ -70,7 +72,7 @@ export function criarInput({ stageEl, onPause }) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) clear(); });
 
   const isTouch = matchMedia('(pointer: coarse)').matches;
-  function clear() { keys.clear(); mdx = 0; mdy = 0; for (const s of STICKS) s.reset(); }
+  function clear() { keys.clear(); mdx = 0; mdy = 0; restoX = 0; restoY = 0; for (const s of STICKS) s.reset(); }
 
   return {
     isTouch,
@@ -83,10 +85,39 @@ export function criarInput({ stageEl, onPause }) {
       const len = Math.hypot(x, z); if (len > 1) { x /= len; z /= len; }
       return { x, z };
     },
-    /* delta de olhar do MOUSE (pixels acumulados desde a última leitura, zera ao ler) */
-    mouseLookDelta() { const d = { dx: mdx, dy: mdy }; mdx = 0; mdy = 0; return d; },
+    /* delta de olhar do MOUSE (pixels acumulados desde a última leitura, zera ao ler)
+
+       `tau` em segundos liga o amortecimento; 0 devolve o acumulado cru.
+
+       Por que existe: mouse comum lê a 125Hz e a tela atualiza a 120Hz. As
+       duas taxas não se dividem, então uns quadros recebem duas leituras,
+       outros nenhuma. O acumulado fica CERTO, o ritmo não — medido aqui em
+       pico/mediana 2.42 com 4.6% de quadros vazios. Cada quadro sai nítido e
+       mesmo assim o giro parece deixar rastro, porque a câmera anda aos
+       trancos.
+
+       O amortecimento NÃO descarta movimento: o que não é aplicado agora fica
+       no `resto` e entra nos quadros seguintes. A soma no fim de um giro é
+       idêntica à do mouse, então a mira não sai do lugar — só o caminho até
+       lá deixa de ser em degraus. O custo é atraso de cerca de um quadro.
+
+       O `tau` acompanha o dt em vez de ser fração fixa, senão o mesmo número
+       amorteceria mais a 240fps que a 60. */
+    mouseLookDelta(dt = 0, tau = 0) {
+      restoX += mdx; restoY += mdy; mdx = 0; mdy = 0;
+      if (!(tau > 0) || !(dt > 0)) { const d = { dx: restoX, dy: restoY }; restoX = 0; restoY = 0; return d; }
+      const k = 1 - Math.exp(-dt / tau);
+      const dx = restoX * k, dy = restoY * k;
+      restoX -= dx; restoY -= dy;
+      /* sobra minúscula vira arrasto perpétuo e mira que nunca assenta */
+      if (Math.abs(restoX) < 0.01) restoX = 0;
+      if (Math.abs(restoY) < 0.01) restoY = 0;
+      return { dx, dy };
+    },
     /* eixo CONTÍNUO do stick direito (-1..1) — o chamador multiplica por taxa×dt */
     stickLook() { return { rx: JOY.rx, ry: JOY.ry }; },
+    /* verifica se Shift esquerdo ou direito está pressionado (sprint) */
+    shiftHeld() { return keys.has('ShiftLeft') || keys.has('ShiftRight'); },
     guard() { for (const s of STICKS) s.guard(); },   // watchdog por quadro (D-48)
     clear,
   };

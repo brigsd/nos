@@ -7,6 +7,7 @@
  * celular). Uso: node tools/bancadas/res-bench.mjs [--no-build]
  */
 import { createServer } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
@@ -29,7 +30,7 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 
 const PW = join(REPO, 'site/node_modules/playwright/index.js');
 if (!existsSync(PW)) { console.error('res-bench: rode `cd site && npm ci` primeiro.'); process.exit(1); }
-const pw = (await import(PW)).default;
+const pw = (await import(pathToFileURL(PW).href)).default;
 const browser = await pw.chromium.launch();
 
 const CAM = process.env.CAM || '34.0,11.2,0.18'; // carreiro: fileiras de árvore dos 2 lados (billboard-pesado = onde o stutter mora)

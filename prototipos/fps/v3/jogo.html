@@ -8,8 +8,43 @@
   :root { --line: #3a3350; --accent: #a884f3; }
   html, body { margin: 0; height: 100%; background: #0c0f16; overflow: hidden; font-family: ui-monospace, Menlo, monospace; }
   #c { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; }
-  #hud { position: fixed; top: 8px; left: 10px; font-size: 11px; color: #cddf6c; text-shadow: 0 1px 2px #000; pointer-events: none; line-height: 1.5; }
-  #hint { position: fixed; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #9b93a8; text-shadow: 0 1px 2px #000; pointer-events: none; }
+  /* z acima do mapa (16): o texto é pequeno e o mapa é opaco — se ficasse
+     por baixo, sumiria inteiro no canto onde o minimapa estivesse */
+  #hud { z-index: 17; position: fixed; top: 8px; left: 10px; font-size: 11px; color: #cddf6c; text-shadow: 0 1px 2px #000; pointer-events: none; line-height: 1.5; }
+  /* coordenadas: topo ao centro, pra ler de relance e citar uma posição.
+     Tabular-nums trava a largura dos dígitos, senão o texto dança a cada passo. */
+  #coord { z-index: 17; position: fixed; top: 8px; left: 50%; transform: translateX(-50%); font-size: 11px;
+    font-variant-numeric: tabular-nums; color: #cddf6c; text-shadow: 0 1px 2px #000;
+    pointer-events: none; white-space: nowrap; user-select: text; }
+  /* erro no loop de quadro mata o render e deixa a tela preta, sem nada na
+     tela dizendo o porquê — a mensagem tem que aparecer AQUI, não só no console */
+  /* mapa (tecla M). Canvas 2D solto por cima — não encosta no WebGL. */
+  #mapa { position: fixed; z-index: 16; display: none; pointer-events: none;
+    border: 1px solid var(--line); border-radius: 6px; background: rgba(12,10,20,.72); }
+  /* o minimapa nasce no canto de baixo à esquerda e vai pra qualquer um dos
+     quatro. Só uma medida por eixo em cada classe: definir os quatro lados
+     deixaria o navegador esticar o elemento em vez de encostá-lo no canto. */
+  #mapa.mini { width: 168px; height: 168px; }
+  #mapa.mini.c1 { left: 10px;  top: 10px; }
+  #mapa.mini.c2 { right: 10px; top: 10px; }
+  #mapa.mini.c3 { left: 10px;  bottom: 10px; }
+  #mapa.mini.c4 { right: 10px; bottom: 10px; }
+  #mapa.grande { left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: min(74vh, 74vw); height: min(74vh, 74vw); }
+  /* etiquetas de ID (tecla I). O container nunca some do DOM; o que some são
+     as etiquetas. pointer-events:none pra não roubar clique do jogo. */
+  #tags { position: fixed; inset: 0; z-index: 15; pointer-events: none; }
+  #tags b { position: absolute; transform: translate(-50%, -100%); font-weight: 400;
+    font-size: 11px; color: #f9c22b; text-shadow: 0 1px 2px #000, 0 0 3px #000;
+    background: rgba(20,16,30,.55); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+  /* aviso curto (copiei o link, etc): embaixo ao centro, some sozinho */
+  #aviso { position: fixed; left: 50%; bottom: 42px; transform: translateX(-50%); z-index: 41;
+    display: none; background: rgba(20,16,30,.9); border: 1px solid var(--line); border-radius: 6px;
+    color: #cddf6c; font-size: 12px; padding: 8px 14px; pointer-events: none; max-width: 80vw;
+    white-space: pre-wrap; text-align: center; }
+  #erro { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: none;
+    background: rgba(120,20,30,.92); color: #fdcbb0; font-size: 12px; padding: 10px 14px;
+    white-space: pre-wrap; user-select: text; }
   #pauseBtn { position: fixed; top: 10px; right: 10px; width: 38px; height: 38px; border-radius: 50%;
     background: rgba(23,18,33,.7); color: #eaaded; border: 1px solid var(--line); font-size: 16px; cursor: pointer; z-index: 15; }
 
@@ -55,7 +90,11 @@
 <body>
 <canvas id="c"></canvas>
 <div id="hud">NÓS · v3 — o alicerce (D-61)<br><b id="fps">— fps</b> · <span id="dev">—</span></div>
-<div id="hint">clique: mirar (ESC pausa) · WASD anda</div>
+<div id="coord">—</div>
+<canvas id="mapa" width="420" height="420"></canvas>
+<div id="tags"></div>
+<div id="aviso"></div>
+<div id="erro"></div>
 <button id="pauseBtn" title="pausa (ESC)">⏸</button>
 <div id="stickL" class="stick"><div class="knob"></div></div>
 <div id="stickR" class="stick"><div class="knob"></div></div>
@@ -75,6 +114,7 @@
     <div class="abas">
       <button class="aba on" data-aba="som">som</button>
       <button class="aba" data-aba="graficos">gráficos</button>
+      <button class="aba" data-aba="hud">HUD</button>
       <button class="aba" data-aba="controles">controles</button>
       <button class="aba" data-aba="lingua">idioma</button>
     </div>
@@ -87,6 +127,11 @@
     </div>
 
     <div class="painelAba" id="abaGraficos" hidden>
+      <div class="linha"><span>preset</span><div class="tiers" id="presets">
+        <button class="opt" data-p="dinamico">Dinâmico</button><button class="opt" data-p="baixo">Baixo</button
+        ><button class="opt" data-p="medio">Médio</button><button class="opt" data-p="alto">Alto</button>
+      </div></div>
+      <p class="gnote">dinâmico mede o tempo de quadro e ajusta sozinho pra segurar 60 · mexer numa opção abaixo volta pro manual</p>
       <div class="linha"><span>textura</span><div class="tiers" data-cfg="ts">
         <button class="opt" data-v="2">Baixo</button><button class="opt" data-v="4">Médio</button><button class="opt" data-v="8">Alto</button>
       </div></div>
@@ -99,15 +144,46 @@
       <div class="linha"><span>partículas</span><div class="tiers" data-cfg="particulas">
         <button class="opt" data-v="0">Baixo</button><button class="opt" data-v="1">Médio</button><button class="opt" data-v="2">Alto</button>
       </div></div>
-      <p class="gnote">muda a densidade real (32/64/128px, contagem de pólen etc.) — aplica recarregando a página</p>
+      <div class="linha"><span>resolução</span><div class="tiers" data-cfg="res">
+        <button class="opt" data-v="480">480</button><button class="opt" data-v="640">640</button
+        ><button class="opt" data-v="960">960</button><button class="opt" data-v="1440">1440</button
+        ><button class="opt" data-v="1920">1920</button><button class="opt" data-v="2560">2560</button
+        ><button class="opt" data-v="3440">3440</button>
+      </div></div>
+      <div class="linha"><span>suavização</span><div class="tiers" data-cfg="aa">
+        <button class="opt" data-v="0">Pixel duro</button><button class="opt" data-v="1">Suave</button
+        ><button class="opt" data-v="2">2× (SSAA)</button>
+      </div></div>
+      <div class="linha"><span>reconstrução</span><div class="tiers" data-cfg="recon">
+        <button class="opt" data-v="0">Desligada</button><button class="opt" data-v="1">Ligada</button>
+      </div></div>
+      <p class="gnote">2× tira serrilha sem borrar, mas pesa. Reconstrução ajuda em resolução baixa · só textura recarrega</p>
+    </div>
+
+    <div class="painelAba" id="abaHud" hidden>
+      <div class="linha"><span>minimapa</span><div class="tiers" data-cfg="mapaCanto">
+        <button class="opt" data-v="0">Nenhum</button><button class="opt" data-v="1">↖</button
+        ><button class="opt" data-v="2">↗</button><button class="opt" data-v="3">↙</button
+        ><button class="opt" data-v="4">↘</button>
+      </div></div>
+      <p class="gnote">canto da tela onde o minimapa fica · M abre o mapa grande por cima</p>
+      <div class="linha"><span>textos</span><div class="tiers" data-cfg="hudTexto">
+        <button class="opt" data-v="0">Ocultos</button><button class="opt" data-v="1">Visíveis</button>
+      </div></div>
+      <p class="gnote">o título, os fps e a linha de coordenadas do topo</p>
     </div>
 
     <div class="painelAba" id="abaControles" hidden>
       <div class="controlesLista">
         <div><b>W A S D</b> andar</div>
+        <div><b>SHIFT</b> correr</div>
         <div><b>mouse</b> olhar (clique pra travar o cursor)</div>
         <div><b>alavancas</b> andar / olhar (celular)</div>
         <div><b>ESC</b> pausar</div>
+        <div><b>M</b> abrir/fechar o mapa grande</div>
+        <div><b>I</b> etiquetas de ID nos objetos</div>
+        <div><b>O</b> áreas de colisão</div>
+        <div><b>=</b> copiar o link desta vista</div>
       </div>
     </div>
 
@@ -133,7 +209,36 @@ import { criarSom } from './motor/som.js';
 import * as ilhaChao from './pecas/ilha-chao.js';
 import * as arvore3d from './pecas/arvore3d.js';
 
-const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1 };
+/* O laço de erro fica no TOPO de propósito: registrado lá embaixo, ele não
+   pegava nada que quebrasse durante a montagem — e falha na montagem é
+   justamente a que deixa a tela preta sem dizer por quê.
+   Um erro dentro do quadro também derrubava o rAF inteiro: tela preta, sem
+   movimento, e o som seguindo normal (Web Audio roda em outra thread). Só a 1ª
+   mensagem — a 60 quadros por segundo, repetir viraria enxurrada. */
+const elErro = document.getElementById('erro');
+let erroMostrado = false;
+function mostrarErro(e) {
+  if (erroMostrado) return;
+  erroMostrado = true;
+  elErro.textContent = String(e?.stack || e?.message || e);
+  elErro.style.display = 'block';
+}
+addEventListener('error', (ev) => mostrarErro(ev.error || ev.message));
+addEventListener('unhandledrejection', (ev) => mostrarErro(ev.reason));
+
+
+/* res = largura do quadro interno, em pixels. Havia uma opção "Nativa" que
+   acompanhava a janela mas era limitada a 2560 — num monitor de 3440 ela
+   entregava MENOS que o nativo e ninguém tinha como perceber. Trocada por
+   números explícitos: o que se pede é o que se recebe.
+   Passar da largura da janela é desperdício: o quadro é reduzido na cópia final
+   e o detalhe extra vai pro lixo — a não ser com a suavização 2×, que é
+   supersampling e existe justamente pra aproveitar isso. */
+/* mapaCanto: 0 nenhum · 1 ↖ · 2 ↗ · 3 ↙ · 4 ↘. Nasce em 3 (canto de baixo à
+   esquerda): o minimapa passou a ser parte fixa do HUD, não algo a descobrir. */
+const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0, recon: 0, auto: 0,
+  mapaCanto: 3, hudTexto: 1 };
+const larguraInterna = (r) => Math.max(160, r | 0);
 const Q = new URLSearchParams(location.search);
 function lerCfg() {
   let c;
@@ -163,11 +268,11 @@ const cena = { ...ilha, particulas: true, lotes: [...ilha.lotes, ...loteArvores]
 /* ---------- visor: câmera LIVRE, tiers do jogador ---------- */
 const canvas = document.getElementById('c');
 const visor = criarVisor({
-  canvas, res: 640, camOrbita: false,
+  canvas, res: larguraInterna(cfg.res), aa: cfg.aa, camOrbita: false,
   sombra: cfg.sombra, particulasN: PARTICULAS_N[cfg.particulas] ?? 320, luz: cfg.luz,
 });
 visor.carregar(cena);
-document.getElementById('dev').textContent = `${visor.info} · tex ${16 * cfg.ts}px · ${visor.renderer}`;
+
 
 /* ---------- som ---------- */
 const som = criarSom();
@@ -199,56 +304,565 @@ slA.addEventListener('input', () => som.setVolumes({ ambiente: slA.value / 100 }
 slP.addEventListener('input', () => som.setVolumes({ passos: slP.value / 100 }));
 
 /* gráficos: tiers reais de motor — recarrega a página pra aplicar (mesmo
-   padrão do D-49 na v2: ?res troca de preset recarregando limpo) */
-for (const grupo of document.querySelectorAll('.tiers')) {
+   padrão do D-49 na v2: ?res troca de preset recarregando limpo).
+
+   Recarregar jogava o jogador de volta no spawn, olhando pro outro lado, com o
+   menu fechado: comparar duas opções virava caminhar até o mesmo lugar de novo
+   a cada toque. Agora a volta é no MESMO ponto e com o painel aberto na mesma
+   aba, reaproveitando o ?cam= que o jogo já sabia ler. */
+function recarregarMantendoLugar() {
+  const q = new URLSearchParams(location.search);
+  q.set('cam', camAtual());
+  const aba = document.querySelector('.aba.on')?.dataset.aba;
+  if (telaConfig.classList.contains('show') && aba) q.set('cfg', aba);
+  location.replace(`${location.pathname}?${q}`);
+}
+
+/* Só a TEXTURA recarrega, porque ela é das peças: mudar o tier manda
+   reconstruir a textura de tudo que está na cena. O resto é do visor e troca
+   na hora — o jogador vê a diferença enquanto olha pro mesmo lugar, que é o
+   único jeito de comparar duas opções de verdade. */
+const TIERS_AO_VIVO = new Set(['luz', 'sombra', 'particulas', 'res', 'aa', 'recon']);
+const TIERS_DE_HUD = new Set(['mapaCanto', 'hudTexto']);
+
+/* Baixo e Médio ficam em pixel duro: é o visual do projeto e não custa nada.
+   Alto usa supersampling 2×, e não a suavização "Suave" — esta borra o pixel
+   art, aquele tira serrilha sem borrar. Repare que Alto pede 960 com 2×, ou
+   seja, 1920 de largura interna: é de longe o degrau mais caro da lista. */
+const PRESETS = {
+  baixo: { ts: 2, luz: 0, sombra: 0, particulas: 0, res: 480, aa: 0 },
+  medio: { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0 },
+  alto:  { ts: 8, luz: 2, sombra: 2, particulas: 2, res: 960, aa: 2 },
+};
+
+/* traduz um tier de config no número que o visor espera */
+const paraVisor = (chave, v) => (chave === 'res' ? larguraInterna(v)
+  : chave === 'particulas' ? PARTICULAS_N[v] ?? PARTICULAS_N[1]
+  : v);
+
+function marcarBotoes() {
+  const atual = lerCfg();
+  for (const g of document.querySelectorAll('.tiers[data-cfg]')) {
+    for (const b of g.querySelectorAll('.opt')) b.classList.toggle('on', String(atual[g.dataset.cfg]) === b.dataset.v);
+  }
+  /* Dinâmico acende quando o ajuste automático está no comando. Os presets
+     fixos só acendem com ele desligado E com TUDO batendo — mexeu num tier
+     solto, nenhum acende, porque dizer que ainda está "no Médio" seria mentira. */
+  for (const b of document.querySelectorAll('#presets .opt')) {
+    if (b.dataset.p === 'dinamico') { b.classList.toggle('on', autoLigado); continue; }
+    const p = PRESETS[b.dataset.p];
+    b.classList.toggle('on', !autoLigado && Object.keys(p).every((k) => atual[k] === p[k]));
+  }
+}
+
+for (const grupo of document.querySelectorAll('.tiers[data-cfg]')) {
   const chave = grupo.dataset.cfg;
   for (const btn of grupo.querySelectorAll('.opt')) {
-    btn.classList.toggle('on', String(cfg[chave]) === btn.dataset.v);
     btn.addEventListener('click', () => {
-      const novo = { ...lerCfg(), [chave]: Number(btn.dataset.v) };
-      salvarCfg(novo);
-      location.reload();
+      const valor = Number(btn.dataset.v);
+      /* HUD e coisa de tela, não de motor: aplica na hora e não mexe no
+         preset dinâmico, que cuida só de desempenho. */
+      if (TIERS_DE_HUD.has(chave)) {
+        salvarCfg({ ...lerCfg(), [chave]: valor });
+        if (chave === 'mapaCanto') mapaModo = valor ? (mapaModo === 2 ? 2 : 1) : 0;
+        aplicarHud();
+        marcarBotoes();
+        return;
+      }
+      desligarAuto();
+      salvarCfg({ ...lerCfg(), [chave]: valor });
+      if (!TIERS_AO_VIVO.has(chave)) { recarregarMantendoLugar(); return; }
+      visor.aplicarTiers({ [chave]: paraVisor(chave, valor) });
+      marcarBotoes();
     });
   }
 }
 
-addEventListener('keydown', (e) => { if (e.code === 'Escape' && !paused) abrirPausa(); });
+for (const btn of document.querySelectorAll('#presets .opt')) {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.p === 'dinamico') {
+      autoLigado = true;
+      salvarCfg({ ...lerCfg(), auto: 1 });
+      janelaT = 0; janelaN = 0; folgaSeguida = 0;
+      aplicarDegrau();
+      return;
+    }
+    desligarAuto();
+    const antes = lerCfg(), p = PRESETS[btn.dataset.p];
+    salvarCfg({ ...antes, ...p });
+    /* textura é das peças e exige reconstruir a cena: só recarrega se o preset
+       REALMENTE mudou a textura. Trocar de Alto pra Alto não custa nada. */
+    if (p.ts !== antes.ts) { recarregarMantendoLugar(); return; }
+    const vivo = {};
+    for (const k of Object.keys(p)) if (TIERS_AO_VIVO.has(k)) vivo[k] = paraVisor(k, p[k]);
+    visor.aplicarTiers(vivo);
+    marcarBotoes();
+  });
+}
+
+/* ---------- ajuste automático de qualidade ----------
+   O jogador não deveria precisar saber o que é resolução interna nem SSAA. O
+   jogo mede o tempo de quadro e se encaixa no aparelho sozinho.
+
+   Uma ESCADA de degraus, do mais leve pro mais pesado, em vez de mexer nos
+   tiers soltos: assim cada ajuste é um passo previsível, e não uma combinação
+   que ninguém consegue reproduzir depois. Textura fica de fora — ela exige
+   recarregar, e recarregar sozinho no meio do jogo seria pior que qualquer
+   queda de fps. */
+const ESCADA = [
+  { res: 480, luz: 0, sombra: 0, particulas: 0, aa: 0, recon: 1 },
+  { res: 480, luz: 1, sombra: 0, particulas: 0, aa: 0, recon: 1 },
+  { res: 640, luz: 1, sombra: 1, particulas: 1, aa: 0, recon: 1 },
+  { res: 640, luz: 2, sombra: 1, particulas: 1, aa: 0, recon: 0 },
+  { res: 960, luz: 2, sombra: 2, particulas: 2, aa: 0, recon: 0 },
+  { res: 960, luz: 2, sombra: 2, particulas: 2, aa: 2, recon: 0 },
+];
+const ALVO_MS = 1000 / 60;
+let autoLigado = cfg.auto === 1;
+let degrau = 2;                      // começa no meio: nem otimista nem pessimista
+let janelaT = 0, janelaN = 0, folgaSeguida = 0;
+
+function aplicarDegrau() {
+  const d = ESCADA[degrau];
+  visor.aplicarTiers({ ...d, res: larguraInterna(d.res), particulas: PARTICULAS_N[d.particulas] });
+  salvarCfg({ ...lerCfg(), ...d });
+  marcarBotoes();
+}
+
+/* Decide sobre uma JANELA de ~1s, não sobre um quadro: um pico isolado (coleta
+   de lixo do navegador, uma peça carregando) não pode derrubar a qualidade.
+   E pra SUBIR exige três janelas boas seguidas — sem essa assimetria o ajuste
+   fica pingando entre dois degraus pra sempre. */
+function ajustar(dt) {
+  if (!autoLigado || paused) return;
+  janelaT += dt * 1000; janelaN++;
+  if (janelaT < 1000) return;
+  const medio = janelaT / janelaN;
+  janelaT = 0; janelaN = 0;
+  if (medio > ALVO_MS * 1.25 && degrau > 0) {
+    degrau--; folgaSeguida = 0; aplicarDegrau();
+    avisar('qualidade ajustada pra baixo (' + Math.round(1000 / medio) + ' fps)');
+  } else if (medio < ALVO_MS * 0.8 && degrau < ESCADA.length - 1) {
+    if (++folgaSeguida >= 3) { degrau++; folgaSeguida = 0; aplicarDegrau(); }
+  } else folgaSeguida = 0;
+}
+
+/* Mexer numa opção à mão desliga o automático. Os dois disputando o mesmo
+   controle deixaria o jogador sem entender por que a escolha dele some. */
+function desligarAuto() {
+  if (!autoLigado) return;
+  autoLigado = false;
+  salvarCfg({ ...lerCfg(), auto: 0 });
+  marcarBotoes();
+  avisar('preset dinâmico desligado');
+}
+
+marcarBotoes();
+
+/* Com o ponteiro travado, o navegador CONSOME o Esc pra soltar o cursor e não
+   entrega o keydown pra página — por isso o menu nunca abria. Quem avisa é o
+   pointerlockchange: perdeu a trava sem ter sido a gente, abre a pausa.
+   (O Esc de teclado continua tratado no input.js, pro caso sem trava: toque,
+   mobile, ou quando o cursor já está solto.) */
+document.addEventListener('pointerlockchange', () => {
+  if (!document.pointerLockElement && !paused) abrirPausa();
+});
+
+/* Saiu do menu e o cursor continua solto: a trava volta na 1ª tecla de jogo,
+   não na hora de fechar. Pedir no fechamento criava uma corrida — o Chrome
+   bloqueia requestPointerLock por ~1,25s depois de um Esc, e a negativa
+   derrubava a trava de novo, o que reabria o menu sozinho. Amarrado à tecla,
+   uma falha não custa nada: a próxima tecla tenta de novo. */
+const TECLAS_JOGO = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ShiftRight']);
+addEventListener('keydown', (e) => {
+  if (paused || document.pointerLockElement || !TECLAS_JOGO.has(e.code)) return;
+  if (matchMedia('(pointer: coarse)').matches) return;   // toque não tem trava
+  Promise.resolve(canvas.requestPointerLock?.()).catch(() => { /* a próxima tecla tenta */ });
+});
 
 /* ---------- jogador: câmera livre + som de passo + guarda de raio (D-61) ---------- */
 const input = criarInput({ stageEl: canvas, onPause: () => (paused ? fecharTudo() : abrirPausa()) });
 input.bindSticks(document.getElementById('stickL'), document.getElementById('stickR'));
 
-const EYE = 1.7, SPEED = 5.2, MAXR = 25, LAGO = [10, -8];
+const EYE = 1.7, SPEED = 5.2, BEIRA = 0.7, LAGO = [10, -8], JOGADOR_R = 0.35;
+
+/* Colisores vêm do META da peça, não escritos aqui: plantar mais árvore não
+   pede calibragem nenhuma, e trocar a espessura do tronco move a colisão
+   junto. Peça sem `colisao` declarada simplesmente não colide. */
+const COLISORES = arvore3d.meta.colisao
+  ? ARVORE_POS.map(([x, z]) => ({ x, z, r: arvore3d.meta.colisao.raio, h: arvore3d.meta.colisao.altura }))
+  : [];
 /* ?cam=x,z,yaw,pitch — ponto de vista reprodutível pra bancada/QA */
 const camQ = Q.get('cam')?.split(',').map(Number);
 let pos = camQ ? [camQ[0], 0, camQ[1]] : [-19, 0, 0];
 let yaw = camQ ? camQ[2] : 1.85, pitch = camQ ? (camQ[3] ?? 0) : 0;
 if (Q.get('pausado') === '1') abrirPausa();   // QA: capturar o menu direto
+/* volta do recarregamento de configuração já no painel, na aba de onde saiu */
+if (Q.get('cfg')) {
+  abrirPausa();
+  telaPausa.classList.remove('show'); telaConfig.classList.add('show');
+  document.querySelector(`.aba[data-aba="${CSS.escape(Q.get('cfg'))}"]`)?.click();
+}
 
 function antesDoQuadro(dt, T) {
   input.guard();
   if (!paused) {
-    const { dx, dy } = input.mouseLookDelta();
-    yaw += dx * 0.0032; pitch -= dy * 0.0032;
+    /* yaw NEGATIVO no dx: a direcao de visao e (sin yaw, cos yaw), entao yaw
+       crescente gira a camera para a ESQUERDA — somar o dx do mouse invertia
+       o eixo horizontal. O strafe usa o mesmo yaw e continua coerente. */
+    const { dx, dy } = input.mouseLookDelta(dt, MOUSE_TAU);
+    yaw -= dx * 0.0032; pitch -= dy * 0.0032;
     const { rx, ry } = input.stickLook();
-    yaw += rx * 2.2 * dt; pitch -= ry * 2.2 * dt;
+    yaw -= rx * 2.2 * dt; pitch -= ry * 2.2 * dt;
     pitch = Math.max(-1.3, Math.min(1.3, pitch));
 
     const { x: mx, z: mz } = input.moveAxis();
     if (mx || mz) {
+      const speed = input.shiftHeld() ? SPEED * 1.8 : SPEED;
       const fwd = [Math.sin(yaw), Math.cos(yaw)], right = [-Math.cos(yaw), Math.sin(yaw)];
-      pos[0] += (fwd[0] * mz + right[0] * mx) * SPEED * dt;
-      pos[2] += (fwd[1] * mz + right[1] * mx) * SPEED * dt;
+      pos[0] += (fwd[0] * mz + right[0] * mx) * speed * dt;
+      pos[2] += (fwd[1] * mz + right[1] * mx) * speed * dt;
+      /* barra no contorno REAL da ilha, que varia com a direção, e não num
+         círculo fixo. A margem tira o jogador da beirada exata, senão ele fica
+         com meio pé no vazio. Continua sendo um limite radial: andar de lado
+         encostado na borda ainda desliza. */
+      /* objetos primeiro: empurra pra FORA do cilindro, na direção do centro
+         dele. Empurrar assim (e não cancelar o movimento) é o que deixa
+         encostar num tronco e continuar andando de lado em vez de grudar. */
+      for (const c of COLISORES) {
+        const ox = pos[0] - c.x, oz = pos[2] - c.z;
+        const od = Math.hypot(ox, oz), min = c.r + JOGADOR_R;
+        if (od >= min) continue;
+        if (od < 1e-6) { pos[0] = c.x + min; continue; }   // em cima do centro: direção indefinida
+        pos[0] = c.x + (ox / od) * min; pos[2] = c.z + (oz / od) * min;
+      }
+      /* ilha por último: se um tronco na beirada empurrar pra fora, quem manda
+         é a borda — melhor ficar preso no tronco que cair no vazio */
       const d = Math.hypot(pos[0], pos[2]);
-      if (d > MAXR) { pos[0] *= MAXR / d; pos[2] *= MAXR / d; }
-      if (Math.hypot(mx, mz) > 0.12) som.passo(T);
+      const lim = ilhaChao.raioEm(pos[0], pos[2]) - BEIRA;
+      if (d > lim) { pos[0] *= lim / d; pos[2] *= lim / d; }
+      if (Math.hypot(mx, mz) > 0.12) {
+        const tipo = ilhaChao.superficieEm(pos[0], pos[2]);
+        const sprint = input.shiftHeld();
+        som.passo(T, tipo, sprint);
+      }
     }
   }
   som.proximidadeAgua(Math.hypot(pos[0] - LAGO[0], pos[2] - LAGO[1]));
   visor.setCam([pos[0], EYE, pos[2]], yaw, pitch);
+  mostrarCoords(T);
+  /* etiquetas acompanham a câmera, então é todo quadro — mas só quando ligadas.
+     Desligadas, esta linha é uma comparação e mais nada. */
+  if (verTags) mostrarTags();
+  if (mapaModo) desenharMapa();
+  ajustar(dt);
 }
 
-visor.rodar((fps) => { document.getElementById('fps').textContent = fps + ' fps'; }, antesDoQuadro);
+/* Coordenadas no topo. Só 10x por segundo: escrever no DOM a cada quadro é
+   trabalho jogado fora, ninguém lê 60 números por segundo. `raio` é a distância
+   até o centro contra o limite NAQUELA direção — como o contorno é irregular,
+   o segundo número muda conforme se anda, e ver os dois juntos diz na hora
+   quanto falta pra beirada.
+   A string ?cam= sai pronta pra colar na URL e voltar exatamente a este ponto. */
+const elCoord = document.getElementById('coord');
+let proximoCoord = 0;
+
+/* setores como o COMUNICACAO.md define pra v2: colunas A–H de oeste a leste,
+   linhas 1–8 de norte a sul. É a notação pra FALAR de um lugar ("a árvore
+   torta em E5"); o ?cam= é pra MÁQUINA reproduzir a vista exata. A ilha é
+   quadriculada pela extensão declarada na peça, não por um 28 copiado. */
+const SETOR = (ilhaChao.EXTENSAO * 2) / 8;
+function setorEm(x, z) {
+  const c = Math.min(7, Math.max(0, Math.floor((x + ilhaChao.EXTENSAO) / SETOR)));
+  const l = Math.min(7, Math.max(0, Math.floor((z + ilhaChao.EXTENSAO) / SETOR)));
+  return 'ABCDEFGH'[c] + (l + 1);
+}
+
+/* uma fonte só pro ?cam=: o HUD mostra e a tecla = copia o MESMO texto */
+const camAtual = () => `${pos[0].toFixed(1)},${pos[2].toFixed(1)},${yaw.toFixed(2)},${pitch.toFixed(2)}`;
+const urlAtual = () => `${location.origin}${location.pathname}?cam=${camAtual()}`;
+
+function mostrarCoords(T) {
+  if (T < proximoCoord) return;
+  proximoCoord = T + 0.1;
+  const r = Math.hypot(pos[0], pos[2]);
+  const piso = ilhaChao.superficieEm(pos[0], pos[2]);
+  const lim = ilhaChao.raioEm(pos[0], pos[2]) - BEIRA;
+  document.getElementById('dev').textContent = `${visor.info()} · tex ${16 * lerCfg().ts}px`;
+  elCoord.innerHTML = `setor ${setorEm(pos[0], pos[2])} · x ${pos[0].toFixed(1)} · z ${pos[2].toFixed(1)}`
+    + ` · raio ${r.toFixed(1)}/${lim.toFixed(1)} · ${piso}`
+    + `<br><span style="opacity:.55">?cam=${camAtual()}</span>`;
+}
+
+/* tecla = copia a URL PRONTA, não só os números: colar no navegador já abre
+   deste ponto de vista. O navegador só libera a área de transferência dentro
+   de um gesto do usuário — o keydown É o gesto, por isso funciona aqui e não
+   funcionaria num aviso automático. */
+addEventListener('keydown', async (e) => {
+  if (e.code !== 'Equal' || paused) return;
+  const url = urlAtual();
+  try {
+    await navigator.clipboard.writeText(url);
+    avisar('link copiado — é só colar');
+  } catch {
+    /* pode falhar sem https ou sem permissão: mostra o texto pra copiar à mão
+       em vez de sumir sem dizer nada */
+    avisar('não consegui copiar. o link é: ' + url, 8);
+  }
+});
+
+let timerAviso = 0;
+function avisar(texto, segundos = 2.5) {
+  const el = document.getElementById('aviso');
+  el.textContent = texto; el.style.display = 'block';
+  clearTimeout(timerAviso);
+  timerAviso = setTimeout(() => { el.style.display = 'none'; }, segundos * 1000);
+}
+
+/* ---------- mapa (tecla M) ----------
+   Cicla mapa nenhum → minimapa → mapa grande com setores, como na v2.
+
+   O desenho é dividido em duas camadas por um motivo de custo: a ilha, a
+   água, a areia e as árvores NÃO mudam, então saem uma vez só num canvas
+   guardado; por quadro só se copia essa imagem e se desenha a seta do jogador.
+   Redesenhar o terreno inteiro a 60 quadros por segundo seria varrer 175 mil
+   pixels à toa.
+
+   As cores do terreno saem de `superficieEm`, a MESMA função que escolhe o som
+   do passo. Superfície nova aparece no mapa sozinha, sem ninguém lembrar de
+   atualizar dois lugares. */
+const MAPA_PX = 420;
+const CORES_MAPA = { grama: [35, 144, 99], areia: [251, 185, 84], agua: [11, 138, 143] };
+const elMapa = document.getElementById('mapa');
+const ctxMapa = elMapa.getContext('2d');
+/* 0 nenhum · 1 mini · 2 grande. Começa no que a aba HUD mandar: o minimapa é
+   estado do HUD, e o M só passeia por cima disso durante a partida. */
+let mapaModo = cfg.mapaCanto ? 1 : 0, mapaFundo = null;
+
+function aplicarHud() {
+  const c = lerCfg();
+  elMapa.className = mapaModo === 2 ? 'grande' : mapaModo === 1 ? `mini c${c.mapaCanto || 3}` : '';
+  elMapa.style.display = mapaModo ? 'block' : 'none';
+  const ver = c.hudTexto !== 0 ? 'block' : 'none';
+  for (const id of ['hud', 'coord']) document.getElementById(id).style.display = ver;
+}
+
+const paraTela = (v) => ((v + ilhaChao.EXTENSAO) / (2 * ilhaChao.EXTENSAO)) * MAPA_PX;
+
+function montarFundoDoMapa() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = MAPA_PX;
+  const g = cv.getContext('2d');
+  const E = ilhaChao.EXTENSAO, img = g.createImageData(MAPA_PX, MAPA_PX);
+  for (let j = 0; j < MAPA_PX; j++) for (let i = 0; i < MAPA_PX; i++) {
+    const x = ((i + 0.5) / MAPA_PX) * 2 * E - E, z = ((j + 0.5) / MAPA_PX) * 2 * E - E;
+    if (Math.hypot(x, z) > ilhaChao.raioEm(x, z)) continue;   // fora da ilha fica transparente
+    const c = CORES_MAPA[ilhaChao.superficieEm(x, z)] || CORES_MAPA.grama;
+    const o = (j * MAPA_PX + i) * 4;
+    img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 240;
+  }
+  g.putImageData(img, 0, 0);
+  g.fillStyle = '#165a4c';
+  for (const o of OBJETOS) {
+    g.beginPath(); g.arc(paraTela(o.x), paraTela(o.z), MAPA_PX * 0.012, 0, Math.PI * 2); g.fill();
+  }
+  return cv;
+}
+
+function grade(g) {
+  const p = MAPA_PX / 8;
+  g.strokeStyle = 'rgba(199,188,216,.28)'; g.lineWidth = 1;
+  for (let i = 1; i < 8; i++) {
+    g.beginPath(); g.moveTo(i * p, 0); g.lineTo(i * p, MAPA_PX); g.stroke();
+    g.beginPath(); g.moveTo(0, i * p); g.lineTo(MAPA_PX, i * p); g.stroke();
+  }
+  // setor atual em destaque, pra casar com o que o HUD escreve
+  const s = setorEm(pos[0], pos[2]);
+  const col = 'ABCDEFGH'.indexOf(s[0]), lin = Number(s[1]) - 1;
+  g.fillStyle = 'rgba(249,194,43,.16)'; g.fillRect(col * p, lin * p, p, p);
+  g.fillStyle = '#c7bcd8'; g.font = `${Math.round(MAPA_PX * 0.032)}px system-ui, sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  for (let i = 0; i < 8; i++) {
+    g.fillText('ABCDEFGH'[i], (i + 0.5) * p, 3);
+    g.fillText(String(i + 1), 8, (i + 0.5) * p - MAPA_PX * 0.016);
+  }
+}
+
+function desenharMapa() {
+  if (!mapaFundo) mapaFundo = montarFundoDoMapa();
+  ctxMapa.clearRect(0, 0, MAPA_PX, MAPA_PX);
+  ctxMapa.drawImage(mapaFundo, 0, 0);
+  if (mapaModo === 2) grade(ctxMapa);
+
+  /* seta do jogador: aponta pra onde se olha. No mundo a frente é
+     (sin yaw, cos yaw); no mapa o x cresce pra direita e o z pra baixo, então
+     o vetor vai igual, sem inversão. */
+  const px = paraTela(pos[0]), py = paraTela(pos[2]);
+  const fx = Math.sin(yaw), fz = Math.cos(yaw), L = MAPA_PX * 0.028;
+  const ponta = [px + fx * L * 1.6, py + fz * L * 1.6];
+  const esq = [px - fz * L - fx * L * 0.4, py + fx * L - fz * L * 0.4];
+  const dir = [px + fz * L - fx * L * 0.4, py - fx * L - fz * L * 0.4];
+  ctxMapa.fillStyle = '#f9c22b';
+  ctxMapa.beginPath();
+  ctxMapa.moveTo(ponta[0], ponta[1]); ctxMapa.lineTo(esq[0], esq[1]); ctxMapa.lineTo(dir[0], dir[1]);
+  ctxMapa.closePath(); ctxMapa.fill();
+  /* A PONTA sai vermelha: um triangulo de uma cor so e simetrico demais de
+     relance e da pra ler a base como se fosse a frente. A cor resolve sem
+     depender do formato. O corte sai da mistura da ponta com os cantos de tras,
+     entao acompanha qualquer tamanho de seta. */
+  const mist = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const ce = mist(ponta, esq, 0.45), cd = mist(ponta, dir, 0.45);
+  ctxMapa.fillStyle = '#e83b3b';
+  ctxMapa.beginPath();
+  ctxMapa.moveTo(ponta[0], ponta[1]); ctxMapa.lineTo(ce[0], ce[1]); ctxMapa.lineTo(cd[0], cd[1]);
+  ctxMapa.closePath(); ctxMapa.fill();
+}
+
+/* M abre e fecha SÓ o mapa grande. Quem manda no minimapa é a aba HUD — antes
+   o M ciclava por ele também e desfazia a escolha do jogador sem avisar.
+   Fechando, volta pro que o HUD mandar: minimapa no canto, ou nada. */
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyM' || paused) return;
+  mapaModo = mapaModo === 2 ? (lerCfg().mapaCanto ? 1 : 0) : 2;
+  aplicarHud();
+});
+
+aplicarHud();   // estado inicial do HUD: canto do minimapa e textos
+
+/* ---------- etiquetas de ID (tecla I) ----------
+   Porta o protocolo do COMUNICACAO.md: apontar objeto pelo nome em vez de
+   descrever. O ID sai da POSIÇÃO, não de um índice na lista — reordenar as
+   árvores não renomeia nada, e o nome leva direto ao lugar.
+
+   Formato `arvore@-13,8`, e não o `tipo-XxY` da v2, porque lá o mundo era uma
+   grade de tiles positivos e aqui as coordenadas são unidades com sinal. Usar
+   os MESMOS números que o HUD mostra vale mais que a semelhança do formato:
+   dois sistemas de número pra mesma coisa foi o que causou o bug da borda. */
+const ALCANCE_TAG = 14, MAX_TAGS = 12;
+const OBJETOS = ARVORE_POS.map(([x, z]) => ({
+  id: `${arvore3d.meta.nome.replace('3d', '')}@${x},${z}`,
+  x, z, alto: arvore3d.meta.colisao?.altura ?? 2,
+  r: arvore3d.meta.colisao?.raio ?? 0.3,
+}));
+
+const elTags = document.getElementById('tags');
+let verTags = false;
+
+/* tapado por outro objeto? Anda pela linha de visão e vê se algum tronco fica
+   no caminho. Amostrar é bom o bastante aqui: tronco é fino e a etiqueta some
+   um instante depois do certo, o que ninguém percebe — e evita um raycast
+   completo por objeto por quadro. */
+function tapado(alvo) {
+  const olho = [pos[0], EYE, pos[2]];
+  const PASSOS = 12;
+  for (const o of OBJETOS) {
+    if (o === alvo) continue;
+    for (let i = 1; i < PASSOS; i++) {
+      const t = i / PASSOS;
+      const px = olho[0] + (alvo.x - olho[0]) * t;
+      const py = olho[1] + (alvo.alto - olho[1]) * t;
+      const pz = olho[2] + (alvo.z - olho[2]) * t;
+      if (py > o.alto) continue;                       // passa POR CIMA do tronco
+      if (Math.hypot(px - o.x, pz - o.z) < o.r) return true;
+    }
+  }
+  return false;
+}
+
+function mostrarTags() {
+  /* perto primeiro, corta no MAX: um punhado de etiquetas legíveis vale mais
+     que a floresta inteira rotulada por cima de si mesma */
+  const perto = OBJETOS
+    .map((o) => ({ o, d: Math.hypot(o.x - pos[0], o.z - pos[2]) }))
+    .filter((c) => c.d <= ALCANCE_TAG)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, MAX_TAGS);
+
+  const vistos = [];
+  for (const { o } of perto) {
+    const p = visor.projetar([o.x, o.alto, o.z]);
+    if (p && !tapado(o)) vistos.push({ o, p });
+  }
+  /* reusa os elementos: criar e destruir div a 60 quadros por segundo é o que
+     transforma HUD de depuração em queda de fps */
+  while (elTags.children.length < vistos.length) elTags.appendChild(document.createElement('b'));
+  for (let i = 0; i < elTags.children.length; i++) {
+    const el = elTags.children[i];
+    if (i >= vistos.length) { el.style.display = 'none'; continue; }
+    const { o, p } = vistos[i];
+    el.style.display = 'block';
+    el.style.transform = `translate(-50%,-100%) translate(${p.x.toFixed(0)}px, ${p.y.toFixed(0)}px)`;
+    el.style.opacity = String(Math.max(0.35, 1 - p.dist / ALCANCE_TAG));
+    if (el.textContent !== o.id) el.textContent = o.id;
+  }
+}
+
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyI' || paused) return;
+  verTags = !verTags;
+  if (!verTags) elTags.replaceChildren();        // desligado: nada no DOM, nada a atualizar
+  avisar(verTags ? 'etiquetas de ID ligadas' : 'etiquetas desligadas');
+});
+
+/* ---------- ver colisão (tecla O) ----------
+   Desligada, a camada NÃO EXISTE no laço de desenho — não é lote invisível nem
+   material transparente, é lista vazia. Custo zero de quadro, que era o pedido.
+   A malha é montada na PRIMEIRA vez que se liga e fica guardada: ligar/desligar
+   depois é só trocar a lista. */
+let malhaColisao = null, verColisao = false;
+
+/* vermelho furado em xadrez: o shader das peças recorta por alfa (a<0.5) e não
+   mistura, então "transparente" de verdade não existe aqui. O furo deixa ver o
+   tronco através da parede, que é o efeito que se quer. */
+function texColisao() {
+  return tex.texCanvas(16, 16, (x, y) => (((x >> 1) + (y >> 1)) & 1 ? [235, 60, 70] : -1));
+}
+
+function malhaCilindro(cs) {
+  const m = geo.Mesh(), LADOS = 14;
+  for (const c of cs) {
+    const R = c.r + JOGADOR_R;      // desenha o limite REAL: tronco + corpo do jogador
+    for (let i = 0; i < LADOS; i++) {
+      const a0 = (i / LADOS) * Math.PI * 2, a1 = ((i + 1) / LADOS) * Math.PI * 2;
+      const p = (a, y) => [c.x + Math.cos(a) * R, y, c.z + Math.sin(a) * R];
+      const nrm = [Math.cos((a0 + a1) / 2), 0, Math.sin((a0 + a1) / 2)];
+      const u0 = (i / LADOS) * 6, u1 = ((i + 1) / LADOS) * 6;
+      geo.quadUV(m, p(a0, 0), p(a1, 0), p(a1, c.h), p(a0, c.h),
+        [u0, 0], [u1, 0], [u1, 3], [u0, 3], nrm);
+    }
+  }
+  return m;
+}
+
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyO' || paused) return;
+  verColisao = !verColisao;
+  if (verColisao && !malhaColisao) malhaColisao = [{ mesh: malhaCilindro(COLISORES), tex: texColisao() }];
+  visor.depurar(verColisao ? malhaColisao : []);
+});
+
+
+/* Amortecimento do olhar por mouse.
+
+   Mouse comum lê a 125Hz e a tela atualiza a 120Hz. As taxas não se dividem,
+   então uns quadros recebem duas leituras e outros nenhuma — medido aqui,
+   16% de quadros vazios ao girar. O acumulado fica certo, o RITMO não, e a
+   câmera anda aos solavancos.
+
+   12ms espalha cada leitura pelos quadros seguintes sem descartar nada: o
+   total de um giro é idêntico ao do mouse, só o caminho deixa de ser em
+   degraus. Custa cerca de um quadro de atraso.
+
+   Medido com um painel de diagnóstico (removido): a irregularidade entre
+   quadros vizinhos cai de 17% pra 6%, e os quadros vazios pra 6.3%. Em 40ms
+   iria a 2%, mas nem nesse nível a diferença foi percebida a olho, então não
+   vale o atraso extra. Fica registrado que o ganho aqui é medido e não
+   perceptível — se um dia isso atrapalhar a mira, pode ir embora sem dó. */
+const MOUSE_TAU = 0.012;
+
+visor.rodar(
+  (fps) => { document.getElementById('fps').textContent = fps + ' fps'; },
+  (dt, T) => { try { antesDoQuadro(dt, T); } catch (e) { mostrarErro(e); } },
+);
 window.__ready = true;
 </script>
 </body>

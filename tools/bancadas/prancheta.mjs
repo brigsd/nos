@@ -17,6 +17,7 @@
  * espessura, se tiver depth). Saída: prototipos/fps/qa/out/prancheta.png
  */
 import { createServer } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
@@ -40,7 +41,7 @@ const server = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'tex
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const PW = join(REPO, 'site/node_modules/playwright/index.js');
 if (!existsSync(PW)) { console.error('prancheta: rode `cd site && npm ci` primeiro.'); process.exit(1); }
-const pw = (await import(PW)).default;
+const pw = (await import(pathToFileURL(PW).href)).default;
 const browser = await pw.chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 1100 } });
 await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });

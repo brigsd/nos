@@ -40,7 +40,7 @@ try {
   hudNome.textContent = `${mod.meta.nome} (${mod.meta.tipo}) — ${mod.meta.desc}`;
   const visor = criarVisor({ canvas: document.getElementById('c'), res, camOrbita, cam, debug: DBG });
   visor.carregar(mod.construir({ TS, tex, geo, m4 }));
-  hudDev.textContent = `${visor.info} · tex ${16*TS}px${DBG ? ' · GEO' : ''} · ${visor.renderer}`;
+  hudDev.textContent = `${visor.info()} · tex ${16*TS}px${DBG ? ' · GEO' : ''} · ${visor.renderer}`;
   visor.rodar((fps) => { hudFps.textContent = fps + ' fps'; });
   window.__ready = true;
 } catch (e) {

@@ -6,6 +6,7 @@
      node tools/bancadas/porteiro.mjs                 # todas as peças de pecas/
      node tools/bancadas/porteiro.mjs arvore3d ilha-chao */
 import { createServer } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +29,7 @@ const base = `http://127.0.0.1:${server.address().port}/prototipos/fps/v3/visor.
 
 const PW = join(REPO, 'site/node_modules/playwright/index.js');
 if (!existsSync(PW)) { console.error('Playwright não encontrado. Rode: cd site && npm ci'); process.exit(2); }
-const pw = (await import(PW)).default;
+const pw = (await import(pathToFileURL(PW).href)).default;
 const browser = await pw.chromium.launch({ args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
 
 let falhas = 0;
