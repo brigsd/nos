@@ -2,10 +2,15 @@
 
 > O contrário de Jogador Nº 1.
 
-## ▶ [JOGAR — abrir O Coração](https://brigsd.github.io/nos/fps/)
+## Jogar
 
-Roda no navegador do **PC ou do celular**, em **primeira pessoa**. O mundo está vivo agora. 🌍
-(Prefere ver de cima? O [mapa 2D](https://brigsd.github.io/nos/) continua no ar — mesmo mundo, mesmo Registro.)
+O mesmo mundo, três janelas — escolha a sua:
+
+- ▶ **[Jogar V1 — mapa 2D](https://brigsd.github.io/nos/)** — visão de cima, com os painéis (Mural, Comércio, Nativos, Portais).
+- ▶ **[Jogar V2 — primeira pessoa](https://brigsd.github.io/nos/fps/)** — o cliente FPS de hoje (raycaster). Estável.
+- ▶ **[Jogar V3 — protótipo GPU](https://brigsd.github.io/nos/fps/v3/jogo.html)** — primeira pessoa em WebGL, o mais novo e ainda em construção ativa.
+
+Todos rodam direto no navegador do **PC ou do celular**, sem instalar nada — mesmo mundo, mesmo Registro. 🌍
 
 ---
 
@@ -29,7 +34,9 @@ O primeiro mundo se chama **O Coração**. Ele pulsa. Mesmo agora.
 
 ## Como jogar
 
-**▶ [Abrir O Coração](https://brigsd.github.io/nos/fps/)** — PC ou celular, sem instalar nada. Primeira pessoa: **WASD** anda, **clique** captura o mouse para mirar (**ESC** solta e abre o menu), **←→**/arrastar também olham, **M** cicla o mapa (minimapa → mapa grande com setores), **I** liga as tags de identificação, **G** alterna a iluminação global, **V** (ou o botão 🔊) liga o som. Siga o carreiro de terra até **A Clareira**, a cidade-oficina: quatro oficinas de telhado de cobre oxidado ao redor de um chafariz de três níveis, com o Portal do Átrio ao fundo — a água do chafariz murmura conforme você chega perto, sobre uma cama suave de vento. O [mapa 2D](https://brigsd.github.io/nos/) é a visão de cima do mesmo mundo, com os painéis (Mural, Comércio, Nativos, Portais).
+**Primeira pessoa (V2/V3):** **WASD** anda, **clique** captura o mouse para mirar (**ESC** solta e abre o menu), **←→**/arrastar também olham, **M** cicla o mapa (minimapa → mapa grande com setores), **I** liga as tags de identificação, **G** alterna a iluminação global, **V** (ou o botão 🔊) liga o som. Siga o carreiro de terra até **A Clareira**, a cidade-oficina: quatro oficinas de telhado de cobre oxidado ao redor de um chafariz de três níveis, com o Portal do Átrio ao fundo — a água do chafariz murmura conforme você chega perto, sobre uma cama suave de vento.
+
+**Mapa 2D (V1):** a mesma cidade vista de cima, com os painéis (Mural, Comércio, Nativos, Portais).
 
 - **Explorar é instantâneo:** no 2D, arraste para andar pelo mapa, pinça ou roda do mouse para dar zoom.
 - **Agir no mundo é por comando** (via issue): `/entrar` cria seu avatar; depois `/mover`, `/coletar`, `/dizer`, `/trocar` e `/fabricar` (as quatro máquinas vivem n'A Clareira). O tick processa em segundos e responde na sua própria issue.
