@@ -63,6 +63,51 @@ O que se ganha com essa escolha, sem trabalho extra nenhum:
 ferramenta que só guardava vértices, é reescrever ela. Já trocar o gerador de
 colisão depois é uma tarde de trabalho.
 
+## A IA opera tudo (o túnel pra IA)
+
+Consequência direta de "Pra quem é isto": se a Oficina é pra o ideador **e** a
+IA como par, então **tudo que o humano faz por gesto, a IA tem que fazer por
+dado.** Não é gentileza — é requisito, e vale pra toda função nova.
+
+A regra que garante isso: **nada de função só-gesto.** Todo clique e arrasto
+**reduz a uma operação gravada** (a lista de passos já faz isso pro arrasto).
+No instante em que uma função "só acontece" quando você clica, sem deixar
+rastro de dado, ela some pra IA — a IA só alcança o que é expressável como
+dado. Por isso a lista de passos não é só pra desfazer e reabrir: é o **túnel**
+por onde a IA cria e edita igual a você.
+
+Isso a IA já faz bem, e escala, porque é texto — foi assim que quase tudo do
+jogo foi gerado. **Onde a dificuldade cresce com a complexidade não é criar —
+é VER.** Um objeto parado a bancada já renderiza num PNG que a IA olha
+(`olhar-peca`); um som, uma animação no tempo, um sistema de partícula, um
+desenho — desses a IA ainda cria quase às cegas. Por isso o túnel tem **três
+canais**, e todo tipo novo precisa dos três:
+
+1. **Dado** — ler e escrever a lista (passos, traços, trilhas, parâmetros)
+   direto. É a criação e a edição. Já existe.
+2. **Render sem interface** — os olhos da IA. Cada tipo precisa de um caminho
+   headless que mostra o que ficou: PNG (objeto), tira de quadros (animação,
+   partícula), forma de onda e espectro (som), render dos traços (desenho).
+   Existe pro objeto; **estender pros outros é o trabalho concreto que este
+   princípio cobra.**
+3. **Métrica numérica** — o julgamento da IA. Onde o humano bate o olho, a IA
+   precisa de número: IoU de silhueta (já existe), casamento de espectro, perf.
+   Sem isso ela diz "acho que ficou bom" em vez de medir.
+
+E os **controles** que facilitam o trabalho do ideador facilitam o da IA pelo
+mesmo mecanismo: o slider que se arrasta é o **parâmetro nomeado** que a IA
+seta. Um sistema só, dois rostos — não se constrói controle pra humano e um
+canal separado pra IA.
+
+O custo, honesto: isso **proíbe conveniência só-gesto** e obriga cada tipo novo
+a nascer com render headless e métrica, não só com tela bonita. É esforço por
+feature — mas é a mesma disciplina da lista de passos, e é o preço de a IA ser
+co-worker de verdade, não um gerador cego.
+
+**Checklist de toda função nova da Oficina:** (1) tem operação de dado? (2) dá
+pra renderizar sem abrir a tela? (3) tem uma métrica pra a IA se conferir? As
+três respostas "sim" = a IA opera aquilo igual ao ideador.
+
 ## Identidade de vértice
 
 Cada vértice ganha um número quando nasce. As operações dizem **"vértice 7"**,
@@ -319,6 +364,45 @@ tradução na cabeça: y pra cima, lado é z×y, cima é z×x, frente é x×y.
 polígono de referência e devolve o IoU, a fração de área que as duas dividem.
 A mesma conta roda aqui **enquanto você modela**, com a porcentagem na tela.
 Sai de "acho que ficou parecido" pra um número.
+
+## Desenho livre (pintura)
+
+A Aba Desenho acima é **vetor** — contorno de pontos, pra silhueta e gabarito.
+Isto é o outro modo da mesma aba: **pintar**, com paleta, pincel e borracha.
+Pedido do ideador, e cabe sem quebrar a dieta zero-arquivo pela mesma manha do
+resto: **salva o traço, não a imagem.** Cada pincelada é `{cor, raio, dureza,
+pontos}` (o `pincel modo:'livre'` que a Lista de operações já prevê), e a
+imagem é rasterizada ao abrir — versionável, Ctrl+Z por pincelada, diff legível
+no PR.
+
+Dois usos, uma máquina:
+
+- **Pintar a superfície de um objeto** (casca, rosto, enfeite) — é o modo
+  pintura do espaço Modelar, já previsto. Paleta, pincel e borracha encaixam no
+  `pincel`: borracha = pintar com o fundo, paleta = as cores.
+- **Arte livre 2D** (concept, rabisco, ideia pra IA) — o canvas da Aba Desenho
+  no modo pintura, mesmo esquema traço-como-dado.
+
+**O teto é o motor de pincel, não o formato.** Traço-como-dado não é o pincel
+duro e nada além: o carimbo pode ser uma função procedural com semente (ruído,
+cerdas → pincel texturizado), e a pincelada pode **ler o canvas acumulado**
+(esfumar, aquarela — o mesmo princípio do `extruda`/`mescla`, que já leem a
+geometria acumulada). Cada comportamento novo é motor a mais pra escrever,
+então o teto é "até onde se constrói o pincel" — espectro, não parede. Um
+pincel = parâmetros + semente; uma biblioteca de pincéis = **presets** (com
+homologação).
+
+**Paleta = a do jogo.** As texturas já usam índices de uma paleta fixa. Pintar
+nessa paleta faz a arte sair no estilo do jogo em vez de destoar, e é a paleta
+que o ideador edita e estende.
+
+As duas únicas bordas onde código não ganha, e viram exceção consciente:
+
+- **Importar uma foto e mantê-la** — foto não tem descrição procedural; vira
+  referência/rascunho não-commitado, ou é decisão separada de aceitar bitmap no
+  repo (com o custo do diff binário que a federação por PR paga caro).
+- **Pixel a pixel sem estrutura** — aí o dado fica do tamanho da imagem e vira
+  bitmap disfarçado. Raro no estilo chapado do jogo.
 
 ## Aba Som
 
