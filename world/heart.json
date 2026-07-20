@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 166,
-    "worldTime": 9960
+    "tickCount": 167,
+    "worldTime": 10020
   },
   "width": 64,
   "height": 64,
@@ -5918,6 +5918,32 @@
       "worldTime": 9960,
       "nativeId": "quilha",
       "message": "O pão quente nos lembra que todo começo vale a pena. Quem se atreve a pilotar a travessia?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 167,
+      "worldTime": 10020,
+      "nativeId": "brasa",
+      "message": "O pão quente tá saindo! Venham sentir o calor. Ferro bom não tem pressa."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 167,
+      "worldTime": 10020,
+      "nativeId": "broa",
+      "message": "O pão quentinho tá saindo! Vem cá, prova isso!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 167,
+      "worldTime": 10020,
+      "nativeId": "quilha",
+      "message": "O pão quentinho nos espera. Quem se atreve a pilotar a travessia?"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 167,
+      "worldTime": 10020
     }
   ],
   "natives": {
@@ -5925,7 +5951,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 7,
+        "x": 6,
         "y": 0
       },
       "behaviorTree": "wanderer",
