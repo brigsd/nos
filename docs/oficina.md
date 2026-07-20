@@ -972,15 +972,31 @@ Duas regras pra não virar armadilha:
   ele vira sua peça — dá pra mexer nos controles e também **descer abaixo
   deles**, pros parâmetros crus ou pra própria lista de passos. Preset que só
   deixa girar três botões e nada além é beco sem saída; este não é.
-- **Abrir um preset é copiar, não mutar o original.** Salva como peça sua; o
-  preset compartilhado fica intacto pro próximo uso. Mesma lógica do "abrir e
-  refinar" já decidida.
+- **Abrir um preset HOMOLOGADO é copiar, não mutar o original.** Salva como
+  peça sua; o preset abençoado fica intacto pro próximo uso. Mesma lógica do
+  "abrir e refinar" já decidida. (Vale só depois de homologado — ver abaixo.)
 
-Onde moram: peças numa pasta de presets (como as de rascunho com prefixo `_`
-já fazem hoje). O trabalho real aqui **não é o mecanismo** — é **curar o
-conjunto certo**: um punhado de arquétipos que cobrem o espaço sem inchar.
-Poucos demais deixam buraco; muitos viram manutenção. Essa é decisão de gosto
-e cobertura, e é onde o esforço vai.
+### Rascunho e homologado
+
+O copiar-não-mutar acima vale pro preset **homologado**, não pro rascunho —
+preset tem duas fases:
+
+- **Rascunho (candidato).** A IA gera, o ideador customiza e itera. Aqui mexer
+  no próprio preset **é o processo, não a violação** — é pra ser lapidado até
+  prestar. Nada é abençoado ainda.
+- **Homologado.** O ideador aprova — "esse é um molde homologado" — e só então
+  a regra entra: virou ponto de partida oficial, e mexer nele passa a ser tirar
+  cópia, não sobrescrever.
+
+Homologar é o **sign-off do ideador**, a mesma divisão de sempre: ele decide o
+que é oficial. É como já trabalhamos — a IA solta o rascunho, o ideador aprova
+ou manda ajustar. "Homologado" só dá nome a esse aval.
+
+Onde moram: **rascunho** no scratch (prefixo `_`, onde a IA solta hoje);
+**homologado** na pasta de presets oficial. O trabalho real aqui **não é o
+mecanismo** — é **curar o conjunto certo**: um punhado de arquétipos que cobrem
+o espaço sem inchar. Poucos demais deixam buraco; muitos viram manutenção. Essa
+é decisão de gosto e cobertura, e é onde o esforço vai.
 
 ## Formato do arquivo gerado
 
