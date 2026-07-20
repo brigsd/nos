@@ -83,7 +83,7 @@ com asterisco têm a solução detalhada logo abaixo da tabela.
 | **Gizmo de mover** * | Setas X/Y/Z arrastáveis. | Seleção e arrasto resolvidos em 2D, projetando base e ponta da seta. Fórmula abaixo. |
 | **R + eixo + graus + Enter** | Rotaciona digitando o valor. | Estado explícito `digitando`, que desvia as teclas antes de virarem comando. `rotX` e `rotZ` escritos abaixo, prontos pra colar. Pivô no centro da seleção. |
 | **S para escalonar** | Redimensiona. | A escala é aplicada **nos vértices**, não guardada como matriz. As normais são recalculadas junto, então escala desigual não quebra a iluminação. |
-| **Tab: objeto → edição → pintura** | Cicla os modos dentro da aba Objeto. | `preventDefault` no Tab. Uma variável de modo decide qual mapa de teclas escuta; nunca dois ao mesmo tempo. Pintura é modo e não aba, pra não perder câmera e seleção a cada troca. |
+| **Tab: objeto → edição → pintura** | Cicla os modos dentro do espaço Modelar. | `preventDefault` no Tab. Uma variável de modo decide qual mapa de teclas escuta; nunca dois ao mesmo tempo. Material e Animação são **espaços de trabalho** sobre a mesma cena, não abas — trocar não perde câmera nem seleção. |
 | **Ver vértices / arestas / faces** (1, 2, 3) * | Mostra e seleciona as partes. | **Canvas 2D por cima, não WebGL.** O `visor.depurar` não serve: o `draw` do render usa `gl.TRIANGLES` fixo e não desenha ponto nem linha. Detalhe abaixo. |
 | **E para extrudar** * | Puxa a face. | Extrusão de região: só as arestas de **borda** da seleção ganham parede. Resolve o caso de duas faces vizinhas sem precisar restringir a uma por vez. Algoritmo abaixo. |
 | **Painel lateral** | Posição, rotação, dimensão. | A caixa do objeto fica guardada e só é refeita quando a malha muda. Enquanto o gizmo arrasta, os campos ficam de leitura — um dono por vez. |
@@ -253,19 +253,26 @@ Nenhuma. As três que este documento carregava foram fechadas:
 
 ---
 
-## As duas abas
+## Abas e espaços de trabalho
 
-**Desenho** e **Objeto**. Duas, não três.
+Duas coisas diferentes que é fácil confundir.
 
-Desenho é contexto de verdade diferente: tela plana, sem câmera, sem 3D.
+**Abas** são contextos de verdade separados. Só existem duas:
 
-Pintura **não** é aba. Você pinta em cima do modelo, no mesmo visor, com a mesma
-câmera e a mesma seleção — virar aba faria perder as duas a cada troca, atrito
-sem ganho. Ela entra como terceiro modo do Tab, junto com objeto e edição. É a
-mesma divisão do Blender, onde pintar é modo e o editor de imagem é janela
-separada, e pelo mesmo motivo.
+- **Desenho** — tela plana, sem câmera, sem 3D.
+- **Objeto** — a cena 3D.
 
-Então: `Tab` cicla **objeto → edição → pintura** dentro da aba Objeto.
+**Espaços de trabalho** são arranjos de painel sobre a MESMA cena 3D, dentro da
+aba Objeto: **Modelar**, **Material** e **Animação**. Trocar de espaço muda quais
+painéis aparecem, e nada mais — câmera, seleção e objeto continuam onde estavam.
+
+É a divisão do Blender, onde Shading e Animation são espaços de trabalho e não
+programas diferentes. O critério é simples: **precisa da mesma câmera e da mesma
+seleção? Então é espaço, não aba.** Virar aba faria perder as duas a cada troca,
+atrito sem ganho.
+
+Dentro do espaço Modelar, o `Tab` continua ciclando **objeto → edição →
+pintura**.
 
 ## Aba Desenho
 
@@ -445,7 +452,12 @@ precedente de troca ao vivo sem recarregar.
 
 Estas são baratas hoje e caras depois. A ordem é por quanto doeria adiar.
 
-### 1. Espaço pra cor no formato de vértice
+### 0. Migrar pra WebGL 2, antes de tudo
+
+Decidido. Seção própria mais abaixo. Vem primeiro porque gizmo, animação e
+material construídos em cima do WebGL 1 nasceriam em cima do que vai mudar.
+
+### 1. Espaço pra cor E peso de osso no formato de vértice
 
 O formato tem posição, coordenada de textura e normal — 32 bytes, sem cor. Isso
 já bloqueou coisa três vezes neste documento: o `countershade`, o `paintVerts` e
@@ -460,6 +472,11 @@ vez de perder o sombreado. E o pincel ganha um caminho a mais, mais barato que
 textura pra detalhe suave.
 
 **Custo real:** 12 bytes por vértice e uma multiplicação no shader.
+
+**Faça junto com o peso de osso.** O esqueleto da animação também precisa de
+atributos novos (índice e peso). Mudar o formato de vértice duas vezes é pagar a
+migração duas vezes — decida os dois de uma vez, mesmo que o esqueleto só seja
+usado meses depois. O espaço reservado não custa nada; a segunda migração custa.
 
 Isto encosta no `render.js`, que é território de quem cuida de gráficos —
 precisa ser combinado, não feito por cima.
@@ -510,8 +527,141 @@ malha aqui são milhares de vértices, não milhões, e JavaScript dá conta com
 folga. Seria complexidade paga sem retorno.
 
 **A limitação real do motor hoje não é a linguagem nem a biblioteca** — é o
-formato de vértice sem cor e o `draw` preso em triângulos. Os dois itens acima.
-Resolvidos, some quase todo o motivo que faria alguém querer trocar de motor.
+formato de vértice sem cor, o `draw` preso em triângulos e o WebGL 1. Os três
+itens acima. Resolvidos, some quase todo o motivo que faria alguém querer trocar.
+
+**Decisão do ideador: WebGL 2, sem three.js.** Nada do que foi pedido —
+materiais, animação, esqueleto — é impossível no motor próprio. É trabalho, não
+barreira.
+
+## WebGL 2
+
+Decisão do ideador: migrar, sem adotar three.js.
+
+A troca é pequena e mecânica: criar o contexto com `webgl2`, e nos shaders subir
+pra `#version 300 es` — `attribute` vira `in`, `varying` vira `in`/`out`,
+`gl_FragColor` vira uma saída declarada, `texture2D` vira `texture`. As peças não
+são tocadas: elas geram arranjos de vértice e não sabem de shader.
+
+O que destrava, e é bastante:
+
+- **Instanciamento nativo** (`drawArraysInstanced`). Hoje cada árvore plantada é
+  um desenho próprio; uma floresta de 500 viraria mil desenhos por quadro. Com
+  instanciamento, viram um.
+- **Textura de profundidade de verdade** na sombra. Hoje o motor empacota a
+  profundidade em RGBA e desempacota no shader (o `PACK` do `render.js`). Some o
+  truque, some a perda de precisão.
+- **Vários alvos de render** de uma vez, que é o que uma passada de transparência
+  ou de efeito precisa.
+- **Texturas de tamanho livre** com repetição e mipmap, sem a regra de potência
+  de dois do WebGL 1.
+- Mais uniformes disponíveis, o que importa direto pro esqueleto da animação.
+
+Suporte é universal hoje. O risco da migração é baixo e o retorno é alto — e ela
+deve vir **antes** da Oficina, não depois, senão gizmo, animação e material
+nascem em cima do que vai mudar.
+
+WebGPU fica pra depois, e não muda nada agora: é o passo seguinte quando fizer
+sentido, não um concorrente do WebGL 2.
+
+## Espaço Animação
+
+Duas camadas, e a primeira cobre mais do que parece.
+
+### Animação rígida por parte
+
+Girar um galho, balançar uma perna como peça sólida. **Já é possível com o motor
+de hoje**, porque cada parte é um lote com matriz própria — é o que o
+`nos-Craft` faz com `group`, `children` e mapa de partes por nome.
+
+Para animação de criatura em estilo low-poly, isso resolve a maioria dos casos.
+
+### Esqueleto com deformação suave
+
+Malha que dobra em vez de articular em pedaços. Precisa de peso e índice de osso
+por vértice, e das matrizes de osso no shader. É mudança no formato de vértice,
+como a cor — e por isso as duas devem entrar **na mesma passada**, não em duas.
+
+O WebGL 2 ajuda direto aqui, por causa do limite maior de uniformes.
+
+### O que isso exige do formato de passos
+
+Aqui tem uma consequência que muda o que já foi decidido, e é bom encarar agora:
+**a lista de passos é plana, e animação precisa de partes com nome.**
+
+Solução que não desmancha nada: uma operação que **nomeia** um conjunto.
+
+```js
+['parte', { nome: 'galho-1', faces: [12, 13, 14] }],
+```
+
+A partir daí, `'galho-1'` pode ser alvo de transformação, de material e de
+animação. Nada da lista existente muda; ganha um jeito de dar nome ao que já
+está lá. E casa com o `name` que o `nos-Craft` já usa.
+
+As animações não entram na lista de passos — elas não constroem geometria. Vão
+numa seção própria do arquivo:
+
+```js
+export const ANIMACOES = {
+  balanco: {
+    duracao: 2.4, repete: true,
+    trilhas: [
+      { parte: 'galho-1', canal: 'rotZ', chaves: [[0, 0], [1.2, 0.08], [2.4, 0]] },
+    ],
+  },
+};
+```
+
+Chave é `[tempo, valor]`. Interpolação suave por padrão.
+
+## Espaço Material
+
+Material é como a superfície responde à luz. Hoje existe **um** shader de cena:
+textura, difusa lambertiana, sombra, névoa e contorno.
+
+### Parâmetros, não grafo de nós
+
+O Blender usa grafo de nós. Recomendo **não** copiar isso agora: grafo significa
+gerar shader em tempo de execução, o que é um sistema inteiro e caro.
+
+O caminho barato que cobre quase tudo é **um shader só com parâmetros por lote**,
+e já existe precedente disso no motor — o `uRim` é exatamente um parâmetro por
+lote. Acrescentar mais alguns é seguir o que está lá.
+
+Parâmetros propostos:
+
+| Parâmetro | O que faz |
+|---|---|
+| `cor` | multiplica a textura |
+| `emissivo` | brilha sozinho, ignora luz e sombra — portal, brasa, janela acesa |
+| `contorno` | o `uRim` que já existe, agora por material |
+| `aspereza` | quão espalhado é o brilho especular |
+| `semLuz` | superfície chapada, sem sombreamento — útil pra céu, símbolo, interface no mundo |
+| `mistura` | `opaco`, `recorte` (o de hoje) ou `transparente` |
+
+O `transparente` é o único que pede trabalho de motor: uma passada extra depois
+dos opacos, ordenada de trás pra frente. É também o que destrava vidro, fumaça e
+água com profundidade, que hoje são impossíveis.
+
+### No arquivo
+
+```js
+export const MATERIAIS = {
+  casca:  { cor: '#6b4a2f', aspereza: 0.9 },
+  brasa:  { cor: '#ff7326', emissivo: 1.4, semLuz: true },
+};
+```
+
+E a operação que aplica:
+
+```js
+['material', { faces: [0, 1, 2], usa: 'casca' }],
+```
+
+Material por **nome**, não por face solta: assim mudar a casca muda toda a casca
+do objeto de uma vez. É a mesma regra de um número com um dono só que vale pra
+`PARAMS` e pra colisão.
 
 ## Formato do arquivo gerado
 
@@ -617,6 +767,8 @@ Sem o servidor no ar, cai pro download comum — funciona, mas você move o arqu
 | `apagaFace` | `f` | — |
 | `pincel` | `modo`, `cor`, e o alvo conforme o modo | `modo: 'face'` preenche faces inteiras. `modo: 'livre'` recebe `raio`, `dureza` e `pontos: [{ f, a, b }]` — face e posição DENTRO dela, não coordenada de textura crua. Assim mover um vértice depois leva a tinta junto, em vez de deslizar. |
 | `liso` | `faces: [ids]` | Sombreado macio nessas faces. O padrão é chapado. |
+| `parte` | `nome`, `faces: [ids]` | Dá nome a um conjunto. É o que animação e material usam como alvo. |
+| `material` | `faces` ou `parte`, `usa` | Aplica um material declarado em `MATERIAIS`. |
 | `solido` | `faces: [ids]` | Marca o que entra na colisão. |
 
 Toda operação precisa ser **determinística**: mesma lista, mesmo objeto,
@@ -674,6 +826,8 @@ que é o coração de tudo — sem precisar abrir o editor nem clicar em nada.
 
 ## Ordem de construção
 
+0. **Migrar o motor pra WebGL 2**, e na mesma passada abrir espaço no formato de
+   vértice pra cor e peso de osso. Antes de tudo — o resto nasce em cima disto.
 1. Estrutura de dados (vértices únicos, faces, identidades) e a lista de passos.
 2. Câmera do editor com cursor livre.
 3. Ver vértices e faces por cima da malha, em canvas 2D.
@@ -685,6 +839,9 @@ que é o coração de tudo — sem precisar abrir o editor nem clicar em nada.
 9. Textura por objeto com projeção em caixa, e o pincel no modo "face".
 10. Exportar código pelo servidor de desenvolvimento, e colisão automática.
 11. Modos livres do pincel: raio, dureza, degradê. Acrescenta, não substitui.
+12. Espaço Material: parâmetros por lote no shader, e a passada de transparência.
+13. Espaço Animação: `parte` com nome, trilhas de chave, animação rígida.
+14. Esqueleto com deformação suave — usa o espaço de vértice já reservado no 0.
 
 A **aba Desenho** não depende de nada disso e pode ser construída a qualquer
 momento, inclusive primeiro: é polígono em canvas 2D, sem malha e sem
