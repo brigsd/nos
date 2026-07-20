@@ -566,6 +566,41 @@ que compensa garantir agora — o resto encaixa quando quiser.
 
 O caminho principal de uso, decidido pelo ideador.
 
+### Duas portas, dois papéis
+
+Duas formas de entrar na Oficina, pra duas intenções diferentes:
+
+- **Abrir a ferramenta** — tecla **`U`** ou o item **Oficina** no menu do
+  jogo. Abre em cena vazia (criar algo novo) ou no último objeto que você
+  editava. Não depende de estar mirando em nada. O **menu é a porta
+  oficial** — quem não sabe que a Oficina existe descobre ali; o **`U` é só
+  um atalho pra MESMA ação**, não uma segunda implementação, então as duas
+  nunca divergem. Abrir **solta o cursor travado**, senão não dá pra clicar
+  em nada. `U` porque está livre: `WASD`, `Q`, `E` e `I` já são teclas do
+  jogo.
+- **Editar o objeto que você está vendo** — mirar e clicar na etiqueta,
+  detalhado logo abaixo. Abre já com aquele objeto carregado.
+
+O `U`/menu **não** vira um jeito de escolher objeto do mundo pra editar —
+isso é o mirar-e-clicar. Cada porta com um trabalho, sem sobrepor.
+
+### Abrir outro objeto com um já aberto
+
+Se você já está editando A e abre B (pela etiqueta, ou pelo navegador de
+peças da própria ferramenta), **B substitui A** — a Oficina passa a mostrar
+só o B. O A **não se perde**: o auto-save grava o arquivo dele antes da
+troca (a mesma regra de salvamento automático que este documento já adota),
+e você reabre quando quiser. Sem pergunta de "descartar alterações?", porque
+o auto-save já resolveu.
+
+Isso não briga com "cena com um ou vários objetos": ter A e B juntos é um
+gesto **explícito** — "trazer pra cena como referência", pra ter escala e
+encaixe — e aí só um é o **ativo** (editável e salvável) e o outro é
+contexto visível. O clicar-na-etiqueta sozinho não empilha objeto, senão a
+cena encheria sem você pedir.
+
+### O objeto mirado
+
 Jogando, você aperta `I` pra ver as etiquetas, mira num objeto e clica. Aparece
 **"Abrir objeto na oficina?"** com sim e não. Dizendo sim, a Oficina abre já com
 aquele objeto carregado. Você mexe, e clica em **"Aplicar para o jogo"**.
