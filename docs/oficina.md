@@ -803,7 +803,56 @@ sentido, não um concorrente do WebGL 2.
 
 ## Espaço Animação
 
-Duas camadas, e a primeira cobre mais do que parece.
+### O que existe hoje
+
+Na prática, o jogador vê **uma** animação: o vento (o `WIND` do `render.js`,
+procedural no vertex shader, gate por-lote — chão e prédio não balançam).
+Existe também um gancho geral, `animar(t, lotes)`, que uma peça pode usar pra
+mexer nos próprios lotes por código a cada quadro (uma roda **giraria** por
+ele hoje) — mas nenhuma peça do jogo usa ainda, e é código cru, não sistema
+autorável. Ponto de partida honesto: **só natureza, e um escape hatch.**
+
+### Dois eixos pra não se perder
+
+"Personagem", "roda" e "vento" misturam duas perguntas diferentes. Separá-las
+organiza o resto.
+
+**Eixo 1 — COMO deforma (técnica):**
+
+- **Procedural no shader** — vento, água, pulsar, respirar. Tempo + posição,
+  sem estado. Barato. O `WIND` já é isto.
+- **Rígido por parte** — roda, porta, pistão, moinho, alavanca, asa batendo
+  como peça sólida. Move sub-partes por matriz, sem deformar malha. Já
+  possível hoje (abaixo).
+- **Esqueleto / skinning** — personagem andando, bicho flexionando: a malha
+  **dobra** nas juntas. A única camada cara (abaixo).
+- **Textura animada** — esteira, lava, água rolando, pulso emissivo. Barato:
+  UV rolando ou troca de quadro.
+- *(Morph / squash-and-stretch — misturar duas posições de vértice. Fora de
+  escopo cedo: pesa no formato de vértice.)*
+
+**Eixo 2 — O QUE dispara (fonte):**
+
+- **Ambiente / laço** — sempre ligado: vento, tocha, portal. O `ANIMACOES`
+  com `repete:true` (abaixo) já cobre.
+- **Gatilho / uma vez** — em evento: porta abre, baú abre, pulo, ataque.
+  **Ainda não está no formato.**
+- **Dirigido por estado** — locomoção: a velocidade da corrida controla o
+  ciclo de passo; o giro da roda ∝ velocidade do veículo. **Ainda não está no
+  formato.**
+- **Reativo / físico** — pano, corda, rabo seguindo o corpo. Pesado; finge-se
+  com mola simples. Fora de escopo cedo.
+
+**A leitura que importa:** quase tudo cai na parte barata (rígido +
+procedural + textura); só personagem/animal dobrando de verdade precisa do
+esqueleto. E a lacuna real é do **formato**, não do motor — falta gatilho e
+dirigido-por-estado, só o laço está previsto.
+
+### As duas camadas que dobram a malha
+
+Do Eixo 1, só duas técnicas precisam de motor novo — o rígido e o esqueleto;
+procedural e textura já existem ou são triviais. E a primeira cobre mais do
+que parece.
 
 ### Animação rígida por parte
 
@@ -851,6 +900,37 @@ export const ANIMACOES = {
 ```
 
 Chave é `[tempo, valor]`. Interpolação suave por padrão.
+
+### Gatilho e dirigido por estado — o que falta no formato
+
+O `ANIMACOES` acima só sabe **laço** (`repete: true`). Faltam duas fontes do
+Eixo 2 que a movimentação e os personagens vão exigir:
+
+- **Gatilho / uma vez.** Tocar uma animação num evento — porta abre, baú abre,
+  pulo, ataque — e parar no fim, sem repetir. Acréscimo pequeno: um modo
+  `uma-vez` e um jeito de disparar (`tocar('abrir')`), em vez de tudo rodar
+  sozinho no laço.
+- **Dirigido por estado.** A animação não roda no próprio relógio, e sim num
+  valor do jogo: o ciclo de passo acelera com a velocidade da corrida, o giro
+  da roda segue a velocidade do veículo. Aqui o `tempo` da trilha vira uma
+  entrada externa, não o relógio interno.
+
+Nenhum dos dois mexe no formato de geometria — são acréscimos na seção
+`ANIMACOES`, do mesmo jeito que o laço já é. Ficam pra quando a movimentação
+chegar; hoje só o laço (ambiente) está previsto, e é o bastante pro vento e
+afins.
+
+### Comportamento não é animação
+
+Alerta pra não confundir camada. "Parado → anda → ataca" **não** é o sistema
+de animação — é o **cérebro** (IA / máquina de estados) que **decide qual**
+animação disparar. O sistema de animação é o vocabulário (as trilhas, o
+gatilho); o comportamento é quem consome esse vocabulário.
+
+Mesma separação que o `som.js` (a síntese) tem do código do jogo que chama
+`passo()` na hora certa. Misturar os dois faria a peça carregar lógica de
+jogo, e a Oficina deixaria de ser só sobre a FORMA da coisa. O comportamento
+mora no código do mundo, não na peça.
 
 ## Espaço Material
 
