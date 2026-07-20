@@ -31,6 +31,22 @@ Abrir o objeto é executar a lista.
 Isso não limita a liberdade: arrastar um vértice à mão **é** uma operação
 gravada, como qualquer outra. Você mexe no que quiser.
 
+## Pra quem é isto
+
+Decisão do ideador (2026-07-20): a Oficina mira primeiro **o ideador e o
+coder**, não um público externo. O critério de "vale construir X" é "isso
+nos ajuda a fazer o jogo mais rápido e melhor", não "isso atrai contribuidor
+de fora". Fazer o mais completa possível dentro desse critério é o objetivo;
+ficar simples de propósito, pra ser mais fácil de portar pra outro projeto,
+não é.
+
+Efeito colateral bem-vindo, não meta: por ser aberta e em texto simples,
+quem gostar de uma peça — o gerador de som, o painel de IA, um espaço
+específico — pode pegar só aquele pedaço pro projeto dela. Isso é
+consequência da separação em camadas (núcleo/adaptador/interface, ver
+"Onde o código mora") já escolhida por outro motivo, não um requisito novo
+que muda alguma decisão de design.
+
 O que se ganha com essa escolha, sem trabalho extra nenhum:
 
 - **Objeto continua paramétrico.** Muda o `0.34` do primeiro passo, a lista roda
@@ -257,10 +273,15 @@ Nenhuma. As três que este documento carregava foram fechadas:
 
 Duas coisas diferentes que é fácil confundir.
 
-**Abas** são contextos de verdade separados. Só existem duas:
+**Abas** são contextos de verdade separados. Existem três:
 
 - **Desenho** — tela plana, sem câmera, sem 3D.
 - **Objeto** — a cena 3D.
+- **Som** — sem câmera nem malha, forma de onda e play. Ver "Aba Som".
+
+O **painel de IA** (seção própria mais abaixo) não é aba nem espaço: não tem
+cena própria, fica disponível em cima de qualquer uma das três acima e age
+sobre o que estiver aberto ali.
 
 **Espaços de trabalho** são arranjos de painel sobre a MESMA cena 3D, dentro da
 aba Objeto: **Modelar**, **Material** e **Animação**. Trocar de espaço muda quais
@@ -296,6 +317,63 @@ tradução na cabeça: y pra cima, lado é z×y, cima é z×x, frente é x×y.
 polígono de referência e devolve o IoU, a fração de área que as duas dividem.
 A mesma conta roda aqui **enquanto você modela**, com a porcentagem na tela.
 Sai de "acho que ficou parecido" pra um número.
+
+## Aba Som
+
+O jogo já sintetiza 100% do áudio em código — `motor/som.js`, zero arquivo
+de som no repositório, mesma dieta zero-binário da textura (D-30 e D-61). O
+problema não é falta de síntese: é que ela é só código de mão, sem audição
+ao vivo nem parâmetro nomeado. Mudar o corte de um filtro é editar um
+número, salvar, recarregar o jogo e andar até ouvir — o mesmo atrito que a
+Oficina já resolveu do lado visual.
+
+**Nem tudo em `som.js` é a mesma coisa, e a distinção decide o escopo.**
+
+- **Evento parametrizado** — um grão de passo, uma bolha, uma rajada de
+  vento, um estalo. Constrói uma vez a partir de parâmetros, tem duração
+  própria, termina. É o mesmo formato de peça: lista de passos, parâmetros
+  com nome, resultado determinístico dado uma semente. Cabe inteiro na
+  Oficina.
+- **Comportamento contínuo** — quando disparar a próxima rajada, como a
+  densidade da água acompanha a distância (`agendarRajada`, `agendarAgua`).
+  Isto não constrói um objeto, gira pra sempre reagindo ao jogo. Não é peça,
+  é sistema — mais parecido com o que `ANIMACOES` já é pro espaço Animação
+  (valores ao longo do tempo, dirigido por trilha) do que com uma malha.
+
+**Proposta: a Aba Som cobre só o primeiro grupo.** Gera e edita o evento —
+osciladores, ruído, filtro, envelope, ganho — com forma de onda na tela e
+play imediato, do mesmo jeito que o visor mostra o objeto 3D. O agendamento
+(quando tocar, com que densidade) continua código de jogo comum, que CHAMA
+o evento gerado — a mesma separação que já existe entre a peça e o lugar
+onde ela é plantada no mapa.
+
+Contraponto que vale debater: dava pra tentar cobrir o comportamento
+contínuo também, com uma "trilha de eventos" parecida com `ANIMACOES`. Não
+recomendo agora — `agendarRajada`/`agendarAgua` têm lógica condicional real
+(espera de cauda longa, limiar de proximidade) que forçar em trilha
+declarativa provavelmente complica mais do que ajuda. Fica pra depois, se o
+padrão "trilha reage a estado do jogo" aparecer de novo em outro lugar e
+compensar generalizar.
+
+### Passos propostos
+
+| Operação | Argumentos | Observação |
+|---|---|---|
+| `oscilador` | `id`, `tipo` (`seno`/`quadrada`/`triangular`/`serra`), `freq` | Fonte tonal. |
+| `ruido` | `id`, `cor` (`branco`/`rosa`, parâmetro `k` como em `makeNoise`) | Fonte não-tonal. |
+| `filtro` | `de: id`, `tipo` (`passa-baixa`/`passa-alta`/`passa-banda`), `freq`, `q` | Um `BiquadFilterNode`. |
+| `envelope` | `de: id`, `ataque`, `pico`, `decaimento`, `duracao` | Perfil de ganho no tempo. |
+| `ganho` | `de: id`, `valor` | Mistura e volume. |
+| `soma` | `de: [ids]` | Combina caminhos, como o `mixerG` de hoje. |
+
+Mesma regra da geometria vale aqui: **determinístico dado uma semente**, ou
+reabrir o arquivo muda o som. `Math.random()` cru no meio de um passo é
+proibido pela mesma razão de sempre.
+
+`motor/som.js` de hoje **não é jogado fora** — os parâmetros já tunados
+(`PISOS.grama`, a rajada de vento, a bolha) viram o catálogo inicial de
+eventos, e o arquivo continua sendo o adaptador que liga os eventos gerados
+ao Web Audio, no mesmo papel que `motor/oficina.js` tem pro lado visual.
 
 ## Trazer e levar do repositório
 
@@ -370,6 +448,84 @@ Não transfere sem mexer no motor:
   recurso de iluminação; aqui o equivalente é a textura com projeção em caixa.
   **Objeto trazido de lá vai parecer diferente até isso ser resolvido**, e é o
   descompasso mais visível entre os dois projetos.
+
+## Modo texto
+
+A Oficina só abre lista de passos — decisão já tomada acima, em "O contrato
+com a IA". Isto não é sobre reabrir aquilo: é sobre uma SEGUNDA forma de
+editar a MESMA lista, texto em vez de clique.
+
+`PASSOS` já é um array literal (ver "Formato do arquivo gerado", mais
+abaixo). Um painel de texto — realce de sintaxe, sem executar nada
+arbitrário, só faz o parse da mesma forma que o núcleo já entende — deixa
+escrever ou colar passos direto, e a cena 3D reage ao vivo, do mesmo jeito
+que arrastar o gizmo reage. "Editor de código" aqui significa **editor da
+lista, em texto**, não um IDE genérico pra JavaScript solto — isso
+violaria o próprio contrato com a IA que este documento defende.
+
+Pra quem serve, na prática: pouco pra mim (Claude já edita o arquivo direto
+pelas ferramentas de código, fora do navegador) e pouco pro ideador editar à
+mão (a proposta original da Oficina já era não precisar programar). Quem
+precisa de verdade é o **painel de IA** logo abaixo — uma IA rodando só no
+navegador, sem acesso a disco, só tem esse caminho pra propor ou mostrar
+uma lista de passos que ainda não tem gesto de mouse equivalente. Nasce
+como parte do painel de IA, não como recurso solto.
+
+As rotas `GET/POST /pecas/<nome>.js`, já descritas em "Trazer e levar do
+repositório", servem os dois usos: abrir o texto de uma peça existente, e
+gravar o resultado editado.
+
+## Painel de IA (BYOK)
+
+Decisão já tomada em conversa com o ideador; registrada aqui agora. Não é
+aba nem espaço no sentido de "Abas e espaços de trabalho" — não tem câmera
+nem cena própria. É um painel disponível em cima de qualquer aba, que age
+sobre o que está aberto ali.
+
+**Bring your own key: cada um paga a própria conta.** Cada pessoa cola a
+própria chave de API do provedor que quiser — Anthropic ou outro — no
+navegador dela. **Zero chave de API no repositório**, em qualquer commit ou
+branch. A chave mora só em `localStorage`, e só sai de lá pra API do
+provedor escolhido.
+
+Isso evita um problema que chave compartilhada teria: custo de quem mantém
+o repositório crescendo junto com o número de gente usando, e rate limit de
+um brigando com o de todo mundo. Com BYOK, assinatura é conta de cada um, e
+o limite de requisição também é por chave — ninguém disputa cota de
+ninguém.
+
+**Modelo-agnóstico por contrato, não por acaso.** O painel manda pro
+provedor escolhido o mesmo vocabulário de operações que este documento já
+define — `loft`, `inflate`, `cilindro`, `oscilador`, o que for — e esse
+vocabulário é texto simples, então qualquer LLM decente entende sem
+integração especial por modelo. Trocar de provedor é trocar URL e formato
+de chamada, não reescrever prompt.
+
+**Chamada direto do navegador, sem backend.** Página estática no GitHub
+Pages não tem servidor pra intermediar. As APIs relevantes preveem esse
+caso — existe um jeito de habilitar CORS direto do cliente (a Anthropic tem
+um cabeçalho específico pra isso; conferir o nome exato na hora de
+implementar, isto veio de memória, não foi checado numa fonte agora). O
+aviso de "perigoso" nesse tipo de opção é sobre expor chave COMPARTILHADA;
+aqui não existe uma — é a chave de cada um, digitada por ela, e o risco é
+só dela.
+
+**O que a IA pode fazer:** ler o objeto ou som aberto (a lista de passos já
+é o formato que ela entende, sem tradução), propor passos novos, e — usando
+o Modo texto acima — mostrar ou editar a lista em texto quando ainda não
+existe gesto de mouse equivalente. Não escreve arquivo direto: o "Aplicar"
+final continua sendo confirmação humana, igual ao resto da Oficina.
+
+### O que falta pra isso funcionar de verdade
+
+A "Lista de operações" (mais abaixo) hoje não tem `loft`, `inflate` nem
+`lathe` — só as primitivas e as edições manuais (`moveV`, `extruda`...).
+Mas "O contrato com a IA", algumas seções acima, já diz que são exatamente
+esses os passos que a IA deve preferir. **Lacuna real, achada relendo o
+próprio documento**: o vocabulário que o contrato promete não estava na
+tabela que o núcleo de fato implementaria. Fechado nesta rodada — ver as
+linhas novas na Lista de operações. Sem isso o painel nasceria raso,
+emitindo `moveV` por vértice, exatamente o que o contrato queria evitar.
 
 ## Decidido nesta rodada
 
@@ -787,6 +943,11 @@ Sem o servidor no ar, cai pro download comum — funciona, mas você move o arqu
 | Operação | Argumentos | Observação |
 |---|---|---|
 | `cubo`, `cilindro`, `esfera`, `plano`, `cone` | `id`, medidas, `lados` | Ponto de partida. Cria vértices numerados a partir de `id`. |
+| `loft` | `id`, `perfis: [{pos, raio ou secao}]`, `lados` | Conecta uma sequência de anéis/seções ao longo de um caminho — o que hoje `galhoSeca` faz à mão em `arvore-cartoon.js`. Uma árvore inteira vira um passo só. Argumentos a confirmar contra o `nos-Craft` quando for portado (fora do alcance desta sessão) — a forma aqui é a leitura de "O que transfere de lá", não o código-fonte de lá. |
+| `inflate` | `id`, `contornoLado`, `contornoTopo` | Dois contornos 2D (lado e topo, ver Aba Desenho) viram volume 3D. Mesma ressalva de origem do `loft`. |
+| `lathe` | `id`, `perfil: [[raio, y]]`, `lados` | Perfil rotacionado em torno de um eixo — vaso, coluna. |
+| `displace` | `de: id`, `mapa` ou `funcao` | Desloca vértices por uma função ou textura de ruído. |
+| `chamferBox` | `id`, medidas, `chanfro` | Caixa com quinas suavizadas. |
 | `moveV` | `v`, `d: [x,y,z]` | Move um vértice por deslocamento, nunca por posição absoluta — assim ele acompanha quando a base muda. |
 | `moveA`, `moveF` | `a` / `f`, `d` | Aresta e face, mesma regra. |
 | `extruda` | `face`, `dist` | Cria os vértices novos e as paredes laterais. |
@@ -913,6 +1074,16 @@ A **aba Desenho** não depende de nada disso e pode ser construída a qualquer
 momento, inclusive primeiro: é polígono em canvas 2D, sem malha e sem
 identidades. Mesmo sem a modelagem pronta, ela já paga sozinha — você passa a
 mandar contorno exato pra IA em vez de imagem pra ser traçada.
+
+A **Aba Som** também não depende do resto: é Web Audio puro, sem malha e sem
+identidade de vértice. Pode nascer em paralelo a qualquer ponto da lista
+acima — `motor/som.js` já prova que a síntese funciona, falta só a
+interface e o formato de passos por cima.
+
+O **painel de IA** depende de uma coisa só: a Lista de operações precisa ter
+os passos descritivos que o contrato promete (`loft`, `inflate`, `lathe` —
+já fechados nesta rodada). Sem isso o painel nasceria raso, emitindo
+`moveV` por vértice.
 
 A bancada sem interface do `executar` entra junto com o passo 1, não no fim:
 ela é o que deixa provar que o replay está certo antes de existir tela pra
