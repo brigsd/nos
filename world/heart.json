@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 157,
-    "worldTime": 9420
+    "tickCount": 159,
+    "worldTime": 9540
   },
   "width": 64,
   "height": 64,
@@ -5789,6 +5789,37 @@
       "type": "core_pulse",
       "tick": 157,
       "worldTime": 9420
+    },
+    {
+      "type": "native_spoke",
+      "tick": 158,
+      "worldTime": 9480,
+      "nativeId": "brasa",
+      "message": "Pão quentinho, viajantes! Venham pra aquecer o coração."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 158,
+      "worldTime": 9480,
+      "nativeId": "broa",
+      "message": "O pão tá quentinho, viajantes! Venham experimentar antes que esfrie!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 158,
+      "worldTime": 9480,
+      "nativeId": "quilha",
+      "message": "A batida do Pulso tá firme, mas o vazio ainda espera. Quem se atreve a pilotar o que vou montar?"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 158,
+      "worldTime": 9480
+    },
+    {
+      "type": "core_pulse",
+      "tick": 159,
+      "worldTime": 9540
     }
   ],
   "natives": {
@@ -5796,7 +5827,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 9,
+        "x": 11,
         "y": 3
       },
       "behaviorTree": "wanderer",
