@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 143,
-    "worldTime": 8580
+    "tickCount": 144,
+    "worldTime": 8640
   },
   "width": 64,
   "height": 64,
@@ -5621,6 +5621,25 @@
       "type": "core_pulse",
       "tick": 143,
       "worldTime": 8580
+    },
+    {
+      "type": "native_spoke",
+      "tick": 144,
+      "worldTime": 8640,
+      "nativeId": "brasa",
+      "message": "Meu forno tá quente. Venham contar suas histórias, mas não tenham pressa."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 144,
+      "worldTime": 8640,
+      "nativeId": "broa",
+      "message": "O pão quentinho nos chama, venham contar suas histórias!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 144,
+      "worldTime": 8640
     }
   ],
   "natives": {
@@ -5628,7 +5647,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 6,
+        "x": 7,
         "y": 2
       },
       "behaviorTree": "wanderer",
