@@ -5897,6 +5897,27 @@
       "type": "core_pulse",
       "tick": 166,
       "worldTime": 9960
+    },
+    {
+      "type": "native_spoke",
+      "tick": 166,
+      "worldTime": 9960,
+      "nativeId": "brasa",
+      "message": "O pão tá saindo quente! Vem sentir o calor. Ferro bom não tem pressa."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 166,
+      "worldTime": 9960,
+      "nativeId": "broa",
+      "message": "O pão tá saindo quentinho da cozinha! Venham sentir!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 166,
+      "worldTime": 9960,
+      "nativeId": "quilha",
+      "message": "O pão quente nos lembra que todo começo vale a pena. Quem se atreve a pilotar a travessia?"
     }
   ],
   "natives": {
