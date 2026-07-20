@@ -64,3 +64,7 @@ cada entrada é um mundo com `id`, `name`, `worldUrl` e `status`:
 ## Como contribuir
 
 O NÓS é coletivo por natureza — na v3, qualquer pessoa poderá criar um mundo novo via pull request. Antes disso, issues com ideias são bem-vindas.
+
+## Licença
+
+Este projeto é [MIT](LICENSE) — use, copie e modifique à vontade. Se ele te ajudar em algo público, um crédito ao NÓS é bem-vindo.
