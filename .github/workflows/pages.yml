@@ -8,6 +8,7 @@ on:
       - 'world/**'
       - 'assets/**'
       - 'engine/types.ts'
+      - 'prototipos/fps/**'
   workflow_dispatch:
 
 concurrency:

@@ -9,18 +9,17 @@
  * prototipos/fps/nos-fps.html and writes the self-contained result to
  * site/public/fps/index.html — Vite then ships it verbatim in dist/.
  *
- * Deploy trigger (measured 2026-07-17): pages.yml fires on push to
- * site/**, world/**, assets/** or engine/types.ts. TWO gaps stop a
- * FPS-only change (prototipos/fps/**) from reaching /fps/ on its own:
- *   1) prototipos/fps/** is NOT in the trigger paths; and
+ * Deploy trigger (measured 2026-07-17, gap #1 CLOSED 2026-07-20, D-69):
+ * pages.yml fires on push to site/**, world/**, assets/**, engine/types.ts
+ * and now 'prototipos/fps/**' too — a FPS-only change (either raycaster at
+ * /fps/ or the v3 GPU prototype at /fps/v3/) reaches Pages on its own push,
+ * no need to also touch site/** as a trick. One remaining gap:
  *   2) the tick's world/** commits are made by github-actions[bot]
  *      (GITHUB_TOKEN), and by GitHub design a GITHUB_TOKEN push does NOT
  *      start another workflow — so batidas alone never redeploy Pages.
- * Net effect: a raycaster change only ships when a HUMAN push touches one
- * of the trigger paths (e.g. editing this file). Permanent fix is adding
- * 'prototipos/fps/**' to pages.yml — needs the ideador (workflow edits are
- * gated for the coder session). Until then: touch site/** to publish.
- * Published rounds: D-36/37/38 (2026-07-17), D-39, D-40 (som), D-41, D-42 (brasa), D-44 (?res=), D-45 (render em camadas + billboards), D-46 (menu de gráficos), D-45p3 (blocos linha+pedra), D-47 (joystick + 3ª otim), D-48 (joystick 4 camadas), D-49 (billboards orientados), D-50 (profundidade + prancheta), D-50b (espessura fina), D-51 (PLANTA v1 + Santuário), D-53 (motor de setor/portal: a primeira casa enterável), D-54 (protótipo GPU/WebGL em /fps/gpu.html), D-54c (beleza: madeira+tesoura+janelas-abertura), D-54d (casa de TORAS), D-54f (madeira castanho-mel + toras verticais + abas + telha de barro), D-55 (v3 + A OFICINA em /fps/v3/), D-58 (ilha-chao: o chão v3 nasce + hash2 consertado), D-58b (nuvens apagadas), D-58c (ilhotas craggy), D-58d (ilhas grandes no horizonte), D-58e (arquipélago variado), D-58f (ilhas menos pontudas), D-59 (port das árvores V2), D-59b (árvore 3D), D-59c (árvore oficial: lisa+oval, sem contorno), D-61 (resolução medida + jogo.html: câmera livre, som, tiers, menu), D-62 (vila-ruína + árvores 3D transplantadas; NPCs/máquinas fora; arco/portal SEM gambiarra de profundidade), D-62b (copa das árvores SEM CORTE: o buffer da árvore era estreito demais e carvalho/copado — as 2 espécies mais largas, reusadas em ~1/3 da floresta — saíam com a copa fatiada reto na borda; buffer alargado 166→186, mesmo sizeMul, sem mudar o tamanho aparente) — this touch.
+ * That one still means a HUMAN push is what ships a change either way
+ * (ticks alone never do it), same as before.
+ * Published rounds: D-36/37/38 (2026-07-17), D-39, D-40 (som), D-41, D-42 (brasa), D-44 (?res=), D-45 (render em camadas + billboards), D-46 (menu de gráficos), D-45p3 (blocos linha+pedra), D-47 (joystick + 3ª otim), D-48 (joystick 4 camadas), D-49 (billboards orientados), D-50 (profundidade + prancheta), D-50b (espessura fina), D-51 (PLANTA v1 + Santuário), D-53 (motor de setor/portal: a primeira casa enterável), D-54 (protótipo GPU/WebGL em /fps/gpu.html), D-54c (beleza: madeira+tesoura+janelas-abertura), D-54d (casa de TORAS), D-54f (madeira castanho-mel + toras verticais + abas + telha de barro), D-55 (v3 + A OFICINA em /fps/v3/), D-58 (ilha-chao: o chão v3 nasce + hash2 consertado), D-58b (nuvens apagadas), D-58c (ilhotas craggy), D-58d (ilhas grandes no horizonte), D-58e (arquipélago variado), D-58f (ilhas menos pontudas), D-59 (port das árvores V2), D-59b (árvore 3D), D-59c (árvore oficial: lisa+oval, sem contorno), D-61 (resolução medida + jogo.html: câmera livre, som, tiers, menu), D-62 (vila-ruína + árvores 3D transplantadas; NPCs/máquinas fora; arco/portal SEM gambiarra de profundidade), D-62b (copa das árvores SEM CORTE: o buffer da árvore era estreito demais e carvalho/copado — as 2 espécies mais largas, reusadas em ~1/3 da floresta — saíam com a copa fatiada reto na borda; buffer alargado 166→186, mesmo sizeMul, sem mudar o tamanho aparente), D-63/64/65/66/67 (árvores cartoon + vegetação + visão de geometria + elenco seca/frondosa/raiz) + D-68 (merge da branch colaborador4: colisão, HUD, gráficos, áudio) — this touch, primeiro deploy de tudo isso.
  *
  * prototipos/fps/nos-fps.html stays the single source of truth for the
  * prototype; site/public/fps/ is pure build output, regenerated before
