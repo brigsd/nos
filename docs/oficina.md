@@ -279,9 +279,11 @@ Duas coisas diferentes que é fácil confundir.
 - **Objeto** — a cena 3D.
 - **Som** — sem câmera nem malha, forma de onda e play. Ver "Aba Som".
 
-O **painel de IA** (seção própria mais abaixo) não é aba nem espaço: não tem
-cena própria, fica disponível em cima de qualquer uma das três acima e age
-sobre o que estiver aberto ali.
+O **painel de IA** dentro do jogo — marcado mais abaixo como *possível, não
+planejado* (ver "IA na criação de peças") — não seria aba nem espaço:
+ficaria em cima de qualquer uma das três, sem cena própria. O caminho de IA
+que de fato usamos nem é um painel: é a IA soltando a peça no repositório,
+descrito na mesma seção.
 
 **Espaços de trabalho** são arranjos de painel sobre a MESMA cena 3D, dentro da
 aba Objeto: **Modelar**, **Material** e **Animação**. Trocar de espaço muda quais
@@ -466,66 +468,81 @@ violaria o próprio contrato com a IA que este documento defende.
 Pra quem serve, na prática: pouco pra mim (Claude já edita o arquivo direto
 pelas ferramentas de código, fora do navegador) e pouco pro ideador editar à
 mão (a proposta original da Oficina já era não precisar programar). Quem
-precisa de verdade é o **painel de IA** logo abaixo — uma IA rodando só no
-navegador, sem acesso a disco, só tem esse caminho pra propor ou mostrar
-uma lista de passos que ainda não tem gesto de mouse equivalente. Nasce
-como parte do painel de IA, não como recurso solto.
+precisaria de verdade é o **painel de IA dentro do jogo** logo abaixo — uma
+IA rodando só no navegador, sem acesso a disco, só teria esse caminho pra
+propor ou mostrar uma lista de passos. Como esse painel ficou **possível,
+fora do roadmap** (ver "IA na criação de peças"), o Modo texto vai junto:
+possível, não planejado. Não é bloqueio de nada — o caminho de IA que
+usamos de fato (a IA soltando peça no repositório) não precisa dele.
 
 As rotas `GET/POST /pecas/<nome>.js`, já descritas em "Trazer e levar do
 repositório", servem os dois usos: abrir o texto de uma peça existente, e
 gravar o resultado editado.
 
-## Painel de IA (BYOK)
+## IA na criação de peças
 
-Decisão já tomada em conversa com o ideador; registrada aqui agora. Não é
-aba nem espaço no sentido de "Abas e espaços de trabalho" — não tem câmera
-nem cena própria. É um painel disponível em cima de qualquer aba, que age
-sobre o que está aberto ali.
+Tem duas formas de IA entrar, e são MUITO diferentes em quem paga, quando
+funcionam e se estão no roadmap. Misturar as duas foi o que embananou esta
+parte antes — a distinção que desfaz o nó é ONDE a Oficina está rodando.
 
-**Bring your own key: cada um paga a própria conta.** Cada pessoa cola a
-própria chave de API do provedor que quiser — Anthropic ou outro — no
-navegador dela. **Zero chave de API no repositório**, em qualquer commit ou
-branch. A chave mora só em `localStorage`, e só sai de lá pra API do
-provedor escolhido.
+### O caminho real: o repositório é o ponto de encontro (assinatura)
 
-Isso evita um problema que chave compartilhada teria: custo de quem mantém
-o repositório crescendo junto com o número de gente usando, e rate limit de
-um brigando com o de todo mundo. Com BYOK, assinatura é conta de cada um, e
-o limite de requisição também é por chave — ninguém disputa cota de
-ninguém.
+O jeito principal, e que já funciona hoje sem nenhuma feature nova. O
+ideador trabalha com uma IA por assinatura (Claude Code) em tempo real, do
+lado de FORA do navegador; a IA cria ou edita a peça e **publica no
+repositório** — hoje como peça de rascunho (as com prefixo `_` em `pecas/`,
+tipo `_raiz1.js` e `_elenco.js`), por PR ou direto na main. O ideador então
+abre essa peça na Oficina e refina no mouse. O repositório é a caixa
+compartilhada entre os dois: a IA solta o arquivo lá, o ideador pega —
+inclusive de dentro do jogo, é só republicar e recarregar.
 
-**Modelo-agnóstico por contrato, não por acaso.** O painel manda pro
-provedor escolhido o mesmo vocabulário de operações que este documento já
-define — `loft`, `inflate`, `cilindro`, `oscilador`, o que for — e esse
-vocabulário é texto simples, então qualquer LLM decente entende sem
-integração especial por modelo. Trocar de provedor é trocar URL e formato
-de chamada, não reescrever prompt.
+**Isso não é uma feature da Oficina, e é por isso que é robusto.** Cai de
+graça de duas coisas que já existem por outro motivo: o formato de lista de
+passos (a IA escreve, a Oficina lê o mesmo arquivo de volta) e as peças
+morarem no repositório. Sem chave de API, sem custo por token, sem nada pra
+plugar — a IA fica na bancada, e só o resultado entra, pela porta que já
+existe.
 
-**Chamada direto do navegador, sem backend.** Página estática no GitHub
-Pages não tem servidor pra intermediar. As APIs relevantes preveem esse
-caso — existe um jeito de habilitar CORS direto do cliente (a Anthropic tem
-um cabeçalho específico pra isso; conferir o nome exato na hora de
-implementar, isto veio de memória, não foi checado numa fonte agora). O
-aviso de "perigoso" nesse tipo de opção é sobre expor chave COMPARTILHADA;
-aqui não existe uma — é a chave de cada um, digitada por ela, e o risco é
-só dela.
+O limite honesto, pra não vender demais: não é a IA mexendo com o cursor ao
+vivo dentro da aba do jogo publicado. É a IA soltando o arquivo e o ideador
+pegando. Perto o suficiente pra trabalhar junto de verdade, sem nenhuma das
+complicações do caminho de baixo.
 
-**O que a IA pode fazer:** ler o objeto ou som aberto (a lista de passos já
-é o formato que ela entende, sem tradução), propor passos novos, e — usando
-o Modo texto acima — mostrar ou editar a lista em texto quando ainda não
-existe gesto de mouse equivalente. Não escreve arquivo direto: o "Aplicar"
-final continua sendo confirmação humana, igual ao resto da Oficina.
+### O painel dentro do jogo (API/BYOK) — POSSÍVEL, fora do roadmap
 
-### O que falta pra isso funcionar de verdade
+Um painel de IA rodando dentro do jogo publicado, pra qualquer jogador —
+sem Claude Code, sem repositório — pedir uma peça. Esse **só** funciona por
+chamada direta do navegador com chave de API própria (BYOK: bring your own
+key): a assinatura não alcança um navegador qualquer, é regra da Anthropic,
+o login por assinatura vale só pros apps nativos dela. Cada um plugaria a
+própria chave, guardada só no `localStorage`, **zero chave no repositório**;
+o custo por token cai na conta de cada um, e o limite de requisição também é
+por chave — ninguém disputa a cota do outro.
 
-A "Lista de operações" (mais abaixo) hoje não tem `loft`, `inflate` nem
-`lathe` — só as primitivas e as edições manuais (`moveV`, `extruda`...).
-Mas "O contrato com a IA", algumas seções acima, já diz que são exatamente
-esses os passos que a IA deve preferir. **Lacuna real, achada relendo o
-próprio documento**: o vocabulário que o contrato promete não estava na
-tabela que o núcleo de fato implementaria. Fechado nesta rodada — ver as
-linhas novas na Lista de operações. Sem isso o painel nasceria raso,
-emitindo `moveV` por vértice, exatamente o que o contrato queria evitar.
+**Decisão do ideador (2026-07-20): fica como POSSÍVEL, não entra no
+roadmap.** A API é cara pro uso ocasional, então nem o ideador vai depender
+disso, nem nenhum jogador é obrigado a ter chave. E por causa da separação
+em camadas (núcleo/adaptador/interface), dá pra encaixar isso depois como
+rosto fino sobre o mesmo núcleo, a custo baixo — então deixar pra "se um
+dia" não cria dívida nenhuma. Só não se constrói apostando nele.
+
+Detalhe de implementação pra quando/se for: existe um jeito de habilitar
+CORS direto do cliente (a Anthropic tem um cabeçalho específico; conferir o
+nome na hora, isto é de memória). O "perigoso" que aparece no nome desse
+tipo de opção é sobre expor chave COMPARTILHADA — aqui não tem uma, é a
+chave de cada um, risco só dela. Modelo-agnóstico de brinde: o vocabulário
+que sai daqui é o mesmo texto de operações do resto do documento, então
+qualquer LLM decente entende sem integração por modelo.
+
+### O que os dois pedem do formato (isto sim, cedo)
+
+Seja eu soltando arquivo pelo repositório, seja um painel BYOK, **qualquer
+IA gera peça melhor com os passos descritivos** — `loft`, `inflate`,
+`lathe` — do que empilhando `moveV` vértice por vértice. É o que "O contrato
+com a IA" já exige. Relendo o documento achei que a "Lista de operações" não
+tinha esses passos, embora o contrato os pedisse: lacuna real, fechada nesta
+rodada (ver as linhas novas lá). Vale pros dois caminhos, e é a única parte
+que compensa garantir agora — o resto encaixa quando quiser.
 
 ## Decidido nesta rodada
 
@@ -1080,10 +1097,12 @@ identidade de vértice. Pode nascer em paralelo a qualquer ponto da lista
 acima — `motor/som.js` já prova que a síntese funciona, falta só a
 interface e o formato de passos por cima.
 
-O **painel de IA** depende de uma coisa só: a Lista de operações precisa ter
-os passos descritivos que o contrato promete (`loft`, `inflate`, `lathe` —
-já fechados nesta rodada). Sem isso o painel nasceria raso, emitindo
-`moveV` por vértice.
+A **IA na criação de peças** (os dois caminhos) depende de uma coisa só do
+formato: a Lista de operações ter os passos descritivos que o contrato
+promete (`loft`, `inflate`, `lathe` — já fechados nesta rodada). O painel
+BYOK dentro do jogo em si está fora do roadmap (possível, não planejado); o
+caminho por assinatura — a IA soltando peça no repositório — já funciona e
+não espera nada desta lista de construção.
 
 A bancada sem interface do `executar` entra junto com o passo 1, não no fim:
 ela é o que deixa provar que o replay está certo antes de existir tela pra
