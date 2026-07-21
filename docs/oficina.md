@@ -94,6 +94,52 @@ canais**, e todo tipo novo precisa dos três:
    precisa de número: IoU de silhueta (já existe), casamento de espectro, perf.
    Sem isso ela diz "acho que ficou bom" em vez de medir.
 
+Pra ser um **tradutor de mão dupla** de verdade (decisão do ideador: estrutura
+robusta pra IA desde o começo, não adaptada depois), dois canais a mais, ambos
+requisitos do **núcleo**, não módulo "de IA" à parte:
+
+4. **Contrato formal** — o vocabulário carrega a própria definição. Cada
+   operação tem esquema formal (argumentos, tipos, faixas válidas, invariantes)
+   e **um exemplo executável**. Qualquer IA — uma sessão nova sem memória, outro
+   modelo no painel BYOK — lê o esquema e opera, sem depender de tribo. Bônus:
+   os exemplos executáveis são também os testes de regressão do núcleo. Um
+   artefato, dois usos.
+5. **Canal descrever** — a ferramenta narra. O núcleo devolve, em linguagem e
+   números, o que uma peça É e o que MUDOU entre duas versões ("tronco 1.9m,
+   15 lados, 3 galhos; da versão A pra B: raio +20%, 2 pinceladas na copa").
+   Sem isso, ler uma lista de 80 passos crus obriga a IA a reconstruir a peça
+   na cabeça; com isso, custa três linhas. Serve o humano igual: é o resumo do
+   histórico e o texto de PR que se escreve sozinho.
+
+Escrever (1) + ler de volta (5) + saber a língua (4) + ver (2) + medir (3) —
+esse é o tradutor completo. O que NÃO entra: cérebro dentro da Oficina
+(orquestração, agente embutido, memória de IA). O cérebro a IA traz; a
+ferramenta robusta é a que tem contrato completo, boca que narra, olhos e
+régua.
+
+### Como as ferramentas da IA devem ser
+
+Quatro qualidades, tiradas de fricção real de trabalho (e alinhadas com o
+plano FERRAMENTAS/D-56):
+
+- **Ciclo rápido** — editar→ver em segundos. Pra IA, cada rodada de render é o
+  equivalente do "salvar, recarregar o jogo e andar até ouvir".
+- **Resposta, não despejo** — a necessidade que só a IA tem: contexto é
+  finito. Folha de contato (8 ângulos numa imagem), diff visual ("mudou só a
+  copa, 3% dos pixels"), métrica antes de imagem ("IoU 87%"). Ferramenta boa
+  responde uma pergunta em poucas linhas.
+- **Erro que diz por quê** — o padrão `validateModelData`: "passo 3 órfão:
+  vértice 7 não existe" vale dez renders às cegas. Todo executor nasce com
+  validador falante.
+- **Portão de regressão** — baseline + comparação automática ("2 peças
+  mudaram, eis os recortes"), pra mexer no motor compartilhado sem re-olhar
+  tudo à mão.
+
+Sem andaime especulativo: ferramenta boa nasce contra uso real (foi assim com
+os ângulos do `olhar-peca`). A regra é: quando um tipo novo entrar, a
+ferramenta dele nasce junto, no formato resposta-e-não-despejo — e refina na
+primeira dor.
+
 E os **controles** que facilitam o trabalho do ideador facilitam o da IA pelo
 mesmo mecanismo: o slider que se arrasta é o **parâmetro nomeado** que a IA
 seta. Um sistema só, dois rostos — não se constrói controle pra humano e um
@@ -1162,10 +1208,65 @@ mecanismo** — é **curar o conjunto certo**: um punhado de arquétipos que cob
 o espaço sem inchar. Poucos demais deixam buraco; muitos viram manutenção. Essa
 é decisão de gosto e cobertura, e é onde o esforço vai.
 
+## O envelope: um meta-formato pra toda peça
+
+Decisão do ideador (2026-07-20): definir AGORA o que não pode mudar nunca,
+pra que todo o resto possa mudar barato depois. Esse mecanismo é o
+**envelope** — a anatomia única de toda peça, de qualquer tipo.
+
+O perigo que ele mata: este documento já tem cinco formatos irmãos nascendo
+separados — Objeto salva `PASSOS`+`PARAMS`, Som propôs as operações dele,
+Desenho vai ter traços, Animação tem `ANIMACOES`, Material tem `MATERIAIS`.
+Se cada tipo inventar a própria forma de arquivo, cada peça do túnel —
+contrato, descrever, undo, preset, homologação, bancada — custa 5×, e
+unificar depois é reescrever tudo.
+
+A regra: **toda peça, de qualquer tipo, tem a mesma anatomia.**
+
+```js
+export const FORMATO = { v: 1, tipo: 'objeto' };  // ou 'som', 'desenho', 'efeito'
+export const PARAMS = { ... };       // dimensionais, nomeados
+export const TOPO   = { ... };       // os que reconstroem (quando o tipo tiver)
+export const PASSOS = [ ['op', { ... }], ... ];   // SEMPRE esta forma
+export const meta   = { nome, tipo, desc, ... };
+export function construir(ctx) { ... }
+```
+
+O que muda de tipo pra tipo é **só o vocabulário de operações** — malha tem
+`extruda`, som tem `filtro`, desenho tem `pincel`. A gramática, nunca. Com
+isso o túnel é construído UMA vez e opera sobre "envelope"; tipo novo herda
+undo, replay, contrato, descrever, preset e bancada de graça. Tipo novo =
+vocabulário novo + adaptador, nada mais.
+
+Três regras que fazem parte do envelope, porque também são impossíveis de
+consertar depois:
+
+1. **Carimbo de versão desde o primeiro arquivo salvo.** Com a federação,
+   peça ESCAPA — fork, outro mundo, repo de terceiro. A ferramenta se
+   conserta; os arquivos dos outros, nunca mais. Formato sem versão é
+   tatuagem. Compatibilidade: o executor abre qualquer versão antiga;
+   versão mais nova do que ele conhece → **recusa explicando**, jamais
+   adivinha.
+2. **Endereçamento uniforme.** Vértice `7`, `parte:'galho-1'`,
+   `material:'casca'`, traço, trilha — toda referência entre coisas segue o
+   mesmo esquema de id/nome em todo tipo. É o que deixa o descrever, o diff
+   e a detecção de órfão funcionarem iguais em tudo.
+3. **Órfão grita, nunca corrompe.** A regra que o `TOPO` já tem ("avisa
+   quais passos ficaram órfãos") promovida a lei do envelope: qualquer
+   referência pendurada, em qualquer tipo, avisa alto — jamais estraga em
+   silêncio.
+
+E o que o envelope compra de sofisticado é o que ele **evita**: não é
+preciso acertar hoje o vocabulário do som, os pincéis nem o emissor. Tudo
+isso pode nascer errado e ser corrigido — **porque** o envelope segura a
+estabilidade. Define-se agora só o irreversível; o resto ganha licença pra
+evoluir.
+
 ## Formato do arquivo gerado
 
 O arquivo tem que ser uma peça normal do jogo: exporta `meta` e `construir(ctx)`,
-igual `arvore3d.js` faz hoje. A diferença é que o corpo dele é **dados**.
+igual `arvore3d.js` faz hoje — e segue **o envelope** acima (esta seção é o
+envelope encarnado no tipo `objeto`). A diferença é que o corpo dele é **dados**.
 
 ```js
 /* PEÇA gerada pela Oficina. Editável à mão, mas o caminho normal é reabrir
