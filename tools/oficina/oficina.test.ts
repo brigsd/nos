@@ -141,3 +141,30 @@ describe('peça-exemplo shipável', () => {
     expect(toco.meta.colisao.altura).toBeCloseTo(toco.PARAMS.troncoH, 4);
   });
 });
+
+describe('regressões do revisor adversarial (D1/D2/D3)', () => {
+  // Newell inline (a do núcleo não é exportada) — testa a DIREÇÃO da normal, o que pegaria o D1
+  const newellY = (V: any, vs: number[]) => {
+    let ny = 0;
+    for (let k = 0; k < vs.length; k++) { const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]); ny += (c[2] - n[2]) * (c[0] + n[0]); }
+    return ny; // sinal = direção em y (positivo -> +y)
+  };
+
+  it('D1: as tampas do cilindro apontam pra FORA (fundo -y, topo +y)', () => {
+    const { V, F } = nucleo([['cilindro', { id: 0, raio: 'r', altura: 'h', lados: 'l' }]], { r: 1, h: 2 }, { l: 8 });
+    expect(newellY(V, F.get(8).vs)).toBeLessThan(0);      // fundo -> normal -y
+    expect(newellY(V, F.get(9).vs)).toBeGreaterThan(0);   // topo  -> normal +y
+  });
+
+  it('D2: mescla que deixa canto repetido não-consecutivo (bowtie) GRITA e remove a face — nunca corrompe em silêncio', () => {
+    // extruda o topo do cubo (tampa vira 1000..1003), mescla dois cantos OPOSTOS (1000 e 1002) num vértice fora da tampa
+    const passos = [['cubo', { id: 0, lado: 1 }], ['extruda', { face: 1, dist: 0.3 }], ['mescla', { de: [1000, 1002], para: 0 }]];
+    const n = nucleo(passos, {}, {});
+    expect(n.orfaos.some((o: any) => o.op === 'mescla' && /bowtie|repetido/i.test(o.motivo))).toBe(true);
+    for (const f of n.F.values()) expect(new Set(f.vs).size).toBe(f.vs.length);   // nenhuma face sobrevivente com canto repetido
+  });
+
+  it('D3: cilindro com lados demais pro bloco de ids falha ALTO (throw), não vaza pro bloco seguinte', () => {
+    expect(() => nucleo([['cilindro', { id: 0, raio: 'r', altura: 'h', lados: 'l' }]], { r: 1, h: 1 }, { l: 600 })).toThrow(/estoura o bloco/);
+  });
+});

@@ -106,11 +106,13 @@ const OPS = {
     const r = st.num(a.raio ?? 0.5);
     const h = st.num(a.altura ?? 1);
     const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // `lados` é TOPO: muda a CONTAGEM
+    if (2 * L > BLOCO) throw new Error(`oficina: cilindro com ${L} lados estoura o bloco de ids (${BLOCO}); máx ${(BLOCO / 2) | 0}`);   // D3: guarda de overflow por-passo
     for (let k = 0; k < L; k++) { const t = (k / L) * Math.PI * 2; addV(st, b + k, [Math.cos(t) * r, 0, Math.sin(t) * r]); }
     for (let k = 0; k < L; k++) { const t = (k / L) * Math.PI * 2; addV(st, b + L + k, [Math.cos(t) * r, h, Math.sin(t) * r]); }
     for (let k = 0; k < L; k++) { const n = (k + 1) % L; addF(st, b + k, [b + k, b + L + k, b + L + n, b + n]); } // lados (normal radial pra fora)
-    const fundo = []; for (let k = L - 1; k >= 0; k--) fundo.push(b + k); addF(st, b + L, fundo);      // -y
-    const topo = []; for (let k = 0; k < L; k++) topo.push(b + L + k); addF(st, b + L + 1, topo);      // +y
+    // tampas: MESMO winding do cubo (fundo pra-frente -> normal -y; topo revertido -> +y). Inverter apaga a luz da tampa — era o bug D1.
+    const fundo = []; for (let k = 0; k < L; k++) fundo.push(b + k); addF(st, b + L, fundo);          // -y
+    const topo = []; for (let k = L - 1; k >= 0; k--) topo.push(b + L + k); addF(st, b + L + 1, topo); // +y
   },
 
   /* ---- edição por id estável ---- */
@@ -157,7 +159,11 @@ const OPS = {
       const trocado = f.vs.map((v) => (rem.has(v) ? para : v));
       f.vs = colapsaCiclo(trocado);
     }
-    for (const [id, f] of [...st.F]) if (distintos(f.vs) < 3) st.F.delete(id);   // some a face de área zero
+    for (const [id, f] of [...st.F]) {
+      const dist = distintos(f.vs);
+      if (dist < 3) { st.F.delete(id); continue; }   // área zero (merge de cantos adjacentes): some quieto, o doc prevê
+      if (dist < f.vs.length) { grita(st, i, 'mescla', id, `face ${id} ficou com canto repetido (bowtie) — removida`); st.F.delete(id); }   // D2: dup não-consecutivo -> grita + remove (lei "órfão grita, nunca corrompe")
+    }
     for (const d of rem) st.V.delete(d);
     st.merges.push({ de: [...rem].sort((x, y) => x - y), para });
   },
