@@ -117,6 +117,60 @@ Legenda: ★ = prioridade (serve o port já) · [N] nova · [M] melhoria
 > malha limpa". O `[cpu]`/`[render]` gera o fato; a `[disciplina]` me impede de
 > ignorá-lo. Quase tudo aqui roda offline, sem IA, e vira gate de CI.
 
+## 7 · O ROBÔ (CI/Actions) — papel definido (D-71)
+
+> Rodada longa de conversa com o ideador (2026-07-20) sobre "o que mais dá pra
+> tirar do robô". Fechado aqui pra não re-debater. O que o robô É: um
+> computador de nuvem que LIGA SOZINHO quando algo acontece (push, horário,
+> botão), roda a lista que escrevemos, e desliga. O que ele NUNCA é: motor ao
+> vivo (o jogo roda no aparelho do jogador; o robô não está lá) nem
+> consertador autônomo (sugere; humano aprova — mudar código sozinho é
+> proibido).
+
+**Papéis (3):** conferidor (gates) · forno (pré-cozinha o pesado) · relógio
+(tarefas agendadas — o tick já é isso).
+
+**O que entra (decidido):**
+- ★ [N] **ronda-da-oficina** — nasce JUNTO com o núcleo da Oficina: toda peça
+  renderiza sem erro (porteiro), replay 2× dá idêntico (determinismo), órfão
+  grita, exemplos executáveis do contrato rodam. É o braço automático do
+  "portão de regressão" do túnel da IA (`oficina.md`).
+- ★ [M] **sentinela-de-custo** — o `perf-gpu`/`orçamento-peça` (seção 1)
+  rodando no robô: "esta peça custa N× a mediana" vira aviso automático.
+  Honestidade: CPU de nuvem compara peça-contra-peça bem; não crava fps de
+  celular específico — pra isso segue o `boletim-celular`.
+- ★ [M] **diff-visual no robô** — o baseline da seção 2 rodando a cada push:
+  mexeu no motor → lista de QUAIS peças mudaram de aparência, com recortes.
+- [M] **forno** — o padrão `bake-gi` (luz assada na publicação) é a regra
+  geral: conta pesada que dá pra fazer UMA vez e salvar roda no robô, o jogo
+  só lê pronto. Candidatos: posicionamento/mapas grandes, empacotamento.
+- [N] **shaders** — o robô NÃO compila shader (compilação é da GPU de cada
+  jogador; resultado não é portátil) — ele VALIDA (shader quebrado reprova) e
+  pré-monta o texto final. No jogo: **aquecimento de shaders no carregamento
+  como OPÇÃO ligável/desligável nas configurações** (decisão do ideador) —
+  paga o custo no loading pra não engasgar jogando; vira relevante quando o
+  espaço Material multiplicar os shaders.
+- **Logs do jogo → análise**: possível, fora do roadmap (exige canal de
+  coleta que não existe). Conserto automático: NÃO, nunca — só sugestão.
+
+**As 3 sacadas que ninguém tinha pedido (novas):**
+- [N] **painel-de-botões** — `workflow_dispatch` + artifacts: o ideador
+  dispara uma bancada PELO NAVEGADOR/celular (botão na aba Actions, sem
+  terminal) e os PNGs/números ficam anexados na página da rodada. O ideador
+  ganha as bancadas do coder sem precisar do coder.
+- [N] **PR-com-olhos** — PR que toca peça ganha comentário automático do robô
+  com o render antes|depois. Revisão vira VISUAL — e é exatamente o que a
+  federação por PR (cada mundo um repo) precisa pra colaborador de fora.
+- [N] **ronda-profunda** — por push, só os gates rápidos; de madrugada/semanal
+  o pesado: varredura completa de perf, folha-de-contato de TODAS as peças,
+  bench dos críticos. Rápido no dia a dia, fundo no ciclo lento.
+
+**Guard-rail (o medo do ideador, virado regra):** só entra checagem que a
+gente ENTENDE; uma por vez; checagem nova começa AVISANDO e só vira reprovação
+depois de calibrada (senão o robô vira ruído e a gente para de ler); desligar
+= apagar a linha. O robô não inventa nada — tudo que ele faz está escrito em
+`.github/workflows/`, legível.
+
 ## Ordem de construção proposta (as 5 primeiras rodadas)
 
 1. **porteiro-visual + diff-visual** — dão olhos seguros a TODAS as outras rodadas; tudo que vier depois já nasce auditado.

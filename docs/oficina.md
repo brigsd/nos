@@ -133,7 +133,9 @@ plano FERRAMENTAS/D-56):
   validador falante.
 - **Portão de regressão** — baseline + comparação automática ("2 peças
   mudaram, eis os recortes"), pra mexer no motor compartilhado sem re-olhar
-  tudo à mão.
+  tudo à mão. O braço automático disso é o CI — papel do robô fechado em
+  `FERRAMENTAS.md` §7 (D-71): a ronda-da-oficina (porteiro + replay 2× +
+  órfãos + exemplos do contrato) nasce junto com o núcleo.
 
 Sem andaime especulativo: ferramenta boa nasce contra uso real (foi assim com
 os ângulos do `olhar-peca`). A regra é: quando um tipo novo entrar, a
