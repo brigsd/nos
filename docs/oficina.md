@@ -453,6 +453,23 @@ com asterisco têm a solução detalhada logo abaixo da tabela.
 
 ---
 
+### Funções adicionais (D-73)
+
+Além das da tabela, decididas nesta rodada.
+
+Ajudam quem modela à mão:
+- **Valor exato** — mover/girar/escalar digitando o número, não só arrastando.
+- **Espelho/simetria** — modela um lado, o outro acompanha (objeto simétrico).
+- **Duplicar** uma seleção.
+- **Medir** a distância entre dois pontos.
+- **Esconder/isolar** uma parte, pra focar no que edita.
+
+Ajudam a IA (que não clica, descreve uma regra):
+- **Selecionar por critério** — "todas as faces viradas pra cima", "as de tal
+  material", "as acima de tal tamanho". É a função de modelagem que mais ajuda a
+  IA: ela raciocina sobre propriedade, não sobre clique. Vira uma operação como
+  as outras (`['selecionar', { onde: 'normal.y > 0.7' }]`).
+
 ## Soluções detalhadas
 
 ### Vértices e arestas na tela: canvas 2D, não WebGL
@@ -621,6 +638,20 @@ atrito sem ganho.
 Dentro do espaço Modelar, o `Tab` continua ciclando **objeto → edição →
 pintura**.
 
+### Layout da interface (D-73)
+
+Mesmo esqueleto em todas as telas, pra que aprender uma seja saber todas:
+
+- **Cena (ou canvas) no centro**, ocupando a maior parte.
+- **Painel de propriedades à direita** — é o único que troca de conteúdo entre
+  os espaços: Modelar mostra as ferramentas de malha; Material, os parâmetros;
+  Animação abre uma linha do tempo embaixo + a lista de partes.
+- **Barra de modos no topo**, **barra de status embaixo** (dimensões, o que
+  está selecionado, medida).
+
+Nas abas sem 3D: Desenho é o canvas 2D no centro com as ferramentas à esquerda;
+Som é a forma de onda no centro, os blocos à direita e o play embaixo.
+
 ## Editar objeto de dentro do jogo
 
 O caminho principal de uso, decidido pelo ideador.
@@ -777,6 +808,26 @@ As duas únicas bordas onde código não ganha, e viram exceção consciente:
 - **Pixel a pixel sem estrutura** — aí o dado fica do tamanho da imagem e vira
   bitmap disfarçado. Raro no estilo chapado do jogo.
 
+### Ferramentas e resolução (D-73)
+
+Decididas nesta rodada.
+
+**Cor livre.** Como a arte ainda não está fechada numa paleta, a cor é livre
+(roda de cores + RGB). A paleta do jogo aparece como sugestão, **não como
+trava**. Se um dia a arte fechar numa paleta, aí entra um botão opcional de
+"encaixar na paleta".
+
+**Resolução.** O canvas tem resolução em pixels ajustável, e — o equivalente
+real do "DPI" em 3D — a **densidade de texel** (quantos pixels de textura cobrem
+um metro de superfície), que é o que evita textura borrada em objeto grande.
+
+**Pincéis, na ordem de construção:** duro → macio → texturizado → esfumar (do
+mais simples ao que lê o canvas). Mais ferramentas: **Shift = linha reta**,
+conta-gotas (pega cor já pintada), balde (preenche área), **simetria de pintura**
+(pinta um lado, espelha no outro), gradiente, estabilizador de traço (suaviza a
+tremida da mão) e ver ao vivo na malha 3D enquanto pinta. Camadas ficam pra
+depois — úteis, mas adicionam complexidade.
+
 ## Aba Som
 
 O jogo já sintetiza 100% do áudio em código — `motor/som.js`, zero arquivo
@@ -833,6 +884,18 @@ proibido pela mesma razão de sempre.
 (`PISOS.grama`, a rajada de vento, a bolha) viram o catálogo inicial de
 eventos, e o arquivo continua sendo o adaptador que liga os eventos gerados
 ao Web Audio, no mesmo papel que `motor/oficina.js` tem pro lado visual.
+
+### Dois níveis de vocabulário (D-73)
+
+Decisão do ideador: a Aba Som tem os **dois** níveis, não um só —
+- **blocos pequenos** (oscilador, ruído, filtro, envelope, ganho): flexível,
+  monta qualquer som do zero;
+- **presets maiores** (vento, passo, bolha): fáceis, um som pronto pra variar.
+
+Os presets são feitos com os blocos por baixo, então não são sistemas
+concorrentes — o preset é o ponto de partida, o bloco é a liberdade (é a mesma
+relação de "partir de algo pronto" dos Presets de objeto). `[PENDENTE: o
+catálogo exato de cada nível — fechar quando a Aba Som for construída]`
 
 ## Espaço Animação
 
@@ -934,24 +997,28 @@ export const ANIMACOES = {
 
 Chave é `[tempo, valor]`. Interpolação suave por padrão.
 
-### Gatilho e dirigido por estado — o que falta no formato
+### Gatilho e dirigido por estado (D-73, decidido)
 
-O `ANIMACOES` acima só sabe **laço** (`repete: true`). Faltam duas fontes do
-Eixo 2 que a movimentação e os personagens vão exigir:
+O `ANIMACOES` acima só sabe **laço** (`repete: true`). Decidido nesta rodada
+como as outras duas fontes do Eixo 2 (que a movimentação e os personagens vão
+exigir) entram — as duas na própria seção `ANIMACOES`, sem tocar na geometria:
 
-- **Gatilho / uma vez.** Tocar uma animação num evento — porta abre, baú abre,
-  pulo, ataque — e parar no fim, sem repetir. Acréscimo pequeno: um modo
-  `uma-vez` e um jeito de disparar (`tocar('abrir')`), em vez de tudo rodar
-  sozinho no laço.
-- **Dirigido por estado.** A animação não roda no próprio relógio, e sim num
-  valor do jogo: o ciclo de passo acelera com a velocidade da corrida, o giro
-  da roda segue a velocidade do veículo. Aqui o `tempo` da trilha vira uma
-  entrada externa, não o relógio interno.
+- **Gatilho / uma vez.** `modo: 'uma-vez'` toca a animação num evento — porta
+  abre, baú abre, pulo, ataque — e para no fim, sem repetir. Quem dispara é o
+  código do jogo (a camada de comportamento), com `tocar('abrir')`, não a peça.
+- **Dirigido por estado.** Uma trilha com `entrada: 'velocidade'` amarra o tempo
+  da animação a um valor do jogo em vez do relógio: o ciclo de passo acelera com
+  a corrida, a roda gira conforme a velocidade do veículo.
 
-Nenhum dos dois mexe no formato de geometria — são acréscimos na seção
-`ANIMACOES`, do mesmo jeito que o laço já é. Ficam pra quando a movimentação
-chegar; hoje só o laço (ambiente) está previsto, e é o bastante pro vento e
-afins.
+```js
+export const ANIMACOES = {
+  abrir: { modo: 'uma-vez', trilhas: [/* ... */] },        // disparada por tocar('abrir')
+  andar: { entrada: 'velocidade', trilhas: [/* ... */] },  // o tempo vem do jogo
+};
+```
+
+Ficam pra quando a movimentação chegar; hoje só o laço (ambiente) está usado, e
+é o bastante pro vento e afins.
 
 ### Comportamento não é animação
 
