@@ -1631,22 +1631,32 @@ que é o coração de tudo — sem precisar abrir o editor nem clicar em nada.
 
 ## Ordem de construção
 
-0. **Migrar o motor pra WebGL 2**, e na mesma passada abrir espaço no formato de
-   vértice pra cor e peso de osso. Antes de tudo — o resto nasce em cima disto.
-1. Estrutura de dados (vértices únicos, faces, identidades) e a lista de passos.
-2. Câmera do editor com cursor livre.
-3. Ver vértices e faces por cima da malha, em canvas 2D.
-4. Selecionar e arrastar **um** vértice, gravado como operação.
-5. Desfazer e refazer em cima disso.
-6. Gizmo de eixos e o painel lateral.
-7. Extrudar.
-8. Mesclar e ímã.
-9. Textura por objeto com projeção em caixa, e o pincel no modo "face".
-10. Exportar código pelo servidor de desenvolvimento, e colisão automática.
-11. Modos livres do pincel: raio, dureza, degradê. Acrescenta, não substitui.
-12. Espaço Material: parâmetros por lote no shader, e a passada de transparência.
-13. Espaço Animação: `parte` com nome, trilhas de chave, animação rígida.
-14. Esqueleto com deformação suave — usa o espaço de vértice já reservado no 0.
+> Estado por milestone: `[x]` feito · `[~]` em andamento · `[ ]` a fazer. O
+> quebra-fino de cada milestone (as subtarefas em curso) vive na lista de
+> tarefas da sessão, não aqui — aqui é o mapa, não o diário.
+
+0. `[~]` **Migrar o motor pra WebGL 2** — troca pura: contexto `webgl2` + os 8
+   shaders pra `#version 300 es`, com a saída **idêntica** à de hoje (verificada
+   pixel a pixel). O espaço de vértice pra cor e peso de osso fica **reservado**
+   como acréscimo (somar um atributo depois é aditivo, não re-migra shader), não
+   embutido agora — mesmo princípio da reserva do WebGPU (D-75). Antes de tudo:
+   o resto nasce em cima disto.
+1. `[ ]` Estrutura de dados (vértices únicos, faces, identidades) e a lista de passos.
+2. `[ ]` Câmera do editor com cursor livre.
+3. `[ ]` Ver vértices e faces por cima da malha, em canvas 2D.
+4. `[ ]` Selecionar e arrastar **um** vértice, gravado como operação.
+5. `[ ]` Desfazer e refazer em cima disso.
+6. `[ ]` Gizmo de eixos e o painel lateral.
+7. `[ ]` Extrudar.
+8. `[ ]` Mesclar e ímã.
+9. `[ ]` Textura por objeto com projeção em caixa, e o pincel no modo "face".
+10. `[ ]` Exportar código pelo servidor de desenvolvimento, e colisão automática.
+11. `[ ]` Modos livres do pincel: raio, dureza, degradê. Acrescenta, não substitui.
+12. `[ ]` Espaço Material: parâmetros por lote no shader, e a passada de transparência.
+13. `[ ]` Espaço Animação: `parte` com nome, trilhas de chave, animação rígida.
+14. `[ ]` Esqueleto com deformação suave — adiciona ao formato de vértice os
+    atributos de peso/índice de osso (o acréscimo reservado no 0, feito quando
+    o esqueleto finalmente os consome).
 
 A **aba Desenho** não depende de nada disso e pode ser construída a qualquer
 momento, inclusive primeiro: é polígono em canvas 2D, sem malha e sem
