@@ -3,6 +3,50 @@
 Documento de projeto. Nada disso está construído ainda; serve pra decidir antes
 de escrever código, e pra registrar POR QUE cada coisa é como é.
 
+<!-- TOC -->
+
+**Índice** — gerado por `npm run docs:toc`, não edite à mão:
+
+- [O que é](#o-que-é)
+- [A decisão que define todo o resto](#a-decisão-que-define-todo-o-resto)
+- [Pra quem é isto](#pra-quem-é-isto)
+- [A IA opera tudo (o túnel pra IA)](#a-ia-opera-tudo-o-túnel-pra-ia)
+- [Identidade de vértice](#identidade-de-vértice)
+- [Estrutura por dentro](#estrutura-por-dentro)
+- [Funções e soluções](#funções-e-soluções)
+- [Soluções detalhadas](#soluções-detalhadas)
+- [Booleano](#booleano)
+- [Modos de entrada](#modos-de-entrada)
+- [Decisões abertas](#decisões-abertas)
+- [Abas e espaços de trabalho](#abas-e-espaços-de-trabalho)
+- [Aba Desenho](#aba-desenho)
+- [Desenho livre (pintura)](#desenho-livre-pintura)
+- [Aba Som](#aba-som)
+- [Trazer e levar do repositório](#trazer-e-levar-do-repositório)
+- [O contrato com a IA](#o-contrato-com-a-ia)
+- [Modo texto](#modo-texto)
+- [IA na criação de peças](#ia-na-criação-de-peças)
+- [Decisões de base](#decisões-de-base)
+- [Editar objeto de dentro do jogo](#editar-objeto-de-dentro-do-jogo)
+- [O que preparar no motor agora](#o-que-preparar-no-motor-agora)
+- [Sobre three.js e híbrido](#sobre-threejs-e-híbrido)
+- [WebGL 2](#webgl-2)
+- [Espaço Animação](#espaço-animação)
+- [Espaço Material](#espaço-material)
+- [Partículas e fluidos](#partículas-e-fluidos)
+- [Presets: partir de algo pronto, não do zero](#presets-partir-de-algo-pronto-não-do-zero)
+- [O envelope: um meta-formato pra toda peça](#o-envelope-um-meta-formato-pra-toda-peça)
+- [Formato do arquivo gerado](#formato-do-arquivo-gerado)
+- [Lista de operações](#lista-de-operações)
+- [Onde o código mora: três camadas](#onde-o-código-mora-três-camadas)
+- [Normais: chapado por padrão](#normais-chapado-por-padrão)
+- [Mapeamento de UV: fora de escopo (a projeção-em-caixa fica)](#mapeamento-de-uv-fora-de-escopo-a-projeção-em-caixa-fica)
+- [Conforto que evita retrabalho](#conforto-que-evita-retrabalho)
+- [Ordem de construção](#ordem-de-construção)
+- [O que este documento assume do motor](#o-que-este-documento-assume-do-motor)
+
+<!-- /TOC -->
+
 ---
 
 ## O que é
@@ -687,7 +731,7 @@ tinha esses passos, embora o contrato os pedisse: lacuna real, fechada nesta
 rodada (ver as linhas novas lá). Vale pros dois caminhos, e é a única parte
 que compensa garantir agora — o resto encaixa quando quiser.
 
-## Decidido nesta rodada
+## Decisões de base
 
 - **Cena com um ou vários objetos** — vários.
 - **Desenhos em pasta separada**, não junto da peça: o mesmo desenho serve de

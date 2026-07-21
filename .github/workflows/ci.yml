@@ -38,6 +38,9 @@ jobs:
       - name: Mapa do repositório em dia
         run: npm run mapa:check
 
+      - name: Índice da oficina em dia
+        run: npm run docs:toc:check
+
       - name: Build and Typecheck Site Client
         run: |
           cd site
