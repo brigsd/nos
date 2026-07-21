@@ -178,6 +178,17 @@ O editor guarda **vértices únicos e faces apontando pra eles**, e converte pro
 triângulos soltos do motor só na exportação. Aresta não é guardada: sai das
 faces, e duas faces vizinhas compartilham uma.
 
+**Cuidado que confunde (e já confundiu):** "cada face tem seus próprios
+vértices, não compartilha com a vizinha" É regra — mas **do motor**, o formato
+solto que justamente NÃO dá pra editar. No **editor** é o oposto de propósito:
+faces vizinhas **compartilham** o vértice, e é isso que deixa arrastar um canto
+sem rasgar a malha. Consequência direta pra mescla: **mesclar não abre buraco no
+motor.** O motor sempre recebe a versão solta re-gerada na exportação, nunca a
+que você editou; mesclar só faz mais faces apontarem pro mesmo vértice, que é
+situação normal no editor. O impacto real da mescla não é na forma — é na
+identidade dos vértices no histórico (ver a operação `mescla` e a lei "órfão
+grita" do envelope).
+
 ---
 
 ## Funções e soluções
@@ -197,7 +208,7 @@ com asterisco têm a solução detalhada logo abaixo da tabela.
 | **E para extrudar** * | Puxa a face. | Extrusão de região: só as arestas de **borda** da seleção ganham parede. Resolve o caso de duas faces vizinhas sem precisar restringir a uma por vez. Algoritmo abaixo. |
 | **Painel lateral** | Posição, rotação, dimensão. | A caixa do objeto fica guardada e só é refeita quando a malha muda. Enquanto o gizmo arrasta, os campos ficam de leitura — um dono por vez. |
 | **Ímã (Ctrl segurado)** | Cola no vértice ou face mais próximo. | **Varredura linear, sem estrutura espacial.** 10 mil vértices a 60 quadros por segundo dá 600 mil comparações por segundo, que é barato. Só dividir o espaço em células se passar de uns 100 mil vértices. Colar em face é projetar no plano e prender dentro do triângulo. |
-| **Mesclar vértices** | Dois viram um. | Grava `['mescla', { de: [7,12], para: 31 }]`, então o replay sobrevive à troca de identidade. Depois da mesclagem, apaga toda face que ficou com dois cantos iguais, de área zero. |
+| **Mesclar vértices** | Dois viram um. | Grava `['mescla', { de: [7,12], para: 31 }]`, então o replay sobrevive à troca de identidade. Depois da mesclagem, apaga toda face que ficou com dois cantos iguais, de área zero. **O lint de malha roda logo depois** — mesclar pode criar aresta usada por 3+ faces ou face invertida, e é aí que aparece. |
 | **Arestas** | Selecionar e mover. | Chave canônica `min(a,b) + ':' + max(a,b)`, então a mesma aresta nunca vira duas. Deduzida das faces a cada mudança de malha, não guardada. |
 | **Pintar** * | Cor e pincel na malha. | **Projeção em caixa** gera a coordenada de textura sozinha, sem desdobrar malha. Cor por face é o primeiro modo do pincel, não um sistema à parte — assim o pincel macio entra depois sem jogar nada fora. Detalhe abaixo. |
 | **Modo navegação (botão 5)** | Liga e desliga o voo. | `e.button === 4`, com `preventDefault` no `mousedown` e no `auxclick` pra não disparar o "avançar" do navegador. Tecla alternativa configurável pra mouse sem botão lateral. Com o voo desligado, olhar em volta fica no arrastar do botão do meio. |
