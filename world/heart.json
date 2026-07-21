@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 184,
-    "worldTime": 11040
+    "tickCount": 186,
+    "worldTime": 11160
   },
   "width": 64,
   "height": 64,
@@ -6106,6 +6106,16 @@
       "worldTime": 11040,
       "nativeId": "broa",
       "message": "O pão quentinho tá fresquinho! Venham, provem antes que esfrie!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 185,
+      "worldTime": 11100
+    },
+    {
+      "type": "core_pulse",
+      "tick": 186,
+      "worldTime": 11160
     }
   ],
   "natives": {
