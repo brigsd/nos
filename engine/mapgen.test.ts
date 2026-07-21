@@ -1,3 +1,4 @@
+/* Vitest de engine/mapgen: geração determinística do mapa (biomas, água, núcleo). */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

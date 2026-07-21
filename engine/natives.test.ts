@@ -1,3 +1,4 @@
+/* Vitest de engine/natives: nascimento e estado dos nativos. */
 import { describe, expect, it } from 'vitest';
 import { tickNatives } from './natives';
 import { NPC_HOMES } from './behavior';

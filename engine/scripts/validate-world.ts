@@ -1,3 +1,4 @@
+/* validate-world: carrega world/heart.json e roda assertValidWorld — o gate de sanidade do estado do mundo. */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

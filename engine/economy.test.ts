@@ -1,3 +1,4 @@
+/* Vitest de engine/economy: produção, troca e estoque das máquinas. */
 import { describe, expect, it } from 'vitest';
 import type { Native, Player } from './types';
 import { getPulso, RESOURCE_TYPES } from './types';

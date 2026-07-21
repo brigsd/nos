@@ -1,3 +1,4 @@
+/* Vitest de engine/behavior: comportamento dos nativos (rotina, humor, deslocamento). */
 import { describe, expect, it } from 'vitest';
 import {
   BEHAVIOR_TREES,

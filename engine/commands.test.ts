@@ -1,3 +1,4 @@
+/* Vitest de engine/commands: parse e efeito dos comandos vindos de issues. */
 import { describe, expect, it, vi } from 'vitest';
 import type { Machine, Native, World, Player } from './types';
 import {

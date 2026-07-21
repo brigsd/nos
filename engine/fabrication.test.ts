@@ -1,3 +1,4 @@
+/* Vitest de engine/fabrication: receitas e fabricação de itens. */
 import { describe, expect, it } from 'vitest';
 import type { Player } from './types';
 import { MAX_ENERGY, RESOURCE_TYPES } from './types';

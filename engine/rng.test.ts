@@ -1,3 +1,4 @@
+/* Vitest de engine/rng: o gerador determinístico com semente (mesma semente, mesma sequência). */
 import { describe, expect, it } from 'vitest';
 import { hashSeed, Rng } from './rng';
 

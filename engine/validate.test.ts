@@ -1,3 +1,4 @@
+/* Vitest de engine/validate: o validador do estado do mundo pega corrupção conhecida. */
 import { describe, expect, it } from 'vitest';
 import { assertValidWorld, validateWorld, worldSchema } from './validate';
 import { MAX_ENERGY, NATIVE_MESSAGE_MAX_LENGTH, STARTING_ENERGY, STARTING_PULSO } from './types';

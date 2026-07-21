@@ -1,3 +1,4 @@
+/* Vitest de engine/types: invariantes dos tipos centrais do mundo. */
 import { describe, expect, it } from 'vitest';
 import { getOwn, getTile, isInBounds, tileIndex, type World } from './types';
 

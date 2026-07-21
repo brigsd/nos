@@ -1,3 +1,4 @@
+/* LocalPlayer: estado e interpolação do avatar local no cliente 2D (tile + posição visual). */
 import type { Position, World } from '../../engine/types';
 
 export class LocalPlayer {

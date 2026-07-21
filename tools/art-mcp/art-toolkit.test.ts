@@ -1,3 +1,4 @@
+/* Vitest do art-toolkit (tools/art-mcp): a lib do estúdio de arte (paleta, camadas, export). */
 import { describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';

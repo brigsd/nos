@@ -41,9 +41,11 @@ const data = {
   players: Object.fromEntries(Object.entries(w.players ?? {}).map(([k, v]) => [k, v.position])),
 };
 
+/* o cabeçalho vai junto: regenerar não pode apagar o resumo que o MAPA lê */
+const CABECALHO = '/* data.js — snapshot do mundo pro dev local do v2: abre nos-fps.html direto do disco sem build (no Pages, o build-fps inline os dados no lugar da tag). */';
 fs.writeFileSync(
   new URL('data.js', import.meta.url).pathname,
-  `const NOS_DATA = ${JSON.stringify(data)};\nconst NOS_SPRITES = ${JSON.stringify(sprites)};\n`,
+  `${CABECALHO}\nconst NOS_DATA = ${JSON.stringify(data)};\nconst NOS_SPRITES = ${JSON.stringify(sprites)};\n`,
 );
 console.log('ok — tiles', tiles.length, 'sprites', Object.keys(sprites).length,
   Math.round(fs.statSync(new URL('data.js', import.meta.url).pathname).size / 1024) + 'KB');

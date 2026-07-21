@@ -31,6 +31,7 @@ Sem isso, as bancadas saem com uma mensagem pedindo exatamente esse comando.
 | `npm run auditar` | **Gate de senso crítico [cpu]** (D-60): roda os 5 críticos numa peça v3 real, exit≠0 em achado. `npm run auditar -- ilha-chao`. Todo julgamento cita ≥1 número |
 | `npm run porteiro` | **Gate de render** (D-60): renderiza a peça via Playwright e falha em pageerror / `__ready`≠true / frame degenerado (decoder PNG próprio via zlib). `npm run porteiro -- arvore3d` |
 | `npm run bench` | **Benchmark dos críticos** (D-60): peças reais × 18 defeitos plantados + controles → placar F1 núcleo/adversarial por ferramenta. Mede se a ferramenta AJUDA, não se roda |
+| `npm run mapa` | **Mapa do repositório** (D-70): regenera `docs/MAPA.md` — a árvore com o resumo de cada arquivo, puxado do CABEÇALHO do próprio arquivo (1º comentário; H1 nos .md). `mapa:check` (roda no CI) falha se o mapa estiver velho ou se algum arquivo estiver sem cabeçalho — criou arquivo? Dê cabeçalho e rode `npm run mapa` |
 | `npm run art` | CLI do art-mcp (= `node tools/art-mcp/cli.cjs`) — ver "Estúdio de arte" abaixo |
 | `npm run build:sprites` | Renderiza `assets/sprites/src/*.json` → `assets/sprites/*.png` + folhas de contato (= `node assets/tools/build.cjs`) |
 | `npm run lint:sprites` | Valida os PNGs de sprite (roda no CI) |

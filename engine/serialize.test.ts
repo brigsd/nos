@@ -1,3 +1,4 @@
+/* Vitest de engine/serialize: ida-e-volta do estado do mundo pro JSON sem perda. */
 import { describe, expect, it } from 'vitest';
 import { serializeWorld } from './serialize';
 import type { World } from './types';

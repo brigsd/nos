@@ -28,7 +28,9 @@
     "jogar": "node tools/bancadas/jogar.mjs",
     "porteiro": "node tools/bancadas/porteiro.mjs",
     "auditar": "node tools/bancadas/auditar.mjs",
-    "bench": "node tools/bancadas/bench/benchmark.mjs"
+    "bench": "node tools/bancadas/bench/benchmark.mjs",
+    "mapa": "node tools/mapa/mapa.mjs",
+    "mapa:check": "node tools/mapa/mapa.mjs --check"
   },
   "dependencies": {
     "ajv": "^8.20.0"

@@ -1,3 +1,4 @@
+/* Vitest de engine/tick: a batida do mundo (avanço de estado a cada tick). */
 import { describe, expect, it, vi } from 'vitest';
 import {
   advanceWorld,

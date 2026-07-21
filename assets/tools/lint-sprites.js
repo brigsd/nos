@@ -1,3 +1,4 @@
+/* lint-sprites: valida os PNGs de assets/sprites contra os .json de src — o gate de arte do CI (npm run lint:sprites). */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

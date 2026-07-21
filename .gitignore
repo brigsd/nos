@@ -16,3 +16,6 @@ assets/preview/
 # regenerável, nunca versionada (D-30).
 tools/bancadas/out/
 prototipos/fps/bake/out/
+
+# rascunho de sessão do coder — nunca commitar
+scratchpad/
