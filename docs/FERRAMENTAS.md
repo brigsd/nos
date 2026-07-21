@@ -117,29 +117,36 @@ Legenda: ★ = prioridade (serve o port já) · [N] nova · [M] melhoria
 > malha limpa". O `[cpu]`/`[render]` gera o fato; a `[disciplina]` me impede de
 > ignorá-lo. Quase tudo aqui roda offline, sem IA, e vira gate de CI.
 
-## 7 · O ROBÔ (CI/Actions) — papel definido (D-71)
+## 7 · O ROBÔ (CI/Actions) — papel definido, ferramentas SUGERIDAS (D-71)
 
 > Rodada longa de conversa com o ideador (2026-07-20) sobre "o que mais dá pra
-> tirar do robô". Fechado aqui pra não re-debater. O que o robô É: um
-> computador de nuvem que LIGA SOZINHO quando algo acontece (push, horário,
-> botão), roda a lista que escrevemos, e desliga. O que ele NUNCA é: motor ao
-> vivo (o jogo roda no aparelho do jogador; o robô não está lá) nem
-> consertador autônomo (sugere; humano aprova — mudar código sozinho é
-> proibido).
+> tirar do robô". O que o robô É: um computador de nuvem que LIGA SOZINHO
+> quando algo acontece (push, horário, botão), roda a lista que escrevemos, e
+> desliga. O que ele NUNCA é: motor ao vivo (o jogo roda no aparelho do
+> jogador; o robô não está lá) nem consertador autônomo (sugere; humano
+> aprova — mudar código sozinho é proibido).
+>
+> **O que está DECIDIDO aqui é só o papel e os limites** — conferidor / forno /
+> relógio, nunca motor-ao-vivo nem conserto-autônomo, mais o guard-rail no fim.
+> As ferramentas listadas abaixo são **SUGESTÕES — nada no roadmap.** Cada uma
+> só nasce quando uma dor real aparecer; se a dor não vier, não se constrói.
+> Estão escritas pra não re-pensar do zero quando a dor chegar — não pra virar
+> tarefa. (O ideador não consegue, com razão, medir o ganho delas no abstrato:
+> quase todas tiram dor MINHA, não dele; a dor é que vai aprovar cada uma.)
 
 **Papéis (3):** conferidor (gates) · forno (pré-cozinha o pesado) · relógio
 (tarefas agendadas — o tick já é isso).
 
-**O que entra (decidido):**
-- ★ [N] **ronda-da-oficina** — nasce JUNTO com o núcleo da Oficina: toda peça
+**Sugestões (nenhuma no roadmap — esperam dor real):**
+- [N] **ronda-da-oficina** — nasce JUNTO com o núcleo da Oficina: toda peça
   renderiza sem erro (porteiro), replay 2× dá idêntico (determinismo), órfão
   grita, exemplos executáveis do contrato rodam. É o braço automático do
   "portão de regressão" do túnel da IA (`oficina.md`).
-- ★ [M] **sentinela-de-custo** — o `perf-gpu`/`orçamento-peça` (seção 1)
+- [M] **sentinela-de-custo** — o `perf-gpu`/`orçamento-peça` (seção 1)
   rodando no robô: "esta peça custa N× a mediana" vira aviso automático.
   Honestidade: CPU de nuvem compara peça-contra-peça bem; não crava fps de
   celular específico — pra isso segue o `boletim-celular`.
-- ★ [M] **diff-visual no robô** — o baseline da seção 2 rodando a cada push:
+- [M] **diff-visual no robô** — o baseline da seção 2 rodando a cada push:
   mexeu no motor → lista de QUAIS peças mudaram de aparência, com recortes.
 - [M] **forno** — o padrão `bake-gi` (luz assada na publicação) é a regra
   geral: conta pesada que dá pra fazer UMA vez e salvar roda no robô, o jogo
@@ -153,7 +160,7 @@ Legenda: ★ = prioridade (serve o port já) · [N] nova · [M] melhoria
 - **Logs do jogo → análise**: possível, fora do roadmap (exige canal de
   coleta que não existe). Conserto automático: NÃO, nunca — só sugestão.
 
-**As 3 sacadas que ninguém tinha pedido (novas):**
+**Mais 3 sugestões que a conversa não tinha visto (também fora do roadmap):**
 - [N] **painel-de-botões** — `workflow_dispatch` + artifacts: o ideador
   dispara uma bancada PELO NAVEGADOR/celular (botão na aba Actions, sem
   terminal) e os PNGs/números ficam anexados na página da rodada. O ideador
