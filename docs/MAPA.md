@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-184 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+185 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -64,6 +64,7 @@
 ## docs/
 
 - `ARCHITECTURE.md` — Arquitetura — NÓS
+- `AUDIO_E_CENAS.md` — Áudio e cenas — música, voz e cutscenes (direção)
 - `CIDADE.md` — A Clareira — a cidade d'O Coração
 - `CODER.md` — A Bancada do Coder — ferramentas, limites e o método (D-35)
 - `COMUNICACAO.md` — Comunicação ideador ↔ coder — identificação de objetos e áreas (D-33)
