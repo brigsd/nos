@@ -1635,12 +1635,12 @@ que é o coração de tudo — sem precisar abrir o editor nem clicar em nada.
 > quebra-fino de cada milestone (as subtarefas em curso) vive na lista de
 > tarefas da sessão, não aqui — aqui é o mapa, não o diário.
 
-0. `[~]` **Migrar o motor pra WebGL 2** — troca pura: contexto `webgl2` + os 8
-   shaders pra `#version 300 es`, com a saída **idêntica** à de hoje (verificada
-   pixel a pixel). O espaço de vértice pra cor e peso de osso fica **reservado**
-   como acréscimo (somar um atributo depois é aditivo, não re-migra shader), não
-   embutido agora — mesmo princípio da reserva do WebGPU (D-75). Antes de tudo:
-   o resto nasce em cima disto.
+0. `[x]` **Migrar o motor pra WebGL 2** — feito (D-76): troca pura, contexto
+   `webgl2` + os 7 programas de shader em `#version 300 es`, saída
+   **byte-idêntica** à anterior (20 renders conferidos por `cmp`). O espaço de
+   vértice pra cor e peso de osso ficou **reservado** como acréscimo (somar um
+   atributo depois é aditivo, não re-migra shader), não embutido — mesmo
+   princípio da reserva do WebGPU (D-75).
 1. `[ ]` Estrutura de dados (vértices únicos, faces, identidades) e a lista de passos.
 2. `[ ]` Câmera do editor com cursor livre.
 3. `[ ]` Ver vértices e faces por cima da malha, em canvas 2D.

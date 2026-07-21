@@ -39,10 +39,10 @@ const WIND = `
 
 export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, sombra = 1, particulasN = 320, luz = 1, debug = 0, aa = 0 }) {
   const DEBUG = debug | 0;   // 0 normal, 1 normais (geometria), 2 flat (forma sem textura)
-  /* ANTISSERRILHADO. WebGL1 nao tem MSAA em framebuffer (isso e WebGL2), e o
-     serrilhado daqui nem vem das bordas de poligono: vem da AMPLIACAO do quadro
-     interno com pixel duro — o mesmo efeito que da a cara de pixel art. Sobram
-     dois caminhos honestos, e sao os tiers:
+  /* ANTISSERRILHADO. O serrilhado daqui nem vem das bordas de poligono (pra
+     isso o WebGL2 ate teria MSAA em framebuffer): vem da AMPLIACAO do quadro
+     interno com pixel duro — o mesmo efeito que da a cara de pixel art, e MSAA
+     nao ajudaria nele. Sobram dois caminhos honestos, e sao os tiers:
        0  pixel duro. O visual do projeto. Serrilha e nao custa nada.
        1  ampliacao suave (LINEAR no blit). De graca, mas borra o pixel art.
        2  supersampling 2x: desenha no dobro e reduz. Antisserrilhado de
@@ -224,8 +224,9 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
   const isPOT = (n) => (n & (n - 1)) === 0;
   function glTex(cv) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
-    // REPEAT exige POT no WebGL1; sprite NPOT (árvore 166×218) com REPEAT = PRETO.
-    // billboard usa UV 0..1, então CLAMP é o certo pra NPOT.
+    // billboard NPOT (árvore 166×218) usa UV 0..1, então CLAMP é o certo — não
+    // precisa REPEAT. (No WebGL1 REPEAT em NPOT dava PRETO e forçava isto; no
+    // WebGL2 REPEAT em NPOT vale, mas CLAMP segue certo aqui e mantém idêntico.)
     const wrap = (isPOT(cv.width) && isPOT(cv.height)) ? gl.REPEAT : gl.CLAMP_TO_EDGE;
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); return t; }
