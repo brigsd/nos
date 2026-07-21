@@ -65,49 +65,50 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
   let IH = Math.max(90, Math.round(IW / propJanela()));
   let SM = SOMBRA_SM[sombra] ?? 1024, sombraOn = sombra > 0;
   let LT = LUZ_TIER[luz] ?? LUZ_TIER[1];
-  const gl = canvas.getContext('webgl', { antialias: false, depth: true });
-  if (!gl) throw new Error('WebGL indisponível');
+  const gl = canvas.getContext('webgl2', { antialias: false, depth: true });
+  if (!gl) throw new Error('WebGL 2 indisponível');
 
   function sh(t, s) { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o);
     if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; }
   function prog(v, f) { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, v)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, f)); gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; }
 
-  const depthProg = prog(`
-    attribute vec3 aPos; attribute vec2 aUV; uniform mat4 uLMVP, uModel; varying float vZ; varying vec2 vUV;
+  const depthProg = prog(`#version 300 es
+    in vec3 aPos; in vec2 aUV; uniform mat4 uLMVP, uModel; out float vZ; out vec2 vUV;
     ${WIND}
     void main(){ vec4 w = uModel * vec4(aPos,1.0);
       w.xyz = vento(aPos, w.xyz, length(uModel[0].xyz));   // MESMO deslocamento da cena -> sombra acompanha
       vec4 p = uLMVP * w; gl_Position = p; vZ = p.z / p.w * 0.5 + 0.5; vUV = aUV; }`,
-    `precision highp float; varying float vZ; varying vec2 vUV; uniform sampler2D uTex; ${PACK}
-     void main(){ if (texture2D(uTex, vUV).a < 0.5) discard; gl_FragColor = packDepth(vZ); }`);
+    `#version 300 es
+     precision highp float; in float vZ; in vec2 vUV; uniform sampler2D uTex; out vec4 outColor; ${PACK}
+     void main(){ if (texture(uTex, vUV).a < 0.5) discard; outColor = packDepth(vZ); }`);
 
-  const scene = prog(`
-    attribute vec3 aPos; attribute vec2 aUV; attribute vec3 aNrm;
+  const scene = prog(`#version 300 es
+    in vec3 aPos; in vec2 aUV; in vec3 aNrm;
     uniform mat4 uMVP, uLMVP, uModel; uniform vec3 uCam;
-    varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP; varying vec3 vW;
+    out vec2 vUV; out vec3 vN; out float vD; out vec4 vLP; out vec3 vW;
     ${WIND}
     void main(){ vec4 w = uModel * vec4(aPos,1.0);
       w.xyz = vento(aPos, w.xyz, length(uModel[0].xyz));   // curva no MUNDO antes de tudo
       vW = w.xyz;
       gl_Position = uMVP * w; vUV = aUV; vN = mat3(uModel) * aNrm;
-      vD = distance(w.xyz, uCam); vLP = uLMVP * w; }`, `
+      vD = distance(w.xyz, uCam); vLP = uLMVP * w; }`, `#version 300 es
     precision highp float;
-    varying vec2 vUV; varying vec3 vN; varying float vD; varying vec4 vLP; varying vec3 vW;
+    in vec2 vUV; in vec3 vN; in float vD; in vec4 vLP; in vec3 vW;
     uniform sampler2D uTex, uShadow;
-    uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; uniform vec3 uCam; uniform float uRim; ${PACK}
+    uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; uniform vec3 uCam; uniform float uRim; out vec4 outColor; ${PACK}
     uniform float uShadowTexel, uDiffOn, uBounce, uToon, uDebug;
     float shadow(){
       vec3 lc = vLP.xyz / vLP.w * 0.5 + 0.5;
       if (lc.x < 0.0 || lc.x > 1.0 || lc.y < 0.0 || lc.y > 1.0 || lc.z > 1.0) return 1.0;
       float cur = lc.z - 0.0035; float s = 0.0; float t = uShadowTexel;
       for (int i=-1;i<=1;i++) for (int j=-1;j<=1;j++){
-        float d = unpackDepth(texture2D(uShadow, lc.xy + vec2(float(i),float(j))*t));
+        float d = unpackDepth(texture(uShadow, lc.xy + vec2(float(i),float(j))*t));
         s += cur <= d ? 1.0 : 0.0; }
       return s / 9.0;
     }
     void main(){
-      vec4 tx = texture2D(uTex, vUV); if (tx.a < 0.5) discard;
+      vec4 tx = texture(uTex, vUV); if (tx.a < 0.5) discard;
       vec3 N = normalize(vN);
       float diff = max(0.0, dot(N, uSun)) * uDiffOn;
       vec3 amb = mix(uGround, mix(uSkyHz, uSkyTop, clamp(N.y,0.0,1.0)), N.y*0.5+0.5) * 0.5;
@@ -128,42 +129,47 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       // que a casca esconde). 1 = normais cruas (N*.5+.5); 2 = flat cinza (só forma+luz).
       if (uDebug > 0.5 && uDebug < 1.5) outc = N * 0.5 + 0.5;
       else if (uDebug > 1.5) outc = mix(sky, vec3(0.8) * (amb + uSunCol * sunL), fog);
-      gl_FragColor = vec4(outc, 1.0);
+      outColor = vec4(outc, 1.0);
     }`);
 
-  const bg = prog(`attribute vec2 aPos; varying vec2 vUV; void main(){ vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.0,1.0);} `,
-    `precision mediump float; varying vec2 vUV; uniform vec3 uTop, uHz;
-     void main(){ gl_FragColor = vec4(mix(uHz, uTop, pow(clamp(vUV.y,0.0,1.0),0.7)), 1.0); }`);
+  const bg = prog(`#version 300 es
+in vec2 aPos; out vec2 vUV; void main(){ vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.0,1.0);} `,
+    `#version 300 es
+precision mediump float; in vec2 vUV; uniform vec3 uTop, uHz; out vec4 outColor;
+     void main(){ outColor = vec4(mix(uHz, uTop, pow(clamp(vUV.y,0.0,1.0),0.7)), 1.0); }`);
 
-  const parts = prog(`
-    attribute vec3 aSeed; uniform mat4 uMVP; uniform float uT; uniform vec3 uCam; varying float vTw;
+  const parts = prog(`#version 300 es
+    in vec3 aSeed; uniform mat4 uMVP; uniform float uT; uniform vec3 uCam; out float vTw;
     void main(){ vec3 p = aSeed;
       p.x += sin(uT*0.3 + aSeed.y*7.0)*0.6; p.z += cos(uT*0.24 + aSeed.x*6.0)*0.6;
       p.y += mod(uT*0.12 + aSeed.z, 1.0)*2.4;
       gl_Position = uMVP * vec4(p, 1.0);
       gl_PointSize = clamp(9.0/distance(p,uCam), 1.5, 5.0);
-      vTw = 0.5 + 0.5*sin(uT*2.0 + aSeed.x*30.0); }`, `
-    precision mediump float; varying float vTw;
+      vTw = 0.5 + 0.5*sin(uT*2.0 + aSeed.x*30.0); }`, `#version 300 es
+    precision mediump float; in float vTw; out vec4 outColor;
     void main(){ vec2 d = gl_PointCoord - 0.5; float r = dot(d,d);
       if (r > 0.25) discard; float a = (1.0 - r*4.0) * (0.35 + 0.5*vTw);
-      gl_FragColor = vec4(1.0, 0.93, 0.7, a); }`);
+      outColor = vec4(1.0, 0.93, 0.7, a); }`);
 
-  const VS_QUAD = `attribute vec2 aPos; varying vec2 vUV; void main(){ vUV=aPos*0.5+0.5; gl_Position=vec4(aPos,0.0,1.0);} `;
+  const VS_QUAD = `#version 300 es
+in vec2 aPos; out vec2 vUV; void main(){ vUV=aPos*0.5+0.5; gl_Position=vec4(aPos,0.0,1.0);} `;
   const blit = prog(VS_QUAD,
-    `precision mediump float; varying vec2 vUV; uniform sampler2D uTex; void main(){ gl_FragColor = texture2D(uTex, vUV);} `);
+    `#version 300 es
+precision mediump float; in vec2 vUV; uniform sampler2D uTex; out vec4 outColor; void main(){ outColor = texture(uTex, vUV);} `);
 
   /* CONTORNO por-lote (casca invertida, D-63): infla a malha ao longo da normal
      e pinta chapado de verde-escuro; desenhada com as faces DA FRENTE culled (só
      as de TRÁS) ANTES da cena -> sobra só na silhueta = contorno firme e uniforme
      (toon), independente da luz. Ligado por lote via L.outline (largura em
      unidades de mundo); 0 = sem contorno (as outras peças seguem iguais). */
-  const outline = prog(`
-    attribute vec3 aPos; attribute vec3 aNrm; uniform mat4 uMVP, uModel; uniform float uW;
+  const outline = prog(`#version 300 es
+    in vec3 aPos; in vec3 aNrm; uniform mat4 uMVP, uModel; uniform float uW;
     ${WIND}
     void main(){ vec4 w = uModel * vec4(aPos + normalize(aNrm) * uW, 1.0);
       w.xyz = vento(aPos, w.xyz, length(uModel[0].xyz));   // contorno curva junto (aPos LOCAL no bend)
       gl_Position = uMVP * w; }`,
-    `precision mediump float; uniform vec3 uInk; void main(){ gl_FragColor = vec4(uInk, 1.0); }`);
+    `#version 300 es
+precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outColor = vec4(uInk, 1.0); }`);
 
   /* Reconstrução na saída, no espírito do FSR: em vez de esticar o quadro com
      bilinear (que borra tudo por igual), olha a vizinhança e puxa a
@@ -171,19 +177,20 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
      de contraste local.
      Não é o FSR oficial da AMD — aquele é bem mais longo. É a mesma ideia numa
      versão compacta, e por isso a opção não se chama FSR na tela. */
-  const recon = prog(VS_QUAD, `
+  const recon = prog(VS_QUAD, `#version 300 es
     precision highp float;
-    varying vec2 vUV;
+    in vec2 vUV;
     uniform sampler2D uTex;
     uniform vec2 uTexel;
     uniform float uNitidez;
+    out vec4 outColor;
     void main(){
       vec2 p = vUV / uTexel - 0.5;
       vec2 base = (floor(p) + 0.5) * uTexel, f = fract(p);
-      vec3 a = texture2D(uTex, base).rgb;
-      vec3 b = texture2D(uTex, base + vec2(uTexel.x, 0.0)).rgb;
-      vec3 c = texture2D(uTex, base + vec2(0.0, uTexel.y)).rgb;
-      vec3 d = texture2D(uTex, base + uTexel).rgb;
+      vec3 a = texture(uTex, base).rgb;
+      vec3 b = texture(uTex, base + vec2(uTexel.x, 0.0)).rgb;
+      vec3 c = texture(uTex, base + vec2(0.0, uTexel.y)).rgb;
+      vec3 d = texture(uTex, base + uTexel).rgb;
       /* onde o degrau é mais forte, a mistura fica mais dura: borda não é
          suavizada por igual, é seguida */
       vec3 dx = abs((b + d) - (a + c)), dy = abs((c + d) - (a + b));
@@ -193,7 +200,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       vec3 cor = mix(mix(a, b, w.x), mix(c, d, w.x), w.y);
       // realce local: devolve o que a interpolação tirou, sem halo
       vec3 viz = (a + b + c + d) * 0.25;
-      gl_FragColor = vec4(clamp(cor + (cor - viz) * uNitidez, 0.0, 1.0), 1.0);
+      outColor = vec4(clamp(cor + (cor - viz) * uNitidez, 0.0, 1.0), 1.0);
     }`);
 
   const AL = { pos: gl.getAttribLocation(scene,'aPos'), uv: gl.getAttribLocation(scene,'aUV'), nrm: gl.getAttribLocation(scene,'aNrm') };
