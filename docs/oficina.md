@@ -1577,8 +1577,19 @@ Suporte é universal hoje. O risco da migração é baixo e o retorno é alto �
 deve vir **antes** da Oficina, não depois, senão gizmo, animação e material
 nascem em cima do que vai mudar.
 
-WebGPU fica pra depois, e não muda nada agora: é o passo seguinte quando fizer
-sentido, não um concorrente do WebGL 2.
+WebGPU (a tecnologia gráfica acima do WebGL 2 — mais objeto na tela sem travar,
+e a placa de vídeo pra cálculo pesado) fica pra depois, por um motivo concreto:
+hoje ainda falta em cerca de um quinto dos aparelhos (mais antigos, Firefox no
+Android), e "qualquer um entra, PC ou celular, sem instalar" é a alma do NÓS —
+excluir um quinto dos jogadores não vale. Mas ele não é abandonado: o motor
+nasce com o **renderizador trocável** (uma camada fina que separa *o que
+desenhar* de *com qual tecnologia desenhar*), então o WebGPU fica reservado na
+arquitetura. Quando o suporte dele chegar perto de universal — o que deve vir
+junto com o momento em que o mundo fica grande o bastante pra precisar do teto
+dele —, plugá-lo é acréscimo, não reescrita. A abstração em si não é construída
+agora (com um só renderizador seria prematura); o que nasce cedo é a decisão de
+deixar a porta pronta, o mesmo princípio do envelope. Decisão registrada em
+D-75.
 
 ## Trazer e levar do repositório
 
