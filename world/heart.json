@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 188,
-    "worldTime": 11280
+    "tickCount": 189,
+    "worldTime": 11340
   },
   "width": 64,
   "height": 64,
@@ -6147,6 +6147,11 @@
       "worldTime": 11280,
       "nativeId": "brasa",
       "message": "Venham, o pão quentinho tá na mesa! Não deixem esfriar!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 189,
+      "worldTime": 11340
     }
   ],
   "natives": {
@@ -6154,7 +6159,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 2,
+        "x": 1,
         "y": 1
       },
       "behaviorTree": "wanderer",
