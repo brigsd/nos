@@ -1,0 +1,298 @@
+/* oficina.js — NÚCLEO + ADAPTADOR v3 da OFICINA (passo 1). Executa a lista de
+   PASSOS de uma peça-objeto e devolve o objeto pronto pro visor. Duas camadas
+   nítidas (docs/oficina.md "Onde o código mora"): o NÚCLEO neutro monta
+   vértices únicos numerados + faces apontando pra ids + atributos por face, e
+   devolve NÚMEROS; o ADAPTADOR v3 converte esse neutro nos triângulos soltos do
+   motor (8 floats/vértice, cor por face via textura-amostra + UV). SEM
+   interface. Determinístico: mesma lista -> mesmo objeto, sempre. A numeração
+   de identidade depende só da POSIÇÃO do passo (bloco de BLOCO ids por índice),
+   nunca dos valores de PARAMS — mudar `raio` não renumera; mudar `lados` (TOPO)
+   renumera e os passos pendurados viram órfãos que GRITAM, nunca corrompem. */
+
+export const FORMATO = { v: 1, tipo: 'objeto' };
+
+/* Largura do bloco de ids por passo. O passo de índice i possui os ids
+   [i*BLOCO, i*BLOCO+BLOCO) — tanto no espaço de VÉRTICE quanto no de FACE (dois
+   espaços independentes: pode existir vértice 12 e face 12 ao mesmo tempo). É
+   isto que torna a numeração POSICIONAL: o passo 4 começa a numerar no mesmo
+   lugar hoje ou daqui a um ano, e nenhum PARAM mexe nisso. */
+export const BLOCO = 1000;
+
+/* base posicional de um passo (vértice e face partem do mesmo número, espaços
+   distintos). Primitivas podem trazer `id` no arquivo — é só o MESMO número,
+   escrito à mão pra ficar legível; se divergir da posição, vira aviso (nunca
+   uma segunda-verdade silenciosa). */
+function baseDoPasso(i) { return i * BLOCO; }
+
+/* ----------------------------------------------------------------------------
+   Vetores mínimos (puros, sem dependência do motor — o núcleo roda headless).
+---------------------------------------------------------------------------- */
+function norm3(x, y, z) { const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; }
+
+/* Normal de um polígono (n-gon) por Newell — robusto pra face de 3+ cantos e
+   independente da triangulação. */
+function normalDaFace(V, vs) {
+  let nx = 0, ny = 0, nz = 0;
+  for (let k = 0; k < vs.length; k++) {
+    const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]);
+    if (!c || !n) return [0, 1, 0];
+    nx += (c[1] - n[1]) * (c[2] + n[2]);
+    ny += (c[2] - n[2]) * (c[0] + n[0]);
+    nz += (c[0] - n[0]) * (c[1] + n[1]);
+  }
+  return norm3(nx, ny, nz);
+}
+
+/* colapsa cantos repetidos consecutivos (inclusive no fecho do ciclo) — o que
+   a mescla deixa pra trás quando dois cantos de uma face viram o mesmo id. */
+function colapsaCiclo(vs) {
+  const out = [];
+  for (let k = 0; k < vs.length; k++) if (vs[k] !== vs[(k + 1) % vs.length]) out.push(vs[k]);
+  return out;
+}
+function distintos(vs) { return new Set(vs).size; }
+
+/* ----------------------------------------------------------------------------
+   VOCABULÁRIO de operações. Cada uma recebe (st, args, i) e muta o estado
+   neutro. Toda referência a um id inexistente é registrada em `orfaos` e o
+   passo é PULADO — grita, nunca corrompe (lei do envelope). Passo 1 traz só o
+   suficiente pra provar o modelo e as partes difíceis; as ~20 da tabela do doc
+   entram depois, cada uma como mais uma entrada aqui.
+---------------------------------------------------------------------------- */
+function Face(id, vs) { return { id, vs, cor: null, material: null, liso: false, solido: false }; }
+
+function addV(st, id, pos) {
+  if (st.V.has(id)) throw new Error(`oficina: colisão de id de vértice ${id} (bloco pequeno? passo mal-formado?)`);
+  st.V.set(id, pos);
+}
+function addF(st, id, vs) {
+  if (st.F.has(id)) throw new Error(`oficina: colisão de id de face ${id}`);
+  st.F.set(id, Face(id, vs));
+}
+function grita(st, i, op, ref, motivo) { st.orfaos.push({ passo: i, op, ref, motivo }); }
+
+/* valida o `id` opcional de uma primitiva contra a base posicional: se o
+   arquivo escreveu um id que não bate com a posição, é um aviso alto (não muda
+   a numeração — a POSIÇÃO manda sempre). */
+function confereId(st, i, op, args) {
+  const b = baseDoPasso(i);
+  if (typeof args.id === 'number' && args.id !== b) grita(st, i, op, args.id, `id ${args.id} ≠ base da posição ${b} — a posição manda`);
+  return b;
+}
+
+const OPS = {
+  /* ---- primitivas: criam vértices únicos + faces a partir da base do passo ---- */
+  cubo(st, a, i) {
+    const b = confereId(st, i, 'cubo', a);
+    const lx = st.num(a.larg ?? a.lado ?? 1) / 2;
+    const ly = st.num(a.alt ?? a.lado ?? 1);
+    const lz = st.num(a.prof ?? a.lado ?? 1) / 2;
+    const P = [
+      [-lx, 0, -lz], [lx, 0, -lz], [lx, 0, lz], [-lx, 0, lz],   // 0..3 base (y=0)
+      [-lx, ly, -lz], [lx, ly, -lz], [lx, ly, lz], [-lx, ly, lz], // 4..7 topo (y=ly)
+    ];
+    P.forEach((p, k) => addV(st, b + k, p));
+    const q = (fid, ...c) => addF(st, fid, c.map((k) => b + k));   // ordem = normal pra FORA (mesma convenção do geo.box)
+    q(b + 0, 0, 1, 2, 3);   // fundo  -y
+    q(b + 1, 7, 6, 5, 4);   // topo   +y
+    q(b + 2, 1, 0, 4, 5);   // -z
+    q(b + 3, 2, 1, 5, 6);   // +x
+    q(b + 4, 3, 2, 6, 7);   // +z
+    q(b + 5, 0, 3, 7, 4);   // -x
+  },
+
+  cilindro(st, a, i) {
+    const b = confereId(st, i, 'cilindro', a);
+    const r = st.num(a.raio ?? 0.5);
+    const h = st.num(a.altura ?? 1);
+    const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // `lados` é TOPO: muda a CONTAGEM
+    for (let k = 0; k < L; k++) { const t = (k / L) * Math.PI * 2; addV(st, b + k, [Math.cos(t) * r, 0, Math.sin(t) * r]); }
+    for (let k = 0; k < L; k++) { const t = (k / L) * Math.PI * 2; addV(st, b + L + k, [Math.cos(t) * r, h, Math.sin(t) * r]); }
+    for (let k = 0; k < L; k++) { const n = (k + 1) % L; addF(st, b + k, [b + k, b + L + k, b + L + n, b + n]); } // lados (normal radial pra fora)
+    const fundo = []; for (let k = L - 1; k >= 0; k--) fundo.push(b + k); addF(st, b + L, fundo);      // -y
+    const topo = []; for (let k = 0; k < L; k++) topo.push(b + L + k); addF(st, b + L + 1, topo);      // +y
+  },
+
+  /* ---- edição por id estável ---- */
+  moveV(st, a, i) {
+    const v = a.v;
+    if (!st.V.has(v)) return grita(st, i, 'moveV', v, 'vértice inexistente');
+    const d = st.vec(a.d ?? [0, 0, 0]);
+    const p = st.V.get(v);
+    st.V.set(v, [p[0] + d[0], p[1] + d[1], p[2] + d[2]]);   // SEMPRE por deslocamento (acompanha a base)
+  },
+
+  /* extruda (modo face): a prova da numeração de meio-de-caminho. Cria um anel
+     NOVO de vértices (base = POSIÇÃO do passo), levanta a face por `dist` na
+     normal, e ergue as paredes laterais. */
+  extruda(st, a, i) {
+    const fid = a.face;
+    const f = st.F.get(fid);
+    if (!f) return grita(st, i, 'extruda', fid, 'face inexistente');
+    const anel = f.vs.slice();
+    for (const v of anel) if (!st.V.has(v)) return grita(st, i, 'extruda', v, 'canto da face inexistente');
+    const dist = st.num(a.dist ?? 0);
+    const N = normalDaFace(st.V, anel);
+    const b = baseDoPasso(i);                 // vértices novos: numerados pela posição
+    const novo = anel.map((v, k) => { const p = st.V.get(v); const id = b + k; addV(st, id, [p[0] + N[0] * dist, p[1] + N[1] * dist, p[2] + N[2] * dist]); return id; });
+    for (let k = 0; k < anel.length; k++) { const n = (k + 1) % anel.length; addF(st, b + k, [anel[k], anel[n], novo[n], novo[k]]); } // paredes
+    f.vs = novo;                              // a face-tampa sobe pro anel novo (mantém o id)
+  },
+
+  /* mescla (de:[ids] -> para:id): a interação mais delicada. Some os `de`, faz
+     as faces apontarem pro `para`, colapsa cantos repetidos e apaga a face que
+     virou área-zero (<3 cantos distintos). Não abre buraco no motor — o solto é
+     re-gerado na exportação. `de`/`para` ficam gravados no passo. */
+  mescla(st, a, i) {
+    const para = a.para;
+    if (!st.V.has(para)) return grita(st, i, 'mescla', para, 'destino inexistente');
+    const rem = new Set();
+    for (const d of a.de ?? []) {
+      if (d === para) continue;
+      if (!st.V.has(d)) { grita(st, i, 'mescla', d, 'origem inexistente'); continue; }
+      rem.add(d);
+    }
+    if (!rem.size) return;
+    for (const f of st.F.values()) {
+      const trocado = f.vs.map((v) => (rem.has(v) ? para : v));
+      f.vs = colapsaCiclo(trocado);
+    }
+    for (const [id, f] of [...st.F]) if (distintos(f.vs) < 3) st.F.delete(id);   // some a face de área zero
+    for (const d of rem) st.V.delete(d);
+    st.merges.push({ de: [...rem].sort((x, y) => x - y), para });
+  },
+
+  /* ---- atributos por face ---- */
+  pincel(st, a, i) {
+    if (a.modo && a.modo !== 'face') return grita(st, i, 'pincel', a.modo, `modo '${a.modo}' fora do passo 1 (só 'face')`);
+    for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'pincel', fid, 'face inexistente'); continue; } f.cor = a.cor ?? null; }
+  },
+  solido(st, a, i) { for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'solido', fid, 'face inexistente'); continue; } f.solido = true; } },
+  liso(st, a, i) { for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'liso', fid, 'face inexistente'); continue; } f.liso = true; } },
+};
+
+/* ----------------------------------------------------------------------------
+   NÚCLEO: roda a lista e devolve o NEUTRO em números. Não sabe desenhar.
+   `dict` funde PARAMS e TOPO — os passos citam o NOME (raio: 'troncoR'), então
+   trocar o valor reconstrói sem tocar em número nenhum da lista.
+---------------------------------------------------------------------------- */
+export function nucleo(PASSOS, PARAMS = {}, TOPO = {}) {
+  const dict = { ...PARAMS, ...TOPO };
+  const num = (v) => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') { if (!(v in dict)) throw new Error(`oficina: parâmetro '${v}' não existe em PARAMS/TOPO`); return num(dict[v]); }
+    throw new Error(`oficina: valor numérico inválido: ${JSON.stringify(v)}`);
+  };
+  const vec = (a) => a.map(num);
+  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], num, vec };
+
+  PASSOS.forEach((passo, i) => {
+    const [op, args = {}] = passo;
+    const fn = OPS[op];
+    if (!fn) { grita(st, i, op, null, `operação desconhecida '${op}'`); return; }
+    fn(st, args, i);
+  });
+
+  return { V: st.V, F: st.F, orfaos: st.orfaos, merges: st.merges };
+}
+
+/* forma canônica e ORDENADA do neutro — a base de toda comparação (replay da
+   bancada, testes de determinismo). Ids crescentes; posições e atributos
+   explícitos. JSON dela ida-e-volta é idêntico bit-a-bit quando o objeto é o
+   mesmo. */
+export function neutroCanonico(neutro) {
+  return {
+    V: [...neutro.V.entries()].sort((a, b) => a[0] - b[0]).map(([id, p]) => [id, p[0], p[1], p[2]]),
+    F: [...neutro.F.values()].sort((a, b) => a.id - b.id).map((f) => [f.id, f.vs.slice(), f.cor ?? null, f.material ?? null, !!f.liso, !!f.solido]),
+    orfaos: neutro.orfaos.map((o) => ({ passo: o.passo, op: o.op, ref: o.ref ?? null, motivo: o.motivo })),
+    merges: neutro.merges.map((m) => ({ de: m.de.slice(), para: m.para })),
+  };
+}
+
+/* ----------------------------------------------------------------------------
+   ADAPTADOR v3: neutro -> formato do motor. É a ÚNICA peça que muda de mundo
+   pra mundo (outro motor = outro adaptador de ~20 linhas). Monta os triângulos
+   soltos (pos3 uv2 nrm3), e a cor por face chega via uma TEXTURA-AMOSTRA (um
+   swatch por cor) + UV por face apontando pro texel certo — o formato de
+   vértice ainda não tem cor (reservada no passo 0), então NÃO se inventa
+   atributo de cor no vértice. Chapado por padrão (normal por face); face `liso`
+   usa a média das normais das faces lisas vizinhas.
+---------------------------------------------------------------------------- */
+const COR_PADRAO = '#9a8f80';   // madeira neutra pra face sem pincel
+function hexRGB(h) {
+  const s = String(h).replace('#', '');
+  const n = s.length === 3 ? s.split('').map((c) => c + c).join('') : s;
+  return [parseInt(n.slice(0, 2), 16) || 0, parseInt(n.slice(2, 4), 16) || 0, parseInt(n.slice(4, 6), 16) || 0];
+}
+
+export function adaptarV3(neutro, ctx) {
+  const { V, F } = neutro;
+  const faces = [...F.values()].sort((a, b) => a.id - b.id);
+
+  /* paleta: uma cor por valor distinto (padrão incluso). O swatch é CELL×CELL
+     por cor numa fita; UV no CENTRO da célula (NEAREST no motor, mas o centro é
+     robusto a qualquer filtro). */
+  const cores = [];
+  const idxDe = new Map();
+  const corIdx = (c) => { const k = c || COR_PADRAO; if (!idxDe.has(k)) { idxDe.set(k, cores.length); cores.push(k); } return idxDe.get(k); };
+  for (const f of faces) corIdx(f.cor);
+  if (!cores.length) corIdx(null);
+  const CELL = 4, W = cores.length * CELL, H = CELL;
+  const rgb = cores.map(hexRGB);
+  const tex = ctx.tex.texCanvas(W, H, (x) => rgb[Math.min(cores.length - 1, (x / CELL) | 0)]);
+  const uvDe = (ci) => [(ci * CELL + CELL / 2) / W, 0.5];
+
+  /* normais: por face (chapado) e, pra `liso`, média por vértice das faces
+     lisas que o tocam. */
+  const nFace = new Map();
+  for (const f of faces) nFace.set(f.id, normalDaFace(V, f.vs));
+  const acc = new Map();
+  for (const f of faces) if (f.liso) { const n = nFace.get(f.id); for (const v of f.vs) { const s = acc.get(v) || [0, 0, 0]; acc.set(v, [s[0] + n[0], s[1] + n[1], s[2] + n[2]]); } }
+  const nSuave = new Map();
+  for (const [v, s] of acc) nSuave.set(v, norm3(s[0], s[1], s[2]));
+
+  const mesh = { v: [] };
+  for (const f of faces) {
+    if (f.vs.some((v) => !V.has(v))) continue;   // defensivo: nunca desenha canto pendurado
+    const uv = uvDe(corIdx(f.cor));
+    const nf = nFace.get(f.id);
+    const c0 = f.vs[0];
+    for (let k = 1; k < f.vs.length - 1; k++) {   // leque a partir do primeiro canto
+      for (const v of [c0, f.vs[k], f.vs[k + 1]]) {
+        const p = V.get(v);
+        const n = f.liso && nSuave.has(v) ? nSuave.get(v) : nf;
+        mesh.v.push(p[0], p[1], p[2], uv[0], uv[1], n[0], n[1], n[2]);
+      }
+    }
+  }
+  return { mesh, tex };
+}
+
+/* ----------------------------------------------------------------------------
+   API pública que a PEÇA usa.
+---------------------------------------------------------------------------- */
+/* executar: roda a lista e devolve o objeto pronto pro visor
+   ({lotes:[{mesh:{v}, tex, matriz}], ...}). É núcleo + adaptador. */
+export function executar(PASSOS, PARAMS, TOPO, ctx) {
+  const neutro = nucleo(PASSOS, PARAMS, TOPO);
+  if (!ctx || !ctx.tex || !ctx.tex.texCanvas) throw new Error('oficina.executar precisa de ctx {tex,...} do motor v3');
+  if (neutro.orfaos.length && typeof console !== 'undefined') console.warn(`oficina: ${neutro.orfaos.length} órfão(s) —`, neutro.orfaos);
+  const { mesh, tex } = adaptarV3(neutro, ctx);
+  const matriz = ctx.m4 ? ctx.m4.ident() : undefined;
+  return { lotes: [{ mesh, tex, matriz }], camera: { e: 1.05, r: 2.9 } };
+}
+
+/* colisaoDe: SÓ a geometria (sem adaptador/textura/pincel) -> descritor de
+   colisão encaixado na malha FINAL (depois das extrusões). Roda no CARREGAMENTO
+   do módulo, então é barato e tem um dono só (nada de número medido e guardado).
+   Encaixa nas faces `solido` se houver; senão, na malha toda. */
+export function colisaoDe(PASSOS, PARAMS, TOPO) {
+  const { V, F } = nucleo(PASSOS, PARAMS, TOPO);
+  let ids = new Set();
+  for (const f of F.values()) if (f.solido) for (const v of f.vs) ids.add(v);
+  if (!ids.size) ids = new Set(V.keys());
+  let raio = 0, minY = Infinity, maxY = -Infinity;
+  for (const v of ids) { const p = V.get(v); if (!p) continue; raio = Math.max(raio, Math.hypot(p[0], p[2])); if (p[1] < minY) minY = p[1]; if (p[1] > maxY) maxY = p[1]; }
+  if (!Number.isFinite(minY)) { minY = 0; maxY = 0; }
+  return { forma: 'cilindro', raio, altura: maxY - minY, base: minY };
+}
