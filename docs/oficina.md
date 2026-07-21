@@ -51,7 +51,7 @@ de escrever código, e pra registrar POR QUE cada coisa é como é.
 
 ## O que é
 
-Um editor 3D dentro do próprio jogo. Cena vazia, câmera que voa, e você modela
+Um editor 3D dentro do próprio jogo. Cena vazia, câmera livre, e você modela
 o objeto ali: move vértice, extruda face, pinta, escala, rotaciona. Na hora de
 salvar, não sai arquivo de modelo — sai **código**, um arquivo em `pecas/` como
 se tivesse sido escrito à mão.
@@ -96,8 +96,8 @@ O que se ganha com essa escolha, sem trabalho extra nenhum:
 - **Objeto continua paramétrico.** Muda o `0.34` do primeiro passo, a lista roda
   de novo, e os arrastos manuais acompanham. É o que a árvore de hoje faz, onde
   mudar a espessura move a colisão junto. Uma lista de vértices perderia isso.
-- **Desfazer sai de graça.** Apagar o último passo e reexecutar. Não precisa de
-  sistema separado. Pra Ctrl+Z seguido não engasgar, o executor guarda uma cópia
+- **Desfazer sai sem custo.** Apagar o último passo e reexecutar. Não precisa de
+  sistema separado. Pra Ctrl+Z seguido não travar, o executor guarda uma cópia
   do estado a cada 10 passos e reexecuta a partir da cópia mais próxima, em vez
   de refazer tudo desde o começo.
 - **O histórico é editável.** Dá pra voltar num passo do meio, mudar, e o resto
@@ -134,7 +134,7 @@ export function construir(ctx) { ... }
 O que muda de tipo pra tipo é **só o vocabulário de operações** — malha tem
 `extruda`, som tem `filtro`, desenho tem `pincel`. A gramática, nunca. Com
 isso o túnel é construído UMA vez e opera sobre "envelope"; tipo novo herda
-undo, replay, contrato, descrever, preset e bancada de graça. Tipo novo =
+undo, replay, contrato, descrever, preset e bancada sem custo. Tipo novo =
 vocabulário novo + adaptador, nada mais.
 
 Três regras que fazem parte do envelope, porque também são impossíveis de
@@ -285,7 +285,7 @@ malha final, depois das extrusões — quase nunca é igual a um parâmetro, ent
 só a parte geométrica dos passos, sem textura nem pincel: é barato o bastante
 pra rodar no carregamento e mantém um número com um dono só.
 
-**Parâmetros são de dois tipos, e isso não é firula.** Raio e altura mudam a
+**Parâmetros são de dois tipos, e isso não é enfeite.** Raio e altura mudam a
 forma sem mudar a contagem de vértices, então os passos seguintes continuam
 apontando pros mesmos pontos. Já `lados` muda quantos vértices existem: passar
 de 8 pra 12 faz o "vértice 7" de um passo antigo virar outro ponto, e o arrasto
@@ -386,7 +386,7 @@ Pela mesma lógica da lista de passos: barato agora, caro depois.
 
 Foi considerado manter duas versões da Oficina, uma "portátil" e uma nossa,
 customizada. **Rejeitado.** Todo defeito viraria dois, as duas divergem em
-semanas, e a portátil apodrece porque ninguém a usa no dia a dia — sobra uma boa
+semanas, e a portátil se deteriora porque ninguém a usa no dia a dia — sobra uma boa
 e uma quebrada.
 
 A separação em três camadas existe justamente pra que **uma base só** sirva os
@@ -480,7 +480,7 @@ o `visor.depurar` só desenha triângulos. Ponto e linha não passam por ali.
 
 A saída é melhor que a proposta original. Um canvas 2D por cima, como o minimapa
 e as etiquetas de ID já fazem: projeta cada vértice com `visor.projetar` e
-desenha um quadradinho. Vêm de graça três coisas que no WebGL dariam trabalho —
+desenha um quadradinho. Vêm sem custo três coisas que no WebGL dariam trabalho —
 tamanho constante na tela, destaque de seleção, e o traço das arestas.
 
 O que se perde é a oclusão: vértice atrás da superfície continua aparecendo.
@@ -557,7 +557,7 @@ não aparece.
 
 **Por que já nascer assim, e não depois.** A versão anterior deste documento
 recomendava cor por face primeiro e pincel depois. Os dois usariam sistemas
-diferentes por baixo, então a segunda etapa jogaria fora a paleta e a geração
+diferentes por baixo, então a segunda etapa descartaria a paleta e a geração
 de coordenada da primeira. Retrabalho de verdade.
 
 Com a projeção em caixa desde o início, **cor por face vira só o primeiro modo
@@ -1227,7 +1227,7 @@ três respostas "sim" = a IA opera aquilo igual ao ideador.
 
 ## O contrato com a IA
 
-Aqui tem uma armadilha que precisa ficar escrita, porque ela morde justamente no
+Aqui tem uma armadilha que precisa ficar escrita, porque ela atinge justamente o
 caso que motivou tudo isto.
 
 **A Oficina só abre lista de passos.** Ela não interpreta código procedural. O
@@ -1328,7 +1328,7 @@ Detalhe de implementação pra quando/se for: existe um jeito de habilitar
 CORS direto do cliente (a Anthropic tem um cabeçalho específico; conferir o
 nome na hora, isto é de memória). O "perigoso" que aparece no nome desse
 tipo de opção é sobre expor chave COMPARTILHADA — aqui não tem uma, é a
-chave de cada um, risco só dela. Modelo-agnóstico de brinde: o vocabulário
+chave de cada um, risco só dela. Modelo-agnóstico de bônus: o vocabulário
 que sai daqui é o mesmo texto de operações do resto do documento, então
 qualquer LLM decente entende sem integração por modelo.
 
@@ -1378,7 +1378,7 @@ partícula (fumaça, faísca, poeira, respingo, brilho), um objeto-base, um
 material-base, um som-base — pra você **variar em cima** com controles, em vez
 de criar do zero.
 
-Por que isto é natural, e não firula:
+Por que isto é natural, e não enfeite:
 
 - **É como o jogo já funciona.** As árvores nascem de espécie + semente
   (`VARIANTES`); os passos pisam em `PISOS` (grama, areia, madeira, pedra); os
@@ -1389,7 +1389,7 @@ Por que isto é natural, e não firula:
   sempre (lista de passos + `PARAMS`). "Abrir e variar" é literalmente como
   toda a Oficina funciona; o preset é o ponto de partida, não uma engrenagem à
   parte.
-- **Os controles saem de graça.** Como os parâmetros já têm nome, a interface
+- **Os controles saem sem custo.** Como os parâmetros já têm nome, a interface
   mostra **um controle por parâmetro** sozinha. Faz o painel genérico uma vez,
   e todo preset ganha controle automaticamente — não se desenha controle
   preset por preset.
@@ -1489,7 +1489,7 @@ Pergunta do ideador: usar three.js junto, ou um conversor, traria ganho?
 passariam a ser desenhados com a iluminação e os shaders de lá — o que você
 modela deixa de se parecer com o que aparece no jogo. Num jogo onde o visual
 estilizado é o ponto, isso custa mais do que entrega. As funcionalidades que
-viriam de graça, na maioria, são coisas que ainda não precisamos.
+viriam sem custo, na maioria, são coisas que ainda não precisamos.
 
 **Como conversor em tempo de execução, também não.** Converter a saída do
 `nos-Craft` no navegador significa carregar o three.js junto com o jogo, e o
@@ -1528,7 +1528,7 @@ cliente dele, **nosso renderizador nunca carrega `.glb` de estranho**.
 
 ### O sinal pra reconsiderar
 
-Se daqui a alguns meses o tempo estiver indo todo pra encanamento de
+Se daqui a alguns meses o tempo estiver indo todo pra infraestrutura de
 renderizador em vez de pro mundo, trocar passa a valer. Enquanto o motor não for
 o gargalo, ele não é o problema.
 
@@ -1538,7 +1538,7 @@ A colaboração no metaverso passa por Pull Request: cada repositório é um mun
 e quem quiser ajudar bifurca e propõe. **Lista de passos em texto mostra
 exatamente o que mudou numa revisão. Um `.glb` binário não mostra nada.**
 
-Isso não foi projetado de propósito — caiu no colo por causa da federação por
+Isso não foi projetado de propósito — surgiu sozinho por causa da federação por
 repositório — mas é um argumento forte a favor do formato escolhido.
 
 ## WebGL 2
@@ -1602,7 +1602,7 @@ do jogador. Modelar sem referência de escala é desenhar sem régua — o erro 
 aparece quando o objeto é plantado no jogo e está do tamanho errado.
 
 **Salvamento automático em `localStorage`.** Como o arquivo é só a lista de
-passos, guardar a cada mudança é quase de graça, e a aba caindo deixa de custar
+passos, guardar a cada mudança é quase sem custo, e a aba caindo deixa de custar
 o trabalho todo.
 
 **Bancada sem interface pro `executar`.** O projeto já tem `tools/bancadas/`.
