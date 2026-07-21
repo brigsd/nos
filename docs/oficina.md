@@ -750,7 +750,9 @@ precedente de troca ao vivo sem recarregar.
 
 Canvas 2D pra traçar contornos fechados: clicar põe ponto, arrastar move,
 fechar o polígono termina. Nada de malha, nada de identidade de vértice — é o
-subsistema mais independente da ferramenta inteira.
+subsistema mais independente da ferramenta inteira. **Reservar agora:** cada
+ponto do contorno pode ter uma alça de curva opcional (não usada no começo — só
+reta). Sem isso, adicionar curva suave depois muda o formato de todo contorno.
 
 Serve a três coisas, e é por isso que vale construir cedo.
 
@@ -826,7 +828,10 @@ mais simples ao que lê o canvas). Mais ferramentas: **Shift = linha reta**,
 conta-gotas (pega cor já pintada), balde (preenche área), **simetria de pintura**
 (pinta um lado, espelha no outro), gradiente, estabilizador de traço (suaviza a
 tremida da mão) e ver ao vivo na malha 3D enquanto pinta. Camadas ficam pra
-depois — úteis, mas adicionam complexidade.
+depois — úteis, mas adicionam complexidade. **Reservar agora (pra não ser
+retrabalho):** cada pincelada nasce com um campo `camada` opcional (padrão
+`'base'`), mesmo com uma camada só na interface. Sem isso, adicionar camadas
+depois obriga a alterar toda pincelada já gravada.
 
 ## Aba Som
 
@@ -1059,7 +1064,11 @@ Parâmetros propostos:
 
 O `transparente` é o único que pede trabalho de motor: uma passada extra depois
 dos opacos, ordenada de trás pra frente. É também o que destrava vidro, fumaça e
-água com profundidade, que hoje são impossíveis.
+água com profundidade, que hoje são impossíveis. O campo `mistura` já está
+reservado no formato, então a peça pode declarar `transparente` desde já; a
+passada de render é **acréscimo**, não reescrita, e depende da ordenação por
+profundidade — mais um motivo pra o WebGL 2 (com textura de profundidade de
+verdade) vir antes.
 
 ### No arquivo
 
