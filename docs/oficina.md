@@ -1378,7 +1378,8 @@ Sem o servidor no ar, cai pro download comum — funciona, mas você move o arqu
 | `chamferBox` | `id`, medidas, `chanfro` | Caixa com quinas suavizadas. |
 | `moveV` | `v`, `d: [x,y,z]` | Move um vértice por deslocamento, nunca por posição absoluta — assim ele acompanha quando a base muda. |
 | `moveA`, `moveF` | `a` / `f`, `d` | Aresta e face, mesma regra. |
-| `extruda` | `face`, `dist` | Cria os vértices novos e as paredes laterais. |
+| `extruda` | `sel`, `dist` | Puxa a seleção por `dist`. **Vértice** (cria um novo ligado por uma aresta), **aresta** (cria uma aresta nova + uma face) e **face** (paredes laterais; região usa só as arestas de borda — algoritmo acima). As três, não só face. |
+| `vira` | `faces: [ids]` | Inverte a direção das faces selecionadas (troca a ordem dos cantos) — barato e seguro. "Recalcular todas pra fora" é só ajudante de **melhor esforço**, conferido no mostrador de direção — nunca confiado cego (em malha ambígua até o Blender erra). |
 | `escala` | `sel`, `fator`, `eixo?` | Sem eixo, uniforme. |
 | `rotaciona` | `sel`, `eixo`, `graus` | Pivô é o centro da seleção. |
 | `mescla` | `de: [ids]`, `para: id` | Some as faces de área zero que sobrarem. |
@@ -1462,6 +1463,24 @@ igual ao resto (`['liso', { faces: [...] }]`).
 
 Sem decidir isso, cada objeto sairia com um sombreado diferente sem ninguém
 entender por quê.
+
+### Direção das faces, à vista
+
+Mostrar pra que lado cada face aponta (fora/dentro) é o `--geo=normais` que a
+bancada já tem (D-65). Na modelagem isso entra como **camada visível ligável**
+— cor por orientação, tipo o azul/vermelho do Blender — pra você achar a face
+virada do avesso a olho. É o par visual do `vira` e do lint de malha: um mostra,
+o outro conserta/acusa.
+
+## Mapeamento de UV: fora de escopo (a projeção-em-caixa fica)
+
+Decisão do ideador (2026-07-20): **não construir UV manual** — desdobrar a
+malha à mão em ilhas, resolver costuras e empacotar é um subsistema inteiro e
+penoso (o que mais dói no Blender). A **projeção-em-caixa** já resolve a
+coordenada de textura sozinha, sem desdobramento, e é a escolha. O preço dela
+(emenda onde a face troca de eixo, distorção em face muito inclinada) é
+aceitável no estilo chapado do jogo. Revisitar só sob dor real — se um dia
+precisar colocar textura num lugar exato que a caixa não acerta.
 
 ## Conforto que evita retrabalho
 
