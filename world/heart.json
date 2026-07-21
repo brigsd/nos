@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 178,
-    "worldTime": 10680
+    "tickCount": 180,
+    "worldTime": 10800
   },
   "width": 64,
   "height": 64,
@@ -6034,6 +6034,37 @@
       "type": "core_pulse",
       "tick": 178,
       "worldTime": 10680
+    },
+    {
+      "type": "native_spoke",
+      "tick": 179,
+      "worldTime": 10740,
+      "nativeId": "brasa",
+      "message": "O pão quentinho tá aqui! Venham, provem antes que esfrie!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 179,
+      "worldTime": 10740,
+      "nativeId": "broa",
+      "message": "Venham, provem o pão quentinho! É alegria pra aquecer o coração!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 179,
+      "worldTime": 10740,
+      "nativeId": "quilha",
+      "message": "Pão quentinho na broa! É o calor que nos une."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 179,
+      "worldTime": 10740
+    },
+    {
+      "type": "core_pulse",
+      "tick": 180,
+      "worldTime": 10800
     }
   ],
   "natives": {
