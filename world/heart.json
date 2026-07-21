@@ -6099,6 +6099,13 @@
       "type": "core_pulse",
       "tick": 184,
       "worldTime": 11040
+    },
+    {
+      "type": "native_spoke",
+      "tick": 184,
+      "worldTime": 11040,
+      "nativeId": "broa",
+      "message": "O pão quentinho tá fresquinho! Venham, provem antes que esfrie!"
     }
   ],
   "natives": {
