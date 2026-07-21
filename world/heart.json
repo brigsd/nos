@@ -6140,6 +6140,13 @@
       "type": "core_pulse",
       "tick": 188,
       "worldTime": 11280
+    },
+    {
+      "type": "native_spoke",
+      "tick": 188,
+      "worldTime": 11280,
+      "nativeId": "brasa",
+      "message": "Venham, o pão quentinho tá na mesa! Não deixem esfriar!"
     }
   ],
   "natives": {
