@@ -1641,7 +1641,7 @@ que é o coração de tudo — sem precisar abrir o editor nem clicar em nada.
    vértice pra cor e peso de osso ficou **reservado** como acréscimo (somar um
    atributo depois é aditivo, não re-migra shader), não embutido — mesmo
    princípio da reserva do WebGPU (D-75).
-1. `[ ]` Estrutura de dados (vértices únicos, faces, identidades) e a lista de passos.
+1. `[x]` **Estrutura de dados (vértices únicos, faces, identidades) e a lista de passos** — feito (D-77): `motor/oficina.js` (núcleo neutro + adaptador v3 + `colisaoDe`), numeração posicional por bloco, vocabulário inicial (cubo/cilindro/moveV/extruda/mescla/pincel-face/solido/liso), a bancada `executar` que prova o replay, e a peça `_oficina-toco`. As operações restantes da tabela entram nos passos que as usam (extruda no 7, mescla+ímã no 8, etc.).
 2. `[ ]` Câmera do editor com cursor livre.
 3. `[ ]` Ver vértices e faces por cima da malha, em canvas 2D.
 4. `[ ]` Selecionar e arrastar **um** vértice, gravado como operação.
