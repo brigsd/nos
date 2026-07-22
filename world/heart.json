@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 199,
-    "worldTime": 11940
+    "tickCount": 201,
+    "worldTime": 12060
   },
   "width": 64,
   "height": 64,
@@ -6307,6 +6307,37 @@
       "type": "core_pulse",
       "tick": 199,
       "worldTime": 11940
+    },
+    {
+      "type": "native_spoke",
+      "tick": 200,
+      "worldTime": 12000,
+      "nativeId": "brasa",
+      "message": "Venham, o pão tá quentinho! Calor de história e de sorrisos juntos."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 200,
+      "worldTime": 12000,
+      "nativeId": "broa",
+      "message": "O pão tá quentinho! Venham, o calor das histórias nos une!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 200,
+      "worldTime": 12000,
+      "nativeId": "quilha",
+      "message": "O pão quentinho tá na mesa, venham! O calor das histórias nos une!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 200,
+      "worldTime": 12000
+    },
+    {
+      "type": "core_pulse",
+      "tick": 201,
+      "worldTime": 12060
     }
   ],
   "natives": {
