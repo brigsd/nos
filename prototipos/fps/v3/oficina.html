@@ -221,7 +221,7 @@ function iniciarPinch() {
 }
 
 canvas.addEventListener('pointerdown', (e) => {
-  canvas.setPointerCapture(e.pointerId);
+  try { canvas.setPointerCapture(e.pointerId); } catch { /* ponteiro já solto / evento sintético */ }
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
   /* PASSO 4 — câmera-vs-arrasto se decide AQUI, ANTES da câmera. Só num gesto
@@ -293,6 +293,7 @@ canvas.addEventListener('pointercancel', soltar);
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
+  if (arrasto) return;   // PASSO 4: zoom NÃO mexe a câmera no meio de um arrasto de vértice — a escala do arrasto está fixada na profundidade daquele instante; zoomar aqui gravaria um moveV com escala velha (defeito do passe adversarial). Entre arrastos, arrasto===null e o zoom segue normal.
   dist *= Math.pow(ZOOM_BASE, e.deltaY);
   clampDist();
 }, { passive: false });

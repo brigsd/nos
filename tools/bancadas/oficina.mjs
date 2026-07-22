@@ -402,6 +402,29 @@ const casaComOverlay = Math.hypot(posNova[0] - posV_agora[0], posNova[1] - posV_
 ok('(4d) o vértice movido está na posição NOVA, não na original', desloc > 0.05 && casaComOverlay < 1e-9,
    `original ${JSON.stringify(pos0.map((n) => +n.toFixed(3)))} -> nova ${JSON.stringify(posNova.map((n) => +n.toFixed(3)))} (deslocou ${desloc.toFixed(3)} em mundo)`);
 
+// (4g) REGRESSÃO (passe adversarial): a roda do mouse DURANTE o arrasto de vértice
+//      é IGNORADA. Senão a câmera zooma com a escala do arrasto congelada e grava um
+//      moveV com escala velha — o vértice deriva do cursor. Guarda: `if (arrasto) return`.
+await page.evaluate((f) => window.__oficina.orbitar(f), F4);
+await rAF2(); await rAF2();
+const pts4g = await page.evaluate(() => window.__oficina.projMalha());
+const alvo4g = escolherVertice(pts4g).v;
+const distAntes4g = await page.evaluate(() => window.__oficina.estado().dist);
+await page.mouse.move(alvo4g.x, alvo4g.y);
+await page.mouse.down();
+await page.mouse.wheel(0, -300);            // tenta ZOOMAR no meio do arrasto de vértice
+await rAF2();
+const distDurante4g = await page.evaluate(() => window.__oficina.estado().dist);
+await page.mouse.move(alvo4g.x + 70, alvo4g.y - 40, { steps: 12 });
+await page.mouse.up();
+const soltou4g = { x: alvo4g.x + 70, y: alvo4g.y - 40 };
+const proj4g = await page.evaluate((id) => window.__oficina.projetarV(id), alvo4g.id);
+const erro4g = Math.hypot(proj4g.x - soltou4g.x, proj4g.y - soltou4g.y);
+ok('(4g) roda IGNORADA durante o arrasto de vértice (dist não muda)', Math.abs(distDurante4g - distAntes4g) < 1e-9,
+   `dist ${distAntes4g.toFixed(3)} -> ${distDurante4g.toFixed(3)}`);
+ok('(4g) e o vértice ainda SEGUE o cursor apesar da roda (escala não corrompida)', erro4g <= 3,
+   `erro ${erro4g.toFixed(2)}px`);
+
 // screenshot: a malha DEFORMADA (vértice arrastado) — o milestone visível
 mkdirSync(OUT4, { recursive: true });
 await page.evaluate(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })); });   // etiquetas de id ligadas
