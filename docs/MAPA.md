@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-193 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+194 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -87,6 +87,7 @@
 - `PORTALS_PROTOCOL.md` — Protocolo dos Portais — R6
 - `RECURSOS.md` — Recursos do coder — o índice único
 - `VISION.md` — Visão — NÓS
+- `oficina-referencia.md` — Oficina — referência de como cada coisa funciona
 - `oficina.md` — A Oficina — editor de objetos dentro do jogo
 - `walkthrough_colaborador2.md` — Resumo de Alterações — Colaborador 2 (T5, T6, T8, T9)
 - `walkthrough_colaborador4.md` — Resumo de Alterações — Colaborador 4 (branch `colaborador4`)

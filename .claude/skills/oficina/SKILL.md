@@ -12,6 +12,7 @@ O editor de objetos que roda dentro do jogo. O roteiro vive em **`docs/oficina.m
 Os arquivos que importam pra Oficina são poucos:
 
 - **`docs/oficina.md`** → "Ordem de construção" (qual é o próximo passo) + a seção que esse passo cita (a spec autoritativa).
+- **`docs/oficina-referencia.md`** — manual plano de "como cada elemento funciona" (identidade dos vértices, operações, controles, formato). Pra ENTENDER rápido o que já existe; o design fica no `oficina.md`.
 - **`prototipos/fps/v3/motor/oficina.js`** — o núcleo (o dado). ~300 linhas; leia inteiro se for mexer no modelo.
 - **`prototipos/fps/v3/oficina.html`** — a interface (câmera, overlay, edição). Onde vive quase todo passo novo.
 - **`prototipos/fps/v3/motor/render.js`** — só os hooks que a Oficina usa (`setCam`/`setLente`/`projetar`/`rodar`). NÃO leia inteiro nem mexa sem o cuidado do `nos-fluxo` (é jóia).
