@@ -43,3 +43,7 @@ O olho erra em normal, luz, alinhamento e geometria (D-65). Onde der, prove com 
 ## Registre a decisão
 
 Toda decisão importante entra em `docs/DECISIONS.md`: uma linha no índice (`D-nº · data · resumo`) + uma entrada de detalhe com o PORQUÊ (o que evita re-debater). Marque também o checklist do roteiro relevante (`[x]`). Decisão que reserva arquitetura ou deixa nuance aberta: escreva a nuance, pra não apodrecer.
+
+## Transferir feature pra o passo certo (princípio do ideador, vale sempre)
+
+Se uma feature do passo atual depende de um pré-requisito que só chega num passo POSTERIOR, **transfira-a pra lá** em vez de antecipar a dependência. Anote a transferência nos DOIS passos do roteiro (origem e destino) + no D-nº. Como o FORMATO SALVO fica estável (a operação gravada não muda), a migração posterior não descarta nada. Ex. (D-88): pintar face rodou pelo swatch no passo 9; a textura pintável / projeção em caixa foi pro passo 11, que é quem de fato precisa dela (o pincel macio) — e projeção em caixa ainda traria um furo (topo/fundo compartilham textura) se viesse cedo.
