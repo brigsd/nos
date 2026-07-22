@@ -127,9 +127,10 @@
  */
 import { createServer } from 'node:http';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { readFileSync, mkdirSync, existsSync } from 'node:fs';
-import { dirname, join, resolve, extname } from 'node:path';
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, rmSync } from 'node:fs';
+import { dirname, join, resolve, extname, relative, sep as pathSep } from 'node:path';
 import zlib from 'node:zlib';
+import { criarServidor } from '../servir.mjs';   // PASSO 10: o servidor de dev REAL (grava em pecas/ + no-store) — a bancada o sobe com pecas/ num dir TEMP
 /* PASSO 4: replay INDEPENDENTE em Node — o núcleo neutro e o canônico, mais
    PARAMS/TOPO do toco, pra re-executar a lista EDITADA (vinda do navegador) e
    provar que refaz o mesmo objeto (o critério do doc), fora do browser. */
@@ -146,6 +147,7 @@ const OUT6 = resolve(REPO, 'scratchpad/passo6');
 const OUT7 = resolve(REPO, 'scratchpad/passo7');
 const OUT8 = resolve(REPO, 'scratchpad/passo8');
 const OUT9 = resolve(REPO, 'scratchpad/passo9');
+const OUT10 = resolve(REPO, 'scratchpad/passo10');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -1663,9 +1665,206 @@ await page.evaluate(() => { window.__oficina.selecionarFaces([]); window.__ofici
 await page.screenshot({ path: join(OUT9, 'oficina-faces-pintadas.png') });   // topo azul + casca verde
 await aoBaseline();
 
+/* ==== PASSO 10: EXPORTAR o objeto como CÓDIGO + COLISÃO automática ==========
+   Prova por NÚMERO: (colisão) o painel reflete colisaoDe do estado atual e o toco
+   (que TEM solido) não mostra o aviso; (marca) o botão REAL grava ['solido',{faces:
+   [ordenadas]}], neutro.F.solido vira true, é desfazível, no-op se já-sólido, e é
+   ignorado no meio de um arrasto; (serialização IDA-E-VOLTA — o CORAÇÃO) depois de
+   editar (arrasto+extruda+pincel+solido), a string exportada, salva num TEMP e
+   RE-IMPORTADA em Node, tem PARAMS/TOPO/PASSOS/meta iguais ao editor e o
+   neutroCanonico BIT-A-BIT igual; (servidor) o servir.mjs REAL grava pecas/<nome>.js
+   (num pecas TEMP, nunca o rastreado) e o arquivo === o conteúdo, re-importar
+   replica; a segurança rejeita ../.., /etc, a/b, .., espaço e símbolo sem escrever
+   fora; um GET serve com no-store; (sem-sólido) uma peça sem solido servida pelo
+   servir.mjs mostra o AVISO e a colisão vira o objeto INTEIRO, e marcar uma face a
+   MUDA; (fallback) sem a rota, o Salvar cai no download sem quebrar. */
+mkdirSync(OUT10, { recursive: true });
+const T_MOTOR = join(OUT10, 'motor');   // shim: '../motor/oficina.js' das peças TEMP re-exporta o motor REAL (pro Node re-importar)
+const T_RT = join(OUT10, 'rt');         // round-trip: a string do editor gravada aqui, re-importada em Node
+const T_SRV = join(OUT10, 'srv');       // pecas/ TEMP onde o servir.mjs grava (NUNCA o rastreado)
+const T_NS = join(OUT10, 'ns');         // pecas/ TEMP com uma peça SEM solido, servida pro browser
+for (const d of [T_MOTOR, T_RT, T_SRV, T_NS]) { rmSync(d, { recursive: true, force: true }); mkdirSync(d, { recursive: true }); }
+const relShim = relative(T_MOTOR, resolve(REPO, 'prototipos/fps/v3/motor/oficina.js')).split(pathSep).join('/');
+writeFileSync(join(T_MOTOR, 'oficina.js'), `export * from ${JSON.stringify(relShim)};\n`);
+const reimportar = async (dir, conteudo, nomeArq) => {   // grava no TEMP e importa em Node (com o shim do motor ao lado)
+  const arq = join(dir, nomeArq + '.js');
+  writeFileSync(arq, conteudo);
+  return import(pathToFileURL(arq).href + '?v=' + Date.now());
+};
+const V3 = resolve(REPO, 'prototipos/fps/v3');
+
+// -------- (10 colisão) o painel reflete colisaoDe; o toco TEM solido → sem aviso --
+await page.evaluate((f) => window.__oficina.orbitar(f), F9); await rAF2();
+await aoBaseline();
+const baseN10 = await nP();
+const colToco = await page.evaluate(() => window.__oficina.colisao());
+const pcToco = await page.evaluate(() => window.__oficina.painelColisao());
+ok('(10 colisão) o painel mostra a colisaoDe do estado atual (raio/altura/base batem)',
+   pcToco.forma === 'cilindro' && pcToco.raio === colToco.raio.toFixed(3) && pcToco.altura === colToco.altura.toFixed(3) && pcToco.base === colToco.base.toFixed(3),
+   `painel r${pcToco.raio}/h${pcToco.altura}/b${pcToco.base} · colisaoDe r${colToco.raio.toFixed(3)}/h${colToco.altura.toFixed(3)}/b${colToco.base.toFixed(3)}`);
+ok('(10 colisão) o toco TEM faces sólidas no baseline → o aviso NÃO aparece',
+   pcToco.aviso === false && (await page.evaluate(() => window.__oficina.temSolido())) === true, `aviso ${pcToco.aviso}`);
+
+// -------- (10 marca) o botão REAL marca faces não-sólidas como sólidas ----------
+const Ftoco = JSON.parse(await canon()).F;                       // [id, vs, cor, mat, liso, solido]
+const naoSolidas = Ftoco.filter((f) => !f[5]).map((f) => f[0]).sort((a, b) => a - b).slice(0, 2);
+ok('(10 marca) o toco tem faces NÃO-sólidas pra marcar (as paredes do galho)', naoSolidas.length === 2, `não-sólidas ${JSON.stringify(naoSolidas)}`);
+await page.evaluate((ids) => window.__oficina.selecionarFaces(ids), naoSolidas); await rAF2();
+const pcAntesMarca = await page.evaluate(() => window.__oficina.painelColisao());
+const nP_antesMarca = await nP();
+const btVis = await page.$eval('#btSolido', (el) => !el.hidden);
+await page.click('#btSolido'); await rAF2();          // CLIQUE REAL no botão (Playwright rola pra vista + evento real)
+const ultimoMarca = await page.evaluate(() => window.__oficina.ultimoPasso());
+const nP_posMarca = await nP();
+const solid0 = await page.evaluate((id) => window.__oficina.solidoDe(id), naoSolidas[0]);
+const solid1 = await page.evaluate((id) => window.__oficina.solidoDe(id), naoSolidas[1]);
+ok('(10 marca) o botão "marcar sólido" aparece com face(s) selecionada(s)', btVis === true && pcAntesMarca.btSolido === true);
+ok('(10 marca) clicar grava [solido,{faces:[ordenadas]}] no fim de PASSOS (cresceu 1)',
+   nP_posMarca === nP_antesMarca + 1 && JSON.stringify(ultimoMarca) === JSON.stringify(['solido', { faces: naoSolidas }]),
+   `PASSOS ${nP_antesMarca}->${nP_posMarca} · último ${JSON.stringify(ultimoMarca)}`);
+ok('(10 marca) neutro.F.solido das faces marcadas VIROU true', solid0 === true && solid1 === true, `solidoDe ${naoSolidas[0]}=${solid0} ${naoSolidas[1]}=${solid1}`);
+await ctrlZ();
+ok('(10 marca) Ctrl+Z desfaz a marcação (solidoDe volta a false, PASSOS ao baseline)',
+   (await page.evaluate((id) => window.__oficina.solidoDe(id), naoSolidas[0])) === false && (await nP()) === nP_antesMarca);
+
+// -------- (10 marca no-op) marcar uma face JÁ sólida não grava passo fantasma ----
+await aoBaseline();
+const jaSolida = Ftoco.filter((f) => f[5]).map((f) => f[0])[0];   // uma face já sólida no baseline (0..9)
+await page.evaluate((id) => window.__oficina.selecionarFaces([id]), jaSolida); await rAF2();
+const noopMarca = await page.evaluate(() => window.__oficina.marcarSolido());
+ok('(10 marca no-op) marcar uma face JÁ sólida é NO-OP (devolve null, PASSOS não muda)',
+   noopMarca === null && (await nP()) === baseN10, `pintar-solido(#${jaSolida}) → ${noopMarca === null ? 'null' : JSON.stringify(noopMarca)}`);
+
+// -------- (10 marca guarda) marcar no meio de um arrasto (extrude) é IGNORADO -----
+await aoBaseline();
+await page.evaluate((f) => window.__oficina.orbitar(f), F9); await rAF2(); await rAF2();
+await page.evaluate(() => window.__oficina.selecionarFace(9)); await rAF2();
+const hMarca = await page.evaluate(() => window.__oficina.handleFace());
+const gMarca = hMarca && !hMarca.travada ? await agarreLivre(hMarca) : null;
+if (gMarca) {
+  await page.mouse.move(gMarca.x, gMarca.y); await page.mouse.down();
+  await page.mouse.move(gMarca.x + hMarca.dir[0] * 24, gMarca.y + hMarca.dir[1] * 24, { steps: 8 });   // extrude EM CURSO
+  const emArr = await page.evaluate(() => window.__oficina.emArrasto());
+  const nP_antesGm = await nP();
+  const marcaDur = await page.evaluate(() => window.__oficina.marcarSolido());
+  const nP_durGm = await nP();
+  await page.mouse.up(); await rAF2();
+  ok('(10 marca guarda) marcar no meio de um arrasto é IGNORADO (devolve null, PASSOS não muda)',
+     emArr && emArr.extruda === true && marcaDur === null && nP_durGm === nP_antesGm, `emArrasto ${JSON.stringify(emArr)} · marcar→${marcaDur === null ? 'null' : 'GRAVOU'}`);
+} else { ok('(10 marca guarda) handle da face 9 disponível pra o teste de guarda', false, 'handle travado/ausente'); }
+await aoBaseline();
+
+// -------- (10 serialização IDA-E-VOLTA) — o CORAÇÃO ----------------------------
+await page.evaluate((f) => window.__oficina.orbitar(f), F9); await rAF2(); await rAF2();
+await arrastarVertice(26, -20);                                                   // moveV REAL (arrasto)
+await page.evaluate(() => window.__oficina.selecionarFace(9)); await rAF2();
+await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }))); await rAF2();   // extruda (tecla E)
+await page.evaluate(() => { window.__oficina.selecionarFaces([9]); window.__oficina.pintar('#2277cc'); }); await rAF2();   // pinta
+const paraSolido = JSON.parse(await canon()).F.filter((f) => !f[5]).map((f) => f[0])[0];   // uma face não-sólida qualquer
+await page.evaluate((id) => { window.__oficina.selecionarFaces([id]); window.__oficina.marcarSolido(); }, paraSolido); await rAF2();   // marca sólido
+const canonEdit = await canon();
+const strEdit = await page.evaluate(() => window.__oficina.serializar());
+const passosEdit = await page.evaluate(() => window.__oficina.passos());
+const Mrt = await reimportar(T_RT, strEdit, 'rt_editado');
+const canonNodeEdit = JSON.stringify(neutroCanonico(nucleo(Mrt.PASSOS, Mrt.PARAMS, Mrt.TOPO)));
+ok('(10 serial) o export tem o cabeçalho, o import e a CHAMADA colisaoDe(PASSOS, PARAMS, TOPO) (não o valor)',
+   strEdit.startsWith('/*') && strEdit.includes("import { executar, colisaoDe } from '../motor/oficina.js';") &&
+   /colisao:\s*colisaoDe\(PASSOS, PARAMS, TOPO\)/.test(strEdit) && !/colisao:\s*\{/.test(strEdit));
+ok('(10 serial) PARAMS e TOPO reabrem iguais ao editor', JSON.stringify(Mrt.PARAMS) === JSON.stringify(toco.PARAMS) && JSON.stringify(Mrt.TOPO) === JSON.stringify(toco.TOPO),
+   `PARAMS ${JSON.stringify(Mrt.PARAMS)} · TOPO ${JSON.stringify(Mrt.TOPO)}`);
+ok('(10 serial) PASSOS reabrem iguais à lista EDITADA (arrasto+extruda+pincel+solido)',
+   JSON.stringify(Mrt.PASSOS) === JSON.stringify(passosEdit) && Mrt.PASSOS.length === baseN10 + 4, `${Mrt.PASSOS.length} passos (baseline ${baseN10} + 4 edições)`);
+ok('(10 serial) meta.nome/tipo/desc iguais + colisao é objeto recalculado (cilindro)',
+   Mrt.meta.nome === toco.meta.nome && Mrt.meta.tipo === toco.meta.tipo && Mrt.meta.desc === toco.meta.desc && Mrt.meta.colisao && Mrt.meta.colisao.forma === 'cilindro');
+ok('(10 serial ★) neutroCanonico BIT-A-BIT: a peça exportada REABRE IDÊNTICA à editada (página == Node)',
+   canonNodeEdit === canonEdit, `${canonNodeEdit.length} chars, ${canonNodeEdit === canonEdit ? 'idêntico' : 'DIVERGE'}`);
+
+// -------- (10 servidor) o servir.mjs REAL grava em pecas/ TEMP + segurança + no-store
+const srv = criarServidor({ raiz: V3, pecas: T_SRV });
+await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+const sbase = `http://127.0.0.1:${srv.address().port}`;
+const rGrava = await fetch(`${sbase}/oficina/salvar`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nome: 'teste_export', conteudo: strEdit }) });
+const jGrava = await rGrava.json();
+const gravado = existsSync(join(T_SRV, 'teste_export.js')) ? readFileSync(join(T_SRV, 'teste_export.js'), 'utf8') : null;
+ok('(10 servidor grava) POST {nome:teste_export} grava pecas/teste_export.js e o arquivo === o conteúdo enviado',
+   rGrava.status === 200 && jGrava.ok === true && gravado === strEdit, `status ${rGrava.status} · igual ${gravado === strEdit}`);
+const Mg = await import(pathToFileURL(join(T_SRV, 'teste_export.js')).href + '?v=' + Date.now());
+ok('(10 servidor grava) re-importar o arquivo GRAVADO replica o objeto (canônico == editor)',
+   JSON.stringify(neutroCanonico(nucleo(Mg.PASSOS, Mg.PARAMS, Mg.TOPO))) === canonEdit);
+const antesSeg = readdirSync(T_SRV).sort().join(',');
+const maus = ['../../evil', '/etc/passwd', 'a/b', '..', 'com espaco', 'x;rm -rf'];
+let rejeitados = 0;
+for (const mau of maus) { const rr = await fetch(`${sbase}/oficina/salvar`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nome: mau, conteudo: 'HACK' }) }); if (rr.status >= 400) rejeitados++; }
+const depoisSeg = readdirSync(T_SRV).sort().join(',');
+const escapou = existsSync(join(OUT10, 'evil.js')) || existsSync(resolve(V3, 'evil.js')) || existsSync(resolve(REPO, 'evil.js')) || existsSync('/tmp/HACK') || existsSync(join(T_SRV, '..', 'evil.js'));
+ok('(10 segurança) TODOS os nomes maliciosos rejeitados (../.., /etc, a/b, .., espaço, símbolo)', rejeitados === maus.length, `${rejeitados}/${maus.length} rejeitados (status>=400)`);
+ok('(10 segurança) NADA escrito fora nem a mais em pecas/ (o traversal não escapou)', antesSeg === depoisSeg && !escapou, `pecas antes [${antesSeg}] depois [${depoisSeg}] · escapou ${escapou}`);
+const rNoStore = await fetch(`${sbase}/motor/oficina.js`);
+ok('(10 no-store) GET a um módulo serve com Cache-Control: no-store', rNoStore.status === 200 && rNoStore.headers.get('cache-control') === 'no-store', `cache-control ${rNoStore.headers.get('cache-control')}`);
+srv.close();
+
+// -------- (10 sem-sólido) peça SEM solido servida pelo servir.mjs → aviso + objeto todo
+const SEM_SOLIDO = `/* semsolido — fixture da bancada (passo 10): peça SEM solido, pra provar o aviso e a colisão do objeto inteiro. */
+import { executar, colisaoDe } from '../motor/oficina.js';
+export const PARAMS = { r: 0.5, h: 1 };
+export const TOPO = { lados: 8 };
+export const PASSOS = [
+  ['cilindro', { id: 0, raio: 'r', altura: 'h', lados: 'lados' }],
+];
+export const meta = { nome: 'semsolido', tipo: 'objeto', desc: 'sem solido', colisao: colisaoDe(PASSOS, PARAMS, TOPO) };
+export function construir(ctx) { return executar(PASSOS, PARAMS, TOPO, ctx); }
+`;
+writeFileSync(join(T_NS, 'semsolido.js'), SEM_SOLIDO);
+const srvNS = criarServidor({ raiz: V3, pecas: T_NS });
+await new Promise((r) => srvNS.listen(0, '127.0.0.1', r));
+const nsBase = `http://127.0.0.1:${srvNS.address().port}`;
+const page2 = await browser.newPage({ viewport: { width: VW, height: VH } });
+page2.on('pageerror', (e) => console.error('PAGEERR(ns):', e.message));
+await page2.goto(`${nsBase}/oficina.html?peca=semsolido`, { waitUntil: 'load' });
+await page2.waitForFunction(() => window.__ready === true, { timeout: 15000 }).catch(() => {});
+const ready2 = await page2.evaluate(() => window.__ready === true);
+ok('(10 sem-sólido) o servir.mjs serve a Oficina + a peça SEM solido, e ela abre (window.__ready)', ready2);
+const pc2 = await page2.evaluate(() => window.__oficina.painelColisao());
+const col2 = await page2.evaluate(() => window.__oficina.colisao());
+const temSol2 = await page2.evaluate(() => window.__oficina.temSolido());
+ok('(10 sem-sólido) NENHUMA face sólida → o AVISO aparece EM DESTAQUE', pc2.aviso === true && temSol2 === false, `aviso ${pc2.aviso} · temSolido ${temSol2}`);
+ok('(10 sem-sólido) a colisão usa o OBJETO INTEIRO (raio≈0.5, altura≈1, base≈0)',
+   Math.abs(col2.raio - 0.5) < 1e-9 && Math.abs(col2.altura - 1) < 1e-9 && Math.abs(col2.base) < 1e-9, `raio ${col2.raio} altura ${col2.altura} base ${col2.base}`);
+await page2.screenshot({ path: join(OUT10, 'oficina-sem-solido-aviso.png') });
+// marcar o TOPO (face 9) sólido → a colisão MUDA (só o anel de cima: altura → 0) e o aviso some
+await page2.evaluate(() => window.__oficina.selecionarFaces([9])); await rAF2();
+const marcou2 = await page2.evaluate(() => window.__oficina.marcarSolido());
+const col2b = await page2.evaluate(() => window.__oficina.colisao());
+const pc2b = await page2.evaluate(() => window.__oficina.painelColisao());
+ok('(10 sem-sólido→marca) marcar a face 9 grava [solido,{faces:[9]}] e solidoDe(9)=true',
+   JSON.stringify(marcou2) === JSON.stringify(['solido', { faces: [9] }]) && (await page2.evaluate(() => window.__oficina.solidoDe(9))) === true);
+ok('(10 sem-sólido→marca) a colisão MUDOU (só o topo: altura 1→0, base 0→1) e o aviso SUMIU',
+   Math.abs(col2b.altura) < 1e-9 && Math.abs(col2b.base - 1) < 1e-9 && pc2b.aviso === false && pc2b.altura === col2b.altura.toFixed(3),
+   `altura ${col2.altura}→${col2b.altura} · base ${col2.base}→${col2b.base} · aviso ${pc2b.aviso}`);
+await page2.close();
+srvNS.close();
+
+// -------- (10 fallback) sem a rota (server estático da bancada), o Salvar baixa ---
+await aoBaseline();
+const dlAntes = await page.evaluate(() => window.__oficina.ultimoDownload());
+const resSalvar = await page.evaluate(() => window.__oficina.salvar());   // POST → 404 (rota ausente aqui) → FALLBACK download
+const dlDepois = await page.evaluate(() => window.__oficina.ultimoDownload());
+ok('(10 fallback) sem a rota de salvar, o Salvar cai no DOWNLOAD sem quebrar (blob + <a download>)',
+   resSalvar && resSalvar.via === 'download' && dlAntes === null && dlDepois && dlDepois.nome.endsWith('.js') && dlDepois.tamanho > 200,
+   `via ${resSalvar && resSalvar.via} · download ${JSON.stringify(dlDepois)}`);
+
+// screenshot do passo 10: painel de colisão + face marcada sólida na peça principal
+await page.evaluate((f) => window.__oficina.orbitar(f), F9); await rAF2();
+await aoBaseline();
+await page.evaluate(() => window.__oficina.selecionarFaces([1000, 1001])); await rAF2();
+await page.screenshot({ path: join(OUT10, 'oficina-colisao-painel.png') });
+await aoBaseline();
+// limpa os dirs TEMP de peças (scratchpad é gitignored; some com o repo limpo)
+for (const d of [T_MOTOR, T_RT, T_SRV, T_NS]) rmSync(d, { recursive: true, force: true });
+
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}\n               ${join(OUT10, 'oficina-sem-solido-aviso.png')}\n               ${join(OUT10, 'oficina-colisao-painel.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex).`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex); passo 10: EXPORTAR + COLISÃO — o painel reflete colisaoDe (raio/altura/base) e o botão REAL grava ['solido',{faces:[ordenadas]}] (neutro.F.solido vira true, desfazível, no-op se já-sólido, ignorado no arrasto); a serialização IDA-E-VOLTA depois de editar (arrasto+extruda+pincel+solido) reabre BIT-A-BIT idêntica (página == Node, com a CHAMADA colisaoDe(PASSOS, PARAMS, TOPO) gravada, não o valor); o servir.mjs REAL grava pecas/<nome>.js num dir TEMP (arquivo === conteúdo, re-import replica), rejeita ../.., /etc, a/b, .., espaço e símbolo sem escrever fora, e serve com Cache-Control: no-store; uma peça sem solido mostra o AVISO e a colisão vira o objeto INTEIRO (marcar o topo a muda: altura 1→0); e sem a rota o Salvar cai no download sem quebrar.`);

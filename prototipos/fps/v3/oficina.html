@@ -44,7 +44,14 @@
   .chip.on { color: #10131c; background: var(--accent); border-color: var(--accent); font-weight: 700; }
   .ph { font-size: 9px; color: var(--dim); border: 1px dashed var(--line); border-radius: 4px;
     padding: 1px 6px; text-transform: uppercase; letter-spacing: .08em; }
-  #modos .dir { margin-left: auto; }
+  /* PASSO 10: botão SALVAR (barra de modos, à direita) + a mensagem do resultado */
+  #modos .dir { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .btsalvar { font-size: 11px; font-weight: 700; letter-spacing: .02em; color: #10131c; flex: none;
+    background: var(--hud); border: 1px solid var(--hud); border-radius: 6px; padding: 5px 14px; cursor: pointer; }
+  .btsalvar:hover { filter: brightness(1.08); }
+  .btsalvar:active { transform: translateY(1px); }
+  .salvar-msg { font-size: 10px; color: var(--dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .salvar-msg.erro { color: var(--amber); }
 
   /* painel de PROPRIEDADES à direita (passo 6: vértice selecionado + caixa do objeto) */
   #props { position: fixed; top: 44px; right: 0; bottom: 26px; width: min(320px, 32vw); z-index: 9;
@@ -97,6 +104,10 @@
     border: 1px dashed #f9c22b66; border-radius: 6px; padding: 6px; background: #f9c22b0f; }
   #props.emArrasto .leitura { display: block; }
   #props.emArrasto .bloco { border-color: #f9c22b40; }
+  /* PASSO 10: aviso EM DESTAQUE quando NÃO há face sólida (colisão = objeto todo) */
+  #props .aviso { font-size: 10px; color: var(--amber); text-align: center; margin-top: 9px;
+    border: 1px solid #f9c22b66; border-radius: 6px; padding: 6px 8px; background: #f9c22b12; line-height: 1.45; }
+  #props .aviso[hidden] { display: none; }
 
   /* barra de STATUS embaixo: nome da peça · câmera · fps · dev-string */
   #status { position: fixed; bottom: 0; left: 0; right: 0; height: 26px; z-index: 11;
@@ -126,7 +137,12 @@
     <span class="chip">Desenho</span><span class="chip on">Objeto</span><span class="chip">Som</span></div>
   <div class="grupo"><span class="rot">espaço</span>
     <span class="chip on">Modelar</span><span class="chip">Material</span><span class="chip">Animação</span></div>
-  <div class="dir"><span class="ph">placeholder — sem função no passo 2</span></div>
+  <!-- PASSO 10: SALVAR — exporta o objeto como .js (serializado do estado atual) e
+       POSTa pro servidor de dev (grava em pecas/); sem servidor, baixa o .js. -->
+  <div class="dir">
+    <span id="salvarMsg" class="salvar-msg"></span>
+    <button id="btSalvar" class="btsalvar" type="button" title="exporta o objeto como código e grava em pecas/ (ou baixa, sem servidor)">Salvar peça</button>
+  </div>
 </header>
 
 <aside id="props">
@@ -167,6 +183,22 @@
     </div>
   </section>
 
+  <!-- PASSO 10: COLISÃO — o cilindro que colisaoDe encaixa na malha FINAL (raio/
+       altura/base), recalculado a cada edição. Das faces SÓLIDAS se houver; senão do
+       objeto INTEIRO, e aí o aviso aparece EM DESTAQUE (a copa da árvore não pode
+       virar parede — docs/oficina.md "Encaixe automático da colisão"). O botão marca
+       as faces selecionadas como sólidas (aparece só com face(s) selecionada(s)). -->
+  <section class="bloco" id="blocoColisao">
+    <div class="rotulo">Colisão <span id="pcolForma" class="badge">cilindro</span></div>
+    <div class="dims">
+      <div class="dim"><span class="dk">raio</span><b id="pcolR">—</b></div>
+      <div class="dim"><span class="dk">altura</span><b id="pcolH">—</b></div>
+      <div class="dim"><span class="dk">base</span><b id="pcolB">—</b></div>
+    </div>
+    <div class="aviso" id="pcolAviso" hidden>sem face sólida → a colisão usa o objeto INTEIRO</div>
+    <button id="btSolido" class="btmescla" type="button" hidden>Marcar <span id="pSolidoN">2</span> faces como sólidas · colisão</button>
+  </section>
+
   <div class="leitura" id="pLeitura">arrastando — painel em leitura</div>
 </aside>
 
@@ -195,7 +227,7 @@
    "abrir solta o cursor travado, senão não dá pra clicar em nada") — NENHUM
    requestPointerLock; os passos futuros clicam em vértice/face. */
 import { criarVisor } from './motor/render.js';
-import { nucleo, executar, neutroCanonico } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números); passo 4: re-executa a lista ao vivo (executar/nucleo) e compara canônico
+import { nucleo, executar, neutroCanonico, colisaoDe } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números); passo 4: re-executa a lista ao vivo (executar/nucleo) e compara canônico; passo 10: colisaoDe (colisão sugerida no painel + a CHAMADA gravada no export)
 import { m4 } from './motor/mat4.js';
 import * as tex from './motor/tex.js';
 import * as geo from './motor/geo.js';
@@ -392,6 +424,93 @@ function pontoEmPoligono(x, y, poly) {
     if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) dentro = !dentro;
   }
   return dentro;
+}
+
+/* ---- PASSO 10: EXPORTAR o objeto como CÓDIGO (serialização) + SALVAR --------
+   Monta uma string .js IDÊNTICA ao molde do toco (pecas/_oficina-toco.js /
+   docs/oficina.md "Formato do arquivo gerado"): cabeçalho de comentário (a Oficina
+   precisa dele pro `mapa:check` quando a peça for commitada), o import, os três
+   `export const` PARAMS/TOPO/PASSOS, o `meta` com a colisão como a CHAMADA literal
+   `colisaoDe(PASSOS, PARAMS, TOPO)` (NÃO o valor — recalcula no load, um dono só,
+   como o doc exige) e `construir`. Os PASSOS saem UMA op por linha, legíveis. A
+   prova é o IDA-E-VOLTA: re-importar o .js gerado dá o MESMO objeto bit-a-bit —
+   por isso `String(número)` (round-trip-safe pra double) em vez de arredondar. */
+function jsStr(s) { return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r') + "'"; }
+function jsVal(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '0';   // String(double) reabre idêntico; não-finito nunca deve chegar, mas não vaza NaN pro arquivo
+  if (typeof v === 'string') return jsStr(v);
+  if (typeof v === 'boolean' || v === null) return String(v);
+  if (Array.isArray(v)) return '[' + v.map(jsVal).join(', ') + ']';
+  if (v && typeof v === 'object') { const ks = Object.keys(v); return ks.length ? '{ ' + ks.map((k) => `${k}: ${jsVal(v[k])}`).join(', ') + ' }' : '{}'; }
+  return 'null';
+}
+function jsPasso(p) { const op = jsStr(p[0]); return (p.length > 1 && p[1] !== undefined) ? `[${op}, ${jsVal(p[1])}]` : `[${op}]`; }
+/* a STRING .js completa. `PASSOS` uma op por linha (2 espaços), como o toco. */
+function serializarPeca(meta, PARAMS, TOPO, PASSOS) {
+  const nome = (meta && meta.nome) || 'peca';
+  const tipo = (meta && meta.tipo) || 'objeto';
+  const desc = (meta && meta.desc) || '';
+  const passosTxt = (PASSOS || []).map((p) => '  ' + jsPasso(p) + ',').join('\n');
+  return `/* ${nome} — peça-objeto gerada pela OFICINA (exportar, passo 10). Descrita
+   100% como lista de PASSOS + PARAMS/TOPO e reconstruída por \`executar\`; a Oficina
+   relê este mesmo arquivo pra reabrir a edição (por isso PARAMS/TOPO/PASSOS são
+   exportados). \`meta.colisao\` é CALCULADA no load por colisaoDe, não guardada.
+   Reabrir: visor.html?peca=${nome} · npm run peca -- ${nome} */
+import { executar, colisaoDe } from '../motor/oficina.js';
+
+/* dimensionais: mudar à vontade, NÃO alteram a contagem de vértices nem a
+   numeração — os passos seguintes seguem apontando pros mesmos pontos. */
+export const PARAMS = ${jsVal(PARAMS || {})};
+
+/* topológico: mudar RECONSTRÓI e pode deixar os passos seguintes órfãos. */
+export const TOPO = ${jsVal(TOPO || {})};
+
+/* exportado (não \`const\` privado): sem isto a Oficina não relê a lista e o
+   arquivo nunca mais reabre pra edição. Os passos citam o NOME do parâmetro. */
+export const PASSOS = [
+${passosTxt}
+];
+
+export const meta = {
+  nome: ${jsStr(nome)},
+  tipo: ${jsStr(tipo)},
+  desc: ${jsStr(desc)},
+  /* CALCULADA, não guardada: o jogo lê isto no carregamento do módulo, antes de
+     construir(). colisaoDe roda só a geometria e encaixa a colisão na malha FINAL. */
+  colisao: colisaoDe(PASSOS, PARAMS, TOPO),
+};
+
+export function construir(ctx) { return executar(PASSOS, PARAMS, TOPO, ctx); }
+`;
+}
+
+/* SALVAR: POST pro servidor de dev (grava direto em pecas/); se ele não responder
+   (fora do ar, ou servido por `python -m http.server`, que não tem a rota), FALLBACK
+   pro download comum do .js (blob + <a download>). `ultimoDownload` deixa a bancada
+   afirmar que o fallback disparou sem quebrar. O fetch é RELATIVO à página, então
+   resolve pra /oficina/salvar servido de v3 (servir.mjs) tanto quanto do repo. */
+let ultimoDownload = null;
+function baixar(nomeArq, conteudo) {
+  const blob = new Blob([conteudo], { type: 'text/javascript' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `${nomeArq}.js`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  ultimoDownload = { nome: `${nomeArq}.js`, tamanho: conteudo.length, ts: Date.now() };
+  return ultimoDownload;
+}
+function msgSalvar(txt, erro) { const el = document.getElementById('salvarMsg'); if (!el) return; el.textContent = txt; el.classList.toggle('erro', !!erro); }
+async function salvarPeca(nomeArq, conteudo) {
+  try {
+    const r = await fetch(new URL('oficina/salvar', location.href), {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nome: nomeArq, conteudo }),
+    });
+    if (r.ok) { const j = await r.json().catch(() => ({})); if (j && j.ok) { msgSalvar(`salvo em pecas/${nomeArq}.js`, false); return { via: 'servidor', ...j }; } }
+  } catch { /* servidor fora do ar → cai pro download */ }
+  const d = baixar(nomeArq, conteudo);
+  msgSalvar(`baixado ${nomeArq}.js (servidor fora — mova pra pecas/)`, true);
+  return { via: 'download', ...d };
 }
 
 /* ---- entrada: mouse + toque unificados em Pointer Events ------------------
@@ -629,6 +748,28 @@ try {
       return [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]];
     };
     const campos = ['pvx', 'pvy', 'pvz'].map($);
+    /* PASSO 10 — COLISÃO no painel: roda colisaoDe(PASSOS,PARAMS,TOPO) — a MESMA
+       função que o arquivo salvo chama no load — e mostra forma/raio/altura/base. Se
+       NENHUMA face é sólida, colisaoDe usa o objeto INTEIRO e o aviso aparece EM
+       DESTAQUE (a copa não pode virar parede). O botão de marcar aparece só com
+       face(s) selecionada(s) e some no arrasto (leitura), como o de mesclar. */
+    const temSolidoAtual = () => !!neutro && [...neutro.F.values()].some((f) => f.solido);
+    function atualizarColisao() {
+      if (!$('pcolForma')) return;   // markup ausente: no-op (robustez)
+      let col = null;
+      try { col = colisaoDe(PASSOS, PARAMS, TOPO); } catch { col = null; }
+      $('pcolR').textContent = col ? col.raio.toFixed(3) : '—';
+      $('pcolH').textContent = col ? col.altura.toFixed(3) : '—';
+      $('pcolB').textContent = col ? col.base.toFixed(3) : '—';
+      const av = $('pcolAviso'); if (av) av.hidden = temSolidoAtual();   // aviso só sem face sólida
+      const bt = $('btSolido');
+      if (bt) {
+        const temFaces = selFaces.length >= 1 && !!neutro;
+        bt.hidden = !temFaces;
+        bt.disabled = !temFaces || !!arrasto;
+        const n = $('pSolidoN'); if (n && temFaces) n.textContent = String(selFaces.length);
+      }
+    }
     atualizarPainel = () => {
       const badge = $('pvSel'); if (!badge) return;   // markup ausente: no-op (robustez)
       const temSel = selecionado != null && neutro && neutro.V.has(selecionado);
@@ -678,6 +819,7 @@ try {
       $('pdx').textContent = dims ? dims[0].toFixed(3) : '—';
       $('pdy').textContent = dims ? dims[1].toFixed(3) : '—';
       $('pdz').textContent = dims ? dims[2].toFixed(3) : '—';
+      atualizarColisao();   // PASSO 10: colisão sugerida + aviso sem-sólido + botão marcar
       $('props').classList.toggle('emArrasto', !!arrasto);
     };
     /* VALOR EXATO (opcional do brief / D-73): digitar um número move o vértice pro
@@ -721,6 +863,21 @@ try {
         const b = e.target.closest('.sw'); if (!b || !malhaCtl) return;
         const cor = b.getAttribute('data-cor'); const pc = $('pcCor'); if (pc) pc.value = cor;   // o input reflete o preset clicado
         malhaCtl.pintar(cor);
+      }); }
+
+    /* PASSO 10 — o botão "marcar sólido" grava pela MESMA via de malhaCtl.marcarSolido
+       (a guarda de arrasto + o no-op de já-sólido cobrem). malhaCtl já está montado
+       quando o botão fica visível (só aparece com face selecionada). Sem tecla
+       dedicada de propósito: o design de "Modos de entrada" (docs/oficina.md) reserva
+       S/E/R pra escala/extruda/rotação — então a marcação vive no painel, como o
+       pincel do passo 9. */
+    { const bt = $('btSolido'); if (bt) bt.addEventListener('click', () => { if (malhaCtl) malhaCtl.marcarSolido(); }); }
+    /* PASSO 10 — o botão "Salvar peça" serializa o estado ATUAL (mod/PASSOS/PARAMS/
+       TOPO) e POSTa pro servidor de dev; sem servidor, baixa o .js (fallback). */
+    { const bt = $('btSalvar'); if (bt) bt.addEventListener('click', async () => {
+        bt.disabled = true;
+        try { await salvarPeca(mod.meta.nome, serializarPeca(mod.meta, PARAMS, TOPO, PASSOS)); }
+        finally { bt.disabled = false; }
       }); }
 
     /* ---- PASSO 5: DESFAZER / REFAZER (em cima do passo 4) --------------------
@@ -945,6 +1102,33 @@ try {
         atualizarPassos();
         atualizarPainel();
         console.log(`oficina passo 9 (pincel): ['pincel', {modo:'face', faces:[${faces.join(', ')}], cor:'${alvo}'}] — PASSOS agora ${PASSOS.length}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+
+      /* ---- PASSO 10: MARCAR FACES SÓLIDAS (o que entra na COLISÃO) ----------- */
+      /* MARCAR SÓLIDO: grava ['solido',{faces:[ORDENADAS]}] no fim de PASSOS e
+         reexec (a op `solido` do NÚCLEO já existe/provada — só SETA f.solido=true,
+         NÃO desmarca; o Ctrl+Z reverte). Limpa o redo. Desfazível como toda edição.
+         `faces` ORDENADO (forma canônica, replay/diff estáveis). Muda a colisão que o
+         painel mostra (colisaoDe passa a encaixar só nas faces sólidas). Devolve o
+         passo (ou null se no-op). GUARDAS, espelhando o pincel do passo 9:
+           · `arrasto` em curso → no-op (mexer em PASSOS com uma edição em voo
+             tangleria a lista — mesma classe da roda/Ctrl+Z dos passos 4/5);
+           · TODAS as faces já sólidas → no-op (o núcleo é idempotente; marcar de novo
+             não muda o neutro — nada de passo fantasma, D3 do passo 6/9). */
+      marcarSolido() {
+        if (arrasto) return null;                        // guarda: não marca com edição em voo
+        if (!selFaces.length || !neutro) return null;    // precisa de face(s) selecionada(s)
+        const faces = selFaces.filter((id) => neutro.F.has(id)).sort((a, b) => a - b);
+        if (!faces.length) return null;
+        if (faces.every((id) => neutro.F.get(id).solido)) return null;   // todas já sólidas: sem passo fantasma
+        const passo = ['solido', { faces }];
+        PASSOS.push(passo);
+        redo.length = 0;                                 // edição nova invalida o refazer (semântica do passo 5)
+        reexec(PASSOS);
+        atualizarPassos();
+        atualizarPainel();
+        console.log(`oficina passo 10 (solido): ['solido', {faces:[${faces.join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
         return JSON.parse(JSON.stringify(passo));
       },
 
@@ -1468,6 +1652,16 @@ try {
     corEfetiva: (id) => { const f = neutro && neutro.F.get(id); return f ? (f.cor ?? COR_PADRAO) : null; }, // cor que a face MOSTRA (null vira COR_PADRAO) — bate o read-back do input
     corPadrao: COR_PADRAO,                                                             // a madeira neutra do adaptador, espelhada aqui (a bancada prova que a paleta concorda)
     painelCor: () => ({ vis: !$('blocoCor').hidden, cor: $('pcCor').value, faces: $('pcFaces').textContent }),   // leitura do bloco de cor pra a bancada afirmar
+    /* ---- PASSO 10: sólido + colisão + serialização + salvar (a bancada mede) --- */
+    marcarSolido: () => (malhaCtl ? malhaCtl.marcarSolido() : null),                  // marca as faces selecionadas como sólidas; devolve o passo (ou null se no-op/guarda)
+    solidoDe: (id) => { const f = neutro && neutro.F.get(id); return f ? !!f.solido : false; },   // a face id é sólida no neutro?
+    temSolido: () => { const F = neutro && neutro.F; return F ? [...F.values()].some((f) => f.solido) : false; },   // há ALGUMA face sólida?
+    colisao: () => { try { return colisaoDe(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}); } catch { return null; } },   // {forma,raio,altura,base} do estado atual (a MESMA função que o arquivo salvo chama no load)
+    painelColisao: () => ({ forma: $('pcolForma').textContent, raio: $('pcolR').textContent, altura: $('pcolH').textContent, base: $('pcolB').textContent, aviso: !$('pcolAviso').hidden, btSolido: !$('btSolido').hidden }),   // leitura do bloco Colisão pra a bancada afirmar
+    serializar: () => serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS),   // a STRING .js do export (do estado ATUAL)
+    salvar: () => salvarPeca(mod.meta.nome, serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS)),   // dispara o salvar (POST → fallback download); devolve {via,...}
+    ultimoDownload: () => (ultimoDownload ? { ...ultimoDownload } : null),            // o último download disparado pelo fallback (null = nenhum ainda)
+    nomePeca: () => mod.meta.nome,                                                    // o nome do arquivo que o salvar usa
     /* paleta REAL do render: roda executar (núcleo+adaptarV3) e lê os pixels do
        SWATCH que o motor sobe pra GPU — os hexes DISTINTOS que de fato viram
        textura. Prova que a cor pintada chega ao render (não fica só no dado). */

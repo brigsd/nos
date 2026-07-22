@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-194 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+195 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -241,6 +241,7 @@
 ## tools/
 
 - `README.md` — tools/ — as ferramentas do coder (o lar unificado)
+- `servir.mjs` — servir.mjs — servidor de DESENVOLVIMENTO da Oficina (passo 10). Faz duas coisas: (1) serve `prototipos/fps/v3/` ESTÁTICO com `Cache-Control: no-store` — mata…
 
 ## tools/art-mcp/
 
