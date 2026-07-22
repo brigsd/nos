@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-191 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+193 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -29,6 +29,14 @@
 ## .claude/skills/estruturas/
 
 - `SKILL.md` — Fluxo de criação e auditoria de estruturas no cliente FPS do NÓS — blueprint de topo (prancheta), colisão, paredes/arcos com profundidade, verificação multi-…
+
+## .claude/skills/nos-fluxo/
+
+- `SKILL.md` — O fluxo pra construir e entregar QUALQUER feature no repo NÓS — orquestrar subagentes (coder + revisor adversarial por risco), verificar por medição, o cuida…
+
+## .claude/skills/oficina/
+
+- `SKILL.md` — A Oficina — o editor de objetos in-game do NÓS (arquitetura, ciclo de construção, verificação, armadilhas). Use SEMPRE que for construir/continuar um passo d…
 
 ## assets/
 
