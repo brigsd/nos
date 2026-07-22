@@ -1644,7 +1644,7 @@ que é o coração de tudo — sem precisar abrir o editor nem clicar em nada.
 1. `[x]` **Estrutura de dados (vértices únicos, faces, identidades) e a lista de passos** — feito (D-77): `motor/oficina.js` (núcleo neutro + adaptador v3 + `colisaoDe`), numeração posicional por bloco, vocabulário inicial (cubo/cilindro/moveV/extruda/mescla/pincel-face/solido/liso), a bancada `executar` que prova o replay, e a peça `_oficina-toco`. As operações restantes da tabela entram nos passos que as usam (extruda no 7, mescla+ímã no 8, etc.).
 2. `[x]` **Câmera do editor com cursor livre** — feito (D-78): `oficina.html`, esqueleto D-73 + órbita/pan/zoom dirigindo o motor por `setCam`, centragem provada por medição (`projetar`, 0.00px). Nuance de centrar na área visível resolvida com lente deslocada (D-79); auto-enquadrar peça arbitrária segue aberto.
 3. `[x]` **Ver vértices e faces por cima da malha, em canvas 2D** — feito (D-80): overlay 2D (`pointer-events:none`) desenha os vértices (pontos) e faces (arestas) do neutro (`nucleo`), projetados por `visor.projetar`, redesenhado no `antesDoQuadro` (casa com o quadro + a lente D-79). Alinhamento provado por bbox de pixels (19/19); tecla `i` mostra os ids.
-4. `[ ]` Selecionar e arrastar **um** vértice, gravado como operação.
+4. `[x]` **Selecionar e arrastar um vértice, gravado como operação** — feito, o MILESTONE (D-81): hit-test câmera-vs-vértice no `pointerdown`, arrasto 2D→3D no plano da câmera na profundidade do vértice (segue o cursor 0.04-0.06px, provado por medição), grava `moveV`, e a lista editada re-executada refaz o objeto bit-idêntico (página == Node). "O teste da ideia inteira" passou.
 5. `[ ]` Desfazer e refazer em cima disso.
 6. `[ ]` Gizmo de eixos e o painel lateral.
 7. `[ ]` Extrudar.
