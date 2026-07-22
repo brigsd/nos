@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). -->
+<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
@@ -170,6 +170,21 @@ let selecionado = null;
 let arrasto = null;
 let malhaCtl = null;
 
+/* PASSO 5 — DESFAZER / REFAZER das edições DESTA sessão. O objeto É a lista
+   (passo 4): toda edição é uma operação no FIM de PASSOS, então desfazer = tirar
+   a última e re-executar; refazer = pôr de volta. Estado no escopo do módulo (o
+   keydown e os ganchos de __oficina, lá embaixo, precisam alcançar), LIGADO
+   quando a peça abre — igual malhaCtl.
+     baseline — quantas operações vieram do ARQUIVO (a definição da peça). O piso
+                do desfazer: NUNCA remove a construção original, só o que se editou
+                nesta sessão. (Peça vazia teria baseline 0 e desfaria tudo.)
+     redo     — pilha das operações desfeitas. Uma EDIÇÃO NOVA a LIMPA (o
+                futuro-refazer é invalidado — semântica padrão do Ctrl+Z/Y). */
+let baseline = 0;
+const redo = [];
+let desfazer = () => false;   // no-op até a peça abrir (assinados no try da malha)
+let refazer = () => false;
+
 const clampEl = () => { el = Math.max(-EL_LIMITE, Math.min(EL_LIMITE, el)); };
 const clampDist = () => { dist = Math.max(MIN_DIST, Math.min(MAX_DIST, dist)); };
 
@@ -317,11 +332,13 @@ try {
      gl.TRIANGLES fixo — não faz ponto nem linha. */
   const octx = malha.getContext('2d');
 
-  /* PASSO 4 — feedback de que GRAVOU: contador de passos + último op no status. */
+  /* PASSO 4/5 — feedback no status: total de passos + quantos há pra DESFAZER
+     (o que se editou nesta sessão, n − baseline) e pra REFAZER (a pilha redo). */
   function atualizarPassos() {
-    const arr = mod.PASSOS || [], n = arr.length, u = arr[n - 1];
+    const arr = mod.PASSOS || [], n = arr.length;
+    const nDesf = Math.max(0, n - baseline), nRef = redo.length;
     const el = $('passos');
-    if (el) el.textContent = `passos ${n}` + (u ? ` · ${u[0]}${u[1] && u[1].v != null ? ' v' + u[1].v : ''}` : '');
+    if (el) el.textContent = `passos ${n} · desfazer ${nDesf} · refazer ${nRef}`;
   }
 
   try {
@@ -344,6 +361,29 @@ try {
       const r = nucleo(passos, PARAMS, TOPO);
       neutro = { V: r.V, F: r.F };
     };
+
+    /* ---- PASSO 5: DESFAZER / REFAZER (em cima do passo 4) --------------------
+       Como toda edição é uma operação no FIM de PASSOS, o histórico não precisa
+       de sistema à parte: desfazer TIRA a última (empilhando em redo) e re-executa;
+       refazer faz o inverso. Determinístico — só mexe na lista e reexec refaz o
+       objeto (o mesmo ciclo do passo 4). O baseline é travado AGORA, com a lista
+       exatamente como veio do ARQUIVO (nenhuma edição aconteceu ainda). */
+    baseline = PASSOS.length;   // o piso: desfazer não passa daqui (a construção da peça)
+    desfazer = () => {
+      if (PASSOS.length <= baseline) return false;   // no-op no piso: não desfaz a peça, só a sessão
+      redo.push(PASSOS.pop());                        // tira a última edição, guarda pra refazer
+      reexec(PASSOS);                                 // o objeto se refaz da lista encurtada
+      atualizarPassos();
+      return true;
+    };
+    refazer = () => {
+      if (redo.length === 0) return false;            // no-op: nada pra refazer
+      PASSOS.push(redo.pop());                         // devolve a última desfeita ao fim da lista
+      reexec(PASSOS);
+      atualizarPassos();
+      return true;
+    };
+
     malhaCtl = {
       /* hit-test contra os vértices PROJETADOS do último quadro (o MESMO estado
          que o overlay desenha). Devolve o id mais próximo dentro de RAIO_HIT. */
@@ -383,6 +423,7 @@ try {
         let gravou = false;
         if (movPix >= LIMIAR_PX) {
           PASSOS.push(['moveV', { v: id, d }]);
+          redo.length = 0;   // PASSO 5: edição nova invalida o futuro-refazer (semântica padrão)
           gravou = true;
           console.log(`oficina passo 4: gravado ['moveV', {v:${id}, d:[${d.map((n) => n.toFixed(3)).join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
         }
@@ -472,6 +513,19 @@ try {
   }
   addEventListener('keydown', (e) => { if (e.key === 'i' || e.key === 'I') verIds = !verIds; });
 
+  /* PASSO 5 — teclas de desfazer/refazer. Ctrl+Z desfaz; Ctrl+Y ou Ctrl+Shift+Z
+     refaz (também aceita ⌘ no Mac). preventDefault SÓ nessas combinações — o
+     navegador rouba o Ctrl+Z, e sem isto ele desfaria no campo/na página. Não
+     conflita com o cursor livre (nenhum pointer lock) nem com a tecla `i`
+     (etiquetas), que é sem Ctrl. Repetição de tecla (segurar) desfaz em série,
+     que é o comportamento esperado. */
+  addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); desfazer(); }
+    else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); refazer(); }
+  });
+
   /* DESLOCAMENTO DE LENTE: o painel direito (e as barras) cobrem parte da cena,
      então a imagem é deslizada pra o objeto ficar centrado na ÁREA LIVRE (janela
      menos painel/barras) SEM mover o alvo da órbita — mover o alvo faria o objeto
@@ -529,6 +583,11 @@ try {
     nPassos: () => mod.PASSOS.length,
     ultimoPasso: () => { const u = mod.PASSOS[mod.PASSOS.length - 1]; return u ? JSON.parse(JSON.stringify(u)) : null; },
     canon: () => neutroCanonico(nucleo(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {})),   // neutro CANÔNICO dos PASSOS atuais (replay determinístico)
+    /* ---- PASSO 5: ganchos de desfazer/refazer (a bancada dispara e afirma) --- */
+    desfazer: () => desfazer(),      // tira a última edição (se >baseline) e reexec; devolve false = no-op (piso)
+    refazer: () => refazer(),        // devolve a última desfeita ao fim da lista; false = redo vazio
+    nRedo: () => redo.length,        // tamanho da pilha de refazer
+    baseline: () => baseline,        // o piso: nº de passos que vieram do ARQUIVO
     limiar: LIMIAR_PX, raioHit: RAIO_HIT,
   };
   window.__ready = true;

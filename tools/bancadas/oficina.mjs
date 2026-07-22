@@ -34,7 +34,20 @@
  *        cursor livre — o passo 2 segue valendo;
  *   (4f) CLIQUE SÓ SELECIONA: pointerdown+up sem passar do limiar seleciona mas
  *        NÃO grava moveV.
- * Screenshots em scratchpad/passo2..4/. Sai 1 se algo falhar.
+ *   PASSO 5 (desfazer/refazer — em cima do passo 4, teclas REAIS do Chromium):
+ *   (5 teclas) Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z chamam preventDefault (o navegador
+ *        rouba o Ctrl+Z); a tecla `i` (etiquetas) NÃO é interceptada;
+ *   (5 desfaz) arrasta (PASSOS baseline→+1), Ctrl+Z volta PASSOS ao baseline E o
+ *        neutro CANÔNICO volta a bater BIT-A-BIT com o de ANTES do arrasto;
+ *   (5 refaz) Ctrl+Y (e o alternativo Ctrl+Shift+Z) devolve PASSOS +1 E o neutro
+ *        bate com o de DEPOIS do arrasto;
+ *   (5 piso) no baseline, Ctrl+Z é NO-OP — não remove a construção da peça;
+ *   (5 limpa) arrasta, Ctrl+Z, arrasta de novo → pilha redo vazia (Ctrl+Y não
+ *        ressuscita a 1ª desfeita — a edição nova invalidou o refazer);
+ *   (5 vários) 3 arrastos → 3 Ctrl+Z voltam ao baseline (neutro == pristino do
+ *        arquivo, conferido em Node à parte) → 3 refaz reconstroem o neutro
+ *        IDÊNTICO ao estado com os 3.
+ * Screenshots em scratchpad/passo2..5/. Sai 1 se algo falhar.
  *
  *   npm run oficina
  */
@@ -54,6 +67,7 @@ const REPO = resolve(HERE, '../..');
 const OUT = resolve(REPO, 'scratchpad/passo2');
 const OUT3 = resolve(REPO, 'scratchpad/passo3');
 const OUT4 = resolve(REPO, 'scratchpad/passo4');
+const OUT5 = resolve(REPO, 'scratchpad/passo5');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -431,9 +445,124 @@ await page.evaluate(() => { window.dispatchEvent(new KeyboardEvent('keydown', { 
 await rAF2();
 await page.screenshot({ path: join(OUT4, 'oficina-vertice-arrastado.png') });
 
+/* ==== PASSO 5: DESFAZER e REFAZER (em cima do passo 4) ======================
+   Como toda edição é uma operação no FIM de PASSOS, desfazer = tirar a última e
+   reexec; refazer = pôr de volta. A prova é por MEDIÇÃO do neutro CANÔNICO (o
+   replay determinístico): ao desfazer, tem que bater BIT-A-BIT com o de ANTES do
+   arrasto; ao refazer, com o de DEPOIS. As teclas são REAIS (page.keyboard →
+   eventos confiáveis do Chromium), não sintéticas. */
+await page.evaluate((f) => window.__oficina.orbitar(f), F4);
+await rAF2(); await rAF2();
+
+// atalhos de tecla REAIS (eventos confiáveis) + leitura de estado por gancho
+const ctrlZ = async () => { await page.keyboard.down('Control'); await page.keyboard.press('KeyZ'); await page.keyboard.up('Control'); await rAF2(); };
+const ctrlY = async () => { await page.keyboard.down('Control'); await page.keyboard.press('KeyY'); await page.keyboard.up('Control'); await rAF2(); };
+const ctrlShiftZ = async () => { await page.keyboard.down('Control'); await page.keyboard.down('Shift'); await page.keyboard.press('KeyZ'); await page.keyboard.up('Shift'); await page.keyboard.up('Control'); await rAF2(); };
+const canon = () => page.evaluate(() => JSON.stringify(window.__oficina.canon()));
+const nP = () => page.evaluate(() => window.__oficina.nPassos());
+const nRedo = () => page.evaluate(() => window.__oficina.nRedo());
+// arrasta o vértice mais isolado por (dx,dy) e grava um moveV; devolve o id
+async function arrastarVertice(dx, dy) {
+  const pts = await page.evaluate(() => window.__oficina.projMalha());
+  const a = escolherVertice(pts).v;
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  await page.mouse.move(a.x + dx, a.y + dy, { steps: 14 }); await page.mouse.up();
+  await rAF2();
+  return a.id;
+}
+
+// (5 teclas) as três combinações chamam preventDefault (o navegador rouba o
+// Ctrl+Z); a tecla `i` NÃO. Evento cancelável → defaultPrevented prova a guarda.
+// (Muta o desfazer/refazer, mas o baseline é recomposto logo abaixo.)
+const zPrev = await page.evaluate(() => { const e = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+const yPrev = await page.evaluate(() => { const e = new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+const zsPrev = await page.evaluate(() => { const e = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true, cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+const iPrev = await page.evaluate(() => { const e = new KeyboardEvent('keydown', { key: 'i', cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+ok('(5 teclas) Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z chamam preventDefault', zPrev && yPrev && zsPrev, `z ${zPrev} · y ${yPrev} · shift+z ${zsPrev}`);
+ok('(5 teclas) a tecla i (etiquetas) NÃO é interceptada (sem conflito de tecla)', iPrev === false, `i defaultPrevented ${iPrev}`);
+
+// PISO + volta ao baseline: Ctrl+Z repetido desfaz o que o passo 4 gravou e PARA
+// exatamente no baseline (a construção da peça, vinda do arquivo, não se desfaz).
+const baseN = await page.evaluate(() => window.__oficina.baseline());
+let guard = 0;
+while ((await nP()) > baseN && guard++ < 60) await ctrlZ();
+const nLimpo = await nP();
+ok('(5) Ctrl+Z desfaz as edições da sessão até o BASELINE', nLimpo === baseN, `PASSOS ${nLimpo} == baseline ${baseN}`);
+const canonBase = await canon();   // neutro do baseline (a peça pura do arquivo)
+// prova NÃO-circular: o baseline reproduz o objeto PRISTINO do arquivo (Node à parte)
+const canonNodeBase = JSON.stringify(neutroCanonico(nucleo(toco.PASSOS, toco.PARAMS, toco.TOPO)));
+ok('(5) desfazer até o baseline reproduz a peça PURA do arquivo (página == Node pristino)', canonBase === canonNodeBase, `canônico ${canonBase.length} chars, bit-a-bit igual ao arquivo`);
+// PISO: no baseline, mais um Ctrl+Z é NO-OP (PASSOS e neutro intactos)
+await ctrlZ();
+const nPiso = await nP(), canonPiso = await canon();
+ok('(5 piso) no baseline, Ctrl+Z é NO-OP (não remove passo da peça)', nPiso === baseN && canonPiso === canonBase, `PASSOS ${nPiso}, neutro ${canonPiso === canonBase ? 'idêntico' : 'MUDOU'}`);
+
+// (5 desfaz) arrasta (baseline→+1) e Ctrl+Z volta ao baseline com o neutro de ANTES
+const nAntes = await nP();                     // == baseline
+const canonAntes = await canon();              // == canonBase
+const idA = await arrastarVertice(84, -52);    // grava 1 moveV (LIMPA o redo)
+const nDepois = await nP();
+const canonDepois = await canon();
+ok('(5 desfaz) o arrasto gravou (PASSOS baseline→+1)', nDepois === nAntes + 1, `PASSOS ${nAntes} -> ${nDepois} (vértice ${idA})`);
+ok('(5 desfaz) o arrasto MUDOU o neutro (edição de verdade)', canonDepois !== canonAntes);
+ok('(5 desfaz) a edição nova LIMPOU o redo', (await nRedo()) === 0, `redo ${await nRedo()}`);
+await ctrlZ();
+const nPosUndo = await nP(), canonPosUndo = await canon();
+ok('(5 desfaz) Ctrl+Z volta PASSOS ao baseline', nPosUndo === nAntes, `PASSOS ${nDepois} -> ${nPosUndo}`);
+ok('(5 desfaz) e o neutro canônico VOLTA a bater BIT-A-BIT com o de ANTES do arrasto', canonPosUndo === canonAntes, `${canonPosUndo === canonAntes ? 'idêntico' : 'DIVERGE'}`);
+ok('(5 desfaz) desfazer encheu o redo (1 pra refazer)', (await nRedo()) === 1, `redo ${await nRedo()}`);
+
+// (5 refaz) Ctrl+Y devolve o passo e o neutro bate com o de DEPOIS
+await ctrlY();
+const nPosRedo = await nP(), canonPosRedo = await canon();
+ok('(5 refaz) Ctrl+Y refez (PASSOS +1)', nPosRedo === nDepois, `PASSOS ${nPosUndo} -> ${nPosRedo}`);
+ok('(5 refaz) e o neutro bate BIT-A-BIT com o de DEPOIS do arrasto', canonPosRedo === canonDepois, `${canonPosRedo === canonDepois ? 'idêntico' : 'DIVERGE'}`);
+// o atalho ALTERNATIVO Ctrl+Shift+Z também refaz: desfaz e refaz por ele
+await ctrlZ();
+ok('(5 refaz) Ctrl+Z de novo volta ao baseline', (await canon()) === canonAntes);
+await ctrlShiftZ();
+ok('(5 refaz) Ctrl+Shift+Z também refaz (alternativa de Ctrl+Y)', (await nP()) === nDepois && (await canon()) === canonDepois, `PASSOS ${await nP()}, neutro ${(await canon()) === canonDepois ? 'idêntico' : 'DIVERGE'}`);
+
+// (5 limpa) edição NOVA invalida o refazer: arrasta, Ctrl+Z, arrasta de novo →
+// redo vazio, e Ctrl+Y não ressuscita a 1ª desfeita.
+await ctrlZ();                                  // volta ao baseline; redo = [moveV idA]
+const redoAposUndo = await nRedo();
+const idC = await arrastarVertice(-72, 44);     // edição NOVA → deve LIMPAR o redo
+const redoAposNova = await nRedo();
+ok('(5 limpa) após desfazer, o redo tinha 1', redoAposUndo === 1, `redo ${redoAposUndo}`);
+ok('(5 limpa) a edição nova LIMPA o redo (fica 0)', redoAposNova === 0, `redo ${redoAposNova} (vértice ${idC})`);
+const nAntesNoop = await nP(), canonAntesNoop = await canon();
+await ctrlY();                                   // redo vazio → no-op: não traz a 1ª de volta
+ok('(5 limpa) Ctrl+Y com redo vazio é NO-OP (não ressuscita a edição desfeita)', (await nP()) === nAntesNoop && (await canon()) === canonAntesNoop, `PASSOS ${await nP()}, neutro ${(await canon()) === canonAntesNoop ? 'intacto' : 'MUDOU'}`);
+
+// (5 vários) 3 arrastos → 3 desfaz → baseline; 3 refaz → neutro idêntico aos 3
+guard = 0;
+while ((await nP()) > baseN && guard++ < 60) await ctrlZ();
+ok('(5 vários) partindo do baseline', (await nP()) === baseN, `PASSOS ${await nP()}`);
+const canonV0 = await canon();
+await arrastarVertice(62, -38); await arrastarVertice(-54, -28); await arrastarVertice(46, 52);
+const nTres = await nP(), canonTres = await canon();
+ok('(5 vários) 3 arrastos somam 3 passos', nTres === baseN + 3, `PASSOS ${baseN} -> ${nTres}`);
+await ctrlZ(); await ctrlZ(); await ctrlZ();
+ok('(5 vários) 3 Ctrl+Z voltam ao baseline', (await nP()) === baseN, `PASSOS ${nTres} -> ${await nP()}`);
+ok('(5 vários) e o neutro bate com o baseline', (await canon()) === canonV0, `${(await canon()) === canonV0 ? 'idêntico' : 'DIVERGE'}`);
+await ctrlY(); await ctrlY(); await ctrlY();
+ok('(5 vários) 3 refaz reconstroem os 3 passos', (await nP()) === nTres, `PASSOS ${await nP()}`);
+ok('(5 vários) e o neutro é IDÊNTICO ao estado com os 3 arrastos', (await canon()) === canonTres, `${(await canon()) === canonTres ? 'idêntico' : 'DIVERGE'}`);
+
+// status reflete desfazer/refazer (feedback visível): "passos N · desfazer M · refazer K"
+const statusTxt = await page.evaluate(() => document.getElementById('passos').textContent);
+ok('(5 status) a barra mostra passos/desfazer/refazer', /passos \d+ · desfazer \d+ · refazer \d+/.test(statusTxt), `"${statusTxt}"`);
+
+// screenshot do estado com os 3 refeitos — o milestone do passo 5 visível
+mkdirSync(OUT5, { recursive: true });
+await page.evaluate(() => { const e = document.getElementById('passos'); e.style.color = '#f9c22b'; });
+await rAF2();
+await page.screenshot({ path: join(OUT5, 'oficina-desfazer-refazer.png') });
+
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio.`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico.`);
