@@ -1642,7 +1642,7 @@ que é o coração de tudo — sem precisar abrir o editor nem clicar em nada.
    atributo depois é aditivo, não re-migra shader), não embutido — mesmo
    princípio da reserva do WebGPU (D-75).
 1. `[x]` **Estrutura de dados (vértices únicos, faces, identidades) e a lista de passos** — feito (D-77): `motor/oficina.js` (núcleo neutro + adaptador v3 + `colisaoDe`), numeração posicional por bloco, vocabulário inicial (cubo/cilindro/moveV/extruda/mescla/pincel-face/solido/liso), a bancada `executar` que prova o replay, e a peça `_oficina-toco`. As operações restantes da tabela entram nos passos que as usam (extruda no 7, mescla+ímã no 8, etc.).
-2. `[ ]` Câmera do editor com cursor livre.
+2. `[x]` **Câmera do editor com cursor livre** — feito (D-78): `oficina.html`, esqueleto D-73 + órbita/pan/zoom dirigindo o motor por `setCam` (render.js intacto), centragem provada por medição (`projetar`, 0.00px). Duas nuances abertas em D-78 (centrar na área visível pede projeção deslocada; auto-enquadrar peça arbitrária).
 3. `[ ]` Ver vértices e faces por cima da malha, em canvas 2D.
 4. `[ ]` Selecionar e arrastar **um** vértice, gravado como operação.
 5. `[ ]` Desfazer e refazer em cima disso.
