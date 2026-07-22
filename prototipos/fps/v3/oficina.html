@@ -245,6 +245,19 @@ try {
   visor.carregar(mod.construir({ TS, tex, geo, m4 }));
   aplicarCamera();   // já aponta antes do 1º quadro (pra projetar/hooks valerem de cara)
 
+  /* DESLOCAMENTO DE LENTE: o painel direito (e as barras) cobrem parte da cena,
+     então a imagem é deslizada pra o objeto ficar centrado na ÁREA LIVRE (janela
+     menos painel/barras) SEM mover o alvo da órbita — mover o alvo faria o objeto
+     varrer um arco ao girar. Lê os tamanhos reais do DOM; recalcula no resize. */
+  function ajustarLente() {
+    const pw = $('props').getBoundingClientRect().width;
+    const th = $('modos').getBoundingClientRect().height;
+    const sh = $('status').getBoundingClientRect().height;
+    visor.setLente(pw / innerWidth, (th - sh) / innerHeight);
+  }
+  ajustarLente();
+  addEventListener('resize', ajustarLente);
+
   const dev = `${visor.info()} · tex ${16 * TS}px · ${visor.renderer}`;
   const elNome = $('nome'), elCam = $('cam'), elFps = $('fps'), elDev = $('dev');
   function atualizarStatus(fps) {

@@ -147,26 +147,34 @@ ok('(a) a CÂMERA mexeu a cena bem além do piso de animação',
 
 await page.screenshot({ path: join(OUT, 'oficina-depois.png') });
 
-// (c) CENTRAGEM rigorosa: o alvo, projetado pelo MOTOR, fica no centro em vários
-//     azimutes; e um ponto fora do eixo varre a tela (a câmera dá a volta mesmo).
+// (c) ÓRBITA CORRETA + LENTE: o alvo, projetado pelo MOTOR, fica ESTÁVEL ao
+//     orbitar (não varre); a lente o leva pra a ÁREA LIVRE (à esquerda do painel);
+//     e um ponto fora do eixo varre a tela (a câmera dá a volta mesmo).
 const R = await page.evaluate(async () => {
-  const centro = { x: innerWidth / 2, y: innerHeight / 2 };
   const alvo = window.__oficina.estado().alvo;
   const fora = [alvo[0] + 0.6, alvo[1], alvo[2]];
   const espera = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(0))));
-  const desvios = [], forasX = [];
+  const ax = [], ay = [], forasX = [];
   for (const az of [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]) {
     window.__oficina.orbitar({ az, el: 0.4, dist: 2.6, alvo });
     await espera();
     const pa = window.__oficina.projetar(alvo);
-    if (!pa) { desvios.push(9999); continue; }
-    desvios.push(Math.hypot(pa.x - centro.x, pa.y - centro.y));
+    if (!pa) { ax.push(99999); continue; }
+    ax.push(pa.x); ay.push(pa.y);
     const pf = window.__oficina.projetar(fora);
     if (pf) forasX.push(pf.x);
   }
-  return { centro, desvioMax: Math.max(...desvios), forasSpread: forasX.length > 1 ? Math.max(...forasX) - Math.min(...forasX) : 0, nForas: forasX.length };
+  const spread = (a) => (a.length > 1 ? Math.max(...a) - Math.min(...a) : 0);
+  const media = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+  return {
+    estab: Math.max(spread(ax), spread(ay)),   // o alvo NÃO deve andar ao orbitar (invariante da órbita, agnóstico à lente)
+    alvoMedX: media(ax), centroX: innerWidth / 2,
+    painel: document.getElementById('props').getBoundingClientRect().width,
+    forasSpread: spread(forasX), nForas: forasX.length,
+  };
 });
-ok('(c) alvo CENTRADO em todo azimute (projeção do motor ≤ 3px do centro)', R.desvioMax <= 3, `desvio máx ${R.desvioMax.toFixed(2)}px`);
+ok('(c) alvo ESTÁVEL ao orbitar (projeção do motor não varre)', R.estab <= 3, `variação ${R.estab.toFixed(2)}px em 7 azimutes`);
+ok('(c) LENTE leva o alvo pra a área livre (à esquerda do centro, ~metade do painel)', R.centroX - R.alvoMedX > R.painel * 0.35, `alvo ${Math.round(R.alvoMedX)}px · centro ${Math.round(R.centroX)}px · painel ${Math.round(R.painel)}px`);
 ok('(c) a câmera dá a VOLTA (ponto fora do eixo varre a tela)', R.forasSpread > 80, `varredura ${Math.round(R.forasSpread)}px em ${R.nForas} ângulos`);
 
 const projAlvo = await page.evaluate(() => window.__oficina.projetar());

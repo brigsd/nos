@@ -313,6 +313,7 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
   let farCfg = 60;  // far plane; paisagens (far>100) sobem o near junto (precisão do depth16)
   let camCfg = {};  // câmera SUGERIDA pela peça {e,r} (paisagem pede órbita alta) — ?e/?r vencem
   let freeCam = null;  // {pos:[x,y,z], yaw, pitch} — câmera de JOGADOR (jogo.html); substitui a órbita quando setada
+  let lente = [0, 0];  // DESLOCAMENTO DE LENTE (NDC x,y): projeção assimétrica que desliza a imagem inteira sem girar a câmera. A Oficina usa pra centrar o objeto na área livre (fora do painel). [0,0] = projeção normal, efeito nenhum — o jogo/visor nunca mexem nisto.
   let extras = [];     // camada de DEPURAÇÃO (colisores etc). Vazia = nada a pagar.
   let mvpAtual = null, camAtualPos = null;   // do último quadro, pra projetar()
   const visor = {
@@ -320,6 +321,10 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
     /* câmera livre (jogo.html chama a cada quadro com a posição/olhar do
        jogador); passar null volta pra órbita — usado só no visor da Oficina */
     setCam(pos, yaw, pitch) { freeCam = pos ? { pos, yaw, pitch } : null; },
+    /* DESLOCAMENTO DE LENTE em NDC (x,y): desliza a imagem inteira sem girar a
+       câmera (projeção assimétrica) — a Oficina usa pra centrar o objeto na área
+       livre, fora do painel. [0,0] = sem efeito; o jogo nunca chama, fica normal. */
+    setLente(x, y) { lente = [x || 0, y || 0]; },
     /* carrega uma peça construída:
        {lotes:[{mesh,tex,matriz?}], animar?, palco?, particulas?, fog?} —
        mesh ainda em CPU ({v}) e tex ainda canvas: o visor sobe pra GPU aqui.
@@ -359,7 +364,9 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
         const { pos: fp, yaw, pitch } = freeCam;
         const cy = Math.cos(pitch), sy = Math.sin(pitch), sx = Math.sin(yaw), cx = Math.cos(yaw);
         const lk = m4.lookAt(fp, [fp[0] + sx * cy, fp[1] + sy, fp[2] + cx * cy], [0, 1, 0]);
-        M = m4.mul(m4.persp(58 * Math.PI / 180, IW / IH, 0.05, farCfg), lk);
+        const pj = m4.persp(58 * Math.PI / 180, IW / IH, 0.05, farCfg);
+        pj[8] += lente[0]; pj[9] += lente[1];   // MESMA lente do render, senão projetar() mente sobre onde o ponto cai na tela
+        M = m4.mul(pj, lk);
         C = fp;
       }
       if (!M) return null;
@@ -479,6 +486,7 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
         /* IH muda quando a janela muda de proporção, então a abertura é lida
            aqui e não uma vez só — senão o mundo volta a esticar ao redimensionar */
         const proj = m4.persp(58 * Math.PI/180, IW/IH, near, farCfg);
+        proj[8] += lente[0]; proj[9] += lente[1];   // DESLOCAMENTO DE LENTE (NDC): [0,0] no jogo/visor = sem efeito
         const mvp = m4.mul(proj, lookAtM);
         mvpAtual = mvp; camAtualPos = camPos;   // guardados pra projetar()
 
