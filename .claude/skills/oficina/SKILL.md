@@ -7,6 +7,19 @@ description: A Oficina — o editor de objetos in-game do NÓS (arquitetura, cic
 
 O editor de objetos que roda dentro do jogo. O roteiro vive em **`docs/oficina.md` → "Ordem de construção"** (checklist `[x]/[~]/[ ]`); as decisões, em `docs/DECISIONS.md` (D-73…D-82). Regra de ouro: **o visor usa o MESMO motor do jogo** (`render.js`) — o que fica bom aqui fica bom no jogo.
 
+## Por onde começar (leia estes, pule o resto)
+
+Os arquivos que importam pra Oficina são poucos:
+
+- **`docs/oficina.md`** → "Ordem de construção" (qual é o próximo passo) + a seção que esse passo cita (a spec autoritativa).
+- **`prototipos/fps/v3/motor/oficina.js`** — o núcleo (o dado). ~300 linhas; leia inteiro se for mexer no modelo.
+- **`prototipos/fps/v3/oficina.html`** — a interface (câmera, overlay, edição). Onde vive quase todo passo novo.
+- **`prototipos/fps/v3/motor/render.js`** — só os hooks que a Oficina usa (`setCam`/`setLente`/`projetar`/`rodar`). NÃO leia inteiro nem mexa sem o cuidado do `nos-fluxo` (é jóia).
+- **`tools/bancadas/oficina.mjs`** — a bancada que prova cada passo com número.
+- **`docs/DECISIONS.md`** (D-73…) — o porquê de cada escolha.
+
+A **árvore completa** do repo (todo arquivo + um resumo por arquivo) fica em **`docs/MAPA.md`**, gerado e sempre fresco — vá lá só quando precisar de algo fora desta lista.
+
 ## A ideia central: o objeto É a lista de passos
 
 Uma peça é o **envelope**: `FORMATO` + `PARAMS` (dimensionais, citados por NOME) + `TOPO` (topológicos, mudam a contagem de vértices) + `PASSOS` (a lista `[['op',{...}],...]`) + `meta` + `construir`. **Editar = mexer na lista + re-executar** — não existe estado paralelo. É isso que dá undo/replay/IA de graça. Nada de aleatório sem semente escrita no passo.
