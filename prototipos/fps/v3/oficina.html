@@ -1,0 +1,279 @@
+<!doctype html>
+<!-- oficina.html — a INTERFACE da Oficina (passo 2, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>NÓS · Oficina — editor (v3)</title>
+<style>
+  :root {
+    --bg: #0c0f16; --panel: #141826; --panel2: #0f1320; --line: #2a2f45;
+    --accent: #a884f3; --ink: #c7cbe0; --dim: #7b82a0; --hud: #cddf6c; --amber: #f9c22b;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden;
+    font-family: ui-monospace, Menlo, monospace; color: var(--ink); }
+
+  /* A CENA é o canvas de tela cheia POR BAIXO de tudo. O motor v3 dimensiona o
+     backbuffer por innerWidth/innerHeight e tira a proporção da JANELA inteira
+     (render.js: propJanela + resize) — então o canvas TEM que ser de tela cheia,
+     senão a cena estica. Por isso os painéis do D-73 são sobreposições fixas nas
+     bordas (o mesmo padrão de visor.html/jogo.html), não células de um grid que
+     encolheriam o canvas. O centro livre é a "cena no centro" do layout. */
+  #c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0;
+    image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; cursor: grab; }
+  #c.arrastando { cursor: grabbing; }
+
+  /* barra de MODOS no topo (placeholder — passo futuro dá função) */
+  #modos { position: fixed; top: 0; left: 0; right: 0; height: 44px; z-index: 10;
+    display: flex; align-items: center; gap: 14px; padding: 0 12px;
+    background: #141826e6; border-bottom: 1px solid var(--line); }
+  #modos .marca { color: var(--accent); font-weight: 700; letter-spacing: .06em; }
+  #modos .grupo { display: flex; gap: 6px; align-items: center; }
+  #modos .rot { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+  .chip { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--dim); background: #0f1320; user-select: none; }
+  .chip.on { color: #10131c; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .ph { font-size: 9px; color: var(--dim); border: 1px dashed var(--line); border-radius: 4px;
+    padding: 1px 6px; text-transform: uppercase; letter-spacing: .08em; }
+  #modos .dir { margin-left: auto; }
+
+  /* painel de PROPRIEDADES à direita (placeholder — passo 6 preenche) */
+  #props { position: fixed; top: 44px; right: 0; bottom: 26px; width: min(320px, 32vw); z-index: 9;
+    background: #141826e6; border-left: 1px solid var(--line); padding: 14px; overflow: auto; }
+  #props h2 { margin: 0 0 4px; font-size: 12px; letter-spacing: .04em; color: var(--ink); }
+  #props .sub { font-size: 10px; color: var(--dim); margin-bottom: 12px; }
+  #props .placeholder { border: 1px dashed var(--line); border-radius: 8px; padding: 14px;
+    background: #0f132066; color: var(--dim); font-size: 11px; line-height: 1.6; }
+  #props .placeholder b { color: var(--ink); }
+
+  /* barra de STATUS embaixo: nome da peça · câmera · fps · dev-string */
+  #status { position: fixed; bottom: 0; left: 0; right: 0; height: 26px; z-index: 11;
+    display: flex; align-items: center; gap: 16px; padding: 0 12px; white-space: nowrap; overflow: hidden;
+    font-size: 11px; background: #0f1320f2; border-top: 1px solid var(--line); color: var(--hud);
+    font-variant-numeric: tabular-nums; }
+  #status b { color: var(--amber); font-weight: 400; }
+  #status .sep { flex: 1; }
+  #status .dev { color: var(--dim); }
+
+  /* legenda dos controles: canto da cena, não rouba clique */
+  #ajuda { position: fixed; left: 12px; bottom: 34px; z-index: 8; pointer-events: none;
+    font-size: 10px; color: var(--dim); text-shadow: 0 1px 2px #000; line-height: 1.6; }
+  #ajuda b { color: var(--hud); font-weight: 400; }
+
+  #erro { position: fixed; inset: 0; z-index: 20; display: none; place-items: center;
+    background: #0c0f16dd; color: #ff9c9c; font-size: 13px; text-align: center; padding: 24px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<header id="modos">
+  <span class="marca">OFICINA</span>
+  <div class="grupo"><span class="rot">aba</span>
+    <span class="chip">Desenho</span><span class="chip on">Objeto</span><span class="chip">Som</span></div>
+  <div class="grupo"><span class="rot">espaço</span>
+    <span class="chip on">Modelar</span><span class="chip">Material</span><span class="chip">Animação</span></div>
+  <div class="dir"><span class="ph">placeholder — sem função no passo 2</span></div>
+</header>
+
+<aside id="props">
+  <h2>Propriedades</h2>
+  <div class="sub">painel da direita (D-73) <span class="ph">placeholder</span></div>
+  <div class="placeholder">
+    O <b>passo 6</b> preenche este painel. É o único que troca de conteúdo entre
+    os espaços:<br><br>
+    <b>Modelar</b> — ferramentas de malha.<br>
+    <b>Material</b> — parâmetros.<br>
+    <b>Animação</b> — linha do tempo + lista de partes.
+  </div>
+</aside>
+
+<div id="ajuda">
+  <b>arrastar</b> girar · <b>direito / shift</b> mover · <b>roda</b> zoom<br>
+  <b>toque:</b> 1 dedo gira · 2 dedos pinça+arrasta
+</div>
+
+<footer id="status">
+  <span>peça <b id="nome">…</b></span>
+  <span id="cam">—</span>
+  <span class="sep"></span>
+  <span id="fps">— fps</span>
+  <span class="dev" id="dev">—</span>
+</footer>
+
+<div id="erro"></div>
+
+<script type="module">
+/* A CÂMERA DO EDITOR (passo 2). É da INTERFACE, não do motor: guarda alvo/az/el/
+   dist aqui e dirige o motor por visor.setCam(pos, yaw, pitch) DENTRO do
+   antesDoQuadro de visor.rodar — o motor não sabe o que é órbita, só recebe a
+   câmera livre pronta a cada quadro. Cursor LIVRE de propósito (docs/oficina.md:
+   "abrir solta o cursor travado, senão não dá pra clicar em nada") — NENHUM
+   requestPointerLock; os passos futuros clicam em vértice/face. */
+import { criarVisor } from './motor/render.js';
+import { m4 } from './motor/mat4.js';
+import * as tex from './motor/tex.js';
+import * as geo from './motor/geo.js';
+
+const P = new URLSearchParams(location.search);
+const nome = (P.get('peca') || '_oficina-toco').replace(/[^a-z0-9_-]/gi, '');
+const TS = Math.max(1, (parseInt(P.get('ts')) || 4) | 0);
+const res = Math.max(160, (parseInt(P.get('res')) || 640) | 0);
+
+const $ = (id) => document.getElementById(id);
+const elErro = $('erro');
+function mostrarErro(msg) { elErro.textContent = msg; elErro.style.display = 'grid'; }
+
+const canvas = $('c');
+
+/* ---- estado da órbita ---------------------------------------------------- */
+const FOVY = 58 * Math.PI / 180;   // MESMA abertura vertical do motor (render.js: m4.persp 58°)
+const ORBIT = 0.008;               // rad por pixel arrastado
+const ZOOM_BASE = 1.0014;          // dist *= ZOOM_BASE^deltaY (roda)
+const MIN_DIST = 0.6, MAX_DIST = 40;
+const EL_LIMITE = 1.45;            // ~83°: trava perto dos polos (não vira de cabeça pra baixo)
+
+let alvo = [0, 0.28, 0];           // centro do objeto (o pan move ISTO); a órbita é sempre em volta dele
+let az = 0.7;                      // azimute
+let el = 0.4;                      // elevação
+let dist = 1.9;                    // distância câmera→alvo
+
+const clampEl = () => { el = Math.max(-EL_LIMITE, Math.min(EL_LIMITE, el)); };
+const clampDist = () => { dist = Math.max(MIN_DIST, Math.min(MAX_DIST, dist)); };
+
+/* base ortonormal a partir do estado atual:
+     f    = normalize(alvo - pos)   (a direção do olhar)
+     dir  = normalize(cross(f, mundoCima))   (direita da TELA em coordenadas de mundo)
+     cima = cross(dir, f)                     (cima da TELA)
+   f é EXATAMENTE a direção que o freeCam do render.js aponta
+   (sin(yaw)cos(pitch), sin(pitch), cos(yaw)cos(pitch)) com yaw=az+π, pitch=-el —
+   é o que garante que o olhar cai no alvo. */
+function base() {
+  const ce = Math.cos(el), se = Math.sin(el), sa = Math.sin(az), ca = Math.cos(az);
+  const f = [-ce * sa, -se, -ce * ca];
+  let rx = -f[2], ry = 0, rz = f[0];                 // cross(f, [0,1,0])
+  const rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+  const dir = [rx, ry, rz];
+  const cima = [ry * f[2] - rz * f[1], rz * f[0] - rx * f[2], rx * f[1] - ry * f[0]];  // cross(dir, f)
+  return { f, dir, cima };
+}
+
+/* órbita → setCam. VERIFICADO (headless, projetando o alvo pelo motor): o alvo
+   cai no centro da tela em qualquer azimute — se deslizasse pro canto, a
+   conversão estaria errada (foi o cuidado pedido no brief). */
+function aplicarCamera() {
+  const ce = Math.cos(el), se = Math.sin(el), sa = Math.sin(az), ca = Math.cos(az);
+  const pos = [alvo[0] + dist * ce * sa, alvo[1] + dist * se, alvo[2] + dist * ce * ca];
+  visor.setCam(pos, az + Math.PI, -el);
+}
+
+/* pan: move o ALVO no plano da tela, 1:1 com o cursor (a escala vem da abertura
+   e da distância — a mesma conta que o motor usa pra projetar). Pegar-e-arrastar:
+   cursor pra direita leva o alvo pra esquerda (a cena segue o dedo). */
+function pan(dxpix, dypix) {
+  const { dir, cima } = base();
+  const escala = (2 * dist * Math.tan(FOVY / 2)) / Math.max(1, canvas.clientHeight);
+  for (let k = 0; k < 3; k++) alvo[k] += (-dir[k] * dxpix + cima[k] * dypix) * escala;
+}
+
+/* ---- entrada: mouse + toque unificados em Pointer Events ------------------
+   Cursor LIVRE — nada de pointer lock. Captura o ponteiro no canvas pra o
+   arrasto continuar mesmo saindo dele. */
+const pointers = new Map();   // id -> {x,y}
+let modo = 'orbita';          // 'orbita' | 'pan' (mouse define no down; toque de 1 dedo = orbita)
+let pinch = null;             // baseline do gesto de 2 dedos {d, mx, my}
+
+function iniciarPinch() {
+  const [a, b] = [...pointers.values()];
+  pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (e.pointerType === 'mouse')
+    modo = (e.button === 2 || (e.button === 0 && e.shiftKey)) ? 'pan' : 'orbita';   // direito OU shift+esq = pan
+  else
+    modo = 'orbita';   // toque: 1 dedo gira
+  if (pointers.size === 2) iniciarPinch();
+  canvas.classList.add('arrastando');
+  e.preventDefault();
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  const p = pointers.get(e.pointerId);
+  if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (pointers.size >= 2) {   // 2 dedos: pinça = zoom + arrasto do ponto médio = pan
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    if (pinch) { dist *= pinch.d / d; clampDist(); pan(mx - pinch.mx, my - pinch.my); }
+    pinch = { d, mx, my };
+    return;
+  }
+  if (modo === 'pan') pan(dx, dy);
+  else { az -= dx * ORBIT; el += dy * ORBIT; clampEl(); }   // órbita
+});
+
+function soltar(e) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  try { canvas.releasePointerCapture(e.pointerId); } catch { /* já solto */ }
+  pinch = null;
+  if (pointers.size === 1) modo = 'orbita';           // voltou pra 1 dedo: re-âncora (a pos guardada é atual)
+  if (pointers.size === 0) canvas.classList.remove('arrastando');
+}
+canvas.addEventListener('pointerup', soltar);
+canvas.addEventListener('pointercancel', soltar);
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  dist *= Math.pow(ZOOM_BASE, e.deltaY);
+  clampDist();
+}, { passive: false });
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());   // senão o menu do botão direito atrapalha o pan
+
+/* ---- carrega a peça e roda o motor --------------------------------------- */
+let visor;
+try {
+  const mod = await import(`./pecas/${nome}.js`);
+  $('nome').textContent = `${mod.meta.nome}`;
+  visor = criarVisor({ canvas, res });
+  visor.carregar(mod.construir({ TS, tex, geo, m4 }));
+  aplicarCamera();   // já aponta antes do 1º quadro (pra projetar/hooks valerem de cara)
+
+  const dev = `${visor.info()} · tex ${16 * TS}px · ${visor.renderer}`;
+  const elNome = $('nome'), elCam = $('cam'), elFps = $('fps'), elDev = $('dev');
+  function atualizarStatus(fps) {
+    if (fps != null) elFps.textContent = fps + ' fps';
+    elCam.textContent = `cam az ${(az).toFixed(2)} · el ${(el).toFixed(2)} · d ${dist.toFixed(2)}`;
+    elDev.textContent = dev;
+  }
+  atualizarStatus();
+
+  visor.rodar(
+    (fps) => atualizarStatus(fps),   // onFrame (~2×/s): mexe no DOM devagar
+    () => aplicarCamera(),           // antesDoQuadro: injeta a câmera do editor no motor, todo quadro
+  );
+
+  /* ganchos de VERIFICAÇÃO (a bancada headless usa; inertes no uso normal).
+     projetar vem do MOTOR — é a prova não-circular de que o alvo fica centrado. */
+  window.__oficina = {
+    estado: () => ({ az, el, dist, alvo: alvo.slice() }),
+    orbitar: (o) => { if (o.az != null) az = o.az; if (o.el != null) { el = o.el; clampEl(); }
+      if (o.dist != null) { dist = o.dist; clampDist(); } if (o.alvo) alvo = o.alvo.slice(); },
+    projetar: (p) => visor.projetar(p || alvo),
+    travado: () => document.pointerLockElement,
+  };
+  window.__ready = true;
+} catch (e) {
+  $('nome').textContent = 'ERRO';
+  mostrarErro(`peça "${nome}" não abriu — ${e.message}\nveja prototipos/fps/v3/pecas/ e o console`);
+  throw e;
+}
+</script>
+</body>
+</html>

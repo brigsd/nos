@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-189 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+191 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -140,6 +140,7 @@
 
 - `README.md` — v3 — o cliente GPU e A OFICINA (D-55)
 - `jogo.html` — jogo.html — o alicerce jogável v3 (D-61): câmera livre, som, tiers de gráfico e menu, em cima do motor ES modules.
+- `oficina.html` — oficina.html — a INTERFACE da Oficina (passo 2, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMER…
 - `visor.html` — visor.html — visor de peças da OFICINA (D-55): abre qualquer peça de pecas/ isolada no ambiente padrão (?peca=nome).
 
 ## prototipos/fps/v3/motor/
@@ -255,6 +256,7 @@
 - `auditar.mjs` — auditar.mjs — o GATE de senso crítico [cpu] numa peça REAL (D-60). Roda os críticos validados pelo benchmark (lint-de-malha, distancia-paleta, seam, banding,…
 - `executar.mjs` — executar.mjs — a bancada do REPLAY da OFICINA (passo 1), sem browser. Roda a lista de PASSOS de uma peça, serializa a lista, re-parseia e re-executa, e afirm…
 - `jogar.mjs` — jogar.mjs — o olho do ALICERCE jogável do v3 (D-61).
+- `oficina.mjs` — oficina.mjs — a bancada da CÂMERA DO EDITOR (Oficina, passo 2).
 - `olhar-peca.mjs` — olhar-peca.mjs — o olho da OFICINA (D-55).
 - `olhar.mjs` — olhar.mjs — o olho do coder (D-35).
 - `ouvir.mjs` — ouvir.mjs — os ouvidos do coder (D-40).
