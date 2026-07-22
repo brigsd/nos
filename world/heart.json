@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 196,
-    "worldTime": 11760
+    "tickCount": 198,
+    "worldTime": 11880
   },
   "width": 64,
   "height": 64,
@@ -6271,6 +6271,37 @@
       "type": "core_pulse",
       "tick": 196,
       "worldTime": 11760
+    },
+    {
+      "type": "native_spoke",
+      "tick": 197,
+      "worldTime": 11820,
+      "nativeId": "brasa",
+      "message": "O pão tá quentinho! Venham antes que esfrie!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 197,
+      "worldTime": 11820,
+      "nativeId": "broa",
+      "message": "O pão quentinho tá na mesa! Venham, o calor das histórias nos une!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 197,
+      "worldTime": 11820,
+      "nativeId": "quilha",
+      "message": "O pão quentinho tá na mesa! Venham antes que esfrie!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 197,
+      "worldTime": 11820
+    },
+    {
+      "type": "core_pulse",
+      "tick": 198,
+      "worldTime": 11880
     }
   ],
   "natives": {
@@ -6278,7 +6309,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 3,
+        "x": 1,
         "y": 0
       },
       "behaviorTree": "wanderer",
