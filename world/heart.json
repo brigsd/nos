@@ -6477,6 +6477,27 @@
       "type": "core_pulse",
       "tick": 212,
       "worldTime": 12720
+    },
+    {
+      "type": "native_spoke",
+      "tick": 212,
+      "worldTime": 12720,
+      "nativeId": "brasa",
+      "message": "O pão tá quentinho. As histórias aquecem mais ainda. Venham, venham!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 212,
+      "worldTime": 12720,
+      "nativeId": "broa",
+      "message": "O pão tá quentinho! Venham aquecer o coração com histórias!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 212,
+      "worldTime": 12720,
+      "nativeId": "quilha",
+      "message": "O pão tá quentinho. Venham, venham! Histórias e calor!"
     }
   ],
   "natives": {
