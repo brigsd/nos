@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- oficina.html — a INTERFACE da Oficina (passos 2-3, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. -->
+<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
@@ -99,13 +99,14 @@
 </aside>
 
 <div id="ajuda">
-  <b>arrastar</b> girar · <b>direito / shift</b> mover · <b>roda</b> zoom<br>
+  <b>clique num vértice</b> pega e arrasta · <b>arrastar vazio</b> girar · <b>direito / shift</b> mover · <b>roda</b> zoom<br>
   <b>toque:</b> 1 dedo gira · 2 dedos pinça+arrasta
 </div>
 
 <footer id="status">
   <span>peça <b id="nome">…</b></span>
   <span id="cam">—</span>
+  <span id="passos">passos —</span>
   <span class="sep"></span>
   <span id="fps">— fps</span>
   <span class="dev" id="dev">—</span>
@@ -121,7 +122,7 @@
    "abrir solta o cursor travado, senão não dá pra clicar em nada") — NENHUM
    requestPointerLock; os passos futuros clicam em vértice/face. */
 import { criarVisor } from './motor/render.js';
-import { nucleo } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números) por cima da malha
+import { nucleo, executar, neutroCanonico } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números); passo 4: re-executa a lista ao vivo (executar/nucleo) e compara canônico
 import { m4 } from './motor/mat4.js';
 import * as tex from './motor/tex.js';
 import * as geo from './motor/geo.js';
@@ -145,10 +146,29 @@ const ZOOM_BASE = 1.0014;          // dist *= ZOOM_BASE^deltaY (roda)
 const MIN_DIST = 0.6, MAX_DIST = 40;
 const EL_LIMITE = 1.45;            // ~83°: trava perto dos polos (não vira de cabeça pra baixo)
 
+/* PASSO 4: seleção + arrasto de vértice. */
+const RAIO_HIT = 10;               // px: acertou vértice se o cursor caiu a ≤ isto de um vértice PROJETADO
+const LIMIAR_PX = 4;               // px: abaixo disto o gesto é CLIQUE — só SELECIONA, NÃO grava moveV
+
 let alvo = [0, 0.28, 0];           // centro do objeto (o pan move ISTO); a órbita é sempre em volta dele
 let az = 0.7;                      // azimute
 let el = 0.4;                      // elevação
 let dist = 1.9;                    // distância câmera→alvo
+
+/* PASSO 4 — estado compartilhado entre os handlers do #c (aqui em cima) e a
+   máquina da malha (montada lá embaixo, dentro do try, quando a peça abre):
+     neutro    — V/F em números do overlay (o passo 3 já mantinha; movido pra cá
+                 pro hit-test do #c enxergar);
+     projAtual — id->{x,y} PROJETADO no último quadro (o overlay JÁ calcula isso;
+                 o pointerdown reusa esse MESMO estado pro hit-test);
+     selecionado — id do vértice destacado no overlay;
+     arrasto   — gesto de vértice em andamento (null = câmera/nada);
+     malhaCtl  — {hit,iniciar,mover,soltar}, montado quando a peça abre. */
+let neutro = null;
+let projAtual = new Map();
+let selecionado = null;
+let arrasto = null;
+let malhaCtl = null;
 
 const clampEl = () => { el = Math.max(-EL_LIMITE, Math.min(EL_LIMITE, el)); };
 const clampDist = () => { dist = Math.max(MIN_DIST, Math.min(MAX_DIST, dist)); };
@@ -173,11 +193,11 @@ function base() {
 /* órbita → setCam. VERIFICADO (headless, projetando o alvo pelo motor): o alvo
    cai no centro da tela em qualquer azimute — se deslizasse pro canto, a
    conversão estaria errada (foi o cuidado pedido no brief). */
-function aplicarCamera() {
+function camPos() {
   const ce = Math.cos(el), se = Math.sin(el), sa = Math.sin(az), ca = Math.cos(az);
-  const pos = [alvo[0] + dist * ce * sa, alvo[1] + dist * se, alvo[2] + dist * ce * ca];
-  visor.setCam(pos, az + Math.PI, -el);
+  return [alvo[0] + dist * ce * sa, alvo[1] + dist * se, alvo[2] + dist * ce * ca];
 }
+function aplicarCamera() { visor.setCam(camPos(), az + Math.PI, -el); }
 
 /* pan: move o ALVO no plano da tela, 1:1 com o cursor (a escala vem da abertura
    e da distância — a mesma conta que o motor usa pra projetar). Pegar-e-arrastar:
@@ -203,6 +223,24 @@ function iniciarPinch() {
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  /* PASSO 4 — câmera-vs-arrasto se decide AQUI, ANTES da câmera. Só num gesto
+     PRIMÁRIO de 1 ponteiro (mouse esq sem shift, ou 1 dedo): testa o cursor
+     contra os vértices PROJETADOS (o MESMO projAtual que o overlay calcula por
+     quadro). Acertou ≤RAIO_HIT px → o gesto é ARRASTO DE VÉRTICE, não câmera, e
+     saímos antes de tocar em modo/pinça — a câmera fica IDÊNTICA no caso de erro. */
+  const primario = (e.pointerType === 'mouse') ? (e.button === 0 && !e.shiftKey) : true;
+  if (!arrasto && pointers.size === 1 && primario && malhaCtl) {
+    const id = malhaCtl.hit(e.clientX, e.clientY);
+    if (id != null) {
+      arrasto = malhaCtl.iniciar(id, e.clientX, e.clientY, e.pointerId);
+      canvas.classList.add('arrastando');
+      e.preventDefault();
+      return;   // ACERTOU vértice: NÃO é câmera
+    }
+  }
+  if (arrasto) { e.preventDefault(); return; }   // já arrastando vértice: ponteiros extras não viram câmera/pinça
+
   if (e.pointerType === 'mouse')
     modo = (e.button === 2 || (e.button === 0 && e.shiftKey)) ? 'pan' : 'orbita';   // direito OU shift+esq = pan
   else
@@ -215,6 +253,13 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   const p = pointers.get(e.pointerId);
   if (!p) return;
+  /* PASSO 4 — arrasto de vértice tem prioridade e é do SEU ponteiro; o vértice
+     segue o cursor (mapeamento 2D→3D em malhaCtl.mover). Enquanto ele roda,
+     nenhum ponteiro mexe a câmera. */
+  if (arrasto) {
+    if (e.pointerId === arrasto.pointerId) { p.x = e.clientX; p.y = e.clientY; malhaCtl.mover(e.clientX, e.clientY); }
+    return;
+  }
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
   p.x = e.clientX; p.y = e.clientY;
   if (pointers.size >= 2) {   // 2 dedos: pinça = zoom + arrasto do ponto médio = pan
@@ -231,6 +276,12 @@ canvas.addEventListener('pointermove', (e) => {
 
 function soltar(e) {
   if (!pointers.has(e.pointerId)) return;
+  /* PASSO 4 — fim do arrasto de vértice: grava o moveV (se passou do limiar) ou
+     só mantém a seleção (clique). Depois cai no encerramento normal do ponteiro. */
+  if (arrasto && e.pointerId === arrasto.pointerId) {
+    malhaCtl.soltar(e.clientX, e.clientY);
+    arrasto = null;
+  }
   pointers.delete(e.pointerId);
   try { canvas.releasePointerCapture(e.pointerId); } catch { /* já solto */ }
   pinch = null;
@@ -264,14 +315,85 @@ try {
      apontando pra ids. Desenhado num canvas 2D por cima PORQUE o draw do motor é
      gl.TRIANGLES fixo — não faz ponto nem linha. */
   const octx = malha.getContext('2d');
-  let neutro = null;
+
+  /* PASSO 4 — feedback de que GRAVOU: contador de passos + último op no status. */
+  function atualizarPassos() {
+    const arr = mod.PASSOS || [], n = arr.length, u = arr[n - 1];
+    const el = $('passos');
+    if (el) el.textContent = `passos ${n}` + (u ? ` · ${u[0]}${u[1] && u[1].v != null ? ' v' + u[1].v : ''}` : '');
+  }
+
   try {
-    const { PASSOS, PARAMS, TOPO } = mod;
+    const { PASSOS } = mod;
     if (!Array.isArray(PASSOS)) throw new Error('a peça não exporta PASSOS — o envelope pede PARAMS/TOPO/PASSOS exportados');
-    const { V, F } = nucleo(PASSOS, PARAMS ?? {}, TOPO ?? {});
-    neutro = { V, F };
+    const PARAMS = mod.PARAMS ?? {}, TOPO = mod.TOPO ?? {};
+    const { V, F } = nucleo(PASSOS, PARAMS, TOPO);
+    neutro = { V, F };   // módulo-escopo: o hit-test do #c e o overlay leem o MESMO neutro
+
+    /* ---- PASSO 4: MÁQUINA de seleção + arrasto de vértice (o MILESTONE) --------
+       Decide câmera-vs-arrasto no hit-test (feito no pointerdown do #c, contra o
+       projAtual que ESTE overlay calcula por quadro). O arrasto mapeia o cursor
+       2D pro plano da câmera NA PROFUNDIDADE DO PRÓPRIO VÉRTICE e re-executa a
+       lista AO VIVO com um moveV tentativo; ao soltar, grava um moveV de verdade
+       (o deslocamento TOTAL, em mundo). Re-executar a lista editada refaz o
+       objeto com o vértice movido — o ciclo fechado do doc. */
+    const ctxMotor = { TS, tex, geo, m4 };
+    const reexec = (passos) => {                       // lista -> render (executar) + overlay (nucleo)
+      visor.carregar(executar(passos, PARAMS, TOPO, ctxMotor));
+      const r = nucleo(passos, PARAMS, TOPO);
+      neutro = { V: r.V, F: r.F };
+    };
+    malhaCtl = {
+      /* hit-test contra os vértices PROJETADOS do último quadro (o MESMO estado
+         que o overlay desenha). Devolve o id mais próximo dentro de RAIO_HIT. */
+      hit(cx, cy) {
+        let melhor = null, md = RAIO_HIT * RAIO_HIT;
+        for (const [id, q] of projAtual) { const dd = (q.x - cx) ** 2 + (q.y - cy) ** 2; if (dd <= md) { md = dd; melhor = id; } }
+        return melhor;
+      },
+      /* começa o arrasto: fixa a base (right/up em mundo) e a ESCALA mundo-por-px
+         NA PROFUNDIDADE DO VÉRTICE. A câmera não se move durante o arrasto e o
+         vértice anda só no plano da câmera, então prof/escala são constantes. */
+      iniciar(id, cx, cy, pointerId) {
+        selecionado = id;
+        const P = neutro.V.get(id).slice();
+        const cp = camPos(), { f, dir, cima } = base();
+        const prof = (P[0] - cp[0]) * f[0] + (P[1] - cp[1]) * f[1] + (P[2] - cp[2]) * f[2];   // dot(P - camPos, olhar)
+        const escala = (2 * prof * Math.tan(FOVY / 2)) / Math.max(1, canvas.clientHeight);    // NÃO usa `dist` (alvo), usa a prof do vértice
+        return { pointerId, id, x0: cx, y0: cy, dir, cima, escala, d: [0, 0, 0] };
+      },
+      /* o vértice SEGUE o cursor: right·(+dx) e cima·(−dy) (tela cresce pra baixo).
+         Re-executa com um moveV TENTATIVO no fim da lista (ainda não grava). */
+      mover(cx, cy) {
+        if (!arrasto) return;
+        const dxpix = cx - arrasto.x0, dypix = cy - arrasto.y0, e = arrasto.escala;
+        const d = [0, 0, 0];
+        for (let k = 0; k < 3; k++) d[k] = arrasto.dir[k] * dxpix * e - arrasto.cima[k] * dypix * e;
+        arrasto.d = d;
+        reexec([...PASSOS, ['moveV', { v: arrasto.id, d }]]);
+      },
+      /* solta: passou do limiar -> GRAVA o moveV (deslocamento total, em mundo);
+         clique puro -> só mantém a seleção. Em qualquer caso reconstrói a partir
+         da lista REAL (some o tentativo se não gravou). */
+      soltar(cx, cy) {
+        if (!arrasto) return { gravou: false };
+        const id = arrasto.id, d = arrasto.d.slice();
+        const movPix = Math.hypot(cx - arrasto.x0, cy - arrasto.y0);
+        let gravou = false;
+        if (movPix >= LIMIAR_PX) {
+          PASSOS.push(['moveV', { v: id, d }]);
+          gravou = true;
+          console.log(`oficina passo 4: gravado ['moveV', {v:${id}, d:[${d.map((n) => n.toFixed(3)).join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
+        }
+        reexec(PASSOS);
+        selecionado = id;
+        atualizarPassos();
+        return { gravou, id, d };
+      },
+    };
+    atualizarPassos();
   } catch (e) {
-    console.warn('oficina passo 3: malha não desenhada —', e.message);
+    console.warn('oficina passo 3/4: malha não montada —', e.message);
   }
 
   let verIds = false;   // etiqueta de id por vértice (tecla i) — o baseline é só ponto+aresta
@@ -320,6 +442,7 @@ try {
     octx.clearRect(0, 0, innerWidth, innerHeight);
     if (!neutro) return;
     const proj = projetarVertices();
+    projAtual = proj;   // PASSO 4: o hit-test do #c reusa ESTE estado de projeção (o mesmo que se desenha)
 
     // ARESTAS: dois passes — halo escuro largo + núcleo claro fino — pra ler tanto
     // sobre a grama clara quanto sobre a casca escura do objeto.
@@ -327,11 +450,13 @@ try {
     octx.strokeStyle = 'rgba(12, 15, 23, 0.34)'; octx.lineWidth = 2.4; tracarArestas(proj);
     octx.strokeStyle = 'rgba(223, 229, 247, 0.55)'; octx.lineWidth = 1;   tracarArestas(proj);
 
-    // VÉRTICES: ponto claro com contorno escuro — legível nos dois fundos.
-    for (const q of proj.values()) {
-      octx.beginPath(); octx.arc(q.x, q.y, 3, 0, Math.PI * 2);
-      octx.fillStyle = 'rgba(234, 239, 252, 0.96)'; octx.fill();
-      octx.lineWidth = 1.2; octx.strokeStyle = 'rgba(11, 14, 22, 0.92)'; octx.stroke();
+    // VÉRTICES: ponto claro com contorno escuro — legível nos dois fundos. O
+    // SELECIONADO (passo 4) fica maior e roxo-acento, pra ler qual está pego.
+    for (const [id, q] of proj) {
+      const sel = id === selecionado;
+      octx.beginPath(); octx.arc(q.x, q.y, sel ? 5.5 : 3, 0, Math.PI * 2);
+      octx.fillStyle = sel ? 'rgba(168, 132, 243, 0.98)' : 'rgba(234, 239, 252, 0.96)'; octx.fill();
+      octx.lineWidth = sel ? 1.8 : 1.2; octx.strokeStyle = 'rgba(11, 14, 22, 0.92)'; octx.stroke();
     }
 
     // ETIQUETAS de id (opcional, tecla i): fininhas, desligadas por padrão.
@@ -393,6 +518,17 @@ try {
           if (a && b && visor.projetar(a) && visor.projetar(b)) arestas++; } }
       return { nV: V ? V.size : 0, nF: F ? F.size : 0, pontos, arestas };
     },
+    /* ---- PASSO 4: ganchos de seleção + arrasto + gravação (a bancada afirma) --- */
+    selecionado: () => selecionado,                                   // id do vértice pego (null = nenhum)
+    hit: (x, y) => (malhaCtl ? malhaCtl.hit(x, y) : null),            // id no ponto (mesmo hit-test do #c)
+    projMalha: () => [...projAtual].map(([id, q]) => ({ id, x: q.x, y: q.y })),   // estado de projeção COMPARTILHADO
+    projetarV: (id) => { const p = neutro && neutro.V.get(id); return p ? visor.projetar(p) : null; },   // projeção FRESCA (prova "segue o cursor")
+    posV: (id) => { const p = neutro && neutro.V.get(id); return p ? p.slice() : null; },   // posição em MUNDO
+    passos: () => JSON.parse(JSON.stringify(mod.PASSOS)),             // a lista EDITADA (serializável)
+    nPassos: () => mod.PASSOS.length,
+    ultimoPasso: () => { const u = mod.PASSOS[mod.PASSOS.length - 1]; return u ? JSON.parse(JSON.stringify(u)) : null; },
+    canon: () => neutroCanonico(nucleo(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {})),   // neutro CANÔNICO dos PASSOS atuais (replay determinístico)
+    limiar: LIMIAR_PX, raioHit: RAIO_HIT,
   };
   window.__ready = true;
 } catch (e) {

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * oficina.mjs — a bancada da CÂMERA DO EDITOR + OVERLAY DA MALHA (Oficina, passos 2-3).
+ * oficina.mjs — a bancada da CÂMERA DO EDITOR + OVERLAY DA MALHA + ARRASTO DE
+ * VÉRTICE (Oficina, passos 2-4).
  *
  * Abre oficina.html?peca=_oficina-toco headless (server estático + Chromium do
  * site), simula arrasto de ÓRBITA e roda de ZOOM com eventos REAIS de mouse, e
@@ -21,7 +22,19 @@
  *        detectado nos pixels do RENDER (prova o alinhamento overlay↔motor);
  *   (3d) o overlay é pointer-events:none (e o arrasto do passo 2 segue passando,
  *        prova viva de que o overlay não rouba o input da câmera).
- * Screenshots em scratchpad/passo2/ e scratchpad/passo3/. Sai 1 se algo falhar.
+ *   PASSO 4 (arrasto de vértice gravado como moveV — o MILESTONE):
+ *   (4a) SELECIONA: pointerdown a ≤10px de um vértice projetado seleciona AQUELE
+ *        vértice; um ponto >10px de todos não seleciona nada (é câmera);
+ *   (4b) SEGUE O CURSOR: arrasta o vértice por (Δx,Δy) px e, projetando-o DEPOIS
+ *        pelo motor, ele cai a ≤ poucos px de onde o cursor soltou (número real);
+ *   (4c) GRAVOU: PASSOS cresceu e o último é ['moveV',{v:id,d:[...]}] com d≠0;
+ *   (4d) REPLAY: a lista EDITADA re-executada 2× (na página E em Node, à parte)
+ *        dá o MESMO neutro canônico, e o vértice movido está na posição NOVA;
+ *   (4e) CÂMERA INTACTA: arrasto em espaço VAZIO (longe de vértice) ainda orbita,
+ *        cursor livre — o passo 2 segue valendo;
+ *   (4f) CLIQUE SÓ SELECIONA: pointerdown+up sem passar do limiar seleciona mas
+ *        NÃO grava moveV.
+ * Screenshots em scratchpad/passo2..4/. Sai 1 se algo falhar.
  *
  *   npm run oficina
  */
@@ -30,11 +43,17 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve, extname } from 'node:path';
 import zlib from 'node:zlib';
+/* PASSO 4: replay INDEPENDENTE em Node — o núcleo neutro e o canônico, mais
+   PARAMS/TOPO do toco, pra re-executar a lista EDITADA (vinda do navegador) e
+   provar que refaz o mesmo objeto (o critério do doc), fora do browser. */
+import { nucleo, neutroCanonico } from '../../prototipos/fps/v3/motor/oficina.js';
+import * as toco from '../../prototipos/fps/v3/pecas/_oficina-toco.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
 const OUT = resolve(REPO, 'scratchpad/passo2');
 const OUT3 = resolve(REPO, 'scratchpad/passo3');
+const OUT4 = resolve(REPO, 'scratchpad/passo4');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -268,10 +287,130 @@ await page.screenshot({ path: join(OUT3, 'oficina-malha.png') });
 await page.evaluate(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })); });   // liga as etiquetas de id
 await rAF2();
 await page.screenshot({ path: join(OUT3, 'oficina-malha-ids.png') });
+await page.evaluate(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })); });   // desliga de novo pro passo 4
+
+/* ==== PASSO 4: SELECIONAR E ARRASTAR UM VÉRTICE (gravado como moveV) ========
+   O MILESTONE. Tudo com eventos REAIS de mouse no #c (o overlay é só visual), e
+   a prova de "segue o cursor" é por MEDIÇÃO: projeta o vértice DEPOIS do arrasto
+   e confere que caiu onde o cursor soltou. */
+const F4 = { az: 0.7, el: 0.45, dist: 1.95, alvo: [0, 0.28, 0] };   // câmera limpa e conhecida
+await page.evaluate((f) => window.__oficina.orbitar(f), F4);
+await rAF2(); await rAF2();
+
+// escolhe um vértice BEM dentro da cena (à esquerda do painel) e o mais isolado
+// possível dos vizinhos — clique limpo, sem ambiguidade de hit.
+const painelW4 = await page.evaluate(() => document.getElementById('props').getBoundingClientRect().width);
+function escolherVertice(pts) {
+  const dentro = pts.filter((p) => p.x > 24 && p.x < VW - painelW4 - 24 && p.y > 60 && p.y < VH - 40);
+  let melhor = dentro[0], sep = -1;
+  for (const p of dentro) { let n = 1e9; for (const q of pts) if (q.id !== p.id) n = Math.min(n, Math.hypot(p.x - q.x, p.y - q.y)); if (n > sep) { sep = n; melhor = p; } }
+  return { v: melhor, sep };
+}
+// um ponto de cena garantidamente VAZIO (>2·RAIO_HIT de todo vértice) pra provar câmera-intacta e o miss
+function pontoVazio(pts) {
+  for (let y = 90; y < VH - 60; y += 12) for (let x = 30; x < VW - painelW4 - 30; x += 12) {
+    let n = 1e9; for (const q of pts) n = Math.min(n, Math.hypot(x - q.x, y - q.y));
+    if (n > 24) return { x, y, sep: n };
+  }
+  return null;
+}
+
+let pts4 = await page.evaluate(() => window.__oficina.projMalha());
+const { v: alvoV, sep } = escolherVertice(pts4);
+const vazio = pontoVazio(pts4);
+
+// (4a) SELECIONA: hit a ≤10px seleciona AQUELE vértice; >10px de todos não seleciona
+const idNoPonto = await page.evaluate(([x, y]) => window.__oficina.hit(x, y), [alvoV.x + 8, alvoV.y]);
+const idVazio = await page.evaluate(([x, y]) => window.__oficina.hit(x, y), [vazio.x, vazio.y]);
+ok('(4a) hit a ≤10px de um vértice acerta AQUELE vértice', idNoPonto === alvoV.id, `hit(${Math.round(alvoV.x + 8)},${Math.round(alvoV.y)})=${idNoPonto} (vértice ${alvoV.id}, vizinho a ${sep.toFixed(0)}px)`);
+ok('(4a) hit em espaço vazio (>10px) não acerta vértice', idVazio === null, `hit(${vazio.x},${vazio.y})=${idVazio} · vazio a ${vazio.sep.toFixed(0)}px do vértice mais perto`);
+
+// (4f) CLIQUE SÓ SELECIONA: down+up com micro-movimento (<limiar) seleciona mas NÃO grava
+const nP_antesClique = await page.evaluate(() => window.__oficina.nPassos());
+await page.mouse.move(alvoV.x, alvoV.y);
+await page.mouse.down();
+const selNoDown = await page.evaluate(() => window.__oficina.selecionado());
+await page.mouse.move(alvoV.x + 2, alvoV.y + 1, { steps: 2 });   // 2.2px < limiar 4px
+await page.mouse.up();
+const nP_depoisClique = await page.evaluate(() => window.__oficina.nPassos());
+ok('(4a) pointerdown SELECIONA o vértice (selecionado exposto)', selNoDown === alvoV.id, `selecionado=${selNoDown}`);
+ok('(4f) clique sem arrasto NÃO grava moveV (só seleciona)', nP_depoisClique === nP_antesClique, `PASSOS ${nP_antesClique} -> ${nP_depoisClique} (limiar ${await page.evaluate(() => window.__oficina.limiar)}px)`);
+
+// (4e) CÂMERA INTACTA: arrasto em espaço VAZIO ainda ORBITA (passo 2 segue valendo), cursor livre
+await page.evaluate((f) => window.__oficina.orbitar(f), F4);
+await rAF2();
+const estAntes = await page.evaluate(() => window.__oficina.estado());
+await page.mouse.move(vazio.x, vazio.y);
+await page.mouse.down();
+const travadoNoArrasto = await page.evaluate(() => window.__oficina.travado());
+await page.mouse.move(vazio.x + 180, vazio.y + 20, { steps: 14 });
+await page.mouse.up();
+const estDepois = await page.evaluate(() => window.__oficina.estado());
+const nP_depoisVazio = await page.evaluate(() => window.__oficina.nPassos());
+ok('(4e) arrasto em espaço vazio ORBITA (câmera idêntica ao passo 2)', Math.abs(estDepois.az - estAntes.az) > 0.5, `az ${estAntes.az.toFixed(2)} -> ${estDepois.az.toFixed(2)}`);
+ok('(4e) arrasto de câmera não grava moveV', nP_depoisVazio === nP_depoisClique, `PASSOS ${nP_depoisClique} -> ${nP_depoisVazio}`);
+ok('(4e) cursor LIVRE durante o arrasto de câmera (pointerLock null)', travadoNoArrasto === null);
+
+// (4b/4c) SEGUE O CURSOR + GRAVA: volta pra câmera limpa, pega o vértice, arrasta (Δx,Δy),
+//         projeta DEPOIS e mede o erro; confere o moveV gravado.
+await page.evaluate((f) => window.__oficina.orbitar(f), F4);
+await rAF2(); await rAF2();
+pts4 = await page.evaluate(() => window.__oficina.projMalha());
+const alvo2 = escolherVertice(pts4).v;   // re-projeta (a câmera é a mesma F4, mas relê fresco)
+const pos0 = await page.evaluate((id) => window.__oficina.posV(id), alvo2.id);
+const nP_antesGrava = await page.evaluate(() => window.__oficina.nPassos());
+const DX = 82, DY = -56;
+await page.mouse.move(alvo2.x, alvo2.y);
+await page.mouse.down();
+await page.mouse.move(alvo2.x + DX, alvo2.y + DY, { steps: 16 });
+await page.mouse.up();
+const soltouEm = { x: alvo2.x + DX, y: alvo2.y + DY };
+const projDepois = await page.evaluate((id) => window.__oficina.projetarV(id), alvo2.id);
+const erroSegue = Math.hypot(projDepois.x - soltouEm.x, projDepois.y - soltouEm.y);
+ok('(4b) o vértice SEGUE o cursor (projeção pós-arrasto cai onde soltou)', erroSegue <= 3,
+   `vértice caiu em (${projDepois.x.toFixed(1)},${projDepois.y.toFixed(1)}) · cursor soltou em (${soltouEm.x},${soltouEm.y}) · erro ${erroSegue.toFixed(2)}px`);
+// sinal: cursor pra direita+cima -> vértice pra direita+cima na tela
+ok('(4b) sinal correto (direita/cima do cursor = direita/cima do vértice)',
+   projDepois.x > alvo2.x + 20 && projDepois.y < alvo2.y - 10, `Δtela (${(projDepois.x - alvo2.x).toFixed(0)},${(projDepois.y - alvo2.y).toFixed(0)})px`);
+
+const nP_depoisGrava = await page.evaluate(() => window.__oficina.nPassos());
+const ultimo = await page.evaluate(() => window.__oficina.ultimoPasso());
+const dGrav = ultimo && ultimo[1] && ultimo[1].d;
+const magD = dGrav ? Math.hypot(dGrav[0], dGrav[1], dGrav[2]) : 0;
+ok('(4c) GRAVOU um moveV (PASSOS cresceu 1, último é moveV do vértice)',
+   nP_depoisGrava === nP_antesGrava + 1 && ultimo && ultimo[0] === 'moveV' && ultimo[1].v === alvo2.id && magD > 0.01,
+   `PASSOS ${nP_antesGrava} -> ${nP_depoisGrava} · último ${JSON.stringify(ultimo)} · |d|=${magD.toFixed(3)}`);
+
+// (4d) REPLAY: a lista EDITADA re-executada 2× dá o MESMO neutro canônico —
+//      na PÁGINA e, à parte, em NODE (núcleo importado) — e batem entre si.
+const passosEd = await page.evaluate(() => window.__oficina.passos());
+const canonPage1 = await page.evaluate(() => JSON.stringify(window.__oficina.canon()));
+const canonPage2 = await page.evaluate(() => JSON.stringify(window.__oficina.canon()));
+const canonNode = (ps) => JSON.stringify(neutroCanonico(nucleo(ps, toco.PARAMS, toco.TOPO)));
+const canonNode1 = canonNode(passosEd), canonNode2 = canonNode(passosEd);
+ok('(4d) replay na PÁGINA 2× idêntico (determinístico)', canonPage1 === canonPage2);
+ok('(4d) replay em NODE 2× idêntico (mesmo núcleo, fora do browser)', canonNode1 === canonNode2);
+ok('(4d) página e Node produzem o MESMO neutro (a lista editada refaz o objeto igual)', canonPage1 === canonNode1,
+   `canônico ${canonPage1.length} chars, bit-a-bit igual`);
+// o vértice movido está na posição NOVA, não na original
+const Vcanon = JSON.parse(canonPage1).V;
+const eV = Vcanon.find((e) => e[0] === alvo2.id);
+const posNova = [eV[1], eV[2], eV[3]];
+const desloc = Math.hypot(posNova[0] - pos0[0], posNova[1] - pos0[1], posNova[2] - pos0[2]);
+const posV_agora = await page.evaluate((id) => window.__oficina.posV(id), alvo2.id);
+const casaComOverlay = Math.hypot(posNova[0] - posV_agora[0], posNova[1] - posV_agora[1], posNova[2] - posV_agora[2]);
+ok('(4d) o vértice movido está na posição NOVA, não na original', desloc > 0.05 && casaComOverlay < 1e-9,
+   `original ${JSON.stringify(pos0.map((n) => +n.toFixed(3)))} -> nova ${JSON.stringify(posNova.map((n) => +n.toFixed(3)))} (deslocou ${desloc.toFixed(3)} em mundo)`);
+
+// screenshot: a malha DEFORMADA (vértice arrastado) — o milestone visível
+mkdirSync(OUT4, { recursive: true });
+await page.evaluate(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })); });   // etiquetas de id ligadas
+await rAF2();
+await page.screenshot({ path: join(OUT4, 'oficina-vertice-arrastado.png') });
 
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto e acompanhando a câmera.`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio.`);
