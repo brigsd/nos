@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 212,
-    "worldTime": 12720
+    "tickCount": 213,
+    "worldTime": 12780
   },
   "width": 64,
   "height": 64,
@@ -6498,6 +6498,11 @@
       "worldTime": 12720,
       "nativeId": "quilha",
       "message": "O pão tá quentinho. Venham, venham! Histórias e calor!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 213,
+      "worldTime": 12780
     }
   ],
   "natives": {
@@ -6506,7 +6511,7 @@
       "name": "Gota",
       "position": {
         "x": 0,
-        "y": 1
+        "y": 0
       },
       "behaviorTree": "wanderer",
       "behaviorState": "{}",
