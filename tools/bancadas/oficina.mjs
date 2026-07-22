@@ -102,7 +102,26 @@
  *   (8 área-zero) mesclar dois cantos ADJACENTES de uma face (o triângulo da parede
  *        1001) → o núcleo apaga a face de área-zero QUIETO (sem órfão), o replay segue
  *        idêntico e o resto da malha (V/F das outras faces) fica INTACTO.
- * Screenshots em scratchpad/passo2..8/. Sai 1 se algo falhar.
+ *
+ *   PASSO 9 (pintar faces — selecaoFaces/faceAtiva/pintar/corDaFace/paleta, eventos REAIS):
+ *   (9 multi) clique normal numa FACE seleciona UMA; Shift+clique ACUMULA (2, 3), a
+ *        ativa é a última; Shift+clique numa já-selecionada REMOVE; clique normal RESETA
+ *        pra 1; selecionar um VÉRTICE limpa as faces e selecionar face limpa vértices (XOR);
+ *   (9 pinta) o `change` do <input type=color> grava ['pincel',{modo:'face',faces:[9],
+ *        cor:'#hex'}] no fim de PASSOS — neutro.F.get(9).cor vira a cor, uma face NÃO
+ *        selecionada fica intacta;
+ *   (9 render) DEPOIS do reexec a cor aparece no render: a paleta REAL do swatch (pixels
+ *        que o motor sobe pra GPU) passa a conter o hex, E um probe de pixel do topo pintado
+ *        vira azul (b>r) onde antes era madeira (r>b) — não é só no dado;
+ *   (9 replay) a lista editada re-executada dá o MESMO neutro canônico (página == Node);
+ *   (9 undo/redo) Ctrl+Z tira o pincel (a face volta bit-a-bit à cor de antes), Ctrl+Y devolve;
+ *   (9 várias) 3 faces selecionadas + 1 preset → 1 passo pincel com as 3 faces ORDENADAS,
+ *        todas com a cor;
+ *   (9 guarda) pintar no meio de um arrasto (extrude em curso) é IGNORADO (PASSOS não muda);
+ *   (9 bordas) pintar a cor que a face já mostra é NO-OP (sem passo fantasma; null conta
+ *        como COR_PADRAO), e pintar uma face SEM cor prévia (parede recém-extrudada, cor
+ *        null) grava normalmente (null → hex).
+ * Screenshots em scratchpad/passo2..9/. Sai 1 se algo falhar.
  *
  *   npm run oficina
  */
@@ -126,6 +145,7 @@ const OUT5 = resolve(REPO, 'scratchpad/passo5');
 const OUT6 = resolve(REPO, 'scratchpad/passo6');
 const OUT7 = resolve(REPO, 'scratchpad/passo7');
 const OUT8 = resolve(REPO, 'scratchpad/passo8');
+const OUT9 = resolve(REPO, 'scratchpad/passo9');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -1423,9 +1443,229 @@ await page.mouse.up();
 await page.keyboard.up('Control'); await rAF2();
 await aoBaseline();
 
+/* ==== PASSO 9: PINTAR FACES ================================================
+   Multi-seleção de FACE (espelho do passo 8, mas pra face) + o seletor de cor do
+   painel, tudo com eventos REAIS (clique/Shift+clique de verdade nas faces, clique
+   real nos presets, `change` REAL no <input type=color> — o picker nativo não roda
+   headless). Prova por NÚMERO: a multi-seleção acumula/reseta/remove e a ativa é a
+   última; o `change` grava ['pincel',{modo:'face',faces:[ordenadas],cor}] e a face
+   vira a cor; a cor APARECE no render (paleta do swatch + probe de pixel); replay
+   página==Node; undo/redo bit-a-bit; 3 faces + 1 cor = 1 passo; pintar no arrasto é
+   ignorado; e as bordas (no-op de cor-igual, pintar face sem cor prévia). */
+const F9 = { az: 0.7, el: 0.45, dist: 1.95, alvo: [0, 0.28, 0] };
+const selFacesB = () => page.evaluate(() => window.__oficina.selecaoFaces());
+const faceAtiva = () => page.evaluate(() => window.__oficina.faceAtiva());
+const corFace = (id) => page.evaluate((i) => window.__oficina.corDaFace(i), id);
+const paleta = () => page.evaluate(() => window.__oficina.paleta());
+// FACES clicáveis: centroide na cena (à esquerda do painel), front-most (hitFace===id)
+// e SEM vértice sob o centroide (hit===null) — então clique normal arma a face e
+// Shift+clique arma a face (não um vértice). Espelha escolherIsolados, mas pra face.
+async function facesClicaveis() {
+  const fids = JSON.parse(await canon()).F.map((f) => f[0]);
+  const out = [];
+  for (const id of fids) {
+    const c = await projFace(id);
+    if (!c || !(c.x > 46 && c.x < VW - painelW4 - 46 && c.y > 76 && c.y < VH - 56)) continue;
+    const hitF = await page.evaluate(([x, y]) => window.__oficina.hitFace(x, y), [c.x, c.y]);
+    const hitV = await page.evaluate(([x, y]) => window.__oficina.hit(x, y), [c.x, c.y]);
+    if (hitF === id && hitV === null) out.push({ id, x: c.x, y: c.y });
+  }
+  return out;
+}
+// 3 faces mutuamente separadas na tela (clique limpo), a de MENOR id primeiro só pra
+// ter A distante das outras; a ativa transita como o teste afirma.
+function tresFacesSeparadas(fs, minSep = 70) {
+  const esc = [];
+  for (const f of fs) { if (esc.every((g) => Math.hypot(f.x - g.x, f.y - g.y) >= minSep)) esc.push(f); if (esc.length === 3) break; }
+  return esc;
+}
+const pintarChange = async (cor) => { await page.$eval('#pcCor', (el, c) => { el.value = c; el.dispatchEvent(new Event('change', { bubbles: true })); }, cor); await rAF2(); };
+const clicarPreset = async (cor) => { const b = await page.$eval(`#pcPresets .sw[data-cor="${cor}"]`, (el) => { const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }); await page.mouse.click(b.x, b.y); await rAF2(); };
+// média RGB de um probe pequeno do RENDER centrado em (px,py) — prova de pixel
+async function probeRGB(px, py, s = 14) {
+  const x = Math.max(0, Math.round(px - s / 2)), y = Math.max(0, Math.round(py - s / 2));
+  const img = decodePNG(await page.screenshot({ clip: { x, y, width: s, height: s } }));
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i + 3 <= img.data.length; i += img.ch) { r += img.data[i]; g += img.data[i + 1]; b += img.data[i + 2]; n++; }
+  return { r: r / n, g: g / n, b: b / n };
+}
+
+await page.evaluate((f) => window.__oficina.orbitar(f), F9); await rAF2(); await rAF2();
+await page.evaluate(() => { window.__oficina.selecionar(null); window.__oficina.selecionarFaces([]); }); await rAF2();
+await aoBaseline();
+const canonBaseline9 = await canon();
+ok('(9 setup) partiu do baseline (peça pura do arquivo)', JSON.parse(canonBaseline9).V.length === 19, `V ${JSON.parse(canonBaseline9).V.length}`);
+
+// (9 multi) MULTI-SELEÇÃO de FACE por clique/Shift+clique REAL
+const fclick = await facesClicaveis();
+const [FA, FB, FC] = tresFacesSeparadas(fclick);
+ok('(9 multi) achou 3 faces clicáveis e separadas na tela', !!(FA && FB && FC) && FA.id !== FB.id && FB.id !== FC.id,
+   FA && FB && FC ? `faces #${FA.id} #${FB.id} #${FC.id}` : `só ${fclick.length} clicáveis`);
+await clicarPonto(FA.x, FA.y);                     // clique NORMAL → só FA
+const f1 = await selFacesB();
+ok('(9 multi) clique normal seleciona UMA face', f1.length === 1 && f1[0] === FA.id && (await faceAtiva()) === FA.id, `selFaces ${JSON.stringify(f1)} · ativa #${await faceAtiva()} (esp #${FA.id})`);
+await shiftClick(FB.x, FB.y);                       // Shift+clique soma FB
+const f2 = await selFacesB();
+ok('(9 multi) Shift+clique ACUMULA (2 faces, ativa = a última)', f2.length === 2 && f2[0] === FA.id && f2[1] === FB.id && (await faceAtiva()) === FB.id, `selFaces ${JSON.stringify(f2)} · ativa #${await faceAtiva()}`);
+await shiftClick(FC.x, FC.y);                       // Shift+clique soma FC
+const f3 = await selFacesB();
+ok('(9 multi) Shift+clique ACUMULA (3 faces, ativa = a última)', f3.length === 3 && f3[2] === FC.id && (await faceAtiva()) === FC.id, `selFaces ${JSON.stringify(f3)} · ativa #${await faceAtiva()}`);
+await shiftClick(FB.x, FB.y);                       // Shift+clique numa já-selecionada REMOVE
+const f4 = await selFacesB();
+ok('(9 multi) Shift+clique numa já-selecionada REMOVE (ativa intacta)', f4.length === 2 && !f4.includes(FB.id) && (await faceAtiva()) === FC.id, `selFaces ${JSON.stringify(f4)} · ativa #${await faceAtiva()}`);
+await clicarPonto(FA.x, FA.y);                      // clique NORMAL reseta pra 1
+const f5 = await selFacesB();
+ok('(9 multi) clique normal RESETA pra 1 (limpa o resto)', f5.length === 1 && f5[0] === FA.id, `selFaces ${JSON.stringify(f5)}`);
+// XOR: selecionar um VÉRTICE limpa as faces
+await page.evaluate((ids) => window.__oficina.selecionarFaces(ids), [FA.id, FC.id]); await rAF2();
+const nFacesAntesV = (await selFacesB()).length;
+const ptsV9 = await page.evaluate(() => window.__oficina.projMalha());
+const vIso9 = escolherVertice(ptsV9).v;
+await clicarPonto(vIso9.x, vIso9.y);
+const facesPosV = await selFacesB(); const vSelPosV = await page.evaluate(() => window.__oficina.selecionado());
+ok('(9 multi) selecionar um VÉRTICE limpa as faces (XOR)', nFacesAntesV === 2 && facesPosV.length === 0 && vSelPosV === vIso9.id, `faces antes ${nFacesAntesV} → depois ${facesPosV.length}, vértice #${vSelPosV}`);
+// XOR reverso: selecionar face limpa vértices
+await page.evaluate(() => window.__oficina.selecionarVarios([3, 5])); await rAF2();
+const nVAntesF = (await selecao()).length;
+await clicarPonto(FA.x, FA.y);
+const selPosFace9 = await selecao(); const facePosClick = await faceAtiva();
+ok('(9 multi) selecionar uma FACE limpa os vértices (XOR reverso)', nVAntesF === 2 && selPosFace9.length === 0 && facePosClick === FA.id, `vértices antes ${nVAntesF} → depois ${selPosFace9.length}, face #${facePosClick}`);
+
+// (9 pinta) o `change` grava o pincel e a face vira a cor; outra face intacta
+await aoBaseline();
+const CFACE9 = 9;   // topo — pintável e visível de cima pro probe de pixel
+const OUTRA = 8;    // fundo — NÃO selecionada, tem que ficar intacta
+await page.evaluate((id) => window.__oficina.selecionarFaces([id]), CFACE9); await rAF2();
+const corAntes9 = await corFace(CFACE9);
+const corOutraAntes = await corFace(OUTRA);
+const painelCorAntes = await page.evaluate(() => window.__oficina.painelCor());
+ok('(9 pinta) o bloco de cor aparece com a face selecionada e mostra a cor EFETIVA da ativa (read-back)',
+   painelCorAntes.vis === true && painelCorAntes.cor.toLowerCase() === (corAntes9 || '#9a8f80').toLowerCase(),
+   `bloco visível ${painelCorAntes.vis} · input ${painelCorAntes.cor} vs face #${CFACE9} ${corAntes9}`);
+const nP_antesPaint = await nP();
+const paletaAntes = await paleta();
+const AZUL = '#1030ff';
+await pintarChange(AZUL);
+const ultimoPaint = await page.evaluate(() => window.__oficina.ultimoPasso());
+const nP_posPaint = await nP();
+const corDepois9 = await corFace(CFACE9);
+const corOutraDepois = await corFace(OUTRA);
+ok('(9 pinta) o `change` grava [pincel,{modo:face,faces:[9],cor}] no fim de PASSOS (cresceu 1)',
+   nP_posPaint === nP_antesPaint + 1 && JSON.stringify(ultimoPaint) === JSON.stringify(['pincel', { modo: 'face', faces: [CFACE9], cor: AZUL }]),
+   `PASSOS ${nP_antesPaint}->${nP_posPaint} · último ${JSON.stringify(ultimoPaint)}`);
+ok('(9 pinta) neutro.F.get(9).cor VIROU a cor e a face NÃO selecionada (#8) ficou intacta',
+   corDepois9 === AZUL && corOutraDepois === corOutraAntes, `#9 ${corAntes9}->${corDepois9} · #8 ${corOutraAntes}->${corOutraDepois}`);
+
+// (9 render) a cor APARECE no render — paleta do swatch + probe de pixel
+const paletaDepois = await paleta();
+ok('(9 render) a paleta REAL do swatch (pixels que sobem pra GPU) passou a conter o hex',
+   Array.isArray(paletaAntes) && !paletaAntes.includes(AZUL) && Array.isArray(paletaDepois) && paletaDepois.includes(AZUL),
+   `antes ${JSON.stringify(paletaAntes)} · depois inclui ${AZUL}: ${paletaDepois && paletaDepois.includes(AZUL)}`);
+// probe de PIXEL: olhando o topo de cima, o centro da face 9 vira AZUL (b>r) — antes madeira (r>b).
+// Faço o antes/depois na MESMA orientação: desfaço o pincel, meço, refaço.
+await ctrlZ();   // tira o pincel → face 9 volta à cor de madeira
+await page.evaluate(() => window.__oficina.orbitar({ az: 0, el: 1.45, dist: 1.7, alvo: [0, 0.28, 0] })); await rAF2(); await rAF2();
+const pcTopo = await projFace(CFACE9);
+const rgbAntes = await probeRGB(pcTopo.x, pcTopo.y);
+await ctrlY();   // devolve o pincel → face 9 azul de novo
+await rAF2(); await rAF2();
+const rgbDepois = await probeRGB(pcTopo.x, pcTopo.y);
+ok('(9 render) probe de pixel do topo: madeira (r>b) ANTES vira AZUL (b>r) DEPOIS do pincel',
+   rgbAntes.r > rgbAntes.b + 12 && rgbDepois.b > rgbDepois.r + 12 && rgbDepois.b > rgbDepois.g + 12,
+   `antes rgb(${rgbAntes.r.toFixed(0)},${rgbAntes.g.toFixed(0)},${rgbAntes.b.toFixed(0)}) · depois rgb(${rgbDepois.r.toFixed(0)},${rgbDepois.g.toFixed(0)},${rgbDepois.b.toFixed(0)})`);
+
+// (9 replay) a lista editada refaz o objeto igual (página == Node)
+const passosPaint = await page.evaluate(() => window.__oficina.passos());
+const canonPagePaint = await canon();
+const canonNodePaint = JSON.stringify(neutroCanonico(nucleo(passosPaint, toco.PARAMS, toco.TOPO)));
+ok('(9 replay) a lista editada refaz o objeto igual (página == Node, bit-a-bit)', canonPagePaint === canonNodePaint, `canônico ${canonPagePaint.length} chars, igual`);
+
+// (9 undo/redo) Ctrl+Z tira o pincel (a face volta à cor de antes), Ctrl+Y devolve
+await page.evaluate((f) => window.__oficina.orbitar(f), F9); await rAF2();
+const canonComPincel = await canon();
+await ctrlZ();
+const nP_undo9 = await nP(); const canonUndo9 = await canon(); const corUndo9 = await corFace(CFACE9);
+ok('(9 undo) Ctrl+Z tira o pincel e a face volta bit-a-bit à cor de antes',
+   nP_undo9 === nP_antesPaint && canonUndo9 === canonBaseline9 && corUndo9 === corAntes9,
+   `PASSOS ${nP_posPaint}->${nP_undo9} · neutro ${canonUndo9 === canonBaseline9 ? 'idêntico' : 'DIVERGE'} · #9 ${corUndo9}`);
+await ctrlY();
+const canonRedo9 = await canon(); const corRedo9 = await corFace(CFACE9);
+ok('(9 redo) Ctrl+Y devolve o pincel (neutro bate com o de depois, a face azul de novo)',
+   canonRedo9 === canonComPincel && corRedo9 === AZUL, `neutro ${canonRedo9 === canonComPincel ? 'idêntico' : 'DIVERGE'} · #9 ${corRedo9}`);
+
+// (9 várias) 3 faces + 1 preset = 1 passo pincel com as 3 faces ORDENADAS, todas com a cor
+await aoBaseline();
+await page.evaluate(() => window.__oficina.selecionarFaces([9, 5, 3])); await rAF2();   // ordem de seleção [9,5,3] (ativa 3) → grava ORDENADO [3,5,9]
+const FOLHA = '#7a9c3f';
+const nP_antesV = await nP();
+await clicarPreset(FOLHA);   // clique REAL num preset
+const ultimoV = await page.evaluate(() => window.__oficina.ultimoPasso());
+const nP_posV = await nP();
+const coresV = [await corFace(3), await corFace(5), await corFace(9)];
+ok('(9 várias) 3 faces + 1 cor → 1 passo pincel com as faces ORDENADAS [3,5,9]',
+   nP_posV === nP_antesV + 1 && ultimoV && ultimoV[0] === 'pincel' && ultimoV[1].modo === 'face' && JSON.stringify(ultimoV[1].faces) === '[3,5,9]' && ultimoV[1].cor === FOLHA,
+   `PASSOS ${nP_antesV}->${nP_posV} · último ${JSON.stringify(ultimoV)}`);
+ok('(9 várias) as 3 faces selecionadas viraram a cor', coresV.every((c) => c === FOLHA), `cores #3/#5/#9 ${JSON.stringify(coresV)}`);
+await aoBaseline();
+
+// (9 guarda) pintar NO MEIO de um arrasto (extrude em curso) é IGNORADO
+await page.evaluate((f) => window.__oficina.orbitar(f), F9); await rAF2(); await rAF2();
+const pcG9 = await projFace(CFACE9);
+await clicarPonto(pcG9.x, pcG9.y);   // seleciona a face 9 (clique real)
+const hG9 = await page.evaluate(() => window.__oficina.handleFace());
+const gG9 = await agarreLivre(hG9);
+const nP_antesGuard = await nP();
+await page.mouse.move(gG9.x, gG9.y); await page.mouse.down();
+await page.mouse.move(gG9.x + hG9.dir[0] * 24, gG9.y + hG9.dir[1] * 24, { steps: 8 });   // extrude EM CURSO (não soltou)
+const emA9 = await page.evaluate(() => window.__oficina.emArrasto());
+await pintarChange('#00ff88');   // tenta pintar NO MEIO do arrasto
+const nP_durGuard = await nP();
+await page.mouse.up(); await rAF2();
+const nP_posGuard = await nP();
+ok('(9 guarda) o extrude está EM CURSO (arrasto ativo na face 9)', emA9 && emA9.extruda === true && emA9.face === CFACE9, `emArrasto ${JSON.stringify(emA9)}`);
+ok('(9 guarda) pintar no meio do arrasto é IGNORADO (PASSOS não muda durante o arrasto)', nP_durGuard === nP_antesGuard,
+   `PASSOS ${nP_antesGuard} -> ${nP_durGuard} durante o arrasto (ao soltar o extrude comita: ${nP_posGuard})`);
+await aoBaseline();
+
+// (9 bordas) NO-OP de cor-igual (sem passo fantasma) e pintar face SEM cor prévia (null → hex)
+await page.evaluate((id) => window.__oficina.selecionarFaces([id]), CFACE9); await rAF2();
+const corMostra9 = await corFace(CFACE9);   // '#c39a5e' no baseline
+const nP_antesNoop = await nP();
+const noop = await page.evaluate((c) => window.__oficina.pintar(c), corMostra9);   // pinta a MESMA cor
+const nP_posNoop = await nP();
+ok('(9 bordas) pintar a cor que a face JÁ mostra é NO-OP (devolve null, PASSOS não muda)',
+   noop === null && nP_posNoop === nP_antesNoop, `pintar('${corMostra9}') → ${noop === null ? 'null' : JSON.stringify(noop)} · PASSOS ${nP_antesNoop}->${nP_posNoop}`);
+// pintar face SEM cor prévia: extruda a 9 (paredes novas no bloco idx·1000, cor null), pinta uma
+await page.evaluate(() => window.__oficina.selecionarFace(9)); await rAF2();
+const nP_antesE = await nP();                                     // o bloco da extrusão é idx·1000 (idx = nº de passos ANTES dela)
+await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }))); await rAF2();   // tecla E extruda a face 9 → paredes no bloco (cor null)
+const PAREDE = nP_antesE * 1000;
+const corParedeAntes = await corFace(PAREDE);
+await page.evaluate((id) => window.__oficina.selecionarFaces([id]), PAREDE); await rAF2();
+const noopPadrao = await page.evaluate((c) => window.__oficina.pintar(c), '#9a8f80');   // COR_PADRAO numa face null = no-op
+const nP_apExtr = await nP();
+const passoParede = await page.evaluate((c) => window.__oficina.pintar(c), AZUL);   // cor nova numa face SEM cor prévia → grava
+const corParedeDepois = await corFace(PAREDE);
+ok('(9 bordas) parede recém-extrudada NÃO tem cor prévia (neutro cor = null)', corParedeAntes === null, `corDaFace(${PAREDE}) = ${corParedeAntes}`);
+ok('(9 bordas) pintar COR_PADRAO numa face SEM cor é NO-OP (null conta como a madeira neutra)', noopPadrao === null, `pintar('#9a8f80') → ${noopPadrao === null ? 'null' : JSON.stringify(noopPadrao)}`);
+ok('(9 bordas) pintar uma cor NOVA numa face SEM cor prévia grava (null → hex)',
+   passoParede && passoParede[0] === 'pincel' && corParedeDepois === AZUL, `passo ${JSON.stringify(passoParede)} · corDaFace(${PAREDE}) ${corParedeAntes}->${corParedeDepois}`);
+await aoBaseline();
+
+// screenshots do passo 9: faces pintadas + a multi-seleção destacada
+mkdirSync(OUT9, { recursive: true });
+await page.evaluate((f) => window.__oficina.orbitar(f), F9); await rAF2(); await rAF2();
+await page.evaluate(() => { window.__oficina.selecionarFaces([9, 1, 2]); }); await rAF2();
+await page.screenshot({ path: join(OUT9, 'oficina-faces-selecionadas.png') });   // 3 faces roxas, a ativa mais forte
+await page.evaluate(() => { window.__oficina.selecionarFaces([9]); window.__oficina.pintar('#3b6fd6'); }); await rAF2();
+await page.evaluate(() => { window.__oficina.selecionarFaces([1, 2, 3, 4, 5, 6, 7]); window.__oficina.pintar('#7a9c3f'); }); await rAF2();
+await page.evaluate(() => { window.__oficina.selecionarFaces([]); window.__oficina.selecionar(null); }); await rAF2();
+await page.screenshot({ path: join(OUT9, 'oficina-faces-pintadas.png') });   // topo azul + casca verde
+await aoBaseline();
+
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto.`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex).`);
