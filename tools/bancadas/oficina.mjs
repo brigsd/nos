@@ -554,6 +554,22 @@ ok('(5 vários) e o neutro é IDÊNTICO ao estado com os 3 arrastos', (await can
 const statusTxt = await page.evaluate(() => document.getElementById('passos').textContent);
 ok('(5 status) a barra mostra passos/desfazer/refazer', /passos \d+ · desfazer \d+ · refazer \d+/.test(statusTxt), `"${statusTxt}"`);
 
+// (5 guarda) desfazer NÃO age no meio de um arrasto de vértice — senão a lista muda
+//   com um moveV tentativo em voo e o commit cai numa lista encurtada (mesma classe
+//   da brecha da roda no passo 4). Com PASSOS acima do baseline (há o que desfazer),
+//   um Ctrl+Z DURANTE o arrasto tem que ser NO-OP.
+const nAntesG = await page.evaluate(() => window.__oficina.nPassos());
+const ptsG = await page.evaluate(() => window.__oficina.projMalha());
+const alvoG = escolherVertice(ptsG).v;
+await page.mouse.move(alvoG.x, alvoG.y);
+await page.mouse.down();
+await page.mouse.move(alvoG.x + 34, alvoG.y - 22, { steps: 6 });   // arrasto EM CURSO (não soltou)
+await page.keyboard.press('Control+z');                            // tenta desfazer no meio
+const nDuranteG = await page.evaluate(() => window.__oficina.nPassos());
+await page.mouse.up();                                             // solta (aí sim commita)
+ok('(5 guarda) Ctrl+Z no meio de um arrasto é IGNORADO (não desfaz com edição em voo)',
+   nDuranteG === nAntesG && nAntesG > 10, `PASSOS durante o arrasto: ${nAntesG} -> ${nDuranteG} (baseline 10)`);
+
 // screenshot do estado com os 3 refeitos — o milestone do passo 5 visível
 mkdirSync(OUT5, { recursive: true });
 await page.evaluate(() => { const e = document.getElementById('passos'); e.style.color = '#f9c22b'; });

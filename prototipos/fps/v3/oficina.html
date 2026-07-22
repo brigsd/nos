@@ -370,6 +370,7 @@ try {
        exatamente como veio do ARQUIVO (nenhuma edição aconteceu ainda). */
     baseline = PASSOS.length;   // o piso: desfazer não passa daqui (a construção da peça)
     desfazer = () => {
+      if (arrasto) return false;                      // PASSO 5: NÃO desfaz no meio de um arrasto de vértice — mexer em PASSOS com um moveV tentativo em voo tangleria a lista (mesma classe da brecha da roda no passo 4). Solta o vértice primeiro.
       if (PASSOS.length <= baseline) return false;   // no-op no piso: não desfaz a peça, só a sessão
       redo.push(PASSOS.pop());                        // tira a última edição, guarda pra refazer
       reexec(PASSOS);                                 // o objeto se refaz da lista encurtada
@@ -377,6 +378,7 @@ try {
       return true;
     };
     refazer = () => {
+      if (arrasto) return false;                      // idem: refazer no meio de um arrasto tangleria a lista
       if (redo.length === 0) return false;            // no-op: nada pra refazer
       PASSOS.push(redo.pop());                         // devolve a última desfeita ao fim da lista
       reexec(PASSOS);
