@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 208,
-    "worldTime": 12480
+    "tickCount": 210,
+    "worldTime": 12600
   },
   "width": 64,
   "height": 64,
@@ -6436,6 +6436,16 @@
       "worldTime": 12480,
       "nativeId": "quilha",
       "message": "O pão tá quentinho, venham contar suas histórias. O calor nos une."
+    },
+    {
+      "type": "core_pulse",
+      "tick": 209,
+      "worldTime": 12540
+    },
+    {
+      "type": "core_pulse",
+      "tick": 210,
+      "worldTime": 12600
     }
   ],
   "natives": {
