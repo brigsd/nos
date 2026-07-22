@@ -806,6 +806,24 @@ const nPd3b = await page.evaluate(() => window.__oficina.nPassos());
 ok('(6 valor D3) re-digitar o valor EXIBIDO (3 casas) é no-op — sem moveV fantasma',
    nPd3b === nPd3, `X exibido "${exibido}" (real ${posD3[0].toFixed(6)}) · PASSOS ${nPd3}->${nPd3b}`);
 
+// (6 valor D4) limite de sanidade: um valor absurdo (muito além de ±limValor) é
+// RECUSADO — não move o vértice nem grava passo (mesmo tratamento do não-finito).
+await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2();
+pts6 = await page.evaluate(() => window.__oficina.projMalha());
+const vD4 = escolherVertice(pts6).v;
+await clicarV(vD4);
+const antesD4 = await page.evaluate((id) => window.__oficina.posV(id), vD4.id);
+const nPd4 = await page.evaluate(() => window.__oficina.nPassos());
+const limV = await page.evaluate(() => window.__oficina.limValor);
+const absurdo = limV * 1000;   // muito além do limite (tipo digitar 1e5)
+await page.evaluate((val) => { const el = document.getElementById('pvx'); el.value = String(val); el.dispatchEvent(new Event('change', { bubbles: true })); }, absurdo);
+await rAF2();
+const aposD4 = await page.evaluate((id) => window.__oficina.posV(id), vD4.id);
+const nPd4b = await page.evaluate(() => window.__oficina.nPassos());
+ok('(6 valor D4) valor absurdo (> ±limValor) é RECUSADO — vértice e lista intactos',
+   nPd4b === nPd4 && Math.abs(aposD4[0] - antesD4[0]) < 1e-9,
+   `X ${antesD4[0].toFixed(3)} intacto · PASSOS ${nPd4}->${nPd4b} · limValor ${limV} · tentou ${absurdo}`);
+
 // (6 D1) REGRESSÃO: uma seta do gizmo que passa POR CIMA de outro vértice não pode
 // roubar o clique — o vértice mirado DIRETO vence a seta (precedência no hit-test).
 // Varre azimutes procurando uma oclusão real (a seta do selecionado cobrindo outro
@@ -868,4 +886,4 @@ server.close();
 
 console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo).`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}).`);

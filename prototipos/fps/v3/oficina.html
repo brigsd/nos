@@ -199,6 +199,7 @@ const GIZMO_ESC = 1 / 8;           // comprimento da seta em MUNDO = dist * isto
 const GIZMO_TRAVA = 12;            // px por unidade de mundo: abaixo disto a seta aponta ~pra câmera, fica APAGADA e NÃO arrasta (senão o arrasto dispara pro infinito)
 const GIZMO_HIT = 7;              // px: acerta a seta se o cursor cai a ≤ isto do SEGMENTO base→ponta projetado
 const GIZMO_MORTO = RAIO_HIT;     // px de zona morta na BASE: aí perto manda o vértice (arrasto livre do passo 4), não a seta
+const LIM_VALOR = 100;            // limite de sanidade do campo "valor exato": a peça é LOCAL (~1 unidade de tamanho), então recusa um número fora de ±isto — um 1e6 digitado mandaria o vértice pra longe (D4)
 
 let alvo = [0, 0.28, 0];           // centro do objeto (o pan move ISTO); a órbita é sempre em volta dele
 let az = 0.7;                      // azimute
@@ -479,6 +480,10 @@ try {
       if (selecionado == null || !neutro || !neutro.V.has(selecionado) || arrasto) { atualizarPainel(); return; }
       const alvoVal = parseFloat(el.value);
       if (!Number.isFinite(alvoVal)) { atualizarPainel(); return; }
+      // D4: limite de sanidade. A peça é local (coordenadas ~1 unidade); um número
+      // absurdo (1e6) mandaria o vértice pra longe. Fora de ±LIM_VALOR é RECUSADO —
+      // mesmo tratamento do não-finito: repinta (o campo volta ao valor atual).
+      if (Math.abs(alvoVal) > LIM_VALOR) { atualizarPainel(); return; }
       const atual = neutro.V.get(selecionado)[k];
       // D3 (passe adversarial): o campo mostra 3 casas; digitar o MESMO valor exibido
       // não pode gravar um moveV fantasma sub-visual. No-op quando bate o display.
@@ -836,7 +841,7 @@ try {
     refazer: () => refazer(),        // devolve a última desfeita ao fim da lista; false = redo vazio
     nRedo: () => redo.length,        // tamanho da pilha de refazer
     baseline: () => baseline,        // o piso: nº de passos que vieram do ARQUIVO
-    limiar: LIMIAR_PX, raioHit: RAIO_HIT,
+    limiar: LIMIAR_PX, raioHit: RAIO_HIT, limValor: LIM_VALOR,
     /* ---- PASSO 6: ganchos do gizmo + painel (a bancada conta/mede/afirma) ---- */
     gizmo: () => (malhaCtl ? malhaCtl.gizmo().map((s) => ({ k: s.k, eixo: s.eixo.slice(), cor: s.cor,
       o2: { ...s.o2 }, ponta: { ...s.ponta }, dir: s.dir.slice(), seg: s.seg, compr: s.compr, travada: s.travada })) : []),
