@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- oficina.html — a INTERFACE da Oficina (passo 2, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. -->
+<!-- oficina.html — a INTERFACE da Oficina (passos 2-3, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
@@ -22,6 +22,15 @@
   #c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0;
     image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; cursor: grab; }
   #c.arrastando { cursor: grabbing; }
+
+  /* OVERLAY DA MALHA (passo 3): canvas 2D POR CIMA da cena WebGL, do mesmo tamanho
+     em px de CSS. Fica ACIMA do #c (z:0) pra os vértices/arestas aparecerem sobre o
+     3D, e ABAIXO dos painéis (z:9-11) pra a barra/painel cobrirem qualquer ponto que
+     caia fora da área livre. pointer-events:none é OBRIGATÓRIO — passo 3 é só VER; o
+     clique (passo 4) não pode roubar o input da câmera, então os eventos atravessam
+     o overlay e chegam no #c. */
+  #malha { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 5;
+    pointer-events: none; }
 
   /* barra de MODOS no topo (placeholder — passo futuro dá função) */
   #modos { position: fixed; top: 0; left: 0; right: 0; height: 44px; z-index: 10;
@@ -66,6 +75,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="malha"></canvas>
 
 <header id="modos">
   <span class="marca">OFICINA</span>
@@ -111,6 +121,7 @@
    "abrir solta o cursor travado, senão não dá pra clicar em nada") — NENHUM
    requestPointerLock; os passos futuros clicam em vértice/face. */
 import { criarVisor } from './motor/render.js';
+import { nucleo } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números) por cima da malha
 import { m4 } from './motor/mat4.js';
 import * as tex from './motor/tex.js';
 import * as geo from './motor/geo.js';
@@ -125,6 +136,7 @@ const elErro = $('erro');
 function mostrarErro(msg) { elErro.textContent = msg; elErro.style.display = 'grid'; }
 
 const canvas = $('c');
+const malha = $('malha');   // overlay 2D (passo 3)
 
 /* ---- estado da órbita ---------------------------------------------------- */
 const FOVY = 58 * Math.PI / 180;   // MESMA abertura vertical do motor (render.js: m4.persp 58°)
@@ -245,6 +257,95 @@ try {
   visor.carregar(mod.construir({ TS, tex, geo, m4 }));
   aplicarCamera();   // já aponta antes do 1º quadro (pra projetar/hooks valerem de cara)
 
+  /* ---- PASSO 3: overlay da MALHA (vértices + arestas) ----------------------
+     O NEUTRO vem do MESMO núcleo do jogo (motor/oficina.js) relendo os
+     PASSOS/PARAMS/TOPO que a peça EXPORTA (formato do envelope). V = Map
+     id->[x,y,z] de vértices numerados; F = Map id->{vs:[ids...]} de faces
+     apontando pra ids. Desenhado num canvas 2D por cima PORQUE o draw do motor é
+     gl.TRIANGLES fixo — não faz ponto nem linha. */
+  const octx = malha.getContext('2d');
+  let neutro = null;
+  try {
+    const { PASSOS, PARAMS, TOPO } = mod;
+    if (!Array.isArray(PASSOS)) throw new Error('a peça não exporta PASSOS — o envelope pede PARAMS/TOPO/PASSOS exportados');
+    const { V, F } = nucleo(PASSOS, PARAMS ?? {}, TOPO ?? {});
+    neutro = { V, F };
+  } catch (e) {
+    console.warn('oficina passo 3: malha não desenhada —', e.message);
+  }
+
+  let verIds = false;   // etiqueta de id por vértice (tecla i) — o baseline é só ponto+aresta
+
+  /* dimensiona o backbuffer do overlay ao viewport (px de CSS × dpr) e devolve o
+     dpr. Roda a cada quadro: pega o resize da janela de graça, sem listener. */
+  function ajustarMalha() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
+    if (malha.width !== w) malha.width = w;
+    if (malha.height !== h) malha.height = h;
+    return dpr;
+  }
+
+  /* projeta TODOS os vértices pelo MOTOR (visor.projetar reconstrói a matriz do
+     estado ATUAL da câmera). Map id->{x,y} só dos que caem na tela — projetar dá
+     null atrás da câmera / fora do quadro, e esses são pulados. */
+  function projetarVertices() {
+    const p = new Map();
+    if (!neutro) return p;
+    for (const [id, pos] of neutro.V) { const q = visor.projetar(pos); if (q) p.set(id, q); }
+    return p;
+  }
+
+  /* arestas de TODA face: liga cantos consecutivos (contorno), fechando o ciclo.
+     Aresta compartilhada sai 2× — tudo bem. Pula o segmento se um canto não
+     projetou (fora da tela / atrás). */
+  function tracarArestas(proj) {
+    octx.beginPath();
+    for (const f of neutro.F.values()) {
+      const vs = f.vs, n = vs.length;
+      for (let k = 0; k < n; k++) {
+        const a = proj.get(vs[k]), b = proj.get(vs[(k + 1) % n]);
+        if (a && b) { octx.moveTo(a.x, a.y); octx.lineTo(b.x, b.y); }
+      }
+    }
+    octx.stroke();
+  }
+
+  /* redesenho — chamado no antesDoQuadro LOGO DEPOIS de aplicarCamera(): a matriz
+     que projetar() reconstrói é a MESMA que o motor usa no quadro 3D logo em
+     seguida, então o overlay casa exato (sem lag de 1 quadro). */
+  function desenharMalha() {
+    const dpr = ajustarMalha();
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    octx.clearRect(0, 0, innerWidth, innerHeight);
+    if (!neutro) return;
+    const proj = projetarVertices();
+
+    // ARESTAS: dois passes — halo escuro largo + núcleo claro fino — pra ler tanto
+    // sobre a grama clara quanto sobre a casca escura do objeto.
+    octx.lineJoin = 'round'; octx.lineCap = 'round';
+    octx.strokeStyle = 'rgba(12, 15, 23, 0.34)'; octx.lineWidth = 2.4; tracarArestas(proj);
+    octx.strokeStyle = 'rgba(223, 229, 247, 0.55)'; octx.lineWidth = 1;   tracarArestas(proj);
+
+    // VÉRTICES: ponto claro com contorno escuro — legível nos dois fundos.
+    for (const q of proj.values()) {
+      octx.beginPath(); octx.arc(q.x, q.y, 3, 0, Math.PI * 2);
+      octx.fillStyle = 'rgba(234, 239, 252, 0.96)'; octx.fill();
+      octx.lineWidth = 1.2; octx.strokeStyle = 'rgba(11, 14, 22, 0.92)'; octx.stroke();
+    }
+
+    // ETIQUETAS de id (opcional, tecla i): fininhas, desligadas por padrão.
+    if (verIds) {
+      octx.font = '10px ui-monospace, Menlo, monospace'; octx.textBaseline = 'middle';
+      for (const [id, q] of proj) {
+        const s = String(id), tx = q.x + 6, ty = q.y - 6;
+        octx.lineWidth = 2.6; octx.strokeStyle = 'rgba(11, 14, 22, 0.85)'; octx.strokeText(s, tx, ty);
+        octx.fillStyle = 'rgba(205, 223, 108, 0.95)'; octx.fillText(s, tx, ty);
+      }
+    }
+  }
+  addEventListener('keydown', (e) => { if (e.key === 'i' || e.key === 'I') verIds = !verIds; });
+
   /* DESLOCAMENTO DE LENTE: o painel direito (e as barras) cobrem parte da cena,
      então a imagem é deslizada pra o objeto ficar centrado na ÁREA LIVRE (janela
      menos painel/barras) SEM mover o alvo da órbita — mover o alvo faria o objeto
@@ -268,8 +369,8 @@ try {
   atualizarStatus();
 
   visor.rodar(
-    (fps) => atualizarStatus(fps),   // onFrame (~2×/s): mexe no DOM devagar
-    () => aplicarCamera(),           // antesDoQuadro: injeta a câmera do editor no motor, todo quadro
+    (fps) => atualizarStatus(fps),          // onFrame (~2×/s): mexe no DOM devagar
+    () => { aplicarCamera(); desenharMalha(); },   // antesDoQuadro: injeta a câmera do editor E redesenha a malha, em sincronia com o quadro
   );
 
   /* ganchos de VERIFICAÇÃO (a bancada headless usa; inertes no uso normal).
@@ -280,6 +381,18 @@ try {
       if (o.dist != null) { dist = o.dist; clampDist(); } if (o.alvo) alvo = o.alvo.slice(); },
     projetar: (p) => visor.projetar(p || alvo),
     travado: () => document.pointerLockElement,
+    /* passo 3: prova do overlay pra a bancada — conta pontos/arestas SEM ler
+       pixels (projeção FRESCA pelo motor, robusta ao timing do quadro). */
+    overlay: () => {
+      const V = neutro && neutro.V, F = neutro && neutro.F;
+      const pontos = [];
+      if (V) for (const [id, pos] of V) { const q = visor.projetar(pos); if (q) pontos.push({ id, x: q.x, y: q.y }); }
+      let arestas = 0;
+      if (V && F) for (const f of F.values()) { const vs = f.vs, n = vs.length;
+        for (let k = 0; k < n; k++) { const a = V.get(vs[k]), b = V.get(vs[(k + 1) % n]);
+          if (a && b && visor.projetar(a) && visor.projetar(b)) arestas++; } }
+      return { nV: V ? V.size : 0, nF: F ? F.size : 0, pontos, arestas };
+    },
   };
   window.__ready = true;
 } catch (e) {
