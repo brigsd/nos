@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. -->
+<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. Passo 6: GIZMO DE EIXOS + PAINEL. Com um vértice selecionado, 3 setas (X vermelho, Y verde, Z azul) de tamanho constante na tela (comprimento dist/8 em mundo) saem do vértice no overlay 2D; o hit-test do pointerdown testa as setas ANTES do vértice — acertou uma seta (distância ao segmento base→ponta, com zona morta na base) -> arrasto TRAVADO no eixo, senão o vértice (arrasto livre do passo 4), senão câmera. O arrasto travado reusa a MESMA máquina (arrasto/malhaCtl/reexec): avanço = (mouse·dir)/compr unidades no eixo (fórmula do doc), d = eixo·avanço, gravado como um moveV normal — então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem. Seta com compr<12px/un (aponta ~pra câmera) fica apagada e não arrasta. O painel #props deixa de ser placeholder: mostra o vértice selecionado (id + x,y,z) e a caixa do objeto (largura/altura/profundidade), de LEITURA durante o arrasto; digitar um valor exato vira um moveV (d = alvo − atual). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
@@ -46,14 +46,38 @@
     padding: 1px 6px; text-transform: uppercase; letter-spacing: .08em; }
   #modos .dir { margin-left: auto; }
 
-  /* painel de PROPRIEDADES à direita (placeholder — passo 6 preenche) */
+  /* painel de PROPRIEDADES à direita (passo 6: vértice selecionado + caixa do objeto) */
   #props { position: fixed; top: 44px; right: 0; bottom: 26px; width: min(320px, 32vw); z-index: 9;
     background: #141826e6; border-left: 1px solid var(--line); padding: 14px; overflow: auto; }
   #props h2 { margin: 0 0 4px; font-size: 12px; letter-spacing: .04em; color: var(--ink); }
-  #props .sub { font-size: 10px; color: var(--dim); margin-bottom: 12px; }
-  #props .placeholder { border: 1px dashed var(--line); border-radius: 8px; padding: 14px;
-    background: #0f132066; color: var(--dim); font-size: 11px; line-height: 1.6; }
-  #props .placeholder b { color: var(--ink); }
+  #props .sub { font-size: 10px; color: var(--dim); margin-bottom: 14px; }
+  #props .bloco { border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px;
+    background: #0f132066; margin-bottom: 12px; }
+  #props .rotulo { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim);
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+  #props .badge { font-size: 11px; color: #10131c; background: var(--accent); border-radius: 999px;
+    padding: 1px 9px; font-weight: 700; letter-spacing: 0; }
+  #props .badge.vazio { color: var(--dim); background: transparent; border: 1px solid var(--line); font-weight: 400; }
+  #props .campo { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  #props .eixo { width: 15px; height: 15px; border-radius: 4px; display: grid; place-items: center;
+    font-size: 10px; font-weight: 700; color: #0c0f16; flex: none; }
+  #props .eixo.ex { background: #ff5a52; } #props .eixo.ey { background: #46d67f; } #props .eixo.ez { background: #5a8bff; }
+  #props input[type=number] { flex: 1; min-width: 0; background: #0c0f16; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font: inherit; font-size: 12px;
+    font-variant-numeric: tabular-nums; }
+  #props input[type=number]:focus { outline: none; border-color: var(--accent); }
+  #props input[type=number]:disabled { color: var(--dim); background: #0d1018; opacity: .8; }
+  #props .dica { font-size: 9.5px; color: var(--dim); margin-top: 8px; line-height: 1.5; }
+  #props .dims { display: flex; gap: 8px; }
+  #props .dim { flex: 1; text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 7px 4px;
+    background: #0c0f1655; }
+  #props .dim .dk { display: block; font-size: 8.5px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); margin-bottom: 3px; }
+  #props .dim b { color: var(--hud); font-weight: 400; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #props .leitura { display: none; font-size: 10px; color: var(--amber); text-align: center;
+    border: 1px dashed #f9c22b66; border-radius: 6px; padding: 6px; background: #f9c22b0f; }
+  #props.emArrasto .leitura { display: block; }
+  #props.emArrasto .bloco { border-color: #f9c22b40; }
 
   /* barra de STATUS embaixo: nome da peça · câmera · fps · dev-string */
   #status { position: fixed; bottom: 0; left: 0; right: 0; height: 26px; z-index: 11;
@@ -88,19 +112,31 @@
 
 <aside id="props">
   <h2>Propriedades</h2>
-  <div class="sub">painel da direita (D-73) <span class="ph">placeholder</span></div>
-  <div class="placeholder">
-    O <b>passo 6</b> preenche este painel. É o único que troca de conteúdo entre
-    os espaços:<br><br>
-    <b>Modelar</b> — ferramentas de malha.<br>
-    <b>Material</b> — parâmetros.<br>
-    <b>Animação</b> — linha do tempo + lista de partes.
-  </div>
+  <div class="sub">espaço Modelar · vértice e caixa</div>
+
+  <section class="bloco">
+    <div class="rotulo">Vértice <span id="pvSel" class="badge vazio">—</span></div>
+    <label class="campo"><span class="eixo ex">X</span><input id="pvx" type="number" step="0.01" disabled></label>
+    <label class="campo"><span class="eixo ey">Y</span><input id="pvy" type="number" step="0.01" disabled></label>
+    <label class="campo"><span class="eixo ez">Z</span><input id="pvz" type="number" step="0.01" disabled></label>
+    <div class="dica" id="pvDica">clique num vértice pra selecionar</div>
+  </section>
+
+  <section class="bloco">
+    <div class="rotulo">Caixa do objeto</div>
+    <div class="dims">
+      <div class="dim"><span class="dk">largura</span><b id="pdx">—</b></div>
+      <div class="dim"><span class="dk">altura</span><b id="pdy">—</b></div>
+      <div class="dim"><span class="dk">profund.</span><b id="pdz">—</b></div>
+    </div>
+  </section>
+
+  <div class="leitura" id="pLeitura">arrastando — painel em leitura</div>
 </aside>
 
 <div id="ajuda">
-  <b>clique num vértice</b> pega e arrasta · <b>arrastar vazio</b> girar · <b>direito / shift</b> mover · <b>roda</b> zoom<br>
-  <b>toque:</b> 1 dedo gira · 2 dedos pinça+arrasta
+  <b>clique num vértice</b> pega e arrasta · <b>setas X/Y/Z</b> travam no eixo · <b>arrastar vazio</b> girar · <b>direito / shift</b> mover · <b>roda</b> zoom<br>
+  <b>toque:</b> 1 dedo gira · 2 dedos pinça+arrasta · <b>Ctrl+Z / Ctrl+Y</b> desfaz/refaz
 </div>
 
 <footer id="status">
@@ -150,6 +186,20 @@ const EL_LIMITE = 1.45;            // ~83°: trava perto dos polos (não vira de
 const RAIO_HIT = 10;               // px: acertou vértice se o cursor caiu a ≤ isto de um vértice PROJETADO
 const LIMIAR_PX = 4;               // px: abaixo disto o gesto é CLIQUE — só SELECIONA, NÃO grava moveV
 
+/* PASSO 6: GIZMO DE MOVER — 3 setas (X/Y/Z) no vértice SELECIONADO, arrastáveis
+   TRAVADAS num eixo. Desenhadas no overlay 2D projetando base e ponta (nenhum
+   raycast — solução do doc). Tamanho CONSTANTE na tela: a seta tem comprimento
+   `dist/8` em MUNDO, então projeta pro mesmo tanto de px de perto e de longe. */
+const EIXOS = [
+  { k: 'x', v: [1, 0, 0], cor: '#ff5a52' },   // vermelho (Blender: X)
+  { k: 'y', v: [0, 1, 0], cor: '#46d67f' },   // verde   (Y)
+  { k: 'z', v: [0, 0, 1], cor: '#5a8bff' },   // azul    (Z)
+];
+const GIZMO_ESC = 1 / 8;           // comprimento da seta em MUNDO = dist * isto (doc: tamanho constante na tela)
+const GIZMO_TRAVA = 12;            // px por unidade de mundo: abaixo disto a seta aponta ~pra câmera, fica APAGADA e NÃO arrasta (senão o arrasto dispara pro infinito)
+const GIZMO_HIT = 7;              // px: acerta a seta se o cursor cai a ≤ isto do SEGMENTO base→ponta projetado
+const GIZMO_MORTO = RAIO_HIT;     // px de zona morta na BASE: aí perto manda o vértice (arrasto livre do passo 4), não a seta
+
 let alvo = [0, 0.28, 0];           // centro do objeto (o pan move ISTO); a órbita é sempre em volta dele
 let az = 0.7;                      // azimute
 let el = 0.4;                      // elevação
@@ -161,9 +211,11 @@ let dist = 1.9;                    // distância câmera→alvo
                  pro hit-test do #c enxergar);
      projAtual — id->{x,y} PROJETADO no último quadro (o overlay JÁ calcula isso;
                  o pointerdown reusa esse MESMO estado pro hit-test);
-     selecionado — id do vértice destacado no overlay;
-     arrasto   — gesto de vértice em andamento (null = câmera/nada);
-     malhaCtl  — {hit,iniciar,mover,soltar}, montado quando a peça abre. */
+     selecionado — id do vértice destacado no overlay (mostra o gizmo, passo 6);
+     arrasto   — gesto em andamento (null = câmera/nada). LIVRE (passo 4, sem
+                 arrasto.eixo) ou TRAVADO num eixo (passo 6, arrasto.eixo = [x,y,z]);
+     malhaCtl  — {hit,iniciar,mover,soltar} + passo 6 {gizmo,hitGizmo,iniciarEixo},
+                 montado quando a peça abre. */
 let neutro = null;
 let projAtual = new Map();
 let selecionado = null;
@@ -184,6 +236,10 @@ let baseline = 0;
 const redo = [];
 let desfazer = () => false;   // no-op até a peça abrir (assinados no try da malha)
 let refazer = () => false;
+/* PASSO 6 — o painel lateral. Módulo-escopo (o gancho `selecionar` de __oficina,
+   lá embaixo, e a máquina da malha precisam chamar); a função real é assinada no
+   try quando a peça abre. No-op antes disso. */
+let atualizarPainel = () => {};
 
 const clampEl = () => { el = Math.max(-EL_LIMITE, Math.min(EL_LIMITE, el)); };
 const clampDist = () => { dist = Math.max(MIN_DIST, Math.min(MAX_DIST, dist)); };
@@ -246,6 +302,16 @@ canvas.addEventListener('pointerdown', (e) => {
      saímos antes de tocar em modo/pinça — a câmera fica IDÊNTICA no caso de erro. */
   const primario = (e.pointerType === 'mouse') ? (e.button === 0 && !e.shiftKey) : true;
   if (!arrasto && pointers.size === 1 && primario && malhaCtl) {
+    /* PASSO 6 — ORDEM do hit-test: PRIMEIRO as setas do gizmo (só há quando um
+       vértice está selecionado); acertou → arrasto TRAVADO naquele eixo. */
+    const g = malhaCtl.hitGizmo(e.clientX, e.clientY);
+    if (g) {
+      arrasto = malhaCtl.iniciarEixo(g, e.clientX, e.clientY, e.pointerId);
+      canvas.classList.add('arrastando');
+      e.preventDefault();
+      return;   // ACERTOU seta: arrasto travado por eixo, NÃO é câmera
+    }
+    /* SENÃO o vértice (passo 4) → arrasto LIVRE no plano da câmera. */
     const id = malhaCtl.hit(e.clientX, e.clientY);
     if (id != null) {
       arrasto = malhaCtl.iniciar(id, e.clientX, e.clientY, e.pointerId);
@@ -296,6 +362,7 @@ function soltar(e) {
   if (arrasto && e.pointerId === arrasto.pointerId) {
     malhaCtl.soltar(e.clientX, e.clientY);
     arrasto = null;
+    atualizarPainel();   // PASSO 6: o arrasto ACABOU (arrasto já null) — o painel volta de LEITURA pra EDITÁVEL. Depois do soltar interno, que ainda via arrasto setado.
   }
   pointers.delete(e.pointerId);
   try { canvas.releasePointerCapture(e.pointerId); } catch { /* já solto */ }
@@ -362,6 +429,60 @@ try {
       neutro = { V: r.V, F: r.F };
     };
 
+    /* ---- PASSO 6: PAINEL LATERAL (#props) — dá função ao placeholder da direita.
+       Mostra o VÉRTICE selecionado (id + x,y,z) e a CAIXA do objeto (largura/
+       altura/profundidade, de neutro.V). Atualiza na seleção e após cada edição,
+       e AO VIVO durante o arrasto — mas de LEITURA enquanto ele acontece ("um dono
+       por vez", doc): os campos ficam desabilitados e um aviso aparece. */
+    const bboxNeutro = () => {
+      if (!neutro || !neutro.V.size) return null;
+      const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+      for (const p of neutro.V.values()) for (let k = 0; k < 3; k++) { if (p[k] < mn[k]) mn[k] = p[k]; if (p[k] > mx[k]) mx[k] = p[k]; }
+      return [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]];
+    };
+    const campos = ['pvx', 'pvy', 'pvz'].map($);
+    atualizarPainel = () => {
+      const badge = $('pvSel'); if (!badge) return;   // markup ausente: no-op (robustez)
+      const temSel = selecionado != null && neutro && neutro.V.has(selecionado);
+      const editavel = temSel && !arrasto;
+      badge.classList.toggle('vazio', !temSel);
+      if (temSel) {
+        const p = neutro.V.get(selecionado);
+        badge.textContent = '#' + selecionado;
+        for (let k = 0; k < 3; k++) if (document.activeElement !== campos[k]) campos[k].value = p[k].toFixed(3);
+      } else {
+        badge.textContent = '—';
+        for (const c of campos) if (document.activeElement !== c) c.value = '';
+      }
+      for (const c of campos) c.disabled = !editavel;
+      $('pvDica').textContent = !temSel ? 'clique num vértice pra selecionar'
+        : arrasto ? 'arrastando — painel em leitura' : 'digite um valor + Enter (move no eixo)';
+      const dims = bboxNeutro();
+      $('pdx').textContent = dims ? dims[0].toFixed(3) : '—';
+      $('pdy').textContent = dims ? dims[1].toFixed(3) : '—';
+      $('pdz').textContent = dims ? dims[2].toFixed(3) : '—';
+      $('props').classList.toggle('emArrasto', !!arrasto);
+    };
+    /* VALOR EXATO (opcional do brief / D-73): digitar um número move o vértice pro
+       alvo NAQUELE eixo — d = alvo − atual — gravado como um moveV normal (mesma
+       máquina: desfazível, replay idêntico, limpa o redo). Ignorado durante o
+       arrasto (campos desabilitados). */
+    function aplicarValor(k, el) {
+      if (selecionado == null || !neutro || !neutro.V.has(selecionado) || arrasto) { atualizarPainel(); return; }
+      const alvoVal = parseFloat(el.value);
+      if (!Number.isFinite(alvoVal)) { atualizarPainel(); return; }
+      const d = [0, 0, 0];
+      d[k] = alvoVal - neutro.V.get(selecionado)[k];
+      if (Math.abs(d[k]) < 1e-9) { atualizarPainel(); return; }   // sem mudança real: não grava
+      PASSOS.push(['moveV', { v: selecionado, d }]);
+      redo.length = 0;
+      reexec(PASSOS);
+      atualizarPassos();
+      atualizarPainel();
+      console.log(`oficina passo 6 (valor exato): ['moveV', {v:${selecionado}, d:[${d.map((n) => n.toFixed(3)).join(', ')}]}]`);
+    }
+    campos.forEach((el, k) => { if (el) el.addEventListener('change', () => aplicarValor(k, el)); });
+
     /* ---- PASSO 5: DESFAZER / REFAZER (em cima do passo 4) --------------------
        Como toda edição é uma operação no FIM de PASSOS, o histórico não precisa
        de sistema à parte: desfazer TIRA a última (empilhando em redo) e re-executa;
@@ -375,6 +496,7 @@ try {
       redo.push(PASSOS.pop());                        // tira a última edição, guarda pra refazer
       reexec(PASSOS);                                 // o objeto se refaz da lista encurtada
       atualizarPassos();
+      atualizarPainel();                              // PASSO 6: o painel segue a edição
       return true;
     };
     refazer = () => {
@@ -383,6 +505,7 @@ try {
       PASSOS.push(redo.pop());                         // devolve a última desfeita ao fim da lista
       reexec(PASSOS);
       atualizarPassos();
+      atualizarPainel();
       return true;
     };
 
@@ -394,6 +517,58 @@ try {
         for (const [id, q] of projAtual) { const dd = (q.x - cx) ** 2 + (q.y - cy) ** 2; if (dd <= md) { md = dd; melhor = id; } }
         return melhor;
       },
+      /* PASSO 6 — GEOMETRIA do gizmo do vértice SELECIONADO, projetada FRESCA pelo
+         motor (a mesma prova não-circular do overlay). Uma seta por eixo:
+           o2   = projetar(P)                  base, no vértice;
+           a2   = projetar(P + eixo·L)         ponta, L = dist/8 unidades adiante
+                                               (tamanho CONSTANTE na tela);
+           seg  = |a2 − o2|  (px do cabo)   ·  dir = (a2−o2)/seg  (direção na tela);
+           compr = seg / L   → px por UNIDADE de mundo (o `compr` do doc, medido
+                               localmente no eixo). compr<12px = aponta ~pra câmera:
+                               a seta fica TRAVADA (apagada, não arrasta).
+         Fonte única: o desenho, o hit-test e a bancada leem daqui. [] sem seleção. */
+      gizmo() {
+        if (selecionado == null || !neutro || !neutro.V.has(selecionado)) return [];
+        const P = neutro.V.get(selecionado);
+        const o2 = visor.projetar(P);
+        if (!o2) return [];
+        const L = dist * GIZMO_ESC;
+        const segs = [];
+        for (const ax of EIXOS) {
+          const a2 = visor.projetar([P[0] + ax.v[0] * L, P[1] + ax.v[1] * L, P[2] + ax.v[2] * L]);
+          if (!a2) continue;   // ponta fora da tela: sem essa seta neste quadro
+          const dx = a2.x - o2.x, dy = a2.y - o2.y;
+          const seg = Math.hypot(dx, dy);
+          const compr = seg / L;
+          const dir = seg > 1e-6 ? [dx / seg, dy / seg] : [0, 0];
+          segs.push({ k: ax.k, eixo: ax.v.slice(), cor: ax.cor,
+            o2: { x: o2.x, y: o2.y }, ponta: { x: a2.x, y: a2.y }, seg, dir, compr, travada: compr < GIZMO_TRAVA });
+        }
+        return segs;
+      },
+      /* acerta uma seta: distância do cursor ao SEGMENTO base→ponta ≤ GIZMO_HIT,
+         COM uma zona morta na base (GIZMO_MORTO px) que deixa o próprio vértice
+         pro arrasto LIVRE do passo 4. Seta travada não conta. Devolve a mais perto. */
+      hitGizmo(cx, cy) {
+        let melhor = null, md = GIZMO_HIT;
+        for (const s of this.gizmo()) {
+          if (s.travada) continue;
+          const raw = (cx - s.o2.x) * s.dir[0] + (cy - s.o2.y) * s.dir[1];   // projeção escalar no cabo (px)
+          if (raw < GIZMO_MORTO) continue;                                    // perto do vértice: manda o arrasto livre
+          const along = Math.min(raw, s.seg);                                 // além da ponta prende na ponta
+          const perp = Math.hypot(cx - (s.o2.x + s.dir[0] * along), cy - (s.o2.y + s.dir[1] * along));
+          if (perp <= md) { md = perp; melhor = s; }
+        }
+        return melhor;
+      },
+      /* começa o arrasto TRAVADO: fixa eixo/dir/compr do INSTANTE (câmera parada
+         no arrasto → constantes, como no passo 4). O commit reusa a MESMA `arrasto`
+         e o MESMO soltar, então as guardas de passo 4/5 (roda, Ctrl+Z) já cobrem. */
+      iniciarEixo(g, cx, cy, pointerId) {
+        // `selecionado` JÁ é o vértice (o gizmo só existe pra ele).
+        atualizarPainel();
+        return { pointerId, id: selecionado, eixo: g.eixo.slice(), dir: g.dir.slice(), compr: g.compr, x0: cx, y0: cy, avanco: 0, d: [0, 0, 0] };
+      },
       /* começa o arrasto: fixa a base (right/up em mundo) e a ESCALA mundo-por-px
          NA PROFUNDIDADE DO VÉRTICE. A câmera não se move durante o arrasto e o
          vértice anda só no plano da câmera, então prof/escala são constantes. */
@@ -403,41 +578,57 @@ try {
         const cp = camPos(), { f, dir, cima } = base();
         const prof = (P[0] - cp[0]) * f[0] + (P[1] - cp[1]) * f[1] + (P[2] - cp[2]) * f[2];   // dot(P - camPos, olhar)
         const escala = (2 * prof * Math.tan(FOVY / 2)) / Math.max(1, canvas.clientHeight);    // NÃO usa `dist` (alvo), usa a prof do vértice
+        atualizarPainel();   // seleção mudou (o gizmo passa a aparecer neste vértice)
         return { pointerId, id, x0: cx, y0: cy, dir, cima, escala, d: [0, 0, 0] };
       },
-      /* o vértice SEGUE o cursor: right·(+dx) e cima·(−dy) (tela cresce pra baixo).
-         Re-executa com um moveV TENTATIVO no fim da lista (ainda não grava). */
+      /* o vértice SEGUE o cursor. LIVRE (passo 4): right·(+dx) e cima·(−dy) no plano
+         da câmera. TRAVADO (passo 6, arrasto.eixo): avanço = (deslocamento do mouse
+         · dir) / compr — a FÓRMULA do doc; só a componente AO LONGO da seta conta,
+         o perpendicular é descartado, então d fica no eixo e não vaza pros outros.
+         Em ambos, re-executa com um moveV TENTATIVO no fim da lista (não grava). */
       mover(cx, cy) {
         if (!arrasto) return;
-        const dxpix = cx - arrasto.x0, dypix = cy - arrasto.y0, e = arrasto.escala;
-        const d = [0, 0, 0];
-        for (let k = 0; k < 3; k++) d[k] = arrasto.dir[k] * dxpix * e - arrasto.cima[k] * dypix * e;
+        let d;
+        if (arrasto.eixo) {
+          const mx = cx - arrasto.x0, my = cy - arrasto.y0;
+          const avanco = (mx * arrasto.dir[0] + my * arrasto.dir[1]) / arrasto.compr;
+          d = [arrasto.eixo[0] * avanco, arrasto.eixo[1] * avanco, arrasto.eixo[2] * avanco];
+          arrasto.avanco = avanco;
+        } else {
+          const dxpix = cx - arrasto.x0, dypix = cy - arrasto.y0, e = arrasto.escala;
+          d = [0, 0, 0];
+          for (let k = 0; k < 3; k++) d[k] = arrasto.dir[k] * dxpix * e - arrasto.cima[k] * dypix * e;
+        }
         arrasto.d = d;
         reexec([...PASSOS, ['moveV', { v: arrasto.id, d }]]);
+        atualizarPainel();   // coords do vértice ao vivo (em LEITURA — arrasto em curso)
       },
       /* solta: passou do limiar -> GRAVA o moveV (deslocamento total, em mundo);
-         clique puro -> só mantém a seleção. Em qualquer caso reconstrói a partir
-         da lista REAL (some o tentativo se não gravou). */
+         clique puro -> só mantém a seleção. O limiar do passo 6 mede o avanço AO
+         LONGO da seta (o perpendicular não move o vértice, não deve gravar). Em
+         qualquer caso reconstrói da lista REAL (some o tentativo se não gravou). */
       soltar(cx, cy) {
         if (!arrasto) return { gravou: false };
-        const id = arrasto.id, d = arrasto.d.slice();
-        const movPix = Math.hypot(cx - arrasto.x0, cy - arrasto.y0);
+        const id = arrasto.id, d = arrasto.d.slice(), eixoK = arrasto.eixo;
+        const movPix = eixoK ? Math.abs(arrasto.avanco * arrasto.compr) : Math.hypot(cx - arrasto.x0, cy - arrasto.y0);
         let gravou = false;
         if (movPix >= LIMIAR_PX) {
           PASSOS.push(['moveV', { v: id, d }]);
           redo.length = 0;   // PASSO 5: edição nova invalida o futuro-refazer (semântica padrão)
           gravou = true;
-          console.log(`oficina passo 4: gravado ['moveV', {v:${id}, d:[${d.map((n) => n.toFixed(3)).join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
+          console.log(`oficina passo ${eixoK ? '6 (travado)' : '4 (livre)'}: gravado ['moveV', {v:${id}, d:[${d.map((n) => n.toFixed(3)).join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
         }
         reexec(PASSOS);
         selecionado = id;
         atualizarPassos();
+        atualizarPainel();
         return { gravou, id, d };
       },
     };
     atualizarPassos();
+    atualizarPainel();   // PASSO 6: pinta a caixa do objeto já no carregamento (sem seleção ainda)
   } catch (e) {
-    console.warn('oficina passo 3/4: malha não montada —', e.message);
+    console.warn('oficina passo 3/4/6: malha não montada —', e.message);
   }
 
   let verIds = false;   // etiqueta de id por vértice (tecla i) — o baseline é só ponto+aresta
@@ -505,15 +696,58 @@ try {
 
     // ETIQUETAS de id (opcional, tecla i): fininhas, desligadas por padrão.
     if (verIds) {
-      octx.font = '10px ui-monospace, Menlo, monospace'; octx.textBaseline = 'middle';
+      octx.font = '10px ui-monospace, Menlo, monospace'; octx.textBaseline = 'middle'; octx.textAlign = 'left';
       for (const [id, q] of proj) {
         const s = String(id), tx = q.x + 6, ty = q.y - 6;
         octx.lineWidth = 2.6; octx.strokeStyle = 'rgba(11, 14, 22, 0.85)'; octx.strokeText(s, tx, ty);
         octx.fillStyle = 'rgba(205, 223, 108, 0.95)'; octx.fillText(s, tx, ty);
       }
     }
+
+    // GIZMO DE MOVER (passo 6): as 3 setas do vértice SELECIONADO, POR CIMA de tudo.
+    desenharGizmo();
   }
-  addEventListener('keydown', (e) => { if (e.key === 'i' || e.key === 'I') verIds = !verIds; });
+
+  /* desenha o gizmo do vértice selecionado (nada se não há seleção). Fonte única
+     de geometria: malhaCtl.gizmo() — o MESMO que o hit-test e a bancada leem.
+     Seta TRAVADA (aponta ~pra câmera) sai só como um traço apagado, sem ponta. */
+  function desenharGizmo() {
+    if (!malhaCtl) return;
+    const segs = malhaCtl.gizmo();
+    if (!segs.length) return;
+    octx.lineJoin = 'round'; octx.lineCap = 'round';
+    for (const s of segs) {
+      const { o2, ponta, dir, cor } = s;
+      if (s.travada) {
+        octx.globalAlpha = 0.22; octx.strokeStyle = cor; octx.lineWidth = 2;
+        octx.beginPath(); octx.moveTo(o2.x, o2.y); octx.lineTo(ponta.x, ponta.y); octx.stroke();
+        octx.globalAlpha = 1; continue;
+      }
+      // cabo: halo escuro largo + núcleo colorido (legível nos dois fundos)
+      octx.strokeStyle = 'rgba(11,14,22,0.55)'; octx.lineWidth = 3.8;
+      octx.beginPath(); octx.moveTo(o2.x, o2.y); octx.lineTo(ponta.x, ponta.y); octx.stroke();
+      octx.strokeStyle = cor; octx.lineWidth = 2;
+      octx.beginPath(); octx.moveTo(o2.x, o2.y); octx.lineTo(ponta.x, ponta.y); octx.stroke();
+      // ponta: triângulo apontando no sentido da seta
+      const ah = 9, aw = 5, px = -dir[1], py = dir[0];
+      const bx = ponta.x - dir[0] * ah, by = ponta.y - dir[1] * ah;
+      octx.beginPath(); octx.moveTo(ponta.x, ponta.y);
+      octx.lineTo(bx + px * aw, by + py * aw); octx.lineTo(bx - px * aw, by - py * aw); octx.closePath();
+      octx.fillStyle = cor; octx.fill();
+      octx.lineWidth = 1; octx.strokeStyle = 'rgba(11,14,22,0.55)'; octx.stroke();
+      // rótulo do eixo, um tico além da ponta
+      octx.font = 'bold 10px ui-monospace, Menlo, monospace'; octx.textBaseline = 'middle'; octx.textAlign = 'center';
+      const lx = ponta.x + dir[0] * 9, ly = ponta.y + dir[1] * 9;
+      octx.lineWidth = 2.6; octx.strokeStyle = 'rgba(11,14,22,0.85)'; octx.strokeText(s.k.toUpperCase(), lx, ly);
+      octx.fillStyle = cor; octx.fillText(s.k.toUpperCase(), lx, ly);
+    }
+    octx.textAlign = 'left';   // restaura pro resto do overlay (etiquetas de id)
+  }
+
+  addEventListener('keydown', (e) => {
+    if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName)) return;   // PASSO 6: não alterna etiquetas com o foco num campo do painel
+    if (e.key === 'i' || e.key === 'I') verIds = !verIds;
+  });
 
   /* PASSO 5 — teclas de desfazer/refazer. Ctrl+Z desfaz; Ctrl+Y ou Ctrl+Shift+Z
      refaz (também aceita ⌘ no Mac). preventDefault SÓ nessas combinações — o
@@ -522,6 +756,7 @@ try {
      (etiquetas), que é sem Ctrl. Repetição de tecla (segurar) desfaz em série,
      que é o comportamento esperado. */
   addEventListener('keydown', (e) => {
+    if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName)) return;   // PASSO 6: com o foco num campo do painel, deixa o navegador tratar (não desfaz a MALHA por engano)
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === 'z' && !e.shiftKey) { e.preventDefault(); desfazer(); }
@@ -591,6 +826,18 @@ try {
     nRedo: () => redo.length,        // tamanho da pilha de refazer
     baseline: () => baseline,        // o piso: nº de passos que vieram do ARQUIVO
     limiar: LIMIAR_PX, raioHit: RAIO_HIT,
+    /* ---- PASSO 6: ganchos do gizmo + painel (a bancada conta/mede/afirma) ---- */
+    gizmo: () => (malhaCtl ? malhaCtl.gizmo().map((s) => ({ k: s.k, eixo: s.eixo.slice(), cor: s.cor,
+      o2: { ...s.o2 }, ponta: { ...s.ponta }, dir: s.dir.slice(), seg: s.seg, compr: s.compr, travada: s.travada })) : []),
+    hitGizmo: (x, y) => { const g = malhaCtl && malhaCtl.hitGizmo(x, y); return g ? g.k : null; },   // eixo acertado ('x'/'y'/'z') ou null
+    emArrasto: () => (arrasto ? { eixo: arrasto.eixo ? arrasto.eixo.slice() : null, id: arrasto.id } : null),   // null = nenhum; .eixo!=null = arrasto TRAVADO
+    selecionar: (id) => { selecionado = id; atualizarPainel(); },     // seleção direta (a bancada prepara o gizmo sem simular clique)
+    painel: () => ({                                                  // leitura do #props pra a bancada afirmar o conteúdo
+      sel: $('pvSel').textContent, x: $('pvx').value, y: $('pvy').value, z: $('pvz').value,
+      dims: [$('pdx').textContent, $('pdy').textContent, $('pdz').textContent],
+      leitura: ['pvx', 'pvy', 'pvz'].every((i) => $(i).disabled), dica: $('pvDica').textContent,
+    }),
+    gizmoEsc: GIZMO_ESC, gizmoTrava: GIZMO_TRAVA, gizmoHit: GIZMO_HIT,
   };
   window.__ready = true;
 } catch (e) {

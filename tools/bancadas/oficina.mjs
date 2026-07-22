@@ -47,7 +47,23 @@
  *   (5 vários) 3 arrastos → 3 Ctrl+Z voltam ao baseline (neutro == pristino do
  *        arquivo, conferido em Node à parte) → 3 refaz reconstroem o neutro
  *        IDÊNTICO ao estado com os 3.
- * Screenshots em scratchpad/passo2..5/. Sai 1 se algo falhar.
+ *   PASSO 6 (gizmo de eixos + painel — window.__oficina.gizmo/hitGizmo/painel):
+ *   (6 aparece) sem seleção o gizmo é vazio; com um vértice selecionado saem 3
+ *        setas X/Y/Z da MESMA base (o vértice projetado), nas cores certas;
+ *   (6 travado k) arrasta a seta k (46px no eixo + 26px PERPENDICULAR) e o moveV
+ *        gravado tem d NO EIXO k com VAZAMENTO ~0 nos outros dois (número real);
+ *   (6 segue k) o vértice projetado anda AO LONGO da seta ≈ o quanto o cursor
+ *        avançou no eixo (o perpendicular é descartado, mede-se along/perp);
+ *   (6 trava) seta que aponta ~pra câmera (compr<12px/un) fica apagada e NÃO
+ *        aceita arrasto (hitGizmo não a devolve);
+ *   (6 integra) o arrasto do gizmo é a MESMA máquina (emArrasto.eixo != null), a
+ *        roda e o Ctrl+Z DURANTE ele são ignorados (guardas do passo 4/5 cobrem),
+ *        o arrasto LIVRE (centro do vértice, zona morta) e a câmera no vazio
+ *        seguem passando, e o replay da lista editada bate página == Node;
+ *   (6 painel) #props reflete o vértice (id + x,y,z, batendo com o mundo) e a
+ *        caixa (largura/altura/profundidade), de LEITURA durante o arrasto;
+ *   (6 valor) digitar X move o vértice pro alvo no eixo (d = alvo − atual).
+ * Screenshots em scratchpad/passo2..6/. Sai 1 se algo falhar.
  *
  *   npm run oficina
  */
@@ -68,6 +84,7 @@ const OUT = resolve(REPO, 'scratchpad/passo2');
 const OUT3 = resolve(REPO, 'scratchpad/passo3');
 const OUT4 = resolve(REPO, 'scratchpad/passo4');
 const OUT5 = resolve(REPO, 'scratchpad/passo5');
+const OUT6 = resolve(REPO, 'scratchpad/passo6');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -576,9 +593,219 @@ await page.evaluate(() => { const e = document.getElementById('passos'); e.style
 await rAF2();
 await page.screenshot({ path: join(OUT5, 'oficina-desfazer-refazer.png') });
 
+/* ==== PASSO 6: GIZMO DE EIXOS + PAINEL LATERAL =============================
+   O gizmo (3 setas X/Y/Z no vértice selecionado) arrasta TRAVADO num eixo,
+   reusando a MESMA máquina arrasto/malhaCtl/reexec do passo 4. A prova é por
+   MEDIÇÃO: o moveV gravado tem d NO EIXO (vaza ~0 nos outros); o vértice anda AO
+   LONGO da seta conforme o cursor projetado nela; a roda e o Ctrl+Z DURANTE o
+   arrasto do gizmo são ignorados (as guardas de passo 4/5 já cobrem); e o painel
+   reflete o vértice + a caixa, de leitura durante o arrasto. */
+const F6 = { az: 0.7, el: 0.45, dist: 1.95, alvo: [0, 0.28, 0] };
+const RH = await page.evaluate(() => window.__oficina.raioHit);       // = GIZMO_MORTO (zona morta na base)
+const GTRAVA = await page.evaluate(() => window.__oficina.gizmoTrava); // px/un abaixo disto a seta trava
+const IEIXO = { x: 0, y: 1, z: 2 };
+const clicarV = async (v) => { await page.mouse.move(v.x, v.y); await page.mouse.down(); await page.mouse.move(v.x + 1, v.y + 1, { steps: 2 }); await page.mouse.up(); await rAF2(); };
+
+// (6 aparece) SEM seleção não há gizmo; COM seleção, 3 setas X/Y/Z na base do vértice
+await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2(); await rAF2();
+await page.evaluate(() => window.__oficina.selecionar(null)); await rAF2();
+const gizVazio = await page.evaluate(() => window.__oficina.gizmo());
+ok('(6 aparece) sem vértice selecionado, NÃO há gizmo', gizVazio.length === 0, `${gizVazio.length} setas`);
+let pts6 = await page.evaluate(() => window.__oficina.projMalha());
+let alvo6 = escolherVertice(pts6).v;
+await clicarV(alvo6);
+const giz = await page.evaluate(() => window.__oficina.gizmo());
+const eixosVistos = giz.map((s) => s.k).sort().join('');
+const baseComum = giz.length > 0 && giz.every((s) => Math.hypot(s.o2.x - giz[0].o2.x, s.o2.y - giz[0].o2.y) < 0.01);
+const corDe = (k) => (giz.find((s) => s.k === k) || {}).cor;
+ok('(6 aparece) vértice selecionado mostra 3 setas X/Y/Z (segmentos projetados)', giz.length === 3 && eixosVistos === 'xyz', `setas ${giz.map((s) => `${s.k}:${Math.round(s.seg)}px`).join(' ')}`);
+ok('(6 aparece) as 3 setas partem da MESMA base (o vértice projetado)', baseComum);
+ok('(6 aparece) a base cai NO vértice selecionado', giz.length === 3 && Math.hypot(giz[0].o2.x - alvo6.x, giz[0].o2.y - alvo6.y) < 2, `base (${giz[0]?.o2.x.toFixed(1)},${giz[0]?.o2.y.toFixed(1)}) vs vértice (${alvo6.x.toFixed(1)},${alvo6.y.toFixed(1)})`);
+ok('(6 aparece) cores X vermelho / Y verde / Z azul', corDe('x') === '#ff5a52' && corDe('y') === '#46d67f' && corDe('z') === '#5a8bff', `${corDe('x')} / ${corDe('y')} / ${corDe('z')}`);
+
+// (6 travado + segue) arrasta cada seta e mede: d NO EIXO (vaza ~0), vértice anda AO LONGO da seta
+async function arrastarSeta(k, alongPx, perpPx) {
+  const segs = await page.evaluate(() => window.__oficina.gizmo());
+  const s = segs.find((z) => z.k === k);
+  const off = Math.max(RH + 6, Math.min(s.seg - 6, 34));                // ponto no cabo, fora da zona morta
+  const g = { x: s.o2.x + s.dir[0] * off, y: s.o2.y + s.dir[1] * off };
+  const perp = [-s.dir[1], s.dir[0]];
+  const dest = { x: g.x + s.dir[0] * alongPx + perp[0] * perpPx, y: g.y + s.dir[1] * alongPx + perp[1] * perpPx };
+  const id = await page.evaluate(() => window.__oficina.selecionado());
+  const hit = await page.evaluate(([x, y]) => window.__oficina.hitGizmo(x, y), [g.x, g.y]);
+  await page.mouse.move(g.x, g.y); await page.mouse.down();
+  const emA = await page.evaluate(() => window.__oficina.emArrasto());
+  await page.mouse.move(dest.x, dest.y, { steps: 16 }); await page.mouse.up(); await rAF2();
+  const ultimo = await page.evaluate(() => window.__oficina.ultimoPasso());
+  const projDepois = await page.evaluate((vid) => window.__oficina.projetarV(vid), id);
+  return { o2: s.o2, dir: s.dir, perp, hit, emA, ultimo, projDepois };
+}
+const vazamentos = {};
+for (const k of ['x', 'y', 'z']) {
+  await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2(); await rAF2();
+  pts6 = await page.evaluate(() => window.__oficina.projMalha());
+  alvo6 = escolherVertice(pts6).v;
+  await clicarV(alvo6);
+  const r = await arrastarSeta(k, 46, 26);   // 46px AO LONGO do eixo + 26px PERPENDICULAR (tem que ser descartado)
+  const d = r.ultimo && r.ultimo[0] === 'moveV' && r.ultimo[1] && r.ultimo[1].d;
+  const idx = IEIXO[k];
+  const noEixo = d ? Math.abs(d[idx]) : 0;
+  const vaza = d ? [0, 1, 2].filter((i) => i !== idx).reduce((s, i) => s + Math.abs(d[i]), 0) : 999;
+  vazamentos[k] = vaza;
+  ok(`(6 travado ${k.toUpperCase()}) hitGizmo pegou a seta e o arrasto é TRAVADO no eixo`,
+     r.hit === k && r.emA && !!r.emA.eixo, `hit=${r.hit} · emArrasto.eixo=${JSON.stringify(r.emA && r.emA.eixo)}`);
+  ok(`(6 travado ${k.toUpperCase()}) o moveV gravado tem d NO EIXO ${k.toUpperCase()} — vaza ${vaza.toExponential(2)} nos outros`,
+     noEixo > 0.02 && vaza < 1e-9, `d=[${d ? d.map((n) => n.toFixed(4)).join(', ') : '?'}] · |eixo ${k}|=${noEixo.toFixed(4)}`);
+  const dxp = r.projDepois.x - r.o2.x, dyp = r.projDepois.y - r.o2.y;
+  const along = dxp * r.dir[0] + dyp * r.dir[1], perp = dxp * r.perp[0] + dyp * r.perp[1];
+  ok(`(6 segue ${k.toUpperCase()}) o vértice anda AO LONGO da seta conforme o cursor projetado nela`,
+     Math.abs(along - 46) <= 6 && Math.abs(perp) <= 3, `along ${along.toFixed(1)}px (cursor 46) · perp ${perp.toFixed(2)}px`);
+}
+
+// (6 trava) olhando QUASE PELO eixo X (az≈90°, el 0) e de LONGE, a seta X aponta
+//   ~pra câmera e projeta pouquíssimo px por unidade: fica APAGADA (compr<12px/un)
+//   e NÃO aceita arrasto — senão o avanço = mouse/compr dispararia pro infinito.
+await page.evaluate(() => window.__oficina.orbitar({ az: Math.PI / 2, el: 0, dist: 10, alvo: [0, 0.28, 0] })); await rAF2(); await rAF2();
+const ptsEdge = await page.evaluate(() => window.__oficina.projMalha());
+const alvoEdge = escolherVertice(ptsEdge).v;
+await page.evaluate((id) => window.__oficina.selecionar(id), alvoEdge.id); await rAF2();
+const gizEdge = await page.evaluate(() => window.__oficina.gizmo());
+const sX = gizEdge.find((z) => z.k === 'x');
+ok('(6 trava) olhando ~pelo eixo X, a seta X fica TRAVADA (compr < 12px/un, apagada)',
+   !!sX && sX.travada && sX.compr < GTRAVA, `X compr ${sX ? sX.compr.toFixed(1) : '?'}px/un (limiar ${GTRAVA})`);
+// e os OUTROS eixos, de través, seguem grabáveis (a trava é só da seta edge-on)
+const sZedge = gizEdge.find((z) => z.k === 'z');
+ok('(6 trava) as outras setas (Z de través) NÃO travam', !!sZedge && !sZedge.travada, `Z compr ${sZedge ? sZedge.compr.toFixed(1) : '?'}px/un`);
+const meioX = sX ? { x: sX.o2.x + sX.dir[0] * sX.seg * 0.5, y: sX.o2.y + sX.dir[1] * sX.seg * 0.5 } : { x: 0, y: 0 };
+const hitXtravada = await page.evaluate(([x, y]) => window.__oficina.hitGizmo(x, y), [meioX.x, meioX.y]);
+ok('(6 trava) a seta travada NÃO aceita arrasto (hitGizmo não devolve X)', hitXtravada !== 'x', `hitGizmo no cabo X = ${hitXtravada}`);
+
+// (6 integra) roda + Ctrl+Z IGNORADOS durante o arrasto do gizmo (guardas do passo 4/5 cobrem)
+await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2(); await rAF2();
+pts6 = await page.evaluate(() => window.__oficina.projMalha());
+alvo6 = escolherVertice(pts6).v;
+await clicarV(alvo6);
+const sxG = (await page.evaluate(() => window.__oficina.gizmo())).find((z) => z.k === 'x');
+const offG = Math.max(RH + 6, Math.min(sxG.seg - 6, 34));
+const gG = { x: sxG.o2.x + sxG.dir[0] * offG, y: sxG.o2.y + sxG.dir[1] * offG };
+const distA6 = await page.evaluate(() => window.__oficina.estado().dist);
+const nPA6 = await page.evaluate(() => window.__oficina.nPassos());
+await page.mouse.move(gG.x, gG.y); await page.mouse.down();
+const emA6 = await page.evaluate(() => window.__oficina.emArrasto());
+await page.mouse.wheel(0, -300); await rAF2();
+const distD6 = await page.evaluate(() => window.__oficina.estado().dist);
+await page.keyboard.press('Control+z'); await rAF2();
+const nPD6 = await page.evaluate(() => window.__oficina.nPassos());
+await page.mouse.move(gG.x + sxG.dir[0] * 50, gG.y + sxG.dir[1] * 50, { steps: 12 }); await page.mouse.up(); await rAF2();
+ok('(6 integra) o arrasto do gizmo usa a mesma máquina (emArrasto.eixo != null)', emA6 && !!emA6.eixo, `emArrasto ${JSON.stringify(emA6)}`);
+ok('(6 integra) a RODA é IGNORADA durante o arrasto do gizmo (guarda do passo 4)', Math.abs(distD6 - distA6) < 1e-9, `dist ${distA6.toFixed(3)} -> ${distD6.toFixed(3)}`);
+ok('(6 integra) Ctrl+Z é IGNORADO durante o arrasto do gizmo (guarda do passo 5)', nPD6 === nPA6, `PASSOS ${nPA6} -> ${nPD6} durante o arrasto`);
+
+// (6 integra) o arrasto LIVRE do passo 4 segue no vértice selecionado (clicar no CENTRO, zona morta)
+await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2(); await rAF2();
+pts6 = await page.evaluate(() => window.__oficina.projMalha());
+alvo6 = escolherVertice(pts6).v;
+await clicarV(alvo6);
+const gizC = await page.evaluate(() => window.__oficina.gizmo());
+const centro = { x: gizC[0].o2.x, y: gizC[0].o2.y };
+const hitCentro = await page.evaluate(([x, y]) => window.__oficina.hitGizmo(x, y), [centro.x, centro.y]);
+await page.mouse.move(centro.x, centro.y); await page.mouse.down();
+const emAC = await page.evaluate(() => window.__oficina.emArrasto());
+await page.mouse.move(centro.x + 42, centro.y - 30, { steps: 14 }); await page.mouse.up(); await rAF2();
+const ultimoC = await page.evaluate(() => window.__oficina.ultimoPasso());
+const dC = ultimoC && ultimoC[1] && ultimoC[1].d;
+const naoZeroC = dC ? [0, 1, 2].filter((i) => Math.abs(dC[i]) > 1e-6).length : 0;
+ok('(6 integra) no CENTRO do vértice o gizmo NÃO pega (zona morta → arrasto livre)', hitCentro === null, `hitGizmo(centro)=${hitCentro}`);
+ok('(6 integra) arrasto LIVRE (passo 4) segue no vértice selecionado (d fora de um eixo só)',
+   emAC && emAC.eixo === null && naoZeroC >= 2, `emArrasto ${JSON.stringify(emAC)} · d=${JSON.stringify(dC && dC.map((n) => +n.toFixed(3)))}`);
+
+// (6 integra) câmera no VAZIO ainda orbita com um vértice selecionado (o gizmo não rouba o vazio)
+const vazio6 = await page.evaluate(() => {
+  const pts = window.__oficina.projMalha(), sel = window.__oficina.selecionado();
+  const sp = sel != null ? window.__oficina.projetarV(sel) : null;
+  for (let y = 90; y < innerHeight - 60; y += 10) for (let x = 30; x < innerWidth - 360; x += 10) {
+    let n = 1e9; for (const q of pts) n = Math.min(n, Math.hypot(x - q.x, y - q.y));
+    const dsel = sp ? Math.hypot(x - sp.x, y - sp.y) : 1e9;
+    if (n > 28 && dsel > 95 && window.__oficina.hitGizmo(x, y) === null) return { x, y };
+  }
+  return null;
+});
+const estA6b = await page.evaluate(() => window.__oficina.estado());
+await page.mouse.move(vazio6.x, vazio6.y); await page.mouse.down();
+await page.mouse.move(vazio6.x + 170, vazio6.y + 14, { steps: 12 }); await page.mouse.up(); await rAF2();
+const estB6 = await page.evaluate(() => window.__oficina.estado());
+ok('(6 integra) câmera no VAZIO ainda ORBITA com um vértice selecionado', Math.abs(estB6.az - estA6b.az) > 0.5, `az ${estA6b.az.toFixed(2)} -> ${estB6.az.toFixed(2)}`);
+
+// (6 integra) replay da lista EDITADA pelo gizmo idêntico (página == Node, fora do browser)
+const passos6 = await page.evaluate(() => window.__oficina.passos());
+const canonP6 = await page.evaluate(() => JSON.stringify(window.__oficina.canon()));
+const canonN6 = JSON.stringify(neutroCanonico(nucleo(passos6, toco.PARAMS, toco.TOPO)));
+ok('(6 integra) replay da lista editada pelo gizmo idêntico (página == Node)', canonP6 === canonN6, `canônico ${canonP6.length} chars, bit-a-bit igual`);
+
+// (6 painel) reflete o vértice selecionado (id + coords) + as dimensões da caixa
+await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2(); await rAF2();
+pts6 = await page.evaluate(() => window.__oficina.projMalha());
+alvo6 = escolherVertice(pts6).v;
+await clicarV(alvo6);
+const pain = await page.evaluate(() => window.__oficina.painel());
+const posSel = await page.evaluate((id) => window.__oficina.posV(id), alvo6.id);
+const Vall = JSON.parse(canonP6).V;   // todos os vértices, pra a caixa esperada
+const mn6 = [Infinity, Infinity, Infinity], mx6 = [-Infinity, -Infinity, -Infinity];
+for (const e of Vall) for (let k = 0; k < 3; k++) { const v = e[k + 1]; if (v < mn6[k]) mn6[k] = v; if (v > mx6[k]) mx6[k] = v; }
+const dimsEsp = [mx6[0] - mn6[0], mx6[1] - mn6[1], mx6[2] - mn6[2]].map((n) => n.toFixed(3));
+ok('(6 painel) mostra o id do vértice selecionado', pain.sel === '#' + alvo6.id, `painel "${pain.sel}" vs #${alvo6.id}`);
+ok('(6 painel) mostra as COORDS do vértice (x,y,z batem com o mundo)',
+   pain.x === posSel[0].toFixed(3) && pain.y === posSel[1].toFixed(3) && pain.z === posSel[2].toFixed(3),
+   `painel (${pain.x},${pain.y},${pain.z}) vs mundo (${posSel.map((n) => n.toFixed(3)).join(',')})`);
+ok('(6 painel) mostra as DIMENSÕES da caixa (largura/altura/profundidade)',
+   pain.dims[0] === dimsEsp[0] && pain.dims[1] === dimsEsp[1] && pain.dims[2] === dimsEsp[2],
+   `painel [${pain.dims.join(', ')}] vs caixa [${dimsEsp.join(', ')}]`);
+ok('(6 painel) fora do arrasto o painel é EDITÁVEL (não em leitura)', pain.leitura === false, `leitura=${pain.leitura}`);
+
+// (6 painel) de LEITURA durante o arrasto (campos desabilitados)
+const sxP = (await page.evaluate(() => window.__oficina.gizmo())).find((z) => z.k === 'x');
+const offP = Math.max(RH + 6, Math.min(sxP.seg - 6, 32));
+const gP = { x: sxP.o2.x + sxP.dir[0] * offP, y: sxP.o2.y + sxP.dir[1] * offP };
+await page.mouse.move(gP.x, gP.y); await page.mouse.down();
+await page.mouse.move(gP.x + sxP.dir[0] * 30, gP.y + sxP.dir[1] * 30, { steps: 8 });
+const painDrag = await page.evaluate(() => window.__oficina.painel());
+await page.mouse.up(); await rAF2();
+const painApos = await page.evaluate(() => window.__oficina.painel());
+ok('(6 painel) de LEITURA durante o arrasto (campos desabilitados, um dono por vez)', painDrag.leitura === true, `leitura=${painDrag.leitura} · dica "${painDrag.dica}"`);
+ok('(6 painel) volta a EDITÁVEL após soltar', painApos.leitura === false, `leitura=${painApos.leitura}`);
+
+// (6 valor) VALOR EXATO (opcional): digitar X move o vértice pro alvo NO EIXO (d = alvo − atual)
+await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2();
+pts6 = await page.evaluate(() => window.__oficina.projMalha());
+alvo6 = escolherVertice(pts6).v;
+await clicarV(alvo6);
+const antesVX = await page.evaluate((id) => window.__oficina.posV(id), alvo6.id);
+const nPvx = await page.evaluate(() => window.__oficina.nPassos());
+const alvoX = +(antesVX[0] + 0.2).toFixed(3);
+await page.evaluate((val) => { const el = document.getElementById('pvx'); el.value = String(val); el.dispatchEvent(new Event('change', { bubbles: true })); }, alvoX);
+await rAF2();
+const aposVX = await page.evaluate((id) => window.__oficina.posV(id), alvo6.id);
+const nPvx2 = await page.evaluate(() => window.__oficina.nPassos());
+ok('(6 valor) digitar X move o vértice pro alvo (d = alvo − atual), grava 1 moveV, X isolado',
+   nPvx2 === nPvx + 1 && Math.abs(aposVX[0] - alvoX) < 1e-6 && Math.abs(aposVX[1] - antesVX[1]) < 1e-9 && Math.abs(aposVX[2] - antesVX[2]) < 1e-9,
+   `x ${antesVX[0].toFixed(3)} -> ${aposVX[0].toFixed(3)} (alvo ${alvoX}) · y/z intactos · PASSOS ${nPvx}->${nPvx2}`);
+
+// screenshot do GIZMO: um vértice selecionado, as 3 setas por cima do toco
+mkdirSync(OUT6, { recursive: true });
+await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2(); await rAF2();
+const ptsShot = await page.evaluate(() => window.__oficina.projMalha());
+const alvoShot = escolherVertice(ptsShot).v;
+await clicarV(alvoShot);
+await rAF2();
+await page.screenshot({ path: join(OUT6, 'oficina-gizmo.png') });
+await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })));   // etiquetas de id
+await rAF2();
+await page.screenshot({ path: join(OUT6, 'oficina-gizmo-ids.png') });
+const vazMax = Math.max(vazamentos.x, vazamentos.y, vazamentos.z);
+
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico.`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto.`);
