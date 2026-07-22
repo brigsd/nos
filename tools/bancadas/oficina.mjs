@@ -790,6 +790,22 @@ ok('(6 valor) digitar X move o vértice pro alvo (d = alvo − atual), grava 1 m
    nPvx2 === nPvx + 1 && Math.abs(aposVX[0] - alvoX) < 1e-6 && Math.abs(aposVX[1] - antesVX[1]) < 1e-9 && Math.abs(aposVX[2] - antesVX[2]) < 1e-9,
    `x ${antesVX[0].toFixed(3)} -> ${aposVX[0].toFixed(3)} (alvo ${alvoX}) · y/z intactos · PASSOS ${nPvx}->${nPvx2}`);
 
+// (6 valor D3) re-digitar o valor EXIBIDO (3 casas) NÃO pode gravar um moveV fantasma
+// sub-visual. Arrasta pra o X ficar fracionário, lê o display e re-digita esse mesmo texto.
+await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2();
+pts6 = await page.evaluate(() => window.__oficina.projMalha());
+const vD3 = escolherVertice(pts6).v;
+await page.mouse.move(vD3.x, vD3.y); await page.mouse.down();
+await page.mouse.move(vD3.x + 23, vD3.y - 17, { steps: 6 }); await page.mouse.up(); await rAF2();   // X vira fracionário
+const posD3 = await page.evaluate((id) => window.__oficina.posV(id), vD3.id);
+const nPd3 = await page.evaluate(() => window.__oficina.nPassos());
+const exibido = posD3[0].toFixed(3);
+await page.evaluate((val) => { const el = document.getElementById('pvx'); el.value = val; el.dispatchEvent(new Event('change', { bubbles: true })); }, exibido);
+await rAF2();
+const nPd3b = await page.evaluate(() => window.__oficina.nPassos());
+ok('(6 valor D3) re-digitar o valor EXIBIDO (3 casas) é no-op — sem moveV fantasma',
+   nPd3b === nPd3, `X exibido "${exibido}" (real ${posD3[0].toFixed(6)}) · PASSOS ${nPd3}->${nPd3b}`);
+
 // screenshot do GIZMO: um vértice selecionado, as 3 setas por cima do toco
 mkdirSync(OUT6, { recursive: true });
 await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2(); await rAF2();

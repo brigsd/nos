@@ -471,9 +471,12 @@ try {
       if (selecionado == null || !neutro || !neutro.V.has(selecionado) || arrasto) { atualizarPainel(); return; }
       const alvoVal = parseFloat(el.value);
       if (!Number.isFinite(alvoVal)) { atualizarPainel(); return; }
+      const atual = neutro.V.get(selecionado)[k];
+      // D3 (passe adversarial): o campo mostra 3 casas; digitar o MESMO valor exibido
+      // não pode gravar um moveV fantasma sub-visual. No-op quando bate o display.
+      if (alvoVal.toFixed(3) === atual.toFixed(3)) { atualizarPainel(); return; }
       const d = [0, 0, 0];
-      d[k] = alvoVal - neutro.V.get(selecionado)[k];
-      if (Math.abs(d[k]) < 1e-9) { atualizarPainel(); return; }   // sem mudança real: não grava
+      d[k] = alvoVal - atual;
       PASSOS.push(['moveV', { v: selecionado, d }]);
       redo.length = 0;
       reexec(PASSOS);
