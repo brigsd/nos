@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. Passo 6: GIZMO DE EIXOS + PAINEL. Com um vértice selecionado, 3 setas (X vermelho, Y verde, Z azul) de tamanho constante na tela (comprimento dist/8 em mundo) saem do vértice no overlay 2D; o hit-test do pointerdown testa as setas ANTES do vértice — acertou uma seta (distância ao segmento base→ponta, com zona morta na base) -> arrasto TRAVADO no eixo, senão o vértice (arrasto livre do passo 4), senão câmera. O arrasto travado reusa a MESMA máquina (arrasto/malhaCtl/reexec): avanço = (mouse·dir)/compr unidades no eixo (fórmula do doc), d = eixo·avanço, gravado como um moveV normal — então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem. Seta com compr<12px/un (aponta ~pra câmera) fica apagada e não arrasta. O painel #props deixa de ser placeholder: mostra o vértice selecionado (id + x,y,z) e a caixa do objeto (largura/altura/profundidade), de LEITURA durante o arrasto; digitar um valor exato vira um moveV (d = alvo − atual). Passo 7: EXTRUDAR UMA FACE. Além do vértice, dá pra selecionar uma FACE (clicar no corpo dela — a da FRENTE por profundidade do centroide; point-in-polygon nos cantos PROJETADOS; a seleção é ADIADA pro pointerup pra que orbitar pelo corpo do objeto não deselecione o que estava ativo). A face selecionada destaca no overlay e ganha UM handle na NORMAL saindo do centroide (mesmo estilo/projeção do gizmo do passo 6, TRAVADO quando a normal aponta ~pra câmera). Arrastar o handle EXTRUDA: avanço = (mouse·dir)/compr na normal (a mesma fórmula travada do passo 6), preview AO VIVO re-executando a lista com um ['extruda',{face,dist}] TENTATIVO no fim, e ao soltar (passou do LIMIAR_PX) GRAVA ['extruda',{face,dist}] e limpa o redo — a op do núcleo (motor/oficina.js) já existe e está provada, e o anel novo nasce nos ids do BLOCO do passo. Reusa a MESMA máquina arrasto/soltar/reexec, então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem sem código novo. Seleção é vértice XOR face. Tecla E é o atalho opcional do mesmo extrude. -->
+<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. Passo 6: GIZMO DE EIXOS + PAINEL. Com um vértice selecionado, 3 setas (X vermelho, Y verde, Z azul) de tamanho constante na tela (comprimento dist/8 em mundo) saem do vértice no overlay 2D; o hit-test do pointerdown testa as setas ANTES do vértice — acertou uma seta (distância ao segmento base→ponta, com zona morta na base) -> arrasto TRAVADO no eixo, senão o vértice (arrasto livre do passo 4), senão câmera. O arrasto travado reusa a MESMA máquina (arrasto/malhaCtl/reexec): avanço = (mouse·dir)/compr unidades no eixo (fórmula do doc), d = eixo·avanço, gravado como um moveV normal — então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem. Seta com compr<12px/un (aponta ~pra câmera) fica apagada e não arrasta. O painel #props deixa de ser placeholder: mostra o vértice selecionado (id + x,y,z) e a caixa do objeto (largura/altura/profundidade), de LEITURA durante o arrasto; digitar um valor exato vira um moveV (d = alvo − atual). Passo 7: EXTRUDAR UMA FACE. Além do vértice, dá pra selecionar uma FACE (clicar no corpo dela — a da FRENTE por profundidade do centroide; point-in-polygon nos cantos PROJETADOS; a seleção é ADIADA pro pointerup pra que orbitar pelo corpo do objeto não deselecione o que estava ativo). A face selecionada destaca no overlay e ganha UM handle na NORMAL saindo do centroide (mesmo estilo/projeção do gizmo do passo 6, TRAVADO quando a normal aponta ~pra câmera). Arrastar o handle EXTRUDA: avanço = (mouse·dir)/compr na normal (a mesma fórmula travada do passo 6), preview AO VIVO re-executando a lista com um ['extruda',{face,dist}] TENTATIVO no fim, e ao soltar (passou do LIMIAR_PX) GRAVA ['extruda',{face,dist}] e limpa o redo — a op do núcleo (motor/oficina.js) já existe e está provada, e o anel novo nasce nos ids do BLOCO do passo. Reusa a MESMA máquina arrasto/soltar/reexec, então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem sem código novo. Seleção é vértice XOR face. Tecla E é o atalho opcional do mesmo extrude. Passo 8: MESCLAR + ÍMÃ. MULTI-seleção de vértice — Shift+clique adiciona/remove um vértice (toggle ADIADO pro pointerup como o clique de face; um Shift+arrasto longo pana), clique normal reseta pra um só; o ATIVO é o último clicado e é ele que dirige o gizmo/painel (`selecionado` == o ativo, então com 1 vértice tudo é idêntico aos passos 6/7; `selVertices` guarda a lista ordenada, fonte única em `definirSel`). Selecionar face limpa a multi-seleção e vice-versa (XOR). Tecla M (ou o botão do painel) com 2+ selecionados grava ['mescla',{de:[não-ativos],para:ATIVO}] no fim de PASSOS, reexec, limpa o redo, e a seleção vira só o `para` (os `de` somem) — a op do NÚCLEO (motor/oficina.js) já existe e está provada, NÃO se toca nela. ÍMÃ: com Ctrl (ou ⌘) segurado DURANTE o arrasto LIVRE de um vértice, se o cursor cai a ≤IMA_RAIO px de OUTRO vértice projetado, o arrastado COLA na posição EXATA (em mundo) do alvo (o moveV gravado tem d = posAlvo − posOriginal); sem Ctrl, arrasto livre normal. Reusa a MESMA máquina arrasto/mover/soltar (um ramo `if (ctrl && alvo) d = alvo−orig` no mover livre), então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem — inclusive um Ctrl+Z no meio de um arrasto-com-ímã (Ctrl embaixo) é ignorado pela guarda `if (arrasto) return` do desfazer. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
@@ -68,6 +68,13 @@
   #props input[type=number]:focus { outline: none; border-color: var(--accent); }
   #props input[type=number]:disabled { color: var(--dim); background: #0d1018; opacity: .8; }
   #props .dica { font-size: 9.5px; color: var(--dim); margin-top: 8px; line-height: 1.5; }
+  /* PASSO 8: botão de MESCLAR — aparece (removido o [hidden]) só com 2+ vértices */
+  #props .btmescla { width: 100%; margin-top: 10px; background: var(--accent); color: #10131c; font: inherit;
+    font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: 6px; padding: 7px 8px;
+    cursor: pointer; letter-spacing: .02em; }
+  #props .btmescla:hover { filter: brightness(1.08); }
+  #props .btmescla:disabled { background: #0f1320; color: var(--dim); border-color: var(--line); cursor: default; filter: none; }
+  #props .btmescla[hidden] { display: none; }
   #props .dims { display: flex; gap: 8px; }
   #props .dim { flex: 1; text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 7px 4px;
     background: #0c0f1655; }
@@ -120,6 +127,7 @@
     <label class="campo"><span class="eixo ey">Y</span><input id="pvy" type="number" step="0.01" disabled></label>
     <label class="campo"><span class="eixo ez">Z</span><input id="pvz" type="number" step="0.01" disabled></label>
     <div class="dica" id="pvDica">clique num vértice pra selecionar</div>
+    <button id="btMescla" class="btmescla" type="button" hidden>Mesclar <span id="pvMesclaN">2</span> vértices no ativo · M</button>
   </section>
 
   <section class="bloco">
@@ -136,7 +144,8 @@
 
 <div id="ajuda">
   <b>clique num vértice</b> pega e arrasta · <b>setas X/Y/Z</b> travam no eixo · <b>clique numa face</b> seleciona · <b>arraste a seta da normal</b> (ou <b>E</b>) extruda<br>
-  <b>arrastar vazio</b> girar · <b>direito / shift</b> mover · <b>roda</b> zoom · <b>toque:</b> 1 dedo gira · 2 dedos pinça · <b>Ctrl+Z / Ctrl+Y</b> desfaz/refaz
+  <b>Shift+clique</b> soma vértices · <b>M</b> mescla no ativo · <b>Ctrl</b> ao arrastar cola no vizinho (ímã)<br>
+  <b>arrastar vazio</b> girar · <b>direito / shift no vazio</b> mover · <b>roda</b> zoom · <b>toque:</b> 1 dedo gira · 2 dedos pinça · <b>Ctrl+Z / Ctrl+Y</b> desfaz/refaz
 </div>
 
 <footer id="status">
@@ -185,6 +194,10 @@ const EL_LIMITE = 1.45;            // ~83°: trava perto dos polos (não vira de
 /* PASSO 4: seleção + arrasto de vértice. */
 const RAIO_HIT = 10;               // px: acertou vértice se o cursor caiu a ≤ isto de um vértice PROJETADO
 const LIMIAR_PX = 4;               // px: abaixo disto o gesto é CLIQUE — só SELECIONA, NÃO grava moveV
+/* PASSO 8: raio do ÍMÃ (px). Com Ctrl segurado no arrasto LIVRE, o cursor a ≤ isto
+   de OUTRO vértice projetado COLA o arrastado na posição EXATA dele. 1.5×RAIO_HIT:
+   pega o vizinho que está perto sem grudar num que só passou de leve. */
+const IMA_RAIO = RAIO_HIT * 1.5;
 
 /* PASSO 6: GIZMO DE MOVER — 3 setas (X/Y/Z) no vértice SELECIONADO, arrastáveis
    TRAVADAS num eixo. Desenhadas no overlay 2D projetando base e ponta (nenhum
@@ -237,9 +250,12 @@ let dist = 1.9;                    // distância câmera→alvo
 let neutro = null;
 let projAtual = new Map();
 let selecionado = null;
+let selVertices = [];         // PASSO 8: MULTI-seleção de vértices, ORDENADA — o ÚLTIMO é o ATIVO (== `selecionado`). Fonte única via `definirSel`; com 1 id, `selecionado` fica idêntico ao de antes (passos 6/7 não regridem). XOR com faceSelecionada.
 let faceSelecionada = null;   // passo 7: id da face selecionada (null = nenhuma); XOR com `selecionado`
 let arrasto = null;
 let cliqueFace = null;        // passo 7: {fid,x0,y0,pointerId} de um clique-candidato no corpo de uma face (seleção adiada pro up)
+let cliqueSel = null;         // PASSO 8: {id,x0,y0,pointerId} de um Shift+clique-candidato de multi-seleção (toggle ADIADO pro up, como o cliqueFace); um Shift+arrasto LONGO pana em vez de togglar.
+let imaAlvoAtual = null;      // PASSO 8: durante um arrasto LIVRE com Ctrl, o id do vértice-ALVO do ímã sob o cursor (null = sem ímã / sem alvo no raio). Lido pelo overlay (destaque) e pelo gancho imaAlvo().
 let malhaCtl = null;
 
 /* PASSO 5 — DESFAZER / REFAZER das edições DESTA sessão. O objeto É a lista
@@ -352,12 +368,25 @@ canvas.addEventListener('pointerdown', (e) => {
   try { canvas.setPointerCapture(e.pointerId); } catch { /* ponteiro já solto / evento sintético */ }
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   cliqueFace = null;   // PASSO 7: todo down zera o clique-candidato de face (só a ramificação de corpo-de-face o arma de novo)
+  cliqueSel = null;    // PASSO 8: idem pro Shift+clique-candidato de multi-seleção
 
   /* PASSO 4 — câmera-vs-arrasto se decide AQUI, ANTES da câmera. Só num gesto
      PRIMÁRIO de 1 ponteiro (mouse esq sem shift, ou 1 dedo): testa o cursor
      contra os vértices PROJETADOS (o MESMO projAtual que o overlay calcula por
      quadro). Acertou ≤RAIO_HIT px → o gesto é ARRASTO DE VÉRTICE, não câmera, e
      saímos antes de tocar em modo/pinça — a câmera fica IDÊNTICA no caso de erro. */
+  /* PASSO 8 — SHIFT+clique num vértice: MULTI-seleção (toggle). Só num gesto de 1
+     ponteiro do mouse esquerdo COM Shift. Testa SÓ vértice (o Shift é pra somar
+     vértice, não pega gizmo/handle/face — daí conviver com a precedência do D1: o
+     Shift nunca disputa com a seta, sempre mira o vértice sob o cursor). Acertou →
+     arma um toggle ADIADO pro pointerup: um Shift+clique CURTO togglea, um
+     Shift+arrasto LONGO pana (comportamento de hoje). NÃO inicia arrasto nem
+     retorna — cai no setup de pan embaixo, e o soltar decide toggle-vs-pan pelo
+     limiar. Sem vértice sob o cursor, é o Shift+arrasto = pan de sempre. */
+  if (!arrasto && pointers.size === 1 && e.pointerType === 'mouse' && e.button === 0 && e.shiftKey && malhaCtl) {
+    const idSel = malhaCtl.hit(e.clientX, e.clientY);
+    if (idSel != null) cliqueSel = { id: idSel, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId };
+  }
   const primario = (e.pointerType === 'mouse') ? (e.button === 0 && !e.shiftKey) : true;
   if (!arrasto && pointers.size === 1 && primario && malhaCtl) {
     /* PASSO 6 — ORDEM do hit-test (D1: o vértice clicado DIRETO vence a seta que
@@ -423,7 +452,7 @@ canvas.addEventListener('pointermove', (e) => {
      segue o cursor (mapeamento 2D→3D em malhaCtl.mover). Enquanto ele roda,
      nenhum ponteiro mexe a câmera. */
   if (arrasto) {
-    if (e.pointerId === arrasto.pointerId) { p.x = e.clientX; p.y = e.clientY; malhaCtl.mover(e.clientX, e.clientY); }
+    if (e.pointerId === arrasto.pointerId) { p.x = e.clientX; p.y = e.clientY; malhaCtl.mover(e.clientX, e.clientY, e.ctrlKey || e.metaKey); }   // PASSO 8: Ctrl (ou ⌘) segurado = ímã no arrasto livre
     return;
   }
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
@@ -455,8 +484,15 @@ function soltar(e) {
        câmera pode ter girado uns px) — o front-most ali é o que vale. */
     const mov = Math.hypot(e.clientX - cliqueFace.x0, e.clientY - cliqueFace.y0);
     if (mov < LIMIAR_PX) { const fid = malhaCtl.hitFace(e.clientX, e.clientY); if (fid != null) malhaCtl.selecionarFace(fid); }
+  } else if (cliqueSel && e.pointerId === cliqueSel.pointerId) {
+    /* PASSO 8 — resolve o Shift+clique-candidato: SÓ um gesto CURTO (< limiar)
+       togglea o vértice na multi-seleção; acima do limiar foi Shift+arrasto = pan
+       e a seleção fica intacta (o mesmo padrão do cliqueFace). */
+    const mov = Math.hypot(e.clientX - cliqueSel.x0, e.clientY - cliqueSel.y0);
+    if (mov < LIMIAR_PX && malhaCtl) malhaCtl.alternarSel(cliqueSel.id);
   }
   cliqueFace = null;   // o gesto acabou: limpa sempre
+  cliqueSel = null;
   pointers.delete(e.pointerId);
   try { canvas.releasePointerCapture(e.pointerId); } catch { /* já solto */ }
   pinch = null;
@@ -541,15 +577,28 @@ try {
       badge.classList.toggle('vazio', !temSel);
       if (temSel) {
         const p = neutro.V.get(selecionado);
-        badge.textContent = '#' + selecionado;
+        // badge = o ATIVO; com vários selecionados, um sufixo "+N" (o painel edita
+        // sempre o ativo — com 1 vértice fica "#id" exato, como nos passos 6/7).
+        badge.textContent = '#' + selecionado + (selVertices.length > 1 ? ` +${selVertices.length - 1}` : '');
         for (let k = 0; k < 3; k++) if (document.activeElement !== campos[k]) campos[k].value = p[k].toFixed(3);
       } else {
         badge.textContent = '—';
         for (const c of campos) if (document.activeElement !== c) c.value = '';
       }
       for (const c of campos) c.disabled = !editavel;
+      // PASSO 8: o botão de mesclar só existe com 2+ vértices; some no arrasto (leitura)
+      const bt = $('btMescla');
+      if (bt) {
+        const varios = selVertices.length >= 2;
+        bt.hidden = !varios;
+        bt.disabled = !varios || !!arrasto;
+        const n = $('pvMesclaN'); if (n && varios) n.textContent = String(selVertices.length);
+      }
       const temFace = faceSelecionada != null && neutro && neutro.F.has(faceSelecionada);
-      $('pvDica').textContent = temSel ? (arrasto ? 'arrastando — painel em leitura' : 'digite um valor + Enter (move no eixo)')
+      $('pvDica').textContent = temSel
+        ? (arrasto ? 'arrastando — painel em leitura'
+          : selVertices.length >= 2 ? `${selVertices.length} vértices — M mescla no ativo #${selecionado} (Ctrl no arrasto = ímã)`
+          : 'valor + Enter · Shift+clique soma vértices · Ctrl no arrasto = ímã')
         : temFace ? `face #${faceSelecionada} — arraste a seta pra extrudar (ou E)`
         : 'clique num vértice ou numa face';
       const dims = bboxNeutro();
@@ -584,6 +633,9 @@ try {
       console.log(`oficina passo 6 (valor exato): ['moveV', {v:${selecionado}, d:[${d.map((n) => n.toFixed(3)).join(', ')}]}]`);
     }
     campos.forEach((el, k) => { if (el) el.addEventListener('change', () => aplicarValor(k, el)); });
+    // PASSO 8: o botão de mesclar dispara a MESMA via da tecla M (malhaCtl.mesclar,
+    // resolvido no clique — malhaCtl já está montado quando o botão fica clicável).
+    { const bt = $('btMescla'); if (bt) bt.addEventListener('click', () => { if (malhaCtl) malhaCtl.mesclar(); }); }
 
     /* ---- PASSO 5: DESFAZER / REFAZER (em cima do passo 4) --------------------
        Como toda edição é uma operação no FIM de PASSOS, o histórico não precisa
@@ -609,6 +661,16 @@ try {
       atualizarPassos();
       atualizarPainel();
       return true;
+    };
+
+    /* PASSO 8 — FONTE ÚNICA da seleção de vértice: mantém `selVertices` (ordenado,
+       o ATIVO por último) e `selecionado` (== o ativo) SEMPRE em sincronia. Com 1
+       id, `selecionado` fica idêntico ao de antes do passo 8 — os passos 6/7 leem
+       o mesmo `selecionado` e NÃO regridem. Não mexe em faceSelecionada (o XOR é
+       imposto por quem chama, como já era). */
+    const definirSel = (ids) => {
+      selVertices = ids.slice();
+      selecionado = selVertices.length ? selVertices[selVertices.length - 1] : null;
     };
 
     malhaCtl = {
@@ -688,8 +750,66 @@ try {
          vértice XOR face. Face inexistente → limpa (robustez). */
       selecionarFace(id) {
         faceSelecionada = (id != null && neutro && neutro.F.has(id)) ? id : null;
-        selecionado = null;
+        definirSel([]);   // PASSO 8: selecionar face limpa TODA a multi-seleção de vértice (XOR), não só o ativo
         atualizarPainel();
+      },
+
+      /* ---- PASSO 8: MULTI-SELEÇÃO DE VÉRTICE + MESCLA + ÍMÃ ------------------ */
+      /* toggle de um vértice na seleção (Shift+clique). Se já está, sai; senão
+         entra no FIM — vira o ATIVO (merge "no último clicado", estilo Blender).
+         Limpa a face (XOR). */
+      alternarSel(id) {
+        if (id == null || !neutro || !neutro.V.has(id)) { atualizarPainel(); return; }
+        const i = selVertices.indexOf(id);
+        const novo = selVertices.slice();
+        if (i >= 0) novo.splice(i, 1); else novo.push(id);   // remove OU acrescenta no fim (novo ativo)
+        faceSelecionada = null;
+        definirSel(novo);
+        atualizarPainel();
+      },
+      /* setup direto de multi-seleção (a bancada prepara sem simular clique). O
+         ATIVO é o ÚLTIMO da lista. Filtra ids inexistentes; limpa a face (XOR). */
+      selecionarVarios(ids) {
+        const bons = (ids || []).filter((v) => neutro && neutro.V.has(v));
+        faceSelecionada = null;
+        definirSel(bons);
+        atualizarPainel();
+      },
+      /* MESCLAR: com 2+ vértices selecionados, grava ['mescla',{de:[não-ativos],
+         para:ATIVO}] no fim de PASSOS e reexec (a op do NÚCLEO já existe/provada —
+         NÃO se toca nela), limpa o redo, e a seleção passa a ser só o `para` (os
+         `de` sumiram). Desfazível como toda edição. GUARDADA: no meio de um arrasto
+         é no-op (mexer em PASSOS com um moveV tentativo em voo tangleria a lista —
+         mesma classe da roda/Ctrl+Z do passo 4/5). `de` gravado ORDENADO (forma
+         canônica, igual o núcleo faz internamente). Devolve o passo (ou null). */
+      mesclar() {
+        if (arrasto) return null;                       // guarda: não mescla com edição em voo
+        const para = selecionado;
+        if (para == null || !neutro || !neutro.V.has(para)) return null;
+        const de = selVertices.filter((v) => v !== para && neutro.V.has(v)).sort((a, b) => a - b);
+        if (!de.length) return null;                    // precisa de 2+ (o ativo + ao menos 1 outro)
+        const passo = ['mescla', { de, para }];
+        PASSOS.push(passo);
+        redo.length = 0;                                // edição nova invalida o refazer (semântica do passo 5)
+        reexec(PASSOS);
+        definirSel([para]);                             // os `de` não existem mais; sobra só o `para`
+        atualizarPassos();
+        atualizarPainel();
+        console.log(`oficina passo 8 (mescla): ['mescla', {de:[${de.join(', ')}], para:${para}}] — PASSOS agora ${PASSOS.length}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+      /* ÍMÃ: id do vértice PROJETADO mais perto do cursor (≤ IMA_RAIO), EXCLUINDO o
+         arrastado. Varredura linear no projAtual (o MESMO estado do hit-test do
+         passo 4); a peça é pequena, é barato (o doc: 600k comparações/s é nada).
+         Empata pelo mais perto. null se nenhum no raio. */
+      imaAlvoEm(cx, cy, excluir) {
+        let melhor = null, md = IMA_RAIO * IMA_RAIO;
+        for (const [id, q] of projAtual) {
+          if (id === excluir) continue;
+          const dd = (q.x - cx) ** 2 + (q.y - cy) ** 2;
+          if (dd <= md) { md = dd; melhor = id; }
+        }
+        return melhor;
       },
       /* começa o arrasto de EXTRUDE: fixa NORMAL/dir/compr do INSTANTE (câmera parada
          no arrasto → constantes, como o gizmo do passo 6). O commit reusa a MESMA
@@ -755,22 +875,23 @@ try {
          NA PROFUNDIDADE DO VÉRTICE. A câmera não se move durante o arrasto e o
          vértice anda só no plano da câmera, então prof/escala são constantes. */
       iniciar(id, cx, cy, pointerId) {
-        selecionado = id;
+        definirSel([id]);         // PASSO 8: clique NORMAL num vértice reseta a multi-seleção pra só este (limpa o resto); com 1 id, selecionado==id como antes
         faceSelecionada = null;   // PASSO 7: pegar um vértice sai do modo face (seleção é vértice XOR face)
         const P = neutro.V.get(id).slice();
         const cp = camPos(), { f, dir, cima } = base();
         const prof = (P[0] - cp[0]) * f[0] + (P[1] - cp[1]) * f[1] + (P[2] - cp[2]) * f[2];   // dot(P - camPos, olhar)
         const escala = (2 * prof * Math.tan(FOVY / 2)) / Math.max(1, canvas.clientHeight);    // NÃO usa `dist` (alvo), usa a prof do vértice
         atualizarPainel();   // seleção mudou (o gizmo passa a aparecer neste vértice)
-        return { pointerId, id, x0: cx, y0: cy, dir, cima, escala, d: [0, 0, 0] };
+        return { pointerId, id, x0: cx, y0: cy, dir, cima, escala, d: [0, 0, 0], orig: P.slice() };   // PASSO 8: `orig` = pos de MUNDO pré-arrasto (o ímã grava d = posAlvo − orig, colando EXATO)
       },
       /* o vértice SEGUE o cursor. LIVRE (passo 4): right·(+dx) e cima·(−dy) no plano
          da câmera. TRAVADO (passo 6, arrasto.eixo): avanço = (deslocamento do mouse
          · dir) / compr — a FÓRMULA do doc; só a componente AO LONGO da seta conta,
          o perpendicular é descartado, então d fica no eixo e não vaza pros outros.
          Em ambos, re-executa com um moveV TENTATIVO no fim da lista (não grava). */
-      mover(cx, cy) {
+      mover(cx, cy, ctrl) {
         if (!arrasto) return;
+        imaAlvoAtual = null;   // PASSO 8: recomputado só no ramo LIVRE abaixo; nulo em gizmo/extrude
         if (arrasto.extruda) {
           /* PASSO 7 — EXTRUDE ao vivo: avanço = (deslocamento do mouse · dir)/compr,
              a MESMA fórmula travada do passo 6 (só a componente AO LONGO da normal
@@ -795,6 +916,14 @@ try {
           const dxpix = cx - arrasto.x0, dypix = cy - arrasto.y0, e = arrasto.escala;
           d = [0, 0, 0];
           for (let k = 0; k < 3; k++) d[k] = arrasto.dir[k] * dxpix * e - arrasto.cima[k] * dypix * e;
+          /* PASSO 8 — ÍMÃ: Ctrl segurado + cursor a ≤IMA_RAIO de OUTRO vértice
+             projetado → COLA o arrastado na posição EXATA (em MUNDO) do alvo. O `d`
+             vira posAlvo − posOriginal, então o replay põe o vértice bit-a-bit no
+             alvo (não "quase"). Sem Ctrl (ou sem alvo no raio), é o arrasto livre
+             normal do passo 4. Só no ramo LIVRE — gizmo/extrude não têm ímã. */
+          const alvo = ctrl ? this.imaAlvoEm(cx, cy, arrasto.id) : null;
+          imaAlvoAtual = alvo;
+          if (alvo != null) { const pa = neutro.V.get(alvo), po = arrasto.orig; d = [pa[0] - po[0], pa[1] - po[1], pa[2] - po[2]]; }
         }
         arrasto.d = d;
         reexec([...PASSOS, ['moveV', { v: arrasto.id, d }]]);
@@ -806,6 +935,7 @@ try {
          qualquer caso reconstrói da lista REAL (some o tentativo se não gravou). */
       soltar(cx, cy) {
         if (!arrasto) return { gravou: false };
+        imaAlvoAtual = null;   // PASSO 8: o arrasto acabou — sem alvo de ímã (cobre todos os ramos)
         if (arrasto.extruda) {
           /* PASSO 7 — solta o EXTRUDE: passou do limiar (avanço em px ao longo da
              normal ≥ LIMIAR_PX) → GRAVA ['extruda',{face,dist}] no fim de PASSOS e
@@ -839,7 +969,7 @@ try {
           console.log(`oficina passo ${eixoK ? '6 (travado)' : '4 (livre)'}: gravado ['moveV', {v:${id}, d:[${d.map((n) => n.toFixed(3)).join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
         }
         reexec(PASSOS);
-        selecionado = id;
+        definirSel([id]);   // PASSO 8: fim de um arrasto → a seleção colapsa no vértice arrastado (com 1 id, == selecionado=id de antes)
         atualizarPassos();
         atualizarPainel();
         return { gravou, id, d };
@@ -861,6 +991,18 @@ try {
       atualizarPassos();
       atualizarPainel();
       console.log(`oficina passo 7 (tecla E): ['extruda', {face:${faceSelecionada}, dist:${EXTRUDE_E}}] — PASSOS agora ${PASSOS.length}`);
+    });
+
+    /* PASSO 8 — tecla M: MESCLA os vértices selecionados no ATIVO, pela MESMA via
+       de malhaCtl.mesclar (grava ['mescla',{de,para}], reexec, limpa o redo, e a
+       seleção vira o `para`). GUARDADA: ignorada no meio de um arrasto (a guarda de
+       mesclar também cobre, dupla trava) e com o foco num campo do painel (senão
+       digitar "m" num input mesclaria). Fecha sobre malhaCtl. */
+    addEventListener('keydown', (e) => {
+      if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName)) return;
+      if (e.key !== 'm' && e.key !== 'M') return;
+      if (arrasto || !malhaCtl) return;
+      malhaCtl.mesclar();
     });
 
     atualizarPassos();
@@ -925,13 +1067,26 @@ try {
     octx.strokeStyle = 'rgba(12, 15, 23, 0.34)'; octx.lineWidth = 2.4; tracarArestas(proj);
     octx.strokeStyle = 'rgba(223, 229, 247, 0.55)'; octx.lineWidth = 1;   tracarArestas(proj);
 
-    // VÉRTICES: ponto claro com contorno escuro — legível nos dois fundos. O
-    // SELECIONADO (passo 4) fica maior e roxo-acento, pra ler qual está pego.
+    // VÉRTICES: ponto claro com contorno escuro — legível nos dois fundos. Os
+    // SELECIONADOS (passo 8, multi) ficam roxo-acento; o ATIVO (que dirige gizmo/
+    // painel e é o `para` da mescla) é o maior e, HAVENDO VÁRIOS, ganha um anel
+    // âmbar — "o merge cola no que tem o anel".
     for (const [id, q] of proj) {
-      const sel = id === selecionado;
-      octx.beginPath(); octx.arc(q.x, q.y, sel ? 5.5 : 3, 0, Math.PI * 2);
+      const ativo = id === selecionado;
+      const sel = ativo || selVertices.includes(id);
+      octx.beginPath(); octx.arc(q.x, q.y, ativo ? 5.5 : sel ? 4.5 : 3, 0, Math.PI * 2);
       octx.fillStyle = sel ? 'rgba(168, 132, 243, 0.98)' : 'rgba(234, 239, 252, 0.96)'; octx.fill();
       octx.lineWidth = sel ? 1.8 : 1.2; octx.strokeStyle = 'rgba(11, 14, 22, 0.92)'; octx.stroke();
+      if (ativo && selVertices.length > 1) {   // o ATIVO como alvo da mescla: anel âmbar
+        octx.beginPath(); octx.arc(q.x, q.y, 8.5, 0, Math.PI * 2);
+        octx.lineWidth = 1.6; octx.strokeStyle = 'rgba(249, 194, 43, 0.95)'; octx.stroke();
+      }
+    }
+    // PASSO 8 — ALVO DO ÍMÃ: durante um arrasto livre com Ctrl, um anel verde-HUD
+    // no vértice em que o arrastado vai COLAR (a posição exata pra onde ele salta).
+    if (arrasto && imaAlvoAtual != null) {
+      const q = proj.get(imaAlvoAtual);
+      if (q) { octx.beginPath(); octx.arc(q.x, q.y, 9.5, 0, Math.PI * 2); octx.lineWidth = 2.4; octx.strokeStyle = 'rgba(205, 223, 108, 0.95)'; octx.stroke(); }
     }
 
     // ETIQUETAS de id (opcional, tecla i): fininhas, desligadas por padrão.
@@ -1119,7 +1274,7 @@ try {
       o2: { ...s.o2 }, ponta: { ...s.ponta }, dir: s.dir.slice(), seg: s.seg, compr: s.compr, travada: s.travada })) : []),
     hitGizmo: (x, y) => { const g = malhaCtl && malhaCtl.hitGizmo(x, y); return g ? g.k : null; },   // eixo acertado ('x'/'y'/'z') ou null
     emArrasto: () => (arrasto ? { eixo: arrasto.eixo ? arrasto.eixo.slice() : null, id: arrasto.id ?? null, extruda: !!arrasto.extruda, face: arrasto.face ?? null } : null),   // null = nenhum; .eixo!=null = TRAVADO; .extruda = EXTRUDE (passo 7)
-    selecionar: (id) => { selecionado = id; faceSelecionada = null; atualizarPainel(); },     // seleção direta de VÉRTICE (limpa a face — XOR); a bancada prepara o gizmo sem simular clique
+    selecionar: (id) => { if (malhaCtl) malhaCtl.selecionarVarios(id != null ? [id] : []); },   // seleção direta de UM vértice (limpa a face — XOR + mantém a multi-seleção em sincronia); a bancada prepara o gizmo sem simular clique
     painel: () => ({                                                  // leitura do #props pra a bancada afirmar o conteúdo
       sel: $('pvSel').textContent, x: $('pvx').value, y: $('pvy').value, z: $('pvz').value,
       dims: [$('pdx').textContent, $('pdy').textContent, $('pdz').textContent],
@@ -1137,6 +1292,14 @@ try {
     handleFace: () => { const h = malhaCtl && malhaCtl.handleFace(); return h ? { o2: { ...h.o2 }, ponta: { ...h.ponta }, dir: h.dir.slice(), seg: h.seg, compr: h.compr, travada: h.travada, face: h.face, normal: h.normal.slice(), centroide: h.centroide.slice() } : null; },
     hitHandle: (x, y) => (malhaCtl ? !!malhaCtl.hitHandle(x, y) : false),              // pegou o handle no ponto? (true/false)
     extrudeE: EXTRUDE_E,
+    /* ---- PASSO 8: multi-seleção + mescla + ímã (a bancada mede/afirma) ------- */
+    selecao: () => selVertices.slice(),                                                // ids selecionados, na ORDEM (o ATIVO por último)
+    ativo: () => selecionado,                                                          // id do ATIVO (o `para` da mescla)
+    selecionarVarios: (ids) => { if (malhaCtl) malhaCtl.selecionarVarios(ids); },       // setup direto de multi-seleção (sem simular clique)
+    alternarSel: (id) => { if (malhaCtl) malhaCtl.alternarSel(id); },                   // toggle de um vértice (setup sem simular Shift+clique)
+    mesclar: () => (malhaCtl ? malhaCtl.mesclar() : null),                              // dispara a mescla; devolve o passo gravado (ou null se no-op)
+    imaAlvo: () => imaAlvoAtual,                                                        // durante o arrasto: id do alvo do ímã (ou null)
+    imaRaio: IMA_RAIO,                                                                  // raio do ímã em px (pra a bancada posicionar o cursor)
   };
   window.__ready = true;
 } catch (e) {

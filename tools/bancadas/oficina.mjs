@@ -82,7 +82,27 @@
  *        guardas do passo 4/5 já cobrem — é a MESMA máquina), dist/lista intactos;
  *   (7 trava) face com a normal ~pra câmera: handle TRAVADO (compr<12px/un), hitHandle
  *        não pega, e arrastar ali NÃO extruda; a mesma face de través NÃO trava.
- * Screenshots em scratchpad/passo2..7/. Sai 1 se algo falhar.
+ *
+ *   PASSO 8 (mesclar vértices + ímã — selecao/ativo/mesclar/imaAlvo, eventos REAIS):
+ *   (8 multi) clique normal seleciona UM; Shift+clique ACUMULA (2, 3), o ativo é o
+ *        último; Shift+clique num já-selecionado REMOVE; clique normal RESETA pra 1;
+ *        selecionar uma FACE limpa a multi-seleção (XOR);
+ *   (8 mescla) tecla M (e o botão do painel) com 2+ selecionados grava
+ *        ['mescla',{de:[não-ativos],para:ATIVO}] no fim de PASSOS — a contagem de
+ *        vértices cai, o `para` mantém a posição, as faces que usavam `de` passam a
+ *        usar `para`, e a seleção vira só o `para`;
+ *   (8 replay) a lista editada re-executada dá o MESMO neutro canônico (página ==
+ *        Node), o critério do doc pra a operação "mais delicada";
+ *   (8 undo/redo) Ctrl+Z tira a mescla (os 2 vértices VOLTAM bit-a-bit), Ctrl+Y devolve;
+ *   (8 ímã) Ctrl+arrasto de A com o cursor sobre B → o moveV gravado põe A na posição
+ *        EXATA de B (erro ≤ 1e-6 em mundo; d = posB − posOriginal), e imaAlvo aponta B
+ *        durante o arrasto; SEM Ctrl, imaAlvo é null e A cai onde o cursor soltou (sem cola);
+ *   (8 guarda) Ctrl+Z e a roda DURANTE o arrasto-com-ímã são IGNORADOS (guardas do
+ *        passo 4/5, MESMA máquina); segurar Ctrl sozinho não desfaz;
+ *   (8 área-zero) mesclar dois cantos ADJACENTES de uma face (o triângulo da parede
+ *        1001) → o núcleo apaga a face de área-zero QUIETO (sem órfão), o replay segue
+ *        idêntico e o resto da malha (V/F das outras faces) fica INTACTO.
+ * Screenshots em scratchpad/passo2..8/. Sai 1 se algo falhar.
  *
  *   npm run oficina
  */
@@ -105,6 +125,7 @@ const OUT4 = resolve(REPO, 'scratchpad/passo4');
 const OUT5 = resolve(REPO, 'scratchpad/passo5');
 const OUT6 = resolve(REPO, 'scratchpad/passo6');
 const OUT7 = resolve(REPO, 'scratchpad/passo7');
+const OUT8 = resolve(REPO, 'scratchpad/passo8');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -1132,9 +1153,279 @@ await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { ke
 await rAF2();
 await page.screenshot({ path: join(OUT7, 'oficina-face-extrudada.png') });
 
+/* ==== PASSO 8: MESCLAR VÉRTICES + ÍMÃ =======================================
+   Tudo com eventos REAIS (Shift+clique de verdade, tecla M de verdade, Ctrl no
+   arrasto de verdade). Prova por NÚMERO: a multi-seleção acumula/reseta/remove
+   e o ativo é o último; M grava ['mescla',{de,para}] com para=ATIVO e a malha
+   muda como o núcleo manda (V cai, faces trocam de→para, seleção vira o `para`);
+   replay página==Node bit-a-bit (a op "mais delicada"); undo/redo voltam ao
+   neutro de antes/depois; o ímã cola A na posição EXATA de B (erro medido ≤
+   1e-6); Ctrl+Z/roda no meio do arrasto-com-ímã são ignorados; e mesclar cantos
+   adjacentes apaga a face de área-zero sem corromper o resto. */
+const F8 = { az: 0.7, el: 0.45, dist: 1.95, alvo: [0, 0.28, 0] };
+const IMA_RAIO8 = await page.evaluate(() => window.__oficina.imaRaio);
+
+const shiftClick = async (x, y) => {   // Shift+clique CURTO (sub-limiar) = toggle da multi-seleção
+  await page.keyboard.down('Shift');
+  await page.mouse.move(x, y); await page.mouse.down();
+  await page.mouse.move(x + 1, y + 1, { steps: 2 }); await page.mouse.up();
+  await page.keyboard.up('Shift'); await rAF2();
+};
+const selecao = () => page.evaluate(() => window.__oficina.selecao());
+const ativo = () => page.evaluate(() => window.__oficina.ativo());
+const posV8 = (id) => page.evaluate((i) => window.__oficina.posV(i), id);
+// desfaz tudo até o baseline (a peça pura do arquivo) — cada teste parte limpo
+async function aoBaseline() { const b = await page.evaluate(() => window.__oficina.baseline()); let g = 0;
+  while ((await nP()) > b && g++ < 80) await ctrlZ(); return b; }
+// N vértices ISOLADOS na tela (o clique/alvo cai limpo, sem pegar vizinho)
+function escolherIsolados(pts, n) {
+  const dentro = pts.filter((p) => p.x > 24 && p.x < VW - painelW4 - 24 && p.y > 60 && p.y < VH - 40);
+  const comSep = dentro.map((p) => { let s = 1e9; for (const q of pts) if (q.id !== p.id) s = Math.min(s, Math.hypot(p.x - q.x, p.y - q.y)); return { p, s }; });
+  comSep.sort((a, b) => b.s - a.s);
+  return comSep.slice(0, n).map((e) => e.p);
+}
+/* par (A=arrastado, B=alvo) ISOLADO (ninguém a ≤2.2·IMA_RAIO — clique/alvo do ímã
+   sem ambiguidade) e o MAIS AFASTADO EM MUNDO possível, com separação de tela num
+   gesto claro. Afastado em mundo → o "sem cola" tem folga (A livre cai longe de B). */
+async function escolherParIma(pts) {
+  const dentro = pts.filter((p) => p.x > 40 && p.x < VW - painelW4 - 40 && p.y > 80 && p.y < VH - 60);
+  const iso = dentro.filter((p) => { let s = 1e9; for (const q of pts) if (q.id !== p.id) s = Math.min(s, Math.hypot(p.x - q.x, p.y - q.y)); return s > IMA_RAIO8 * 2.2; });
+  const world = {};
+  for (const p of iso) world[p.id] = await posV8(p.id);
+  let melhor = null, best = -1;
+  for (let i = 0; i < iso.length; i++) for (let j = 0; j < iso.length; j++) {
+    if (i === j) continue;
+    const A = iso[i], B = iso[j], scr = Math.hypot(A.x - B.x, A.y - B.y);
+    if (scr < 60 || scr > 340) continue;
+    const wa = world[A.id], wb = world[B.id];
+    const dw = Math.hypot(wa[0] - wb[0], wa[1] - wb[1], wa[2] - wb[2]);
+    if (dw > best) { best = dw; melhor = { A, B, dw, scr }; }
+  }
+  return melhor;
+}
+
+await page.evaluate((f) => window.__oficina.orbitar(f), F8); await rAF2(); await rAF2();
+await page.evaluate(() => window.__oficina.selecionar(null)); await rAF2();
+await aoBaseline();
+const canonBaseline8 = await canon();
+const Vbase8 = JSON.parse(canonBaseline8).V.length;
+ok('(8 setup) partiu do baseline (peça pura, 19 vértices)', Vbase8 === 19, `V ${Vbase8}`);
+
+// (8 multi) MULTI-SELEÇÃO por Shift+clique REAL
+let pts8 = await page.evaluate(() => window.__oficina.projMalha());
+const [A1, B1, C1] = escolherIsolados(pts8, 3);
+await page.evaluate(() => window.__oficina.selecionar(null)); await rAF2();
+await clicarPonto(A1.x, A1.y);                    // clique NORMAL → só A1
+const sel1 = await selecao();
+ok('(8 multi) clique normal seleciona UM vértice', sel1.length === 1 && sel1[0] === A1.id && (await ativo()) === A1.id, `selecao ${JSON.stringify(sel1)} · ativo #${await ativo()} (esp #${A1.id})`);
+await shiftClick(B1.x, B1.y);                     // Shift+clique soma B1
+const sel2 = await selecao();
+ok('(8 multi) Shift+clique ACUMULA (2 vértices, ativo = o último)', sel2.length === 2 && sel2[0] === A1.id && sel2[1] === B1.id && (await ativo()) === B1.id, `selecao ${JSON.stringify(sel2)} · ativo #${await ativo()}`);
+await shiftClick(C1.x, C1.y);                     // Shift+clique soma C1
+const sel3 = await selecao();
+ok('(8 multi) Shift+clique ACUMULA (3 vértices, ativo = o último)', sel3.length === 3 && sel3[2] === C1.id && (await ativo()) === C1.id, `selecao ${JSON.stringify(sel3)} · ativo #${await ativo()}`);
+await shiftClick(B1.x, B1.y);                     // Shift+clique num já-selecionado REMOVE
+const sel4 = await selecao();
+ok('(8 multi) Shift+clique num já-selecionado REMOVE (ativo intacto)', sel4.length === 2 && !sel4.includes(B1.id) && (await ativo()) === C1.id, `selecao ${JSON.stringify(sel4)} · ativo #${await ativo()}`);
+await clicarPonto(A1.x, A1.y);                    // clique NORMAL reseta pra 1
+const sel5 = await selecao();
+ok('(8 multi) clique normal RESETA pra 1 (limpa o resto)', sel5.length === 1 && sel5[0] === A1.id, `selecao ${JSON.stringify(sel5)}`);
+// selecionar uma FACE limpa a multi-seleção (XOR)
+await page.evaluate((ids) => window.__oficina.selecionarVarios(ids), [A1.id, C1.id]); await rAF2();
+const nSelAntesFace = (await selecao()).length;
+const pcF8 = await projFace(9);
+await clicarPonto(pcF8.x, pcF8.y);
+const selPosFace = await selecao();
+const faceSelNow = await page.evaluate(() => window.__oficina.faceSel());
+ok('(8 multi) selecionar uma FACE limpa a multi-seleção de vértice (XOR)', nSelAntesFace === 2 && selPosFace.length === 0 && faceSelNow === 9, `antes ${nSelAntesFace} vértices → depois ${selPosFace.length}, faceSel #${faceSelNow}`);
+
+// (8 mescla) tecla M grava a mescla e a malha muda como o núcleo manda
+await aoBaseline();
+const canonAntesMerge = await canon();
+const cAM = JSON.parse(canonAntesMerge);
+const V_antesM = cAM.V.length;
+const compartilham = cAM.F.filter((f) => f[1].includes(3) && f[1].includes(13)).length;
+ok('(8 mescla) setup: 3 e 13 NÃO compartilham face (merge limpo, sem área-zero)', compartilham === 0, `faces com ambos ${compartilham}`);
+const pos13antes = await posV8(13);
+await page.evaluate(() => window.__oficina.selecionarVarios([3, 13])); await rAF2();   // ativo = 13 (o último)
+ok('(8 mescla) setup: 2 vértices selecionados, ativo = 13', (await selecao()).length === 2 && (await ativo()) === 13, `selecao ${JSON.stringify(await selecao())} · ativo #${await ativo()}`);
+const nP_antesM = await nP();
+await page.keyboard.press('KeyM'); await rAF2();   // tecla M REAL
+const ultimoM = await page.evaluate(() => window.__oficina.ultimoPasso());
+const nP_posM = await nP();
+const canonPosMerge = await canon();
+const cPM = JSON.parse(canonPosMerge);
+const V_posM = cPM.V.length;
+const tem3 = cPM.V.some((e) => e[0] === 3), tem13 = cPM.V.some((e) => e[0] === 13);
+const pos13depois = await posV8(13);
+const facesCom3 = cPM.F.filter((f) => f[1].includes(3)).length;
+const facesCom13 = cPM.F.filter((f) => f[1].includes(13)).map((f) => f[0]);
+ok('(8 mescla) M grava mescla {de:[3],para:13} no fim de PASSOS (para = ativo)',
+   nP_posM === nP_antesM + 1 && ultimoM && ultimoM[0] === 'mescla' && JSON.stringify(ultimoM[1].de) === '[3]' && ultimoM[1].para === 13,
+   `último ${JSON.stringify(ultimoM)} · PASSOS ${nP_antesM}->${nP_posM}`);
+ok('(8 mescla) a contagem de vértices CAI (o `de` some, o `para` fica)', V_posM === V_antesM - 1 && !tem3 && tem13, `V ${V_antesM}->${V_posM} · tem #3 ${tem3} · tem #13 ${tem13}`);
+ok('(8 mescla) o `para` (13) MANTÉM a posição', Math.hypot(pos13depois[0] - pos13antes[0], pos13depois[1] - pos13antes[1], pos13depois[2] - pos13antes[2]) < 1e-9,
+   `13 ${JSON.stringify(pos13antes.map((n) => +n.toFixed(3)))} -> ${JSON.stringify(pos13depois.map((n) => +n.toFixed(3)))}`);
+ok('(8 mescla) as faces que usavam `de` (#3) passam a usar `para` (#13)', facesCom3 === 0 && facesCom13.length >= 1, `faces com #3 ${facesCom3} · faces agora com #13 ${JSON.stringify(facesCom13)}`);
+ok('(8 mescla) a seleção vira só o `para` (#13)', (await selecao()).length === 1 && (await selecao())[0] === 13, `selecao ${JSON.stringify(await selecao())}`);
+
+// (8 replay) a lista editada refaz o objeto igual (página == Node)
+const passosM = await page.evaluate(() => window.__oficina.passos());
+const canonNodeM = JSON.stringify(neutroCanonico(nucleo(passosM, toco.PARAMS, toco.TOPO)));
+ok('(8 replay) a lista editada refaz o objeto igual (página == Node, bit-a-bit)', canonPosMerge === canonNodeM, `canônico ${canonPosMerge.length} chars, igual`);
+
+// (8 undo/redo) Ctrl+Z tira a mescla (os 2 vértices voltam), Ctrl+Y devolve
+await ctrlZ();
+const canonUndoM = await canon(); const nP_undoM = await nP();
+const cUM = JSON.parse(canonUndoM);
+ok('(8 undo) Ctrl+Z tira a mescla e o neutro VOLTA bit-a-bit (os 2 vértices de novo lá)',
+   nP_undoM === nP_antesM && canonUndoM === canonAntesMerge && cUM.V.some((e) => e[0] === 3) && cUM.V.some((e) => e[0] === 13),
+   `PASSOS ${nP_posM}->${nP_undoM} · neutro ${canonUndoM === canonAntesMerge ? 'idêntico' : 'DIVERGE'} · #3 e #13 ${cUM.V.some((e) => e[0] === 3) && cUM.V.some((e) => e[0] === 13) ? 'de volta' : 'SUMIDOS'}`);
+await ctrlY();
+const canonRedoM = await canon();
+ok('(8 redo) Ctrl+Y devolve a mescla (neutro bate com o de depois)', canonRedoM === canonPosMerge, `neutro ${canonRedoM === canonPosMerge ? 'idêntico' : 'DIVERGE'}`);
+
+// (8 botão) o botão do painel também mescla (clique REAL do mouse sobre ele)
+await aoBaseline();
+await page.evaluate(() => window.__oficina.selecionarVarios([3, 13])); await rAF2();
+const btInfo = await page.evaluate(() => { const b = document.getElementById('btMescla'); const r = b.getBoundingClientRect(); return { vis: !b.hidden && !b.disabled, x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+const nP_btAntes = await nP();
+await page.mouse.click(btInfo.x, btInfo.y); await rAF2();   // clique REAL no botão do painel
+const ultimoBt = await page.evaluate(() => window.__oficina.ultimoPasso());
+ok('(8 botão) com 2+ selecionados o botão de mesclar aparece HABILITADO', btInfo.vis === true, `visível/habilitado ${btInfo.vis}`);
+ok('(8 botão) clicar no botão do painel mescla igual à tecla M', (await nP()) === nP_btAntes + 1 && ultimoBt && ultimoBt[0] === 'mescla' && ultimoBt[1].para === 13, `último ${JSON.stringify(ultimoBt)}`);
+
+// (8 ímã) Ctrl+arrasto de A sobre B COLA A na posição EXATA de B
+await aoBaseline();
+await page.evaluate(() => window.__oficina.selecionar(null)); await rAF2();
+await page.evaluate((f) => window.__oficina.orbitar(f), F8); await rAF2(); await rAF2();
+pts8 = await page.evaluate(() => window.__oficina.projMalha());
+const par = await escolherParIma(pts8);
+ok('(8 ímã) achou um par isolado e afastado em mundo pra testar', !!par && par.dw > 0.2, par ? `A #${par.A.id} → B #${par.B.id} · ${par.dw.toFixed(2)}un em mundo, ${par.scr.toFixed(0)}px na tela` : 'nenhum par');
+const origA = await posV8(par.A.id);
+const posB = await posV8(par.B.id);
+await page.keyboard.down('Control');
+await page.mouse.move(par.A.x, par.A.y); await page.mouse.down();
+await page.mouse.move(par.B.x, par.B.y, { steps: 20 });
+const imaDurante = await page.evaluate(() => window.__oficina.imaAlvo());
+await page.mouse.up();
+await page.keyboard.up('Control'); await rAF2();
+const ultimoIma = await page.evaluate(() => window.__oficina.ultimoPasso());
+const posAdepois = await posV8(par.A.id);
+const erroMundo = Math.hypot(posAdepois[0] - posB[0], posAdepois[1] - posB[1], posAdepois[2] - posB[2]);
+const dIma = ultimoIma && ultimoIma[1] && ultimoIma[1].d;
+const dEsper = [posB[0] - origA[0], posB[1] - origA[1], posB[2] - origA[2]];
+const erroD = dIma ? Math.hypot(dIma[0] - dEsper[0], dIma[1] - dEsper[1], dIma[2] - dEsper[2]) : 999;
+ok('(8 ímã) durante o arrasto, imaAlvo aponta o vértice B', imaDurante === par.B.id, `imaAlvo #${imaDurante} (esp #${par.B.id})`);
+ok('(8 ímã) Ctrl+arrasto COLA A na posição EXATA de B (erro ≤ 1e-6 em mundo)',
+   ultimoIma && ultimoIma[0] === 'moveV' && ultimoIma[1].v === par.A.id && erroMundo <= 1e-6,
+   `erro ${erroMundo.toExponential(2)} · A ${JSON.stringify(posAdepois.map((n) => +n.toFixed(4)))} vs B ${JSON.stringify(posB.map((n) => +n.toFixed(4)))}`);
+ok('(8 ímã) o moveV gravado tem d = posB − posOriginal (≤ 1e-9)', erroD <= 1e-9,
+   `d ${JSON.stringify(dIma && dIma.map((n) => +n.toFixed(4)))} vs esperado ${JSON.stringify(dEsper.map((n) => +n.toFixed(4)))}`);
+
+// (8 ímã) SEM Ctrl não cola: imaAlvo null, A cai onde o cursor soltou (segue o cursor)
+await ctrlZ();   // desfaz o ímã, A volta à origem
+await page.mouse.move(par.A.x, par.A.y); await page.mouse.down();
+await page.mouse.move(par.B.x, par.B.y, { steps: 20 });
+const imaSemCtrl = await page.evaluate(() => window.__oficina.imaAlvo());
+await page.mouse.up(); await rAF2();
+const projAlivre = await page.evaluate((id) => window.__oficina.projetarV(id), par.A.id);
+const posAlivre = await posV8(par.A.id);
+const erroSegue8 = Math.hypot(projAlivre.x - par.B.x, projAlivre.y - par.B.y);
+const gapMundoB = Math.hypot(posAlivre[0] - posB[0], posAlivre[1] - posB[1], posAlivre[2] - posB[2]);
+ok('(8 ímã) SEM Ctrl não há ímã (imaAlvo null durante o arrasto)', imaSemCtrl === null, `imaAlvo ${imaSemCtrl}`);
+ok('(8 ímã) SEM Ctrl A segue o cursor e NÃO cola em B (gap em mundo bem > 0)',
+   erroSegue8 <= 3 && gapMundoB > 0.02, `segue o cursor a ${erroSegue8.toFixed(2)}px · gap em mundo a B ${gapMundoB.toFixed(3)}un (colado seria ~0)`);
+await aoBaseline();
+
+// (8 guarda) Ctrl+Z e a roda DURANTE o arrasto-com-ímã são IGNORADOS.
+// PRÉ-EDIÇÃO REAL acima do baseline: sem algo pra desfazer, o Ctrl+Z do meio seria
+// no-op pelo PISO (baseline), não pela guarda do arrasto — e o teste não
+// discriminaria a guarda (foi o que a neutralização pegou). Com PASSOS>baseline, é
+// SÓ a guarda `if (arrasto) return` que segura o Ctrl+Z em voo.
+await page.evaluate((f) => window.__oficina.orbitar(f), F8); await rAF2(); await rAF2();
+await arrastarVertice(28, -20);   // grava 1 moveV → PASSOS = baseline+1 (há o que desfazer)
+await page.evaluate(() => window.__oficina.selecionar(null)); await rAF2();
+// segurar Ctrl SOZINHO (sem Z) não desfaz — MESMO havendo o que desfazer
+const nPpreCtrl = await nP();
+await page.keyboard.down('Control'); await rAF2();
+const nPholdCtrl = await nP();
+await page.keyboard.up('Control');
+ok('(8 guarda) segurar Ctrl (sem Z) NÃO desfaz sozinho (mesmo acima do baseline)', nPholdCtrl === nPpreCtrl && nPpreCtrl > 10, `PASSOS ${nPpreCtrl} -> ${nPholdCtrl} (baseline 10)`);
+pts8 = await page.evaluate(() => window.__oficina.projMalha());
+const parG = await escolherParIma(pts8);
+const distA8 = await page.evaluate(() => window.__oficina.estado().dist);
+const nPA8 = await nP();
+await page.keyboard.down('Control');
+await page.mouse.move(parG.A.x, parG.A.y); await page.mouse.down();
+await page.mouse.move(parG.B.x, parG.B.y, { steps: 16 });   // arrasto-com-ímã EM CURSO (não soltou)
+const emA8 = await page.evaluate(() => window.__oficina.emArrasto());
+const imaG = await page.evaluate(() => window.__oficina.imaAlvo());
+await page.keyboard.press('KeyZ');   // Ctrl+Z (Ctrl ainda embaixo) NO MEIO do arrasto
+await rAF2();
+const nP_durZ = await nP();
+await page.mouse.wheel(0, -300); await rAF2();   // roda NO MEIO do arrasto
+const distDur = await page.evaluate(() => window.__oficina.estado().dist);
+await page.mouse.up();
+await page.keyboard.up('Control'); await rAF2();
+const nP_posG = await nP();
+ok('(8 guarda) o arrasto-com-ímã está em curso (livre, imaAlvo = B)', emA8 && emA8.eixo === null && emA8.extruda === false && imaG === parG.B.id, `emArrasto ${JSON.stringify(emA8)} · imaAlvo #${imaG}`);
+ok('(8 guarda) Ctrl+Z DURANTE o arrasto-com-ímã é IGNORADO (PASSOS não muda)', nP_durZ === nPA8, `PASSOS ${nPA8} -> ${nP_durZ} durante o arrasto`);
+ok('(8 guarda) a RODA durante o arrasto-com-ímã é IGNORADA (dist não muda)', Math.abs(distDur - distA8) < 1e-9, `dist ${distA8.toFixed(3)} -> ${distDur.toFixed(3)}`);
+ok('(8 guarda) ao soltar, o ímã comita 1 moveV (o Ctrl+Z do meio não bagunçou a lista)', nP_posG === nPA8 + 1, `PASSOS ${nPA8} -> ${nP_posG}`);
+await aoBaseline();
+
+// (8 área-zero) mesclar cantos ADJACENTES apaga a face de área-zero, sem corromper o resto
+const canonB7az = await canon();
+const cB7az = JSON.parse(canonB7az);
+const F_b7az = cB7az.F.length;
+const face1001Antes = cB7az.F.find((f) => f[0] === 1001);
+const faceIntactaId = 3;   // side face [3,11,12,4] — não toca em 8 nem 9
+const faceIntactaAntes = JSON.stringify(cB7az.F.find((f) => f[0] === faceIntactaId));
+await page.evaluate(() => window.__oficina.selecionarVarios([8, 9])); await rAF2();   // ativo = 9; de = [8]
+const nP_b7az = await nP();
+await page.keyboard.press('KeyM'); await rAF2();
+const ultimoAZ = await page.evaluate(() => window.__oficina.ultimoPasso());
+const canonAZ = await canon();
+const cAZ = JSON.parse(canonAZ);
+const face1001Depois = cAZ.F.find((f) => f[0] === 1001);
+const faceIntactaDepois = JSON.stringify(cAZ.F.find((f) => f[0] === faceIntactaId));
+ok('(8 área-zero) setup: 8 e 9 são cantos do triângulo da face 1001', !!face1001Antes && face1001Antes[1].length === 3 && face1001Antes[1].includes(8) && face1001Antes[1].includes(9), `face 1001 = ${JSON.stringify(face1001Antes && face1001Antes[1])}`);
+ok('(8 área-zero) mesclar cantos adjacentes APAGA a face de área-zero (F cai de 1)', !face1001Depois && cAZ.F.length === F_b7az - 1,
+   `face 1001 ${face1001Depois ? 'ainda existe' : 'apagada'} · F ${F_b7az}->${cAZ.F.length} · passo ${JSON.stringify(ultimoAZ)}`);
+ok('(8 área-zero) apaga QUIETO (sem órfão — é área-zero, não bowtie)', cAZ.orfaos.length === 0, `órfãos ${cAZ.orfaos.length}`);
+ok('(8 área-zero) V cai de 1 (só o `de` #8 some) e o RESTO fica intacto', cAZ.V.length === cB7az.V.length - 1 && faceIntactaDepois === faceIntactaAntes,
+   `V ${cB7az.V.length}->${cAZ.V.length} · face #${faceIntactaId} ${faceIntactaDepois === faceIntactaAntes ? 'byte-idêntica' : 'MUDOU'}`);
+const passosAZ = await page.evaluate(() => window.__oficina.passos());
+const canonNodeAZ = JSON.stringify(neutroCanonico(nucleo(passosAZ, toco.PARAMS, toco.TOPO)));
+ok('(8 área-zero) o replay segue idêntico mesmo apagando face (página == Node)', canonAZ === canonNodeAZ, `canônico ${canonAZ.length} chars, igual`);
+await aoBaseline();
+
+// screenshots do passo 8: multi-seleção destacada + o ímã em ação
+mkdirSync(OUT8, { recursive: true });
+await page.evaluate((f) => window.__oficina.orbitar(f), F8); await rAF2(); await rAF2();
+pts8 = await page.evaluate(() => window.__oficina.projMalha());
+const tresShot = escolherIsolados(pts8, 3);
+await page.evaluate((ids) => window.__oficina.selecionarVarios(ids), tresShot.map((p) => p.id));
+await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })));   // etiquetas de id
+await rAF2();
+await page.screenshot({ path: join(OUT8, 'oficina-multiselecao.png') });   // 3 vértices roxos + ativo com anel âmbar
+await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })));   // desliga
+await page.evaluate(() => window.__oficina.selecionar(null)); await rAF2();
+pts8 = await page.evaluate(() => window.__oficina.projMalha());
+const parShot = await escolherParIma(pts8);
+await page.keyboard.down('Control');
+await page.mouse.move(parShot.A.x, parShot.A.y); await page.mouse.down();
+await page.mouse.move(parShot.B.x, parShot.B.y, { steps: 16 });
+await rAF2();
+await page.screenshot({ path: join(OUT8, 'oficina-ima.png') });   // A colado em B, anel verde-HUD no alvo
+await page.mouse.up();
+await page.keyboard.up('Control'); await rAF2();
+await aoBaseline();
+
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado).`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto.`);
