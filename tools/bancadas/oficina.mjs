@@ -63,7 +63,26 @@
  *   (6 painel) #props reflete o vértice (id + x,y,z, batendo com o mundo) e a
  *        caixa (largura/altura/profundidade), de LEITURA durante o arrasto;
  *   (6 valor) digitar X move o vértice pro alvo no eixo (d = alvo − atual).
- * Screenshots em scratchpad/passo2..6/. Sai 1 se algo falhar.
+ *   PASSO 7 (extrudar UMA face pelo handle da normal — hitFace/handleFace/extrude):
+ *   (7 hit) clicar dentro de uma face a SELECIONA (modo face, limpa o vértice); e
+ *        onde DUAS faces se sobrepõem na tela, hitFace pega a da FRENTE (menor
+ *        profundidade de centroide) — provado por facesNoPonto (>=2 faces, front
+ *        com menor prof); clicar num vértice depois volta pro modo vértice;
+ *   (7 clique) clicar numa face sem passar do limiar SÓ seleciona, NÃO grava;
+ *   (7 extrude) arrastar o handle da normal grava ['extruda',{face,dist}] no fim de
+ *        PASSOS; dist·compr bate (≤ poucos px) o avanço do cursor na normal e, DEPOIS,
+ *        o centroide da face projetado avança esse tanto (não-circular: o núcleo
+ *        levou a tampa pra onde o handle apontava); o anel novo nasce nos ids do
+ *        BLOCO do passo (idx·1000);
+ *   (7 replay) a lista editada re-executada dá o MESMO neutro canônico (página ==
+ *        Node à parte), como nos passos 4-6;
+ *   (7 undo/redo) Ctrl+Z tira o extrude (neutro volta BIT-A-BIT ao de antes),
+ *        Ctrl+Y devolve (bate com o de depois);
+ *   (7 guardas) roda e Ctrl+Z DURANTE o arrasto do extrude são IGNORADOS (as
+ *        guardas do passo 4/5 já cobrem — é a MESMA máquina), dist/lista intactos;
+ *   (7 trava) face com a normal ~pra câmera: handle TRAVADO (compr<12px/un), hitHandle
+ *        não pega, e arrastar ali NÃO extruda; a mesma face de través NÃO trava.
+ * Screenshots em scratchpad/passo2..7/. Sai 1 se algo falhar.
  *
  *   npm run oficina
  */
@@ -85,6 +104,7 @@ const OUT3 = resolve(REPO, 'scratchpad/passo3');
 const OUT4 = resolve(REPO, 'scratchpad/passo4');
 const OUT5 = resolve(REPO, 'scratchpad/passo5');
 const OUT6 = resolve(REPO, 'scratchpad/passo6');
+const OUT7 = resolve(REPO, 'scratchpad/passo7');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -881,9 +901,240 @@ await rAF2();
 await page.screenshot({ path: join(OUT6, 'oficina-gizmo-ids.png') });
 const vazMax = Math.max(vazamentos.x, vazamentos.y, vazamentos.z);
 
+/* ==== PASSO 7: SELEÇÃO DE FACE + EXTRUDE PELO HANDLE DA NORMAL ==============
+   Extrudar UMA face pela interface, tudo com eventos REAIS de mouse/teclado (a
+   seleção é clique de verdade, o extrude é arrasto de verdade). Prova por NÚMERO:
+   o hit-test pega a face da FRENTE na sobreposição; o extrude grava
+   ['extruda',{face,dist}] com o dist batendo (medido projetando) o avanço do
+   cursor na normal e o anel novo nos ids do BLOCO do passo; replay página==Node;
+   clique puro só seleciona; undo/redo bit-a-bit; roda/Ctrl+Z no arrasto ignorados
+   (MESMA máquina); face com a normal ~pra câmera não extruda (handle travado). */
+const F7 = { az: 0.7, el: 0.45, dist: 1.95, alvo: [0, 0.28, 0] };
+const LIM7 = await page.evaluate(() => window.__oficina.limiar);
+const GTRAVA7 = await page.evaluate(() => window.__oficina.gizmoTrava);
+const CFACE = 9;   // topo do toco: octógono (8 cantos), normal +y limpa, visível e NÃO-travada no F7
+const clicarPonto = async (x, y) => { await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + 1, y + 1, { steps: 2 }); await page.mouse.up(); await rAF2(); };
+const projFace = (id) => page.evaluate((fid) => { const c = window.__oficina.centroideFace(fid); return c ? window.__oficina.projetar(c) : null; }, id);
+/* acha um ponto no CABO do handle que o pegue (hitHandle) e NÃO caia sobre um
+   vértice (o alvo direto venceria o handle, D1) — o cabo sobe pela borda de trás
+   da tampa, então varre da PONTA (acima da tampa, livre) pra dentro. */
+async function agarreLivre(h) {
+  for (let t = 0.92; t >= 0.28; t -= 0.05) {
+    const off = h.seg * t, x = h.o2.x + h.dir[0] * off, y = h.o2.y + h.dir[1] * off;
+    const grab = await page.evaluate(([x, y]) => window.__oficina.hitHandle(x, y), [x, y]);
+    const vert = await page.evaluate(([x, y]) => window.__oficina.hit(x, y), [x, y]);
+    if (grab === true && vert === null) return { x, y, off };
+  }
+  return null;
+}
+
+// SLATE LIMPO: desfaz tudo que os passos 4-6 gravaram, de volta ao baseline (a peça
+// pura do arquivo). Assim o extrude cai num BLOCO previsível (idx=10 -> ids 10000+)
+// e os canônicos de undo/replay comparam contra o toco pristino.
+await page.evaluate((f) => window.__oficina.orbitar(f), F7); await rAF2(); await rAF2();
+await page.evaluate(() => window.__oficina.selecionar(null)); await rAF2();
+{ const baseN7 = await page.evaluate(() => window.__oficina.baseline()); let g = 0;
+  while ((await page.evaluate(() => window.__oficina.nPassos())) > baseN7 && g++ < 80) {
+    await page.keyboard.down('Control'); await page.keyboard.press('KeyZ'); await page.keyboard.up('Control'); await rAF2(); } }
+const nBaseline7 = await page.evaluate(() => window.__oficina.nPassos());
+const canonBaseline7 = await page.evaluate(() => JSON.stringify(window.__oficina.canon()));
+const canonNodeBaseline7 = JSON.stringify(neutroCanonico(nucleo(toco.PASSOS, toco.PARAMS, toco.TOPO)));
+ok('(7 setup) desfez tudo até o baseline (peça pura do arquivo, página == Node)',
+   canonBaseline7 === canonNodeBaseline7, `PASSOS ${nBaseline7} == baseline · canônico bit-a-bit igual ao arquivo`);
+
+// (7 hit) HIT-TEST DE FACE + SOBREPOSIÇÃO (a da FRENTE vence)
+const pc9 = await projFace(CFACE);
+const fnPonto = await page.evaluate(([x, y]) => window.__oficina.facesNoPonto(x, y), [pc9.x, pc9.y]);
+const hitF = await page.evaluate(([x, y]) => window.__oficina.hitFace(x, y), [pc9.x, pc9.y]);
+ok('(7 hit) DUAS faces se sobrepõem nesse ponto da tela (a de trás existe)', fnPonto.length >= 2,
+   `facesNoPonto = ${JSON.stringify(fnPonto.map((f) => ({ id: f.id, prof: +f.prof.toFixed(3) })))}`);
+ok('(7 hit) hitFace pega a da FRENTE (menor profundidade de centroide), não a de trás',
+   hitF === CFACE && fnPonto[0].id === CFACE && fnPonto[0].prof < fnPonto[1].prof,
+   `hitFace ${hitF} · frente #${fnPonto[0].id}(${fnPonto[0].prof.toFixed(3)}) < trás #${fnPonto[1].id}(${fnPonto[1].prof.toFixed(3)})`);
+
+// clicar dentro da face SELECIONA (modo face) e LIMPA o vértice; depois clicar num
+// vértice volta pro modo vértice (a seleção é vértice XOR face, os dois sentidos).
+await page.evaluate(() => { const p = window.__oficina.projMalha()[0]; window.__oficina.selecionar(p.id); }); await rAF2();
+const tipoAntes7 = await page.evaluate(() => window.__oficina.tipoSel());
+await clicarPonto(pc9.x, pc9.y);
+const selVposFace = await page.evaluate(() => window.__oficina.selecionado());
+const faceSelPosClique = await page.evaluate(() => window.__oficina.faceSel());
+const tipoPosFace = await page.evaluate(() => window.__oficina.tipoSel());
+ok('(7 hit) clicar dentro da face SELECIONA aquela face (modo face)', faceSelPosClique === CFACE && tipoPosFace === 'face',
+   `faceSel ${faceSelPosClique} · tipoSel ${tipoAntes7} -> ${tipoPosFace}`);
+ok('(7 hit) e LIMPA a seleção de vértice (vértice XOR face)', selVposFace === null, `selecionado=${selVposFace}`);
+// vice-versa: clicar num vértice isolado volta pro modo vértice e limpa a face
+const ptsPV = await page.evaluate(() => window.__oficina.projMalha());
+const vIso = escolherVertice(ptsPV).v;
+await clicarPonto(vIso.x, vIso.y);
+const selVfim = await page.evaluate(() => window.__oficina.selecionado());
+const faceFim = await page.evaluate(() => window.__oficina.faceSel());
+const tipoFim = await page.evaluate(() => window.__oficina.tipoSel());
+ok('(7 hit) clicar num vértice volta pro modo vértice e LIMPA a face (vice-versa)',
+   selVfim === vIso.id && faceFim === null && tipoFim === 'vertice', `selecionado ${selVfim} · faceSel ${faceFim} · tipo ${tipoFim}`);
+
+// (7 clique) CLIQUE PURO numa face SÓ seleciona — NÃO grava (extrude só pelo handle)
+await page.evaluate(() => window.__oficina.selecionar(null)); await rAF2();
+const nP_antesCliqueF = await page.evaluate(() => window.__oficina.nPassos());
+const pc9b = await projFace(CFACE);
+await clicarPonto(pc9b.x, pc9b.y);
+const nP_posCliqueF = await page.evaluate(() => window.__oficina.nPassos());
+const faceSelCliquePuro = await page.evaluate(() => window.__oficina.faceSel());
+ok('(7 clique) clicar numa face (sem passar do limiar) SÓ seleciona, NÃO grava',
+   faceSelCliquePuro === CFACE && nP_posCliqueF === nP_antesCliqueF,
+   `faceSel ${faceSelCliquePuro} · PASSOS ${nP_antesCliqueF} -> ${nP_posCliqueF} (limiar ${LIM7}px)`);
+
+// (7 extrude) ARRASTAR O HANDLE DA NORMAL grava ['extruda',{face,dist}]
+await page.evaluate((f) => window.__oficina.orbitar(f), F7); await rAF2(); await rAF2();
+const pc9c = await projFace(CFACE);
+await clicarPonto(pc9c.x, pc9c.y);   // seleciona a face 9 (clique real)
+const hAntes = await page.evaluate(() => window.__oficina.handleFace());
+ok('(7 extrude) a face selecionada tem UM handle na normal, NÃO travado no F7',
+   !!hAntes && !hAntes.travada && hAntes.compr > GTRAVA7, `handle compr ${hAntes ? hAntes.compr.toFixed(1) : '?'}px/un · travada ${hAntes && hAntes.travada}`);
+const dirH = hAntes.dir, perpH = [-dirH[1], dirH[0]];
+const gH = await agarreLivre(hAntes);   // ponto no cabo livre de vértices
+ok('(7 extrude) achou um agarre no cabo livre de vértices', !!gH, gH ? `off ${gH.off.toFixed(0)}px de ${hAntes.seg.toFixed(0)}px` : 'nenhum');
+const ALONG7 = 46, PERP7 = 22;   // 46px AO LONGO da normal + 22px PERPENDICULAR (tem que ser descartado)
+const destH = { x: gH.x + dirH[0] * ALONG7 + perpH[0] * PERP7, y: gH.y + dirH[1] * ALONG7 + perpH[1] * PERP7 };
+const hitHandleNoCabo = await page.evaluate(([x, y]) => window.__oficina.hitHandle(x, y), [gH.x, gH.y]);
+const vertNoCabo = await page.evaluate(([x, y]) => window.__oficina.hit(x, y), [gH.x, gH.y]);
+const nP_antesExtr = await page.evaluate(() => window.__oficina.nPassos());
+const idsVAntes = new Set(JSON.parse(canonBaseline7).V.map((e) => e[0]));
+await page.mouse.move(gH.x, gH.y); await page.mouse.down();
+const emAExtr = await page.evaluate(() => window.__oficina.emArrasto());
+await page.mouse.move(destH.x, destH.y, { steps: 16 }); await page.mouse.up(); await rAF2();
+const ultimoExtr = await page.evaluate(() => window.__oficina.ultimoPasso());
+const nP_posExtr = await page.evaluate(() => window.__oficina.nPassos());
+ok('(7 extrude) o handle é grabável no cabo e NÃO é vértice (o alvo direto teria vencido)',
+   hitHandleNoCabo === true && vertNoCabo === null, `hitHandle ${hitHandleNoCabo} · hit(vértice) ${vertNoCabo}`);
+ok('(7 extrude) o arrasto do handle é EXTRUDE na MESMA máquina (emArrasto.extruda)',
+   emAExtr && emAExtr.extruda === true && emAExtr.face === CFACE, `emArrasto ${JSON.stringify(emAExtr)}`);
+const distGrav = ultimoExtr && ultimoExtr[0] === 'extruda' && ultimoExtr[1] ? ultimoExtr[1].dist : null;
+ok('(7 extrude) GRAVOU um passo extruda {face,dist} no fim de PASSOS (cresceu 1)',
+   nP_posExtr === nP_antesExtr + 1 && ultimoExtr && ultimoExtr[0] === 'extruda' && ultimoExtr[1].face === CFACE && Math.abs(distGrav) > 0.01,
+   `PASSOS ${nP_antesExtr} -> ${nP_posExtr} · último ${JSON.stringify(ultimoExtr)}`);
+// dist·compr (o dist em px) bate o avanço do cursor na normal (ALONG7)
+const distPx = distGrav * hAntes.compr;
+ok('(7 extrude) dist·compr bate o avanço do cursor na normal (≤ 3px)', Math.abs(distPx - ALONG7) <= 3,
+   `dist ${distGrav.toFixed(4)} · dist·compr ${distPx.toFixed(1)}px vs cursor ${ALONG7}px na normal (erro ${Math.abs(distPx - ALONG7).toFixed(2)}px)`);
+// NÃO-CIRCULAR: o centroide da face DEPOIS, projetado, avançou ALONG7 na dir (o núcleo levou a tampa pra onde o handle apontava), e o perpendicular foi descartado
+const pc9depois = await projFace(CFACE);
+const dcx = pc9depois.x - hAntes.o2.x, dcy = pc9depois.y - hAntes.o2.y;
+const alongC = dcx * dirH[0] + dcy * dirH[1], perpC = dcx * perpH[0] + dcy * perpH[1];
+ok('(7 extrude) o centroide projetado da face avançou o cursor NA NORMAL (perp descartado, ≤ 6/3px)',
+   Math.abs(alongC - ALONG7) <= 6 && Math.abs(perpC) <= 3, `along ${alongC.toFixed(1)}px (cursor ${ALONG7}) · perp ${perpC.toFixed(2)}px`);
+// o ANEL NOVO nasce nos ids do BLOCO do passo (idx = nP_antesExtr -> base idx·1000)
+const idxExtr = nP_antesExtr, blocoEsp = idxExtr * 1000;
+const canonPosExtr = JSON.parse(await page.evaluate(() => JSON.stringify(window.__oficina.canon())));
+const idsNovos = canonPosExtr.V.map((e) => e[0]).filter((id) => !idsVAntes.has(id)).sort((a, b) => a - b);
+const esperadoAnel = Array.from({ length: 8 }, (_, k) => blocoEsp + k);
+ok('(7 extrude) o anel NOVO nasce nos ids do BLOCO do passo (idx·1000)',
+   idsNovos.length === 8 && idsNovos.every((id, k) => id === esperadoAnel[k]),
+   `passo idx ${idxExtr} -> bloco ${blocoEsp} · anel ${JSON.stringify(idsNovos)}`);
+
+// (7 replay) a lista EDITADA re-executada dá o MESMO neutro canônico (página == Node)
+const passosExtr = await page.evaluate(() => window.__oficina.passos());
+const canonPageExtr = await page.evaluate(() => JSON.stringify(window.__oficina.canon()));
+const canonNodeExtr = JSON.stringify(neutroCanonico(nucleo(passosExtr, toco.PARAMS, toco.TOPO)));
+ok('(7 replay) a lista editada refaz o objeto igual (página == Node, fora do browser)',
+   canonPageExtr === canonNodeExtr, `canônico ${canonPageExtr.length} chars, bit-a-bit igual`);
+
+// (7 undo/redo) Ctrl+Z tira o extrude (neutro volta ao de ANTES), Ctrl+Y devolve
+await page.keyboard.down('Control'); await page.keyboard.press('KeyZ'); await page.keyboard.up('Control'); await rAF2();
+const nP_posUndo7 = await page.evaluate(() => window.__oficina.nPassos());
+const canonPosUndo7 = await page.evaluate(() => JSON.stringify(window.__oficina.canon()));
+ok('(7 undo) Ctrl+Z tira o extrude e o neutro VOLTA BIT-A-BIT ao de antes (o baseline)',
+   nP_posUndo7 === nBaseline7 && canonPosUndo7 === canonBaseline7, `PASSOS ${nP_posExtr} -> ${nP_posUndo7} · neutro ${canonPosUndo7 === canonBaseline7 ? 'idêntico' : 'DIVERGE'}`);
+await page.keyboard.down('Control'); await page.keyboard.press('KeyY'); await page.keyboard.up('Control'); await rAF2();
+const nP_posRedo7 = await page.evaluate(() => window.__oficina.nPassos());
+const canonPosRedo7 = await page.evaluate(() => JSON.stringify(window.__oficina.canon()));
+ok('(7 redo) Ctrl+Y devolve o extrude e o neutro bate com o de DEPOIS',
+   nP_posRedo7 === nP_posExtr && canonPosRedo7 === canonPageExtr, `PASSOS ${nP_posUndo7} -> ${nP_posRedo7} · neutro ${canonPosRedo7 === canonPageExtr ? 'idêntico' : 'DIVERGE'}`);
+// extrudar a MESMA face DE NOVO empilha outro anel no bloco do PRÓXIMO passo (a face-tampa mantém o id)
+await page.evaluate((f) => window.__oficina.orbitar(f), F7); await rAF2(); await rAF2();
+const hAntes2 = await page.evaluate(() => window.__oficina.handleFace());   // a face 9 SEGUE selecionada após o extrude
+const g2 = await agarreLivre(hAntes2);
+const nP_antes2x = await page.evaluate(() => window.__oficina.nPassos());
+const idsAntes2x = new Set(JSON.parse(await page.evaluate(() => JSON.stringify(window.__oficina.canon()))).V.map((e) => e[0]));
+await page.mouse.move(g2.x, g2.y); await page.mouse.down();
+await page.mouse.move(g2.x + hAntes2.dir[0] * 40, g2.y + hAntes2.dir[1] * 40, { steps: 12 }); await page.mouse.up(); await rAF2();
+const ultimo2x = await page.evaluate(() => window.__oficina.ultimoPasso());
+const idsNovos2x = JSON.parse(await page.evaluate(() => JSON.stringify(window.__oficina.canon()))).V.map((e) => e[0]).filter((id) => !idsAntes2x.has(id)).sort((a, b) => a - b);
+ok('(7 extrude 2×) extrudar a MESMA face de novo empilha um anel no bloco do próximo passo (face-tampa mantém o id)',
+   ultimo2x && ultimo2x[0] === 'extruda' && ultimo2x[1].face === CFACE && idsNovos2x.length === 8 && idsNovos2x[0] === nP_antes2x * 1000,
+   `2º extrude idx ${nP_antes2x} -> bloco ${nP_antes2x * 1000} · anel ${JSON.stringify(idsNovos2x)}`);
+// volta ao baseline pro resto (undo dos 2 extrudes)
+{ let g = 0; while ((await page.evaluate(() => window.__oficina.nPassos())) > nBaseline7 && g++ < 20) { await page.keyboard.down('Control'); await page.keyboard.press('KeyZ'); await page.keyboard.up('Control'); await rAF2(); } }
+
+// (7 guardas) roda + Ctrl+Z DURANTE o arrasto do extrude são IGNORADOS (MESMA máquina)
+await page.evaluate((f) => window.__oficina.orbitar(f), F7); await rAF2(); await rAF2();
+const pc9g = await projFace(CFACE);
+await clicarPonto(pc9g.x, pc9g.y);
+const hG = await page.evaluate(() => window.__oficina.handleFace());
+const gG7 = await agarreLivre(hG);
+const distA7 = await page.evaluate(() => window.__oficina.estado().dist);
+const nPA7 = await page.evaluate(() => window.__oficina.nPassos());
+await page.mouse.move(gG7.x, gG7.y); await page.mouse.down();
+const emAG7 = await page.evaluate(() => window.__oficina.emArrasto());
+await page.mouse.wheel(0, -300); await rAF2();
+const distD7 = await page.evaluate(() => window.__oficina.estado().dist);
+await page.keyboard.press('Control+z'); await rAF2();
+const nPD7 = await page.evaluate(() => window.__oficina.nPassos());
+await page.mouse.move(gG7.x + hG.dir[0] * 44, gG7.y + hG.dir[1] * 44, { steps: 12 }); await page.mouse.up(); await rAF2();
+ok('(7 guardas) a RODA é IGNORADA durante o arrasto do extrude (dist não muda)', Math.abs(distD7 - distA7) < 1e-9,
+   `dist ${distA7.toFixed(3)} -> ${distD7.toFixed(3)} (emArrasto.extruda ${emAG7 && emAG7.extruda})`);
+ok('(7 guardas) Ctrl+Z é IGNORADO durante o arrasto do extrude (PASSOS não muda)', nPD7 === nPA7,
+   `PASSOS ${nPA7} -> ${nPD7} durante o arrasto`);
+{ let g = 0; while ((await page.evaluate(() => window.__oficina.nPassos())) > nBaseline7 && g++ < 20) { await page.keyboard.down('Control'); await page.keyboard.press('KeyZ'); await page.keyboard.up('Control'); await rAF2(); } }
+
+// (7 trava) face com a normal ~PRA CÂMERA: olhando AO LONGO da normal de uma face
+//   lateral (face 4), o handle projeta pouquíssimo px/un → TRAVADO, hitHandle não
+//   pega e arrastar ali NÃO extruda. Discrimina: a MESMA face de TRÁVES não trava.
+const FLADO = 4;
+const cfgT = await page.evaluate((fid) => { const n = window.__oficina.normalFace(fid);
+  return { az: Math.atan2(n[0], n[2]), el: Math.asin(Math.max(-1, Math.min(1, n[1]))) }; }, FLADO);
+await page.evaluate((c) => window.__oficina.orbitar({ az: c.az, el: c.el, dist: 6, alvo: [0, 0.28, 0] }), cfgT); await rAF2(); await rAF2();
+const pcT = await projFace(FLADO);
+await clicarPonto(pcT.x, pcT.y);   // seleciona a face lateral por clique real
+const faceSelT = await page.evaluate(() => window.__oficina.faceSel());
+const hT = await page.evaluate(() => window.__oficina.handleFace());
+const hitBaseT = await page.evaluate(() => { const h = window.__oficina.handleFace(); return h ? window.__oficina.hitHandle(h.o2.x, h.o2.y) : null; });
+ok('(7 trava) olhando ~pela normal, o handle da face fica TRAVADO (compr < 12px/un, apagado)',
+   faceSelT === FLADO && !!hT && hT.travada && hT.compr < GTRAVA7, `face ${faceSelT} · compr ${hT ? hT.compr.toFixed(2) : '?'}px/un (limiar ${GTRAVA7})`);
+ok('(7 trava) o handle travado NÃO aceita arrasto (hitHandle não pega)', hitBaseT === false, `hitHandle na base = ${hitBaseT}`);
+// arrastar ali NÃO extruda (hitHandle não pegou → não vira arrasto de extrude)
+const nPT_antes = await page.evaluate(() => window.__oficina.nPassos());
+await page.mouse.move(hT.o2.x, hT.o2.y); await page.mouse.down();
+await page.mouse.move(hT.o2.x + 40, hT.o2.y, { steps: 10 }); await page.mouse.up(); await rAF2();
+const nPT_depois = await page.evaluate(() => window.__oficina.nPassos());
+ok('(7 trava) arrastar sobre o handle travado NÃO extruda (PASSOS intacto)', nPT_depois === nPT_antes,
+   `PASSOS ${nPT_antes} -> ${nPT_depois}`);
+// DISCRIMINA: a MESMA face 4, vista de TRÁVES (do F7), NÃO trava e é grabável
+await page.evaluate((f) => window.__oficina.orbitar(f), F7); await rAF2(); await rAF2();
+await page.evaluate((fid) => window.__oficina.selecionarFace(fid), FLADO); await rAF2();
+const hT2 = await page.evaluate(() => window.__oficina.handleFace());
+ok('(7 trava) a MESMA face de TRÁVES (F7) NÃO trava (a trava é só edge-on)', !!hT2 && !hT2.travada && hT2.compr > GTRAVA7,
+   `face ${FLADO} de tráves compr ${hT2 ? hT2.compr.toFixed(1) : '?'}px/un · travada ${hT2 && hT2.travada}`);
+{ let g = 0; while ((await page.evaluate(() => window.__oficina.nPassos())) > nBaseline7 && g++ < 20) { await page.keyboard.down('Control'); await page.keyboard.press('KeyZ'); await page.keyboard.up('Control'); await rAF2(); } }
+
+// screenshot do EXTRUDE: uma face selecionada + o handle, e a peça extrudada
+mkdirSync(OUT7, { recursive: true });
+await page.evaluate((f) => window.__oficina.orbitar(f), F7); await rAF2(); await rAF2();
+const pc9shot = await projFace(CFACE);
+await clicarPonto(pc9shot.x, pc9shot.y);
+await rAF2();
+await page.screenshot({ path: join(OUT7, 'oficina-face-handle.png') });   // face selecionada + seta da normal
+const hShot = await page.evaluate(() => window.__oficina.handleFace());
+const gS = await agarreLivre(hShot);
+await page.mouse.move(gS.x, gS.y); await page.mouse.down();
+await page.mouse.move(gS.x + hShot.dir[0] * 60, gS.y + hShot.dir[1] * 60, { steps: 14 }); await page.mouse.up(); await rAF2();
+await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })));   // etiquetas de id (mostra o anel novo 10000+)
+await rAF2();
+await page.screenshot({ path: join(OUT7, 'oficina-face-extrudada.png') });
+
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}).`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado).`);

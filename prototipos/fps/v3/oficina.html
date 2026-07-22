@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. Passo 6: GIZMO DE EIXOS + PAINEL. Com um vértice selecionado, 3 setas (X vermelho, Y verde, Z azul) de tamanho constante na tela (comprimento dist/8 em mundo) saem do vértice no overlay 2D; o hit-test do pointerdown testa as setas ANTES do vértice — acertou uma seta (distância ao segmento base→ponta, com zona morta na base) -> arrasto TRAVADO no eixo, senão o vértice (arrasto livre do passo 4), senão câmera. O arrasto travado reusa a MESMA máquina (arrasto/malhaCtl/reexec): avanço = (mouse·dir)/compr unidades no eixo (fórmula do doc), d = eixo·avanço, gravado como um moveV normal — então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem. Seta com compr<12px/un (aponta ~pra câmera) fica apagada e não arrasta. O painel #props deixa de ser placeholder: mostra o vértice selecionado (id + x,y,z) e a caixa do objeto (largura/altura/profundidade), de LEITURA durante o arrasto; digitar um valor exato vira um moveV (d = alvo − atual). -->
+<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. Passo 6: GIZMO DE EIXOS + PAINEL. Com um vértice selecionado, 3 setas (X vermelho, Y verde, Z azul) de tamanho constante na tela (comprimento dist/8 em mundo) saem do vértice no overlay 2D; o hit-test do pointerdown testa as setas ANTES do vértice — acertou uma seta (distância ao segmento base→ponta, com zona morta na base) -> arrasto TRAVADO no eixo, senão o vértice (arrasto livre do passo 4), senão câmera. O arrasto travado reusa a MESMA máquina (arrasto/malhaCtl/reexec): avanço = (mouse·dir)/compr unidades no eixo (fórmula do doc), d = eixo·avanço, gravado como um moveV normal — então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem. Seta com compr<12px/un (aponta ~pra câmera) fica apagada e não arrasta. O painel #props deixa de ser placeholder: mostra o vértice selecionado (id + x,y,z) e a caixa do objeto (largura/altura/profundidade), de LEITURA durante o arrasto; digitar um valor exato vira um moveV (d = alvo − atual). Passo 7: EXTRUDAR UMA FACE. Além do vértice, dá pra selecionar uma FACE (clicar no corpo dela — a da FRENTE por profundidade do centroide; point-in-polygon nos cantos PROJETADOS; a seleção é ADIADA pro pointerup pra que orbitar pelo corpo do objeto não deselecione o que estava ativo). A face selecionada destaca no overlay e ganha UM handle na NORMAL saindo do centroide (mesmo estilo/projeção do gizmo do passo 6, TRAVADO quando a normal aponta ~pra câmera). Arrastar o handle EXTRUDA: avanço = (mouse·dir)/compr na normal (a mesma fórmula travada do passo 6), preview AO VIVO re-executando a lista com um ['extruda',{face,dist}] TENTATIVO no fim, e ao soltar (passou do LIMIAR_PX) GRAVA ['extruda',{face,dist}] e limpa o redo — a op do núcleo (motor/oficina.js) já existe e está provada, e o anel novo nasce nos ids do BLOCO do passo. Reusa a MESMA máquina arrasto/soltar/reexec, então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem sem código novo. Seleção é vértice XOR face. Tecla E é o atalho opcional do mesmo extrude. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
@@ -135,8 +135,8 @@
 </aside>
 
 <div id="ajuda">
-  <b>clique num vértice</b> pega e arrasta · <b>setas X/Y/Z</b> travam no eixo · <b>arrastar vazio</b> girar · <b>direito / shift</b> mover · <b>roda</b> zoom<br>
-  <b>toque:</b> 1 dedo gira · 2 dedos pinça+arrasta · <b>Ctrl+Z / Ctrl+Y</b> desfaz/refaz
+  <b>clique num vértice</b> pega e arrasta · <b>setas X/Y/Z</b> travam no eixo · <b>clique numa face</b> seleciona · <b>arraste a seta da normal</b> (ou <b>E</b>) extruda<br>
+  <b>arrastar vazio</b> girar · <b>direito / shift</b> mover · <b>roda</b> zoom · <b>toque:</b> 1 dedo gira · 2 dedos pinça · <b>Ctrl+Z / Ctrl+Y</b> desfaz/refaz
 </div>
 
 <footer id="status">
@@ -201,6 +201,15 @@ const GIZMO_HIT = 7;              // px: acerta a seta se o cursor cai a ≤ ist
 const GIZMO_MORTO = RAIO_HIT;     // px de zona morta na BASE: aí perto manda o vértice (arrasto livre do passo 4), não a seta
 const LIM_VALOR = 100;            // limite de sanidade do campo "valor exato": a peça é LOCAL (~1 unidade de tamanho), então recusa um número fora de ±isto — um 1e6 digitado mandaria o vértice pra longe (D4)
 
+/* PASSO 7 — EXTRUDAR UMA FACE. Seleção de FACE (além da de vértice) + um HANDLE na
+   NORMAL da face (uma seta saindo do centroide, MESMO estilo/escala/projeção do
+   gizmo do passo 6), cujo arrasto EXTRUDA: grava ['extruda',{face,dist}] no fim de
+   PASSOS e re-executa — a op do NÚCLEO (motor/oficina.js) já existe e está provada,
+   não se mexe nela. Reusa a MESMA máquina arrasto/soltar/reexec, então as guardas
+   de input-no-arrasto (roda, Ctrl+Z) já cobrem. O handle usa GIZMO_ESC/GIZMO_TRAVA/
+   GIZMO_HIT do passo 6 (mesmo tamanho constante, mesma trava, mesma tolerância). */
+const EXTRUDE_E = 0.2;           // avanço padrão (mundo) da tecla E — atalho opcional; a peça é local (~0.55un de altura), então 0.2 é visível sem exagerar
+
 let alvo = [0, 0.28, 0];           // centro do objeto (o pan move ISTO); a órbita é sempre em volta dele
 let az = 0.7;                      // azimute
 let el = 0.4;                      // elevação
@@ -213,14 +222,24 @@ let dist = 1.9;                    // distância câmera→alvo
      projAtual — id->{x,y} PROJETADO no último quadro (o overlay JÁ calcula isso;
                  o pointerdown reusa esse MESMO estado pro hit-test);
      selecionado — id do vértice destacado no overlay (mostra o gizmo, passo 6);
+     faceSelecionada — id da FACE destacada (passo 7); MUTUAMENTE EXCLUSIVA com
+                 `selecionado` (a seleção é vértice XOR face — pegar um vértice
+                 limpa a face e vice-versa), então nunca há gizmo e handle juntos;
      arrasto   — gesto em andamento (null = câmera/nada). LIVRE (passo 4, sem
-                 arrasto.eixo) ou TRAVADO num eixo (passo 6, arrasto.eixo = [x,y,z]);
-     malhaCtl  — {hit,iniciar,mover,soltar} + passo 6 {gizmo,hitGizmo,iniciarEixo},
-                 montado quando a peça abre. */
+                 arrasto.eixo) ou TRAVADO num eixo (passo 6, arrasto.eixo = [x,y,z])
+                 ou EXTRUDE (passo 7, arrasto.extruda = true, avanço na normal);
+     cliqueFace — clique-candidato no CORPO de uma face (passo 7): a seleção da face
+                 é ADIADA pro pointerup pra que ORBITAR pelo corpo do objeto não
+                 deselecione o que estava ativo (só um clique curto seleciona);
+     malhaCtl  — {hit,iniciar,mover,soltar} + passo 6 {gizmo,hitGizmo,iniciarEixo}
+                 + passo 7 {hitFace,facesEmPonto,centroide,normal,handleFace,
+                 hitHandle,selecionarFace,iniciarExtrude}, montado quando a peça abre. */
 let neutro = null;
 let projAtual = new Map();
 let selecionado = null;
+let faceSelecionada = null;   // passo 7: id da face selecionada (null = nenhuma); XOR com `selecionado`
 let arrasto = null;
+let cliqueFace = null;        // passo 7: {fid,x0,y0,pointerId} de um clique-candidato no corpo de uma face (seleção adiada pro up)
 let malhaCtl = null;
 
 /* PASSO 5 — DESFAZER / REFAZER das edições DESTA sessão. O objeto É a lista
@@ -280,6 +299,43 @@ function pan(dxpix, dypix) {
   for (let k = 0; k < 3; k++) alvo[k] += (-dir[k] * dxpix + cima[k] * dypix) * escala;
 }
 
+/* ---- PASSO 7: geometria de FACE, PURA (sem estado de câmera) --------------
+   A normal do handle TEM que ser a MESMA que o núcleo usa pra extrudar — senão o
+   handle apontaria pra um lado e a tampa subiria pra outro, e o `dist` gravado não
+   bateria com o avanço do cursor. O núcleo (motor/oficina.js `normalDaFace`) usa
+   Newell; ele não exporta a função e o núcleo NÃO deve ser tocado, então espelho o
+   algoritmo bit-a-bit aqui — a bancada prova que concordam (o dist gravado bate,
+   ≤ poucos px, com o avanço projetado na normal). */
+function norm3(x, y, z) { const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; }
+function normalDaFaceMundo(V, vs) {   // == normalDaFace do núcleo (Newell): robusto pra n-gon, independente da triangulação
+  let nx = 0, ny = 0, nz = 0;
+  for (let k = 0; k < vs.length; k++) {
+    const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]);
+    if (!c || !n) return [0, 1, 0];
+    nx += (c[1] - n[1]) * (c[2] + n[2]);
+    ny += (c[2] - n[2]) * (c[0] + n[0]);
+    nz += (c[0] - n[0]) * (c[1] + n[1]);
+  }
+  return norm3(nx, ny, nz);
+}
+function centroideDaFace(V, vs) {   // média dos cantos em MUNDO — base do handle + profundidade pra escolher a face da FRENTE
+  let x = 0, y = 0, z = 0, n = 0;
+  for (const v of vs) { const p = V.get(v); if (!p) continue; x += p[0]; y += p[1]; z += p[2]; n++; }
+  return n ? [x / n, y / n, z / n] : null;
+}
+/* ponto-em-polígono por RAY CASTING (regra par-ímpar): agnóstico ao winding e
+   correto pra polígono CÔNCAVO tanto quanto convexo. As faces daqui são quad/n-gon
+   convexos, mas par-ímpar não assume convexidade — então uma face côncava futura,
+   ou uma projeção que se dobra num ângulo raso, não engana o hit-test. */
+function pontoEmPoligono(x, y, poly) {
+  let dentro = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) dentro = !dentro;
+  }
+  return dentro;
+}
+
 /* ---- entrada: mouse + toque unificados em Pointer Events ------------------
    Cursor LIVRE — nada de pointer lock. Captura o ponteiro no canvas pra o
    arrasto continuar mesmo saindo dele. */
@@ -295,6 +351,7 @@ function iniciarPinch() {
 canvas.addEventListener('pointerdown', (e) => {
   try { canvas.setPointerCapture(e.pointerId); } catch { /* ponteiro já solto / evento sintético */ }
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  cliqueFace = null;   // PASSO 7: todo down zera o clique-candidato de face (só a ramificação de corpo-de-face o arma de novo)
 
   /* PASSO 4 — câmera-vs-arrasto se decide AQUI, ANTES da câmera. Só num gesto
      PRIMÁRIO de 1 ponteiro (mouse esq sem shift, ou 1 dedo): testa o cursor
@@ -327,6 +384,25 @@ canvas.addEventListener('pointerdown', (e) => {
       canvas.classList.add('arrastando');
       e.preventDefault();
       return;   // ACERTOU o vértice selecionado: NÃO é câmera
+    }
+    /* PASSO 7 — chega aqui só se NÃO foi vértice nem seta do gizmo. 3) o HANDLE da
+       normal (só existe em modo FACE) → arrasto de EXTRUDE; 4) o CORPO de uma face
+       → clique-candidato de seleção (adiado). Vem DEPOIS do vértice/gizmo: o alvo
+       direto vence o handle (mesma precedência do D1). */
+    const h = malhaCtl.hitHandle(e.clientX, e.clientY);
+    if (h) {
+      arrasto = malhaCtl.iniciarExtrude(h, e.clientX, e.clientY, e.pointerId);
+      canvas.classList.add('arrastando');
+      e.preventDefault();
+      return;   // ACERTOU o handle da normal: arrasto de EXTRUDE, NÃO é câmera
+    }
+    const fid = malhaCtl.hitFace(e.clientX, e.clientY);
+    if (fid != null) {
+      /* corpo de uma FACE: a seleção é ADIADA pro pointerup (só um clique curto
+         seleciona). Se o gesto virar arrasto, ele ORBITA — e girar pelo corpo do
+         objeto NÃO pode deselecionar o que estava ativo. Cai no setup de câmera
+         embaixo (o corpo segue "pegar e girar" idêntico ao passo 2). */
+      cliqueFace = { fid, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId };
     }
   }
   if (arrasto) { e.preventDefault(); return; }   // já arrastando vértice: ponteiros extras não viram câmera/pinça
@@ -372,7 +448,15 @@ function soltar(e) {
     malhaCtl.soltar(e.clientX, e.clientY);
     arrasto = null;
     atualizarPainel();   // PASSO 6: o arrasto ACABOU (arrasto já null) — o painel volta de LEITURA pra EDITÁVEL. Depois do soltar interno, que ainda via arrasto setado.
+  } else if (cliqueFace && e.pointerId === cliqueFace.pointerId) {
+    /* PASSO 7 — resolve o clique-candidato de face: SÓ um gesto curto (< limiar)
+       seleciona; acima disso foi orbita e a seleção fica intacta (preserva o
+       vértice/face ativo ao girar pelo corpo). Re-testa no ponto de SOLTAR (a
+       câmera pode ter girado uns px) — o front-most ali é o que vale. */
+    const mov = Math.hypot(e.clientX - cliqueFace.x0, e.clientY - cliqueFace.y0);
+    if (mov < LIMIAR_PX) { const fid = malhaCtl.hitFace(e.clientX, e.clientY); if (fid != null) malhaCtl.selecionarFace(fid); }
   }
+  cliqueFace = null;   // o gesto acabou: limpa sempre
   pointers.delete(e.pointerId);
   try { canvas.releasePointerCapture(e.pointerId); } catch { /* já solto */ }
   pinch = null;
@@ -464,8 +548,10 @@ try {
         for (const c of campos) if (document.activeElement !== c) c.value = '';
       }
       for (const c of campos) c.disabled = !editavel;
-      $('pvDica').textContent = !temSel ? 'clique num vértice pra selecionar'
-        : arrasto ? 'arrastando — painel em leitura' : 'digite um valor + Enter (move no eixo)';
+      const temFace = faceSelecionada != null && neutro && neutro.F.has(faceSelecionada);
+      $('pvDica').textContent = temSel ? (arrasto ? 'arrastando — painel em leitura' : 'digite um valor + Enter (move no eixo)')
+        : temFace ? `face #${faceSelecionada} — arraste a seta pra extrudar (ou E)`
+        : 'clique num vértice ou numa face';
       const dims = bboxNeutro();
       $('pdx').textContent = dims ? dims[0].toFixed(3) : '—';
       $('pdy').textContent = dims ? dims[1].toFixed(3) : '—';
@@ -533,6 +619,86 @@ try {
         for (const [id, q] of projAtual) { const dd = (q.x - cx) ** 2 + (q.y - cy) ** 2; if (dd <= md) { md = dd; melhor = id; } }
         return melhor;
       },
+
+      /* ---- PASSO 7: SELEÇÃO DE FACE + HANDLE DE EXTRUDE ---------------------- */
+      /* faces cujo POLÍGONO PROJETADO contém (cx,cy), ordenadas da FRENTE pra trás
+         pela profundidade do CENTROIDE (dot(C−camPos, olhar); menor = mais perto da
+         câmera). Fonte única do hitFace e do gancho de verificação. Face com algum
+         canto que não projeta (fora da tela / atrás) é pulada — sem polígono não dá
+         pra decidir; a peça é local e fica quase toda na tela, então é o caso raro. */
+      facesEmPonto(cx, cy) {
+        const out = [];
+        if (!neutro) return out;
+        const cp = camPos(), olhar = base().f;
+        for (const face of neutro.F.values()) {
+          const poly = [];
+          let bom = true;
+          for (const v of face.vs) { const p = neutro.V.get(v); const q = p && visor.projetar(p); if (!q) { bom = false; break; } poly.push(q); }
+          if (!bom || poly.length < 3) continue;
+          if (!pontoEmPoligono(cx, cy, poly)) continue;
+          const C = centroideDaFace(neutro.V, face.vs);
+          const prof = (C[0] - cp[0]) * olhar[0] + (C[1] - cp[1]) * olhar[1] + (C[2] - cp[2]) * olhar[2];
+          out.push({ id: face.id, prof });
+        }
+        out.sort((a, b) => a.prof - b.prof);   // FRENTE primeiro (menor profundidade)
+        return out;
+      },
+      /* id da face sob o cursor: a da FRENTE entre as que contêm o ponto. null se
+         nenhuma. É o desempate de sobreposição — clicar onde duas faces se cobrem
+         na tela pega a mais perto da câmera. */
+      hitFace(cx, cy) { const fs = this.facesEmPonto(cx, cy); return fs.length ? fs[0].id : null; },
+      /* centroide/normal em MUNDO de uma face. A normal é a MESMA do núcleo (Newell
+         espelhado), então o handle aponta pra onde a extrusão de fato leva a tampa. */
+      centroide(id) { const f = neutro && neutro.F.get(id); return f ? centroideDaFace(neutro.V, f.vs) : null; },
+      normal(id) { const f = neutro && neutro.F.get(id); return f ? normalDaFaceMundo(neutro.V, f.vs) : null; },
+      /* GEOMETRIA do handle da face selecionada, projetada FRESCA pelo motor — UMA
+         seta na NORMAL saindo do centroide, no MESMO estilo/escala do gizmo do passo
+         6 (base = projetar(C), ponta = projetar(C + N·L), L = dist·GIZMO_ESC). O
+         `compr` (px por unidade de mundo) mede a projeção LOCAL da normal; compr <
+         GIZMO_TRAVA = a normal aponta ~pra câmera → handle TRAVADO (apagado, não
+         extruda; senão avanço = mouse/compr dispararia). null sem face selecionada. */
+      handleFace() {
+        if (faceSelecionada == null || !neutro || !neutro.F.has(faceSelecionada)) return null;
+        const C = this.centroide(faceSelecionada), N = this.normal(faceSelecionada);
+        if (!C || !N) return null;
+        const o2 = visor.projetar(C);
+        if (!o2) return null;
+        const L = dist * GIZMO_ESC;
+        const a2 = visor.projetar([C[0] + N[0] * L, C[1] + N[1] * L, C[2] + N[2] * L]);
+        if (!a2) return null;
+        const dx = a2.x - o2.x, dy = a2.y - o2.y;
+        const seg = Math.hypot(dx, dy), compr = seg / L;
+        const dir = seg > 1e-6 ? [dx / seg, dy / seg] : [0, 0];
+        return { face: faceSelecionada, normal: N.slice(), centroide: C.slice(),
+          o2: { x: o2.x, y: o2.y }, ponta: { x: a2.x, y: a2.y }, seg, dir, compr, travada: compr < GIZMO_TRAVA };
+      },
+      /* acerta o handle: distância do cursor ao SEGMENTO base→ponta ≤ GIZMO_HIT, à
+         FRENTE da base (raw ≥ 0 — o cabo sai do centroide pra fora). Handle travado
+         não conta. Devolve o handle (pra iniciar o extrude) ou null. */
+      hitHandle(cx, cy) {
+        const h = this.handleFace();
+        if (!h || h.travada) return null;
+        const raw = (cx - h.o2.x) * h.dir[0] + (cy - h.o2.y) * h.dir[1];
+        if (raw < 0) return null;
+        const along = Math.min(raw, h.seg);
+        const perp = Math.hypot(cx - (h.o2.x + h.dir[0] * along), cy - (h.o2.y + h.dir[1] * along));
+        return perp <= GIZMO_HIT ? h : null;
+      },
+      /* seleciona uma FACE (modo face) e LIMPA a seleção de vértice — a seleção é
+         vértice XOR face. Face inexistente → limpa (robustez). */
+      selecionarFace(id) {
+        faceSelecionada = (id != null && neutro && neutro.F.has(id)) ? id : null;
+        selecionado = null;
+        atualizarPainel();
+      },
+      /* começa o arrasto de EXTRUDE: fixa NORMAL/dir/compr do INSTANTE (câmera parada
+         no arrasto → constantes, como o gizmo do passo 6). O commit reusa a MESMA
+         `arrasto`/`soltar`, então as guardas de passo 4/5 (roda, Ctrl+Z) já cobrem. */
+      iniciarExtrude(h, cx, cy, pointerId) {
+        atualizarPainel();
+        return { pointerId, face: h.face, extruda: true, normal: h.normal.slice(), dir: h.dir.slice(), compr: h.compr, x0: cx, y0: cy, avanco: 0, dist: 0 };
+      },
+
       /* PASSO 6 — GEOMETRIA do gizmo do vértice SELECIONADO, projetada FRESCA pelo
          motor (a mesma prova não-circular do overlay). Uma seta por eixo:
            o2   = projetar(P)                  base, no vértice;
@@ -590,6 +756,7 @@ try {
          vértice anda só no plano da câmera, então prof/escala são constantes. */
       iniciar(id, cx, cy, pointerId) {
         selecionado = id;
+        faceSelecionada = null;   // PASSO 7: pegar um vértice sai do modo face (seleção é vértice XOR face)
         const P = neutro.V.get(id).slice();
         const cp = camPos(), { f, dir, cima } = base();
         const prof = (P[0] - cp[0]) * f[0] + (P[1] - cp[1]) * f[1] + (P[2] - cp[2]) * f[2];   // dot(P - camPos, olhar)
@@ -604,6 +771,20 @@ try {
          Em ambos, re-executa com um moveV TENTATIVO no fim da lista (não grava). */
       mover(cx, cy) {
         if (!arrasto) return;
+        if (arrasto.extruda) {
+          /* PASSO 7 — EXTRUDE ao vivo: avanço = (deslocamento do mouse · dir)/compr,
+             a MESMA fórmula travada do passo 6 (só a componente AO LONGO da normal
+             conta; o perpendicular é descartado). dist = avanço; re-executa com um
+             ['extruda',{face,dist}] TENTATIVO no fim (não grava — array novo, PASSOS
+             fica intacto). A op do núcleo levanta a tampa por dist na normal. */
+          const mx = cx - arrasto.x0, my = cy - arrasto.y0;
+          const avanco = (mx * arrasto.dir[0] + my * arrasto.dir[1]) / arrasto.compr;
+          arrasto.avanco = avanco;
+          arrasto.dist = avanco;
+          reexec([...PASSOS, ['extruda', { face: arrasto.face, dist: avanco }]]);
+          atualizarPainel();
+          return;
+        }
         let d;
         if (arrasto.eixo) {
           const mx = cx - arrasto.x0, my = cy - arrasto.y0;
@@ -625,6 +806,29 @@ try {
          qualquer caso reconstrói da lista REAL (some o tentativo se não gravou). */
       soltar(cx, cy) {
         if (!arrasto) return { gravou: false };
+        if (arrasto.extruda) {
+          /* PASSO 7 — solta o EXTRUDE: passou do limiar (avanço em px ao longo da
+             normal ≥ LIMIAR_PX) → GRAVA ['extruda',{face,dist}] no fim de PASSOS e
+             LIMPA o redo (edição nova). A face-tampa mantém o id (o núcleo faz
+             `f.vs = anel novo`), então a face SEGUE selecionada — extrudar de novo
+             empilha outro anel no bloco do PRÓXIMO passo, sem perder a seleção.
+             Abaixo do limiar → clique puro: reconstrói da lista REAL (some o
+             tentativo), só mantém a seleção. */
+          const face = arrasto.face, distFinal = arrasto.dist;
+          const movPix = Math.abs(arrasto.avanco * arrasto.compr);
+          let gravou = false;
+          if (movPix >= LIMIAR_PX) {
+            PASSOS.push(['extruda', { face, dist: distFinal }]);
+            redo.length = 0;
+            gravou = true;
+            console.log(`oficina passo 7 (extrude): gravado ['extruda', {face:${face}, dist:${distFinal.toFixed(4)}}] — PASSOS agora ${PASSOS.length}`);
+          }
+          reexec(PASSOS);
+          faceSelecionada = face;
+          atualizarPassos();
+          atualizarPainel();
+          return { gravou, face, dist: distFinal };
+        }
         const id = arrasto.id, d = arrasto.d.slice(), eixoK = arrasto.eixo;
         const movPix = eixoK ? Math.abs(arrasto.avanco * arrasto.compr) : Math.hypot(cx - arrasto.x0, cy - arrasto.y0);
         let gravou = false;
@@ -641,10 +845,28 @@ try {
         return { gravou, id, d };
       },
     };
+
+    /* PASSO 7 (opcional) — tecla E: com uma FACE selecionada, extruda por um passo
+       padrão (EXTRUDE_E) reusando a MESMA máquina (grava ['extruda',{face,dist}],
+       limpa o redo, reexec). Ignorada no meio de um arrasto (guarda) e com o foco
+       num campo do painel. O ESSENCIAL é o arrasto do handle; isto é só o atalho.
+       Fica AQUI dentro do try porque fecha sobre PASSOS/reexec/atualizarPassos. */
+    addEventListener('keydown', (e) => {
+      if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName)) return;
+      if (e.key !== 'e' && e.key !== 'E') return;
+      if (arrasto || faceSelecionada == null || !neutro || !neutro.F.has(faceSelecionada)) return;
+      PASSOS.push(['extruda', { face: faceSelecionada, dist: EXTRUDE_E }]);
+      redo.length = 0;
+      reexec(PASSOS);
+      atualizarPassos();
+      atualizarPainel();
+      console.log(`oficina passo 7 (tecla E): ['extruda', {face:${faceSelecionada}, dist:${EXTRUDE_E}}] — PASSOS agora ${PASSOS.length}`);
+    });
+
     atualizarPassos();
     atualizarPainel();   // PASSO 6: pinta a caixa do objeto já no carregamento (sem seleção ainda)
   } catch (e) {
-    console.warn('oficina passo 3/4/6: malha não montada —', e.message);
+    console.warn('oficina passo 3/4/6/7: malha não montada —', e.message);
   }
 
   let verIds = false;   // etiqueta de id por vértice (tecla i) — o baseline é só ponto+aresta
@@ -695,6 +917,8 @@ try {
     const proj = projetarVertices();
     projAtual = proj;   // PASSO 4: o hit-test do #c reusa ESTE estado de projeção (o mesmo que se desenha)
 
+    desenharFaceSel(proj);   // PASSO 7: preenchimento da face selecionada, SOB as arestas/vértices
+
     // ARESTAS: dois passes — halo escuro largo + núcleo claro fino — pra ler tanto
     // sobre a grama clara quanto sobre a casca escura do objeto.
     octx.lineJoin = 'round'; octx.lineCap = 'round';
@@ -722,6 +946,8 @@ try {
 
     // GIZMO DE MOVER (passo 6): as 3 setas do vértice SELECIONADO, POR CIMA de tudo.
     desenharGizmo();
+    // HANDLE DE EXTRUDE (passo 7): a seta da normal da FACE selecionada, por cima.
+    desenharHandle();
   }
 
   /* desenha o gizmo do vértice selecionado (nada se não há seleção). Fonte única
@@ -758,6 +984,52 @@ try {
       octx.fillStyle = cor; octx.fillText(s.k.toUpperCase(), lx, ly);
     }
     octx.textAlign = 'left';   // restaura pro resto do overlay (etiquetas de id)
+  }
+
+  /* PASSO 7 — preenchimento + contorno da face selecionada (destaque). Roxo-acento
+     translúcido, mesma família do vértice selecionado. Não pinta se algum canto não
+     projeta (fora da tela) — evita um polígono rasgado. Vem SOB as arestas. */
+  function desenharFaceSel(proj) {
+    if (faceSelecionada == null || !neutro || !neutro.F.has(faceSelecionada)) return;
+    const f = neutro.F.get(faceSelecionada);
+    const pts = [];
+    for (const v of f.vs) { const q = proj.get(v); if (!q) return; pts.push(q); }
+    if (pts.length < 3) return;
+    octx.beginPath();
+    octx.moveTo(pts[0].x, pts[0].y);
+    for (let k = 1; k < pts.length; k++) octx.lineTo(pts[k].x, pts[k].y);
+    octx.closePath();
+    octx.fillStyle = 'rgba(168, 132, 243, 0.22)'; octx.fill();
+    octx.lineJoin = 'round'; octx.lineWidth = 2; octx.strokeStyle = 'rgba(168, 132, 243, 0.95)'; octx.stroke();
+  }
+
+  /* PASSO 7 — o HANDLE de extrude: UMA seta na normal da face selecionada, MESMO
+     desenho do gizmo do passo 6 (halo + núcleo + ponta triangular). Fonte única de
+     geometria: malhaCtl.handleFace() — o mesmo que o hit-test e a bancada leem.
+     Travado (normal ~pra câmera) sai só como um traço apagado, sem ponta. */
+  function desenharHandle() {
+    if (!malhaCtl) return;
+    const h = malhaCtl.handleFace();
+    if (!h) return;
+    const cor = '#a884f3';   // acento (casa com o destaque da face)
+    octx.lineJoin = 'round'; octx.lineCap = 'round';
+    if (h.travada) {
+      octx.globalAlpha = 0.25; octx.strokeStyle = cor; octx.lineWidth = 2;
+      octx.beginPath(); octx.moveTo(h.o2.x, h.o2.y); octx.lineTo(h.ponta.x, h.ponta.y); octx.stroke();
+      octx.globalAlpha = 1; return;
+    }
+    // cabo: halo escuro largo + núcleo colorido (legível nos dois fundos)
+    octx.strokeStyle = 'rgba(11,14,22,0.55)'; octx.lineWidth = 3.8;
+    octx.beginPath(); octx.moveTo(h.o2.x, h.o2.y); octx.lineTo(h.ponta.x, h.ponta.y); octx.stroke();
+    octx.strokeStyle = cor; octx.lineWidth = 2;
+    octx.beginPath(); octx.moveTo(h.o2.x, h.o2.y); octx.lineTo(h.ponta.x, h.ponta.y); octx.stroke();
+    // ponta: triângulo apontando no sentido da normal
+    const dir = h.dir, ah = 9, aw = 5, px = -dir[1], py = dir[0];
+    const bx = h.ponta.x - dir[0] * ah, by = h.ponta.y - dir[1] * ah;
+    octx.beginPath(); octx.moveTo(h.ponta.x, h.ponta.y);
+    octx.lineTo(bx + px * aw, by + py * aw); octx.lineTo(bx - px * aw, by - py * aw); octx.closePath();
+    octx.fillStyle = cor; octx.fill();
+    octx.lineWidth = 1; octx.strokeStyle = 'rgba(11,14,22,0.55)'; octx.stroke();
   }
 
   addEventListener('keydown', (e) => {
@@ -846,14 +1118,25 @@ try {
     gizmo: () => (malhaCtl ? malhaCtl.gizmo().map((s) => ({ k: s.k, eixo: s.eixo.slice(), cor: s.cor,
       o2: { ...s.o2 }, ponta: { ...s.ponta }, dir: s.dir.slice(), seg: s.seg, compr: s.compr, travada: s.travada })) : []),
     hitGizmo: (x, y) => { const g = malhaCtl && malhaCtl.hitGizmo(x, y); return g ? g.k : null; },   // eixo acertado ('x'/'y'/'z') ou null
-    emArrasto: () => (arrasto ? { eixo: arrasto.eixo ? arrasto.eixo.slice() : null, id: arrasto.id } : null),   // null = nenhum; .eixo!=null = arrasto TRAVADO
-    selecionar: (id) => { selecionado = id; atualizarPainel(); },     // seleção direta (a bancada prepara o gizmo sem simular clique)
+    emArrasto: () => (arrasto ? { eixo: arrasto.eixo ? arrasto.eixo.slice() : null, id: arrasto.id ?? null, extruda: !!arrasto.extruda, face: arrasto.face ?? null } : null),   // null = nenhum; .eixo!=null = TRAVADO; .extruda = EXTRUDE (passo 7)
+    selecionar: (id) => { selecionado = id; faceSelecionada = null; atualizarPainel(); },     // seleção direta de VÉRTICE (limpa a face — XOR); a bancada prepara o gizmo sem simular clique
     painel: () => ({                                                  // leitura do #props pra a bancada afirmar o conteúdo
       sel: $('pvSel').textContent, x: $('pvx').value, y: $('pvy').value, z: $('pvz').value,
       dims: [$('pdx').textContent, $('pdy').textContent, $('pdz').textContent],
       leitura: ['pvx', 'pvy', 'pvz'].every((i) => $(i).disabled), dica: $('pvDica').textContent,
     }),
     gizmoEsc: GIZMO_ESC, gizmoTrava: GIZMO_TRAVA, gizmoHit: GIZMO_HIT,
+    /* ---- PASSO 7: ganchos de face + handle + extrude (a bancada mede/afirma) --- */
+    hitFace: (x, y) => (malhaCtl ? malhaCtl.hitFace(x, y) : null),                    // id da face sob o cursor (a da FRENTE) ou null
+    facesNoPonto: (x, y) => (malhaCtl ? malhaCtl.facesEmPonto(x, y) : []),            // [{id,prof}] das faces que contêm o ponto, FRENTE→trás (prova a sobreposição)
+    selecionarFace: (id) => { if (malhaCtl) malhaCtl.selecionarFace(id); },           // seleção direta de face (setup sem simular clique)
+    faceSel: () => faceSelecionada,                                                    // id da face selecionada ou null
+    tipoSel: () => (selecionado != null ? 'vertice' : faceSelecionada != null ? 'face' : null),
+    normalFace: (id) => (malhaCtl ? malhaCtl.normal(id) : null),                       // normal em MUNDO (a MESMA que o núcleo usa)
+    centroideFace: (id) => (malhaCtl ? malhaCtl.centroide(id) : null),                // centroide em MUNDO
+    handleFace: () => { const h = malhaCtl && malhaCtl.handleFace(); return h ? { o2: { ...h.o2 }, ponta: { ...h.ponta }, dir: h.dir.slice(), seg: h.seg, compr: h.compr, travada: h.travada, face: h.face, normal: h.normal.slice(), centroide: h.centroide.slice() } : null; },
+    hitHandle: (x, y) => (malhaCtl ? !!malhaCtl.hitHandle(x, y) : false),              // pegou o handle no ponto? (true/false)
+    extrudeE: EXTRUDE_E,
   };
   window.__ready = true;
 } catch (e) {
