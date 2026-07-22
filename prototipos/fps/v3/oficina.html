@@ -302,8 +302,18 @@ canvas.addEventListener('pointerdown', (e) => {
      saímos antes de tocar em modo/pinça — a câmera fica IDÊNTICA no caso de erro. */
   const primario = (e.pointerType === 'mouse') ? (e.button === 0 && !e.shiftKey) : true;
   if (!arrasto && pointers.size === 1 && primario && malhaCtl) {
-    /* PASSO 6 — ORDEM do hit-test: PRIMEIRO as setas do gizmo (só há quando um
-       vértice está selecionado); acertou → arrasto TRAVADO naquele eixo. */
+    /* PASSO 6 — ORDEM do hit-test (D1: o vértice clicado DIRETO vence a seta que
+       passa por cima dele). 1) um vértice OUTRO que o selecionado, sob o cursor,
+       vence o gizmo → arrasto LIVRE (você mirou o ponto, não o cabo); 2) senão a
+       seta do gizmo → arrasto TRAVADO no eixo; 3) senão o PRÓPRIO selecionado (a
+       base do gizmo, na zona morta) → arrasto LIVRE. */
+    const id = malhaCtl.hit(e.clientX, e.clientY);
+    if (id != null && id !== selecionado) {
+      arrasto = malhaCtl.iniciar(id, e.clientX, e.clientY, e.pointerId);
+      canvas.classList.add('arrastando');
+      e.preventDefault();
+      return;   // vértice DIRETO (≠ selecionado): vence a seta, NÃO é câmera
+    }
     const g = malhaCtl.hitGizmo(e.clientX, e.clientY);
     if (g) {
       arrasto = malhaCtl.iniciarEixo(g, e.clientX, e.clientY, e.pointerId);
@@ -311,13 +321,11 @@ canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       return;   // ACERTOU seta: arrasto travado por eixo, NÃO é câmera
     }
-    /* SENÃO o vértice (passo 4) → arrasto LIVRE no plano da câmera. */
-    const id = malhaCtl.hit(e.clientX, e.clientY);
-    if (id != null) {
+    if (id != null) {   // aqui id === selecionado: a base do gizmo → arrasto livre
       arrasto = malhaCtl.iniciar(id, e.clientX, e.clientY, e.pointerId);
       canvas.classList.add('arrastando');
       e.preventDefault();
-      return;   // ACERTOU vértice: NÃO é câmera
+      return;   // ACERTOU o vértice selecionado: NÃO é câmera
     }
   }
   if (arrasto) { e.preventDefault(); return; }   // já arrastando vértice: ponteiros extras não viram câmera/pinça

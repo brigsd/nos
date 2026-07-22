@@ -55,7 +55,7 @@ A tabela completa, incluindo as operações ainda por construir, está no
 
 - **Câmera:** arrastar no vazio gira; botão direito ou shift+arrastar move (pan); roda dá zoom. Toque: 1 dedo gira, 2 dedos pinça/arrasta. O cursor fica **livre** (não some), pra você conseguir clicar nas coisas.
 - **Selecionar + arrastar vértice:** clicar num ponto o seleciona; arrastar o move (grava um `moveV`). O objeto deforma ao vivo.
-- **Gizmo (as setas X/Y/Z):** aparecem no vértice selecionado; arrastar uma seta move **travado naquele eixo** só. Seta apontando quase pra câmera fica apagada (não dá pra arrastar direito).
+- **Gizmo (as setas X/Y/Z):** aparecem no vértice selecionado; arrastar uma seta move **travado naquele eixo** só. Seta apontando quase pra câmera fica apagada (não dá pra arrastar direito). Se uma seta estiver passando por cima de OUTRO vértice, clicar ali seleciona o vértice — o alvo clicado direto vence a seta.
 - **Painel da direita:** mostra o vértice selecionado (número + posição x,y,z) e o tamanho do objeto (largura/altura/profundidade). Dá pra **digitar um valor exato** num campo pra mover o vértice pra ali. Fica só de leitura enquanto você arrasta.
 - **Desfazer / refazer:** `Ctrl+Z` desfaz, `Ctrl+Y` (ou `Ctrl+Shift+Z`) refaz. Desfaz só o que você editou na sessão — nunca "desmonta" a peça que você abriu.
 

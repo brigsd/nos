@@ -806,6 +806,50 @@ const nPd3b = await page.evaluate(() => window.__oficina.nPassos());
 ok('(6 valor D3) re-digitar o valor EXIBIDO (3 casas) é no-op — sem moveV fantasma',
    nPd3b === nPd3, `X exibido "${exibido}" (real ${posD3[0].toFixed(6)}) · PASSOS ${nPd3}->${nPd3b}`);
 
+// (6 D1) REGRESSÃO: uma seta do gizmo que passa POR CIMA de outro vértice não pode
+// roubar o clique — o vértice mirado DIRETO vence a seta (precedência no hit-test).
+// Varre azimutes procurando uma oclusão real (a seta do selecionado cobrindo outro
+// vértice) e prova que clicar ali SELECIONA o vértice coberto, não pega a seta.
+let d1 = null;
+for (const az of [0.3, 0.9, 1.5, 2.1, 2.7, 3.3]) {
+  await page.evaluate((f) => window.__oficina.orbitar(f), { az, el: 0.45, dist: 2.6, alvo: [0, 0.28, 0] });
+  await rAF2(); await rAF2();
+  const achou = await page.evaluate(() => {
+    const pts = window.__oficina.projMalha();
+    for (const S of pts) {                                   // dono da seta (o selecionado)
+      window.__oficina.selecionar(S.id);                     // gizmo() projeta fresco, não precisa de quadro
+      for (const O of pts) {                                 // vértice coberto pela seta
+        if (O.id === S.id) continue;
+        const k = window.__oficina.hitGizmo(O.x, O.y);
+        if (k) return { sel: S.id, occ: O.id, ax: k };
+      }
+    }
+    return null;
+  });
+  if (achou) { d1 = { az, ...achou }; break; }
+}
+ok('(6 D1) achou uma seta cobrindo outro vértice pra testar (a oclusão do D1 existe)', !!d1,
+   d1 ? `az ${d1.az} · seta ${d1.ax.toUpperCase()} do #${d1.sel} cobre #${d1.occ}` : 'nenhuma oclusão nos azimutes varridos');
+if (d1) {
+  await page.evaluate((f) => window.__oficina.orbitar(f), { az: d1.az, el: 0.45, dist: 2.6, alvo: [0, 0.28, 0] });
+  await rAF2(); await rAF2();
+  await page.evaluate((id) => window.__oficina.selecionar(id), d1.sel);   // dono da seta selecionado
+  await rAF2();
+  const oNow = await page.evaluate((oid) => { const p = window.__oficina.projMalha().find((v) => v.id === oid); return p ? { x: p.x, y: p.y } : null; }, d1.occ);
+  const oclusaoAtiva = await page.evaluate(([x, y]) => window.__oficina.hitGizmo(x, y), [oNow.x, oNow.y]);
+  const nPantes = await page.evaluate(() => window.__oficina.nPassos());
+  await page.mouse.move(oNow.x, oNow.y); await page.mouse.down();
+  await page.mouse.move(oNow.x + 1, oNow.y + 1, { steps: 2 });   // sub-limiar → clique puro, sem arrastar
+  await page.mouse.up(); await rAF2();
+  const selDepois = await page.evaluate(() => window.__oficina.selecionado());
+  const nPdepois = await page.evaluate(() => window.__oficina.nPassos());
+  ok('(6 D1) [pré] a seta REALMENTE cobre o outro vértice (hitGizmo pega no ponto dele)', oclusaoAtiva === d1.ax,
+     `hitGizmo no #${d1.occ} = ${oclusaoAtiva} (seta ${d1.ax})`);
+  ok('(6 D1) clicar no vértice coberto SELECIONA o vértice (não pega a seta que passa por cima)',
+     selDepois === d1.occ, `selecionado ${d1.sel} -> ${selDepois} (esperado o coberto ${d1.occ})`);
+  ok('(6 D1) e é clique PURO — não grava moveV fantasma', nPdepois === nPantes, `PASSOS ${nPantes} -> ${nPdepois}`);
+}
+
 // screenshot do GIZMO: um vértice selecionado, as 3 setas por cima do toco
 mkdirSync(OUT6, { recursive: true });
 await page.evaluate((f) => window.__oficina.orbitar(f), F6); await rAF2(); await rAF2();
@@ -824,4 +868,4 @@ server.close();
 
 console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto.`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo).`);
