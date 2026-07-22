@@ -30,11 +30,11 @@ Uma peça é o **envelope**: `FORMATO` + `PARAMS` (dimensionais, citados por NOM
 - **Adaptador** (`adaptarV3`): neutro → triângulos soltos do motor (8 floats: pos3 uv2 nrm3). Cor por face via textura-amostra + UV (o vértice ainda não tem cor — reservado). Única parte que muda de motor pra motor.
 - **Interface** (`oficina.html`): câmera, overlay, painéis, input.
 
-## Peças-chave já construídas (passos 0-5)
+## Peças-chave já construídas (passos 0-6)
 
 - **`motor/oficina.js`**: `nucleo`, `executar` (núcleo+adaptador → `{lotes,camera}`), `colisaoDe` (só-geometria, encaixa cilindro na malha final), `neutroCanonico` (forma canônica pra comparar/replay). **Identidade posicional por bloco** (`BLOCO=1000`): o passo `i` possui os ids `[i*1000, +1000)` — a numeração depende só da POSIÇÃO, nunca de PARAMS. Mudar `raio` não renumera; mudar `lados` (TOPO) renumera e os passos pendurados viram **órfãos que GRITAM** (nunca corrompem). `moveV` é ADITIVO (`p+d`). Ops iniciais: cubo, cilindro, moveV, extruda(face), mescla, pincel(face), solido, liso.
 - **`render.js`** (motor — jóia, NÃO tocar sem o cuidado do `nos-fluxo`): hooks que a Oficina usa — `setCam(pos,yaw,pitch)` (câmera livre, dirigida no `antesDoQuadro` de `rodar(onFrame, antesDoQuadro)`), `setLente(x,y)` (deslocamento de lente opt-in pra centrar o objeto na área livre fora do painel, D-79; `[0,0]` = no-op), `projetar(p)` (mundo→tela em px, já com a lente).
-- **`oficina.html`**: câmera órbita/pan/zoom de CURSOR LIVRE (dirige `setCam`; conversão órbita→câmera em `aplicarCamera`/`base()`); overlay 2D da malha (`pointer-events:none`, desenha V/F por `projetar` no `antesDoQuadro`, casa com o quadro); hit-test + arrasto de vértice → `moveV` (`malhaCtl`); desfazer/refazer com `baseline` (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z).
+- **`oficina.html`**: câmera órbita/pan/zoom de CURSOR LIVRE (dirige `setCam`; conversão órbita→câmera em `aplicarCamera`/`base()`); overlay 2D da malha (`pointer-events:none`, desenha V/F por `projetar` no `antesDoQuadro`, casa com o quadro); hit-test + arrasto de vértice → `moveV` (`malhaCtl`); desfazer/refazer com `baseline` (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z); **gizmo** de eixos (setas X/Y/Z, arrasto TRAVADO por eixo `d=eixo·avanço`) e **painel** `#props` (vértice + dimensões + valor exato editável) — na MESMA máquina `arrasto`/`malhaCtl`.
 - **Bancada**: `npm run oficina` (`tools/bancadas/oficina.mjs`) — prova cada passo com NÚMERO (Playwright headless, eventos e teclas reais).
 
 ## O ciclo pra construir o próximo passo
@@ -54,8 +54,9 @@ O olho engana em normal, luz e alinhamento (D-65). Prove com número:
 
 ## Armadilhas recorrentes (aprendidas doendo)
 
-- **Input no meio de um arrasto**: QUALQUER handler que dispara durante um arrasto de vértice precisa de `if (arrasto) return`. A roda (passo 4) e o Ctrl+Z (passo 5) tiveram o MESMO bug — mudavam a lista/escala com uma edição em voo e gravavam um `moveV` errado (formato salvo). Todo passo interativo novo: pergunte "e se isto disparar no meio de um arrasto?".
+- **Input no meio de um arrasto**: QUALQUER handler que dispara durante um arrasto precisa de `if (arrasto) return`. A roda (passo 4) e o Ctrl+Z (passo 5) tiveram o MESMO bug — mudavam a lista/escala com uma edição em voo e gravavam um `moveV` errado (formato salvo). O JEITO CERTO de escapar disso: um tipo de arrasto novo (o gizmo, passo 6) **reusa a MESMA máquina `arrasto`/`soltar`/`reexec`** — aí as guardas existentes já cobrem, sem código novo. Todo passo interativo novo: pergunte "e se isto disparar no meio de um arrasto?".
+- **Campo numérico editável × precisão do display**: o no-op de um campo tem que ser amarrado à precisão MOSTRADA (ex.: `toFixed(3)`), não a `1e-9`. Senão re-digitar o valor já exibido grava um passo fantasma sub-visual (D3 do passo 6). Vale pra qualquer campo futuro (material, animação).
 - **Profundidade do vértice ≠ distância do alvo**: no arrasto 2D→3D, use `prof = dot(P−camPos, olhar)` do PRÓPRIO vértice (o galho extrudado está noutra profundidade; usar `dist` erra nele).
 - **Determinismo**: se o neutro não replaya idêntico, algo não é determinístico — cace a fonte (relógio, ordem, `Math.random`).
 
-Progresso e nuances abertas ficam em `docs/DECISIONS.md` (D-77 núcleo · D-78 câmera · D-79 lente · D-80 overlay · D-81 arrasto · D-82 undo).
+Progresso e nuances abertas ficam em `docs/DECISIONS.md` (D-77 núcleo · D-78 câmera · D-79 lente · D-80 overlay · D-81 arrasto · D-82 undo · D-83 gizmo+painel).
