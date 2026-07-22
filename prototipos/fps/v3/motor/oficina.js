@@ -217,13 +217,27 @@ export function neutroCanonico(neutro) {
 
 /* ----------------------------------------------------------------------------
    ADAPTADOR v3: neutro -> formato do motor. É a ÚNICA peça que muda de mundo
-   pra mundo (outro motor = outro adaptador de ~20 linhas). Monta os triângulos
-   soltos (pos3 uv2 nrm3), e a cor por face chega via uma TEXTURA-AMOSTRA (um
-   swatch por cor) + UV por face apontando pro texel certo — o formato de
-   vértice ainda não tem cor (reservada no passo 0), então NÃO se inventa
-   atributo de cor no vértice. Chapado por padrão (normal por face); face `liso`
-   usa a média das normais das faces lisas vizinhas.
----------------------------------------------------------------------------- */
+   pra mundo (outro motor = outro adaptador). Monta os triângulos soltos (pos3
+   uv2 nrm3), e a cor por face chega via TEXTURA + UV — o formato de vértice
+   ainda não tem cor (reservada no passo 0), então NÃO se inventa atributo de
+   cor no vértice. Chapado por padrão (normal por face); face `liso` usa a média
+   das normais das faces lisas vizinhas.
+
+   PASSO 11a — a FUNDAÇÃO da textura pintável: o antigo SWATCH (uma fita de cores
+   distintas, faces da mesma cor compartilhando UM texel) vira um ATLAS POR FACE.
+   Cada face ganha uma ILHA própria num quadriculado ~quadrado (N faces ->
+   cols=ceil(√N)); o UV de cada canto sai por PROJEÇÃO EM CAIXA *daquela* face (o
+   eixo dominante da normal manda; projeta as OUTRAS duas coordenadas de mundo —
+   a "caixa" do doc, docs/oficina.md "Pintura: projeção em caixa desde o começo")
+   normalizada pela bbox 2D da face e mapeada pro retângulo interno da ilha. Como
+   nenhuma cor é compartilhada, o furo da projeção em caixa GLOBAL some: topo (+y)
+   e fundo (-y) de um cilindro — que na caixa global empilhariam no MESMO pedaço
+   da textura (ambos projetam em XZ) — caem em ilhas DISTINTAS. Pintar um não
+   pinta o outro: é a base sem-sobreposição que o pincel macio (passo 11b) exige.
+   Em 11a o conteúdo é cor CHAPADA: a ilha inteira é a cor da face, então a face
+   renderiza IGUAL ao swatch de hoje (mesmo pixel na tela; provado por medição).
+   O mapa por face (retângulo da ilha + a projeção) sai ANEXADO em `atlas` pro
+   11b converter superfície (face + ponto de mundo) -> texel e pintar. */
 const COR_PADRAO = '#9a8f80';   // madeira neutra pra face sem pincel
 function hexRGB(h) {
   const s = String(h).replace('#', '');
@@ -231,25 +245,32 @@ function hexRGB(h) {
   return [parseInt(n.slice(0, 2), 16) || 0, parseInt(n.slice(2, 4), 16) || 0, parseInt(n.slice(4, 6), 16) || 0];
 }
 
+/* atlas: tamanho da ILHA (bloco de texels por face) e do GUTTER (borda de folga
+   entre ilhas). O motor amostra em NEAREST — não há sangramento por
+   interpolação —, então o gutter é MARGEM: mantém todo UV a >= GUTTER texels da
+   borda da célula (nenhum canto encosta na vizinha) e sobra a moldura pro pincel
+   do 11b dilatar a cor pra fora sem vazar. Ilha chapada em 11a => a moldura é a
+   própria cor da face. */
+const ATLAS_TILE = 32, ATLAS_GUTTER = 2;
+
+/* eixo dominante da normal (0=x, 1=y, 2=z: o maior |componente|) e os DOIS eixos
+   de projeção — os outros dois, em ordem crescente. É a "caixa" do doc, privada
+   por face: normal pra cima (y) projeta em (x,z); pro lado (x) em (y,z); pra
+   frente (z) em (x,y). */
+function eixoDominante(n) {
+  const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
+  if (ax >= ay && ax >= az) return 0;
+  if (ay >= az) return 1;
+  return 2;
+}
+const OUTROS_EIXOS = [[1, 2], [0, 2], [0, 1]];   // eixos de projeção por eixo dominante
+
 export function adaptarV3(neutro, ctx) {
   const { V, F } = neutro;
   const faces = [...F.values()].sort((a, b) => a.id - b.id);
 
-  /* paleta: uma cor por valor distinto (padrão incluso). O swatch é CELL×CELL
-     por cor numa fita; UV no CENTRO da célula (NEAREST no motor, mas o centro é
-     robusto a qualquer filtro). */
-  const cores = [];
-  const idxDe = new Map();
-  const corIdx = (c) => { const k = c || COR_PADRAO; if (!idxDe.has(k)) { idxDe.set(k, cores.length); cores.push(k); } return idxDe.get(k); };
-  for (const f of faces) corIdx(f.cor);
-  if (!cores.length) corIdx(null);
-  const CELL = 4, W = cores.length * CELL, H = CELL;
-  const rgb = cores.map(hexRGB);
-  const tex = ctx.tex.texCanvas(W, H, (x) => rgb[Math.min(cores.length - 1, (x / CELL) | 0)]);
-  const uvDe = (ci) => [(ci * CELL + CELL / 2) / W, 0.5];
-
   /* normais: por face (chapado) e, pra `liso`, média por vértice das faces
-     lisas que o tocam. */
+     lisas que o tocam. (Intocado do swatch — o 11a só troca a textura+UV.) */
   const nFace = new Map();
   for (const f of faces) nFace.set(f.id, normalDaFace(V, f.vs));
   const acc = new Map();
@@ -257,21 +278,78 @@ export function adaptarV3(neutro, ctx) {
   const nSuave = new Map();
   for (const [v, s] of acc) nSuave.set(v, norm3(s[0], s[1], s[2]));
 
+  /* GRADE de ilhas: uma por face (ordem por id), quadriculado ~quadrado. Cada
+     ilha ocupa um bloco TILE×TILE; o UV endereça só o retângulo INTERNO (inset
+     de GUTTER em todo lado), então nenhum canto toca a borda da célula. */
+  const N = faces.length || 1;
+  const cols = Math.max(1, Math.ceil(Math.sqrt(N)));
+  const rows = Math.max(1, Math.ceil(N / cols));
+  const W = cols * ATLAS_TILE, H = rows * ATLAS_TILE;
+
+  /* PROJEÇÃO POR FACE, pré-calculada por ilha: eixo dominante, bbox 2D dos cantos
+     no plano dos outros dois eixos, e o retângulo interno da ilha (em UV 0..1 do
+     atlas). `projeta(pontoMundo) -> [u,v]` é a FONTE ÚNICA do UV: o mesh e o mapa
+     do 11b saem dela, então nunca divergem. bbox degenerada (área ~0 num eixo —
+     face de fio, ou canto pendurado) cai no CENTRO daquele eixo: sem divisão por
+     zero, e com a ilha chapada a cor sai a mesma. */
+  const EPS = 1e-9;
+  const atlasFace = new Map();
+  faces.forEach((f, i) => {
+    const col = i % cols, row = (i / cols) | 0;
+    const ix = col * ATLAS_TILE + ATLAS_GUTTER, iy = row * ATLAS_TILE + ATLAS_GUTTER;   // canto do retângulo interno (texels)
+    const iw = ATLAS_TILE - 2 * ATLAS_GUTTER, ih = ATLAS_TILE - 2 * ATLAS_GUTTER;
+    const u0 = ix / W, v0 = iy / H, u1 = (ix + iw) / W, v1 = (iy + ih) / H;             // o mesmo em UV 0..1 do atlas
+    const dom = eixoDominante(nFace.get(f.id));
+    const [pa, pb] = OUTROS_EIXOS[dom];
+    let aMin = Infinity, aMax = -Infinity, bMin = Infinity, bMax = -Infinity;
+    for (const v of f.vs) { const p = V.get(v); if (!p) continue; if (p[pa] < aMin) aMin = p[pa]; if (p[pa] > aMax) aMax = p[pa]; if (p[pb] < bMin) bMin = p[pb]; if (p[pb] > bMax) bMax = p[pb]; }
+    const aSpan = aMax - aMin, bSpan = bMax - bMin;   // bbox 2D da face no plano dominante
+    const projeta = (p) => {
+      const s = aSpan > EPS ? (p[pa] - aMin) / aSpan : 0.5;   // 0..1 na bbox (degenerada -> centro)
+      const t = bSpan > EPS ? (p[pb] - bMin) / bSpan : 0.5;
+      return [u0 + s * (u1 - u0), v0 + t * (v1 - v0)];        // -> retângulo interno da ilha (UV do atlas)
+    };
+    atlasFace.set(f.id, { ilha: { x: ix, y: iy, w: iw, h: ih }, dom, projeta });
+  });
+
+  /* TEXTURA do atlas: cada texel pertence à célula (col,row) que o contém e leva
+     a cor da FACE daquela ilha (`f.cor ?? COR_PADRAO`), célula INTEIRA (miolo +
+     gutter) chapada — então a face renderiza a cor cheia, IGUAL ao swatch, e a
+     moldura já vem preenchida pro 11b. Célula sem face (sobra da última linha)
+     fica na madeira neutra. */
+  const corIlha = faces.map((f) => hexRGB(f.cor ?? COR_PADRAO));
+  const corVazia = hexRGB(COR_PADRAO);
+  const tex = ctx.tex.texCanvas(W, H, (x, y) => {
+    const col = (x / ATLAS_TILE) | 0, row = (y / ATLAS_TILE) | 0, i = row * cols + col;
+    return i < corIlha.length ? corIlha[i] : corVazia;
+  });
+
+  /* triângulos soltos: leque por face; o UV do vértice sai da projeção da PRÓPRIA
+     ilha (a mesma `projeta` do atlas). Normal chapada, ou suave em face `liso`. */
   const mesh = { v: [] };
   for (const f of faces) {
     if (f.vs.some((v) => !V.has(v))) continue;   // defensivo: nunca desenha canto pendurado
-    const uv = uvDe(corIdx(f.cor));
+    const projeta = atlasFace.get(f.id).projeta;
     const nf = nFace.get(f.id);
     const c0 = f.vs[0];
     for (let k = 1; k < f.vs.length - 1; k++) {   // leque a partir do primeiro canto
       for (const v of [c0, f.vs[k], f.vs[k + 1]]) {
         const p = V.get(v);
+        const uv = projeta(p);
         const n = f.liso && nSuave.has(v) ? nSuave.get(v) : nf;
         mesh.v.push(p[0], p[1], p[2], uv[0], uv[1], n[0], n[1], n[2]);
       }
     }
   }
-  return { mesh, tex };
+
+  /* atlas: o mapa por face pro passo 11b (superfície -> texel). `daFace(id)` dá a
+     ILHA (retângulo interno em texels: {x,y,w,h}, a região pintável) e
+     `projeta(pontoMundo) -> [u,v]` no atlas 0..1 (o MESMO UV do mesh). O 11b
+     converte pra texel por (round(u*W), round(v*H)) e prende dentro da ilha (a
+     pincelada nunca escapa pra vizinha). Anexado ao retorno; `executar`/a peça
+     consomem {mesh,tex} e ignoram este campo. */
+  const atlas = { W, H, cols, rows, tile: ATLAS_TILE, gutter: ATLAS_GUTTER, daFace: (id) => atlasFace.get(id) };
+  return { mesh, tex, atlas };
 }
 
 /* ----------------------------------------------------------------------------

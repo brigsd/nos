@@ -103,6 +103,18 @@ describe('mescla de/para (a interação mais delicada)', () => {
 
 describe('núcleo -> adaptador (fronteira) e colisão', () => {
   const fakeCtx = { tex: { texCanvas: (w: number, h: number) => ({ width: w, height: h }) }, m4: { ident: () => new Float32Array(16) } };
+  /* ctx que CAPTURA a fn do texCanvas -> deixa AMOSTRAR o texel (u,v em 0..1 do
+     atlas) como o motor faz (NEAREST). É como o adaptador roda headless: a
+     fábrica devolve o canvas de mentira e o amostrador lê a cor de verdade. */
+  function ctxAmostra() {
+    let T: any = null;
+    const ctx = { tex: { texCanvas: (w: number, h: number, fn: any) => (T = { width: w, height: h, fn }) }, m4: { ident: () => new Float32Array(16) } };
+    const amostra = (u: number, v: number) => { const x = Math.min(T.width - 1, Math.max(0, Math.floor(u * T.width))); const y = Math.min(T.height - 1, Math.max(0, Math.floor(v * T.height))); return T.fn(x, y); };
+    return { ctx, amostra };
+  }
+  const hx = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const centro = (il: any): [number, number] => [il.x + il.w / 2, il.y + il.h / 2];
+  const intersecta = (A: any, B: any) => !(A.x + A.w <= B.x || B.x + B.w <= A.x || A.y + A.h <= B.y || B.y + B.h <= A.y);
 
   it('executar devolve lotes com mesh de triângulos soltos (8 floats/vértice)', () => {
     const obj = executar([['cubo', { id: 0, lado: 1 }]], {}, {}, fakeCtx);
@@ -112,12 +124,51 @@ describe('núcleo -> adaptador (fronteira) e colisão', () => {
     expect(obj.lotes[0].mesh.v.length % 8).toBe(0);
   });
 
-  it('cor por face vira UV distinto (textura-amostra), não atributo de vértice', () => {
-    const semTinta = adaptarV3(nucleo([['cubo', { id: 0, lado: 1 }]], {}, {}), fakeCtx);
-    const comTinta = adaptarV3(nucleo([['cubo', { id: 0, lado: 1 }], ['pincel', { modo: 'face', faces: [0], cor: '#ff0000' }]], {}, {}), fakeCtx);
-    const usDe = (m: any) => new Set(m.mesh.v.filter((_: number, k: number) => k % 8 === 3)); // canal U
-    expect(usDe(semTinta).size).toBe(1);   // uma cor -> um texel
-    expect(usDe(comTinta).size).toBe(2);   // padrão + vermelho -> dois texels
+  it('cor por face chega por TEXTURA + UV (não como atributo do vértice): amostrar a ilha da face dá a cor dela', () => {
+    const { ctx, amostra } = ctxAmostra();
+    const r: any = adaptarV3(nucleo([['cubo', { id: 0, lado: 1 }], ['pincel', { modo: 'face', faces: [0], cor: '#ff0000' }]], {}, {}), ctx);
+    expect(r.mesh.v.length % 8).toBe(0);   // 8 floats/vértice: pos3 uv2 nrm3 — a cor NÃO é atributo do vértice
+    // a face 0 (pintada) amostra VERMELHO no centro da SUA ilha; uma face sem pincel amostra a madeira neutra
+    const c0 = centro(r.atlas.daFace(0).ilha), c1 = centro(r.atlas.daFace(1).ilha);
+    expect(amostra(c0[0] / r.atlas.W, c0[1] / r.atlas.H)).toEqual([255, 0, 0]);
+    expect(amostra(c1[0] / r.atlas.W, c1[1] / r.atlas.H)).toEqual(hx('#9a8f80'));   // COR_PADRAO
+  });
+
+  it('ATLAS por face: cada face ganha uma ILHA PRÓPRIA e NENHUMA se sobrepõe (o furo da caixa global: topo +y e fundo -y em ilhas distintas)', () => {
+    const { ctx } = ctxAmostra();
+    const r: any = adaptarV3(nucleo([['cilindro', { id: 0, raio: 'r', altura: 'h', lados: 'l' }]], { r: 1, h: 2 }, { l: 8 }), ctx);
+    const rects = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((id) => r.atlas.daFace(id).ilha);
+    let colisoes = 0;
+    for (let a = 0; a < rects.length; a++) for (let b = a + 1; b < rects.length; b++) if (intersecta(rects[a], rects[b])) colisoes++;
+    expect(colisoes).toBe(0);   // NENHUM par de ilhas se intersecta
+    // fundo (face 8, normal -y) e topo (face 9, normal +y): na caixa GLOBAL empilham no mesmo XZ; no atlas, ilhas distintas
+    expect(intersecta(r.atlas.daFace(8).ilha, r.atlas.daFace(9).ilha)).toBe(false);
+  });
+
+  it('sem sobreposição PROVADO por independência: pintar o fundo (-y) de vermelho NÃO altera os texels do topo (+y)', () => {
+    const { ctx, amostra } = ctxAmostra();
+    const r: any = adaptarV3(nucleo([['cilindro', { id: 0, raio: 'r', altura: 'h', lados: 'l' }], ['pincel', { modo: 'face', faces: [8], cor: '#ff0000' }], ['pincel', { modo: 'face', faces: [9], cor: '#0000ff' }]], { r: 1, h: 2 }, { l: 8 }), ctx);
+    const c8 = centro(r.atlas.daFace(8).ilha), c9 = centro(r.atlas.daFace(9).ilha);
+    expect(amostra(c8[0] / r.atlas.W, c8[1] / r.atlas.H)).toEqual([255, 0, 0]);   // fundo vermelho
+    expect(amostra(c9[0] / r.atlas.W, c9[1] / r.atlas.H)).toEqual([0, 0, 255]);   // topo AZUL — intacto (ilha própria)
+  });
+
+  it('UV de todo vértice cai DENTRO da ilha da sua face (inset do gutter — nada encosta na vizinha)', () => {
+    const { ctx } = ctxAmostra();
+    const neutro = nucleo([['cubo', { id: 0, lado: 1 }], ['pincel', { modo: 'face', faces: [0, 3], cor: '#123456' }]], {}, {});
+    const r: any = adaptarV3(neutro, ctx);
+    const T = 1e-9;
+    for (const f of neutro.F.values()) {
+      const af = r.atlas.daFace(f.id);
+      for (const v of f.vs) {
+        const uv = af.projeta(neutro.V.get(v));   // a MESMA projeção que gera o UV do mesh (fonte única)
+        const tx = uv[0] * r.atlas.W, ty = uv[1] * r.atlas.H;
+        expect(tx).toBeGreaterThanOrEqual(af.ilha.x - T);                 // dentro do retângulo interno da ilha
+        expect(tx).toBeLessThanOrEqual(af.ilha.x + af.ilha.w + T);
+        expect(ty).toBeGreaterThanOrEqual(af.ilha.y - T);
+        expect(ty).toBeLessThanOrEqual(af.ilha.y + af.ilha.h + T);
+      }
+    }
   });
 
   it('colisaoDe encaixa um cilindro na malha final (usa as faces solido)', () => {
