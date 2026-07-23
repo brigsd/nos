@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-204 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+206 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -150,6 +150,7 @@
 - `README.md` — v3 — o cliente GPU e A OFICINA (D-55)
 - `jogo.html` — jogo.html — o alicerce jogável v3 (D-61): câmera livre, som, tiers de gráfico e menu, em cima do motor ES modules.
 - `oficina.html` — oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂ…
+- `som.html` — som.html — a CASCA da ABA SOM (S2, D-99): a aba nova (sem câmera/malha) que carrega um evento de pecas-som, DESENHA a onda e TOCA ao vivo (Web Audio).
 - `visor.html` — visor.html — visor de peças da OFICINA (D-55): abre qualquer peça de pecas/ isolada no ambiente padrão (?peca=nome).
 
 ## prototipos/fps/v3/motor/
@@ -284,6 +285,7 @@
 - `prancheta.mjs` — prancheta.mjs — a câmera de topo do coder (D-50, pedido do ideador).
 - `res-bench.mjs` — res-bench.mjs — experimento B do D-44: o custo real de subir a resolução INTERNA do render (a alavanca ?res=). Para cada degrau, mede o FPS de verdade (conta…
 - `sintetizar.mjs` — sintetizar.mjs — a bancada do REPLAY da ABA SOM (passo 1), o "cmp de pixel do som". O par do `executar.mjs` (que prova o replay da Oficina em Node), mas aqui…
+- `somtela.mjs` — somtela.mjs — a bancada da CASCA da ABA SOM (passo S2). O par do `oficina.mjs` (que dirige o oficina.html), mas pra a aba Som: sobe o `som.html` num Chromium…
 
 ## tools/bancadas/bench/
 

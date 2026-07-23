@@ -1,0 +1,375 @@
+<!doctype html>
+<!-- som.html — a CASCA da ABA SOM (S2, D-99): a aba nova (sem câmera/malha) que carrega um evento de pecas-som, DESENHA a onda e TOCA ao vivo (Web Audio).
+     Contexto próprio (D-73): "forma de onda no centro, blocos à direita, play embaixo". A onda vem do `renderarOffline` (evento -> Float32Array -> canvas 2D,
+     determinístico); o Play cria um AudioContext no GESTO do usuário e liga o evento pela `tocarEvento`. Blocos à direita são PLACEHOLDER (chegam no S3). Reusa
+     motor/somnucleo.js + motor/somweb.js (o núcleo provado no S1); o som.js do JOGO fica INTOCADO — só importo os módulos NOVOS. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>NÓS · Oficina — aba Som (v3)</title>
+<style>
+  :root {
+    --bg: #0c0f16; --panel: #141826; --panel2: #0f1320; --line: #2a2f45;
+    --accent: #a884f3; --ink: #c7cbe0; --dim: #7b82a0; --hud: #cddf6c; --amber: #f9c22b;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden;
+    font-family: ui-monospace, Menlo, monospace; color: var(--ink); }
+
+  /* barra de MODOS no topo — MESMO esqueleto da Oficina (D-73): marca + abas + ações. */
+  #modos { position: fixed; top: 0; left: 0; right: 0; height: 44px; z-index: 10;
+    display: flex; align-items: center; gap: 14px; padding: 0 12px;
+    background: #141826e6; border-bottom: 1px solid var(--line); }
+  #modos .marca { color: var(--accent); font-weight: 700; letter-spacing: .06em; }
+  #modos .grupo { display: flex; gap: 6px; align-items: center; }
+  #modos .rot { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+  .chip { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--dim); background: #0f1320; user-select: none; }
+  a.chip { text-decoration: none; display: inline-block; cursor: pointer; }
+  a.chip:hover { border-color: var(--accent); color: var(--ink); }
+  .chip.on { color: #10131c; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  #modos .dir { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  #modos select { font: inherit; font-size: 11px; color: var(--ink); background: #0c0f16;
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+  #modos select:focus { outline: none; border-color: var(--accent); }
+
+  /* PALCO central: a FORMA DE ONDA (a "cena no centro" da aba Som). Ocupa o miolo, à
+     esquerda do painel e acima do transporte/status. O <canvas> preenche o palco. */
+  #palco { position: fixed; top: 44px; right: min(320px, 32vw); left: 0; bottom: 80px; z-index: 1;
+    background: #0b0e16; border-right: 1px solid var(--line); }
+  #onda { display: block; width: 100%; height: 100%; }
+  /* PLAYHEAD: linha que corre sobre a onda enquanto toca (bônus). Não rouba clique. */
+  #cursor { position: absolute; top: 0; bottom: 0; left: 0; width: 0; z-index: 2;
+    border-left: 1px solid var(--amber); pointer-events: none; opacity: 0; transition: opacity .12s; }
+  #cursor::before { content: ''; position: absolute; top: 0; left: -4px;
+    border: 4px solid transparent; border-top-color: var(--amber); }
+  #vazio { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+    font-size: 12px; color: var(--dim); }
+  #vazio[hidden] { display: none; }
+
+  /* painel de PROPRIEDADES à direita — PLACEHOLDER da autoria (os BLOCOS chegam no S3).
+     Mostra o grafo do evento em leitura, pra o autor ver de que blocos a onda saiu. */
+  #props { position: fixed; top: 44px; right: 0; bottom: 26px; width: min(320px, 32vw); z-index: 9;
+    background: #141826e6; border-left: 1px solid var(--line); padding: 14px; overflow: auto; }
+  #props h2 { margin: 0 0 4px; font-size: 12px; letter-spacing: .04em; color: var(--ink); }
+  #props .sub { font-size: 10px; color: var(--dim); margin-bottom: 14px; }
+  #props .bloco { border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px;
+    background: #0f132066; margin-bottom: 12px; }
+  #props .rotulo { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim);
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+  #props .no { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 11px; }
+  #props .no .id { color: var(--hud); font-variant-numeric: tabular-nums; }
+  #props .no .tp { color: var(--dim); }
+  #props .no .saidaTag { margin-left: auto; font-size: 9px; color: #10131c; background: var(--hud);
+    border-radius: 999px; padding: 1px 7px; font-weight: 700; }
+  #props .no .modTag { margin-left: auto; font-size: 9px; color: var(--dim); border: 1px solid var(--line);
+    border-radius: 999px; padding: 1px 7px; }
+  #props .ph { font-size: 9px; color: var(--dim); border: 1px dashed var(--line); border-radius: 4px;
+    padding: 2px 7px; text-transform: uppercase; letter-spacing: .08em; }
+  #props .placeholder { border: 1px dashed var(--line); border-radius: 8px; padding: 12px;
+    text-align: center; font-size: 10.5px; color: var(--dim); line-height: 1.5; background: #0c0f1633; }
+  #props .grita { font-size: 10px; color: var(--amber); margin-top: 8px; line-height: 1.4; }
+  #props .grita[hidden] { display: none; }
+
+  /* TRANSPORTE embaixo (play/loop/tempo) — à esquerda do painel, acima do status. */
+  #transporte { position: fixed; left: 0; right: min(320px, 32vw); bottom: 26px; height: 54px; z-index: 9;
+    display: flex; align-items: center; gap: 12px; padding: 0 14px;
+    background: #141826f2; border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
+  #transporte .play { font-size: 13px; font-weight: 700; color: #10131c; background: var(--hud);
+    border: 1px solid var(--hud); border-radius: 7px; padding: 7px 18px; cursor: pointer; min-width: 96px; }
+  #transporte .play:hover { filter: brightness(1.08); }
+  #transporte .play:active { transform: translateY(1px); }
+  #transporte .play.tocando { background: var(--amber); border-color: var(--amber); }
+  #transporte .loop { font-size: 11px; color: var(--dim); background: #0f1320; border: 1px solid var(--line);
+    border-radius: 999px; padding: 5px 12px; cursor: pointer; user-select: none; }
+  #transporte .loop.on { color: #10131c; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  #transporte .tempo { font-size: 12px; color: var(--hud); font-variant-numeric: tabular-nums; min-width: 118px; }
+  #transporte .dica { margin-left: auto; font-size: 10px; color: var(--dim); }
+  #transporte .dica b { color: var(--hud); font-weight: 400; }
+
+  /* barra de STATUS embaixo: nome do evento · duração · amostras · sample rate · áudio */
+  #status { position: fixed; bottom: 0; left: 0; right: 0; height: 26px; z-index: 11;
+    display: flex; align-items: center; gap: 16px; padding: 0 12px; white-space: nowrap; overflow: hidden;
+    font-size: 11px; background: #0f1320f2; border-top: 1px solid var(--line); color: var(--hud);
+    font-variant-numeric: tabular-nums; }
+  #status b { color: var(--amber); font-weight: 400; }
+  #status .sep { flex: 1; }
+  #status .dev { color: var(--dim); }
+
+  #erro { position: fixed; inset: 0; z-index: 20; display: none; place-items: center;
+    background: #0c0f16dd; color: #ff9c9c; font-size: 13px; text-align: center; padding: 24px; }
+</style>
+</head>
+<body>
+<header id="modos">
+  <span class="marca">OFICINA</span>
+  <!-- ABAS (D-73): contextos de verdade. Objeto -> oficina.html (a cena 3D); Som (aqui)
+       está ativa. Desenho ainda não tem tela (fica inerte, como no oficina.html). -->
+  <div class="grupo"><span class="rot">aba</span>
+    <span class="chip">Desenho</span><a class="chip" href="oficina.html">Objeto</a><span class="chip on">Som</span></div>
+  <div class="dir">
+    <span class="rot">evento</span>
+    <select id="seletor" title="evento de pecas-som/ a carregar"></select>
+  </div>
+</header>
+
+<div id="palco">
+  <canvas id="onda"></canvas>
+  <div id="cursor"></div>
+  <div id="vazio">carregando evento…</div>
+</div>
+
+<aside id="props">
+  <h2>Som — evento</h2>
+  <div class="sub">a forma de onda no centro é este grafo, renderizado</div>
+  <div class="bloco">
+    <div class="rotulo"><span>grafo do sinal</span><span class="ph" id="phNos">— nós</span></div>
+    <div id="nos"></div>
+    <div class="grita" id="grita" hidden></div>
+  </div>
+  <div class="bloco">
+    <div class="rotulo"><span>blocos</span><span class="ph">S3</span></div>
+    <div class="placeholder">Montar e editar os blocos ao vivo<br>(oscilador · ruído · filtro · envelope)<br>chega no passo S3.</div>
+  </div>
+</aside>
+
+<footer id="transporte">
+  <button id="btPlay" class="play" type="button" title="tocar o evento (espaço)">▶ Tocar</button>
+  <span id="btLoop" class="loop" role="button" title="repetir em laço">loop</span>
+  <span id="tempo" class="tempo">0.00 / 0.00 s</span>
+  <span class="dica"><b>espaço</b> toca · o áudio liga no 1º gesto</span>
+</footer>
+
+<footer id="status">
+  <span>evento <b id="nome">…</b></span>
+  <span id="desc" class="dev">—</span>
+  <span class="sep"></span>
+  <span id="dur">— s</span>
+  <span id="namostras">— amostras</span>
+  <span id="sr">— Hz</span>
+  <span id="estado" class="dev">áudio: —</span>
+</footer>
+
+<div id="erro"></div>
+
+<script type="module">
+/* A CASCA da aba Som (S2). VER a onda e OUVIR o evento, reusando o motor provado no S1:
+   `renderarOffline` (evento -> Float32Array, offline e determinístico — a "câmera" do
+   som) desenha a onda; `tocarEvento` (evento -> AudioContext ao vivo) faz o Play. Nada
+   de câmera nem malha — a aba Som é contexto próprio (D-73). O `som.js` do JOGO não é
+   tocado: só importo os módulos NOVOS do S1. */
+import { renderarOffline, tocarEvento } from './motor/somweb.js';
+import { somNucleo } from './motor/somnucleo.js';
+
+const SR = 44100;                       // taxa fixa do render (determinismo, igual à bancada sintetizar)
+const EVENTOS = ['_bolha'];             // eventos disponíveis em pecas-som/ (S4 traz o catálogo de presets;
+                                        // listar o diretório pediria uma rota no servidor — fica pra depois)
+
+const P = new URLSearchParams(location.search);
+const alvoInicial = (P.get('som') || '_bolha').replace(/[^a-z0-9_-]/gi, '');
+
+const $ = (id) => document.getElementById(id);
+const elErro = $('erro');
+function mostrarErro(msg) { elErro.textContent = msg; elErro.style.display = 'grid'; }
+
+const palco = $('palco'), onda = $('onda'), cursor = $('cursor'), vazio = $('vazio');
+
+/* ---- estado ------------------------------------------------------------- */
+let eventoAtual = null;                 // { PASSOS, PARAMS, semente, meta }
+let amostrasAtual = new Float32Array(0);// as amostras desenhadas (fonte do probe)
+let ctx = null;                         // AudioContext AO VIVO — criado só no gesto do usuário
+let vozAtual = null;                    // retorno do tocarEvento (saida ligada no destino)
+let ultimaSaidaLigada = false;          // o último tocarEvento devolveu uma saida?
+let tocando = false, loopLigado = false;
+let t0Play = 0, durVoz = 0, loopTimer = 0, rafPend = false;
+
+/* ---- DESENHO da onda: amostras -> canvas (min/max por coluna). Determinístico:
+   mesmas amostras -> os mesmos pixels. A onda é ESTÁTICA (não anima) pra o hash bater;
+   o playhead é um <div> à parte, que não suja o canvas. */
+const COR_FUNDO = '#0b0e16', COR_EIXO = '#2a2f45', COR_ONDA = '#cddf6c';
+let ondaW = 0, ondaH = 0;               // tamanho do backing store (device px) da última pintura
+
+function desenharOnda(a) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = palco.getBoundingClientRect();
+  const Wc = Math.max(1, Math.round(rect.width)), Hc = Math.max(1, Math.round(rect.height));
+  onda.width = Math.round(Wc * dpr); onda.height = Math.round(Hc * dpr);
+  ondaW = onda.width; ondaH = onda.height;
+  const g = onda.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = COR_FUNDO; g.fillRect(0, 0, Wc, Hc);
+  g.strokeStyle = COR_EIXO; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, Math.round(Hc / 2) + 0.5); g.lineTo(Wc, Math.round(Hc / 2) + 0.5); g.stroke();  // eixo zero
+
+  let maxAbs = 0; for (let i = 0; i < a.length; i++) { const v = a[i] < 0 ? -a[i] : a[i]; if (v > maxAbs) maxAbs = v; }
+  const esc = maxAbs > 0 ? (Hc / 2 * 0.92) / maxAbs : 1;   // normaliza pra a onda preencher ~92% da altura
+  const n = a.length, mid = Hc / 2;
+  g.strokeStyle = COR_ONDA; g.lineWidth = 1; g.beginPath();
+  for (let x = 0; x < Wc; x++) {
+    const i0 = Math.floor(x * n / Wc), i1 = Math.max(i0 + 1, Math.floor((x + 1) * n / Wc));
+    let mn = Infinity, mx = -Infinity;
+    for (let i = i0; i < i1 && i < n; i++) { const v = a[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
+    if (mn === Infinity) { mn = 0; mx = 0; }
+    const yTop = mid - mx * esc, yBot = mid - mn * esc;
+    g.moveTo(x + 0.5, yTop); g.lineTo(x + 0.5, Math.max(yBot, yTop + 0.7));
+  }
+  g.stroke();
+  vazio.hidden = true;
+}
+
+/* lista o GRAFO no painel (leitura) — de que blocos a onda saiu; foreshadow do S3. */
+function pintarGrafo(ev) {
+  const cont = $('nos'); cont.textContent = '';
+  let g; try { g = somNucleo(ev.PASSOS, ev.PARAMS ?? {}, ev.semente ?? 0); } catch (e) { g = null; }
+  if (!g) { $('phNos').textContent = '— erro'; return; }
+  $('phNos').textContent = `${g.nos.length} nós`;
+  for (const no of g.nos) {
+    const row = document.createElement('div'); row.className = 'no';
+    const id = document.createElement('span'); id.className = 'id'; id.textContent = no.id;
+    const tp = document.createElement('span'); tp.className = 'tp'; tp.textContent = no.tipo;
+    row.append(id, tp);
+    if (no.id === g.saida) { const t = document.createElement('span'); t.className = 'saidaTag'; t.textContent = 'saída'; row.append(t); }
+    else if (no.papel === 'modulador') { const t = document.createElement('span'); t.className = 'modTag'; t.textContent = 'mod'; row.append(t); }
+    cont.append(row);
+  }
+  const grita = $('grita');
+  if (g.orfaos && g.orfaos.length) { grita.hidden = false; grita.textContent = `grita: ${g.orfaos.map((o) => o.motivo).join(' · ')}`; }
+  else grita.hidden = true;
+}
+
+function fmt(s) { return (s || 0).toFixed(2); }
+function atualizarStatus() {
+  const m = eventoAtual.meta || {};
+  $('nome').textContent = m.nome || eventoAtual._nome || '—';
+  $('desc').textContent = m.desc || '';
+  const durTotal = amostrasAtual.length / SR;
+  $('dur').textContent = `${fmt(durTotal)} s`;
+  $('namostras').textContent = `${amostrasAtual.length} amostras`;
+  $('sr').textContent = `${SR} Hz`;
+  $('tempo').textContent = `0.00 / ${fmt(durTotal)} s`;
+  atualizarEstadoAudio();
+}
+function atualizarEstadoAudio() { $('estado').textContent = `áudio: ${ctx ? ctx.state : 'sem contexto'}`; }
+
+/* ---- carregar um evento de pecas-som/ e desenhar a onda ------------------- */
+async function carregar(nome) {
+  const mod = await import(`./pecas-som/${nome}.js`);
+  eventoAtual = { PASSOS: mod.PASSOS, PARAMS: mod.PARAMS ?? {}, semente: mod.semente ?? 0, meta: mod.meta, _nome: nome };
+  amostrasAtual = await renderarOffline(eventoAtual, { sampleRate: SR });
+  desenharOnda(amostrasAtual);
+  pintarGrafo(eventoAtual);
+  atualizarStatus();
+  const url = new URL(location.href); url.searchParams.set('som', nome); history.replaceState(null, '', url);
+}
+
+/* ---- TOCAR AO VIVO. Web Audio exige um GESTO do usuário: só aqui (clique/espaço)
+   crio e resumo o AudioContext. `tocarEvento` liga a `saida` no `ctx.destination`
+   (som de verdade) e devolve a voz — a mesma máquina do offline, num contexto vivo. */
+async function tocar() {
+  if (!eventoAtual) return;
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) { /* política do browser */ } }
+  pararVoz();                                  // não empilha vozes
+  vozAtual = tocarEvento(eventoAtual, ctx);    // saida -> destination (dentro do adaptador)
+  ultimaSaidaLigada = !!vozAtual.saida;
+  durVoz = vozAtual.dur || (amostrasAtual.length / SR);
+  t0Play = ctx.currentTime; tocando = true;
+  cursor.style.opacity = 1;
+  $('btPlay').classList.add('tocando'); $('btPlay').textContent = '⏸ Tocando';
+  clearTimeout(loopTimer);
+  loopTimer = setTimeout(() => { if (loopLigado) tocar(); else parar(); }, Math.max(60, durVoz * 1000 + 40));
+  if (!rafPend) { rafPend = true; requestAnimationFrame(tickCursor); }
+  atualizarEstadoAudio();
+}
+function pararVoz() { try { if (vozAtual && vozAtual.saida) vozAtual.saida.disconnect(); } catch (e) {} vozAtual = null; }
+function parar() {
+  tocando = false; clearTimeout(loopTimer); pararVoz();
+  cursor.style.opacity = 0; cursor.style.left = '0px';
+  $('btPlay').classList.remove('tocando'); $('btPlay').textContent = '▶ Tocar';
+  atualizarEstadoAudio();
+}
+/* o playhead corre sobre a onda: fração = tempo decorrido / duração desenhada. */
+function tickCursor() {
+  rafPend = false;
+  if (!tocando || !ctx) return;
+  const durTotal = amostrasAtual.length / SR || durVoz;
+  const el = ctx.currentTime - t0Play;
+  const frac = durTotal > 0 ? Math.min(1, el / durTotal) : 0;
+  cursor.style.left = (frac * palco.clientWidth) + 'px';
+  $('tempo').textContent = `${fmt(Math.min(el, durTotal))} / ${fmt(durTotal)} s`;
+  if (tocando) { rafPend = true; requestAnimationFrame(tickCursor); }
+}
+
+/* ---- fiação da UI -------------------------------------------------------- */
+$('btPlay').addEventListener('click', () => { if (tocando && !loopLigado) parar(); else tocar(); });
+$('btLoop').addEventListener('click', () => { loopLigado = !loopLigado; $('btLoop').classList.toggle('on', loopLigado); });
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && !/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) {
+    e.preventDefault(); if (tocando && !loopLigado) parar(); else tocar();
+  }
+});
+{ const sel = $('seletor');
+  for (const nome of EVENTOS) { const o = document.createElement('option'); o.value = nome; o.textContent = nome; sel.append(o); }
+  sel.value = EVENTOS.includes(alvoInicial) ? alvoInicial : EVENTOS[0];
+  sel.addEventListener('change', async () => { parar(); try { await carregar(sel.value); } catch (e) { mostrarErro('evento não abriu: ' + e.message); } });
+}
+window.addEventListener('resize', () => { if (amostrasAtual.length) desenharOnda(amostrasAtual); });
+
+/* ---- probe pra a bancada (só NÚMEROS/hashes — nada de despejar amostras pela ponte).
+   Prova que o DESENHO reflete as AMOSTRAS e que o Play liga o grafo vivo. */
+function hashImg() {
+  const g = onda.getContext('2d');
+  const d = g.getImageData(0, 0, onda.width, onda.height).data;
+  let h = 0x811c9dc5;                                        // FNV-1a 32-bit sobre os pixels
+  for (let i = 0; i < d.length; i += 4) { h ^= d[i]; h = Math.imul(h, 0x01000193); h ^= d[i + 1]; h = Math.imul(h, 0x01000193); h ^= d[i + 2]; h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(16);
+}
+function medirAmostras() {
+  const a = amostrasAtual; let maxAbs = 0, pico = 0, soma = 0;
+  for (let i = 0; i < a.length; i++) { const v = a[i] < 0 ? -a[i] : a[i]; soma += a[i] * a[i]; if (v > maxAbs) { maxAbs = v; pico = i; } }
+  const durTotal = a.length / SR;
+  return { len: a.length, picoIdx: pico, picoT: pico / SR, rms: Math.sqrt(soma / (a.length || 1)), maxAbs, durTotal,
+    colunaPicoAmostra: durTotal > 0 ? Math.floor((pico / SR) / durTotal * onda.width) : 0 };
+}
+/* varre os pixels da onda: a COLUNA mais alta do desenho (o canal verde isola a onda do
+   eixo e do fundo) e quantos pixels de onda existem (canvas não-vazio). */
+function medirDesenho() {
+  const g = onda.getContext('2d');
+  const d = g.getImageData(0, 0, onda.width, onda.height).data, W = onda.width, H = onda.height;
+  let acesos = 0, picoCol = 0, maiorExt = -1;
+  for (let x = 0; x < W; x++) {
+    let ymin = -1, ymax = -1;
+    for (let y = 0; y < H; y++) { const gr = d[(y * W + x) * 4 + 1]; if (gr > 120) { if (ymin < 0) ymin = y; ymax = y; acesos++; } }
+    const ext = ymax - ymin;
+    if (ext > maiorExt) { maiorExt = ext; picoCol = x; }
+  }
+  return { larguraOnda: W, alturaOnda: H, pixelsAcesos: acesos, picoColunaDesenho: picoCol, maiorExtensao: maiorExt };
+}
+
+window.__som = {
+  pronto: () => window.__ready === true,
+  evento: () => ({ nome: (eventoAtual?.meta?.nome) || eventoAtual?._nome || null, dur: amostrasAtual.length / SR, len: amostrasAtual.length, sr: SR }),
+  amostras: () => medirAmostras(),
+  desenho: () => medirDesenho(),
+  hashOnda: () => hashImg(),
+  recarregar: async (nome) => { await carregar(nome); return medirAmostras(); },
+  desenharEvento: async (ev) => { amostrasAtual = await renderarOffline(ev, { sampleRate: SR }); desenharOnda(amostrasAtual); return { len: amostrasAtual.length }; },
+  // áudio: prova a fiação que faz som (sem alto-falante na bancada)
+  estadoAudio: () => (ctx ? ctx.state : 'sem-contexto'),
+  saidaLigada: () => ultimaSaidaLigada,
+  tocando: () => tocando,
+  loop: () => loopLigado,
+};
+
+/* ---- boot --------------------------------------------------------------- */
+try {
+  await carregar($('seletor').value);
+  window.__ready = true;
+} catch (e) {
+  vazio.textContent = 'ERRO: ' + e.message;
+  mostrarErro(`evento "${alvoInicial}" não abriu — veja pecas-som/ e o console\n\n${e.message}`);
+  throw e;
+}
+</script>
+</body>
+</html>
