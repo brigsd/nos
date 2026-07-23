@@ -6765,6 +6765,27 @@
       "type": "core_pulse",
       "tick": 236,
       "worldTime": 14160
+    },
+    {
+      "type": "native_spoke",
+      "tick": 236,
+      "worldTime": 14160,
+      "nativeId": "brasa",
+      "message": "O pão tá quentinho! E a história, viajantes?"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 236,
+      "worldTime": 14160,
+      "nativeId": "broa",
+      "message": "Venham se aquecer com pão quentinho! Temos histórias para compartilhar!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 236,
+      "worldTime": 14160,
+      "nativeId": "quilha",
+      "message": "Pão quentinho e histórias para aquecer a alma! Venham, viajantes!"
     }
   ],
   "natives": {
