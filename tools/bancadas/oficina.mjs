@@ -2267,6 +2267,33 @@ await page.evaluate(() => window.__oficina.orbitar({ az: 0.4, el: 0.7, dist: 1.9
 await page.screenshot({ path: join(OUT12, 'oficina-material-brasa.png') });
 await aoBaseline();
 
+// ===== PASSO 12b: MISTURA TRANSPARENTE — a UI marca transparente + opacidade, grava e replaya =====
+await page.evaluate(() => { window.__oficina.selecionar(null); window.__oficina.selecionarFaces([9]); }); await rAF2();
+const nP12b_0 = await nP();
+const op12b = await page.evaluate(() => window.__oficina.aplicarMaterial({ cor: '#7fdfff', transparente: true, opacidade: 0.5 }));
+const mat12b = await page.evaluate(() => window.__oficina.materiais());
+const usa12b = op12b && op12b[1] ? op12b[1].usa : null;
+const nP12b_1 = await nP();
+ok('(12b UI) marcar transparente + opacidade grava [\'material\',{faces:[9],usa}] e registra mistura:transparente + opacidade:0.5',
+   op12b && op12b[0] === 'material' && JSON.stringify(op12b[1].faces) === '[9]' && nP12b_1 === nP12b_0 + 1 &&
+   mat12b[usa12b] && mat12b[usa12b].mistura === 'transparente' && mat12b[usa12b].opacidade === 0.5,
+   `op ${JSON.stringify(op12b)} · MATERIAIS[${usa12b}]=${JSON.stringify(mat12b[usa12b])} · PASSOS ${nP12b_0}->${nP12b_1}`);
+// replay: página == Node com o material transparente (mistura/opacidade em MATERIAIS, f.material na canon)
+const canonPage12b = await canon();
+const canonNode12b = JSON.stringify(neutroCanonico(nucleo([...toco.PASSOS, op12b], toco.PARAMS, toco.TOPO, mat12b)));
+ok('(12b replay) o material transparente entra e a página == Node bit-a-bit (a lista+MATERIAIS refaz igual)',
+   canonPage12b === canonNode12b, `canônico ${canonPage12b.length} chars, ${canonPage12b === canonNode12b ? 'idêntico' : 'DIVERGE'}`);
+// headless: o adaptarV3 marca UM lote transparente (transparente:true + opacidade) — o render lê daí
+const r12b = adaptarV3(nucleo([...toco.PASSOS, op12b], toco.PARAMS, toco.TOPO, mat12b), ctxAtlas11, mat12b);
+const transpL = r12b.lotes.find((L) => L.transparente);
+ok('(12b lote) o adaptarV3 marca o lote do material transparente (transparente:true, opacidade 0.5), 1 só',
+   transpL && transpL.opacidade === 0.5 && r12b.lotes.filter((L) => L.transparente).length === 1,
+   `lotes transp ${r12b.lotes.filter((L) => L.transparente).length} · opacidade ${transpL && transpL.opacidade}`);
+// screenshot: o toco com o TOPO de vidro (transparente) — evidência pro olho
+await page.evaluate(() => window.__oficina.orbitar({ az: 0.4, el: 0.7, dist: 1.9, alvo: [0, 0.28, 0] })); await rAF2(); await rAF2();
+await page.screenshot({ path: join(OUT12, 'oficina-material-transp.png') });
+await aoBaseline();
+
 await browser.close();
 server.close();
 

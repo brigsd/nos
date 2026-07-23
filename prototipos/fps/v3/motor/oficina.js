@@ -431,7 +431,11 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
   /* cada grupo -> um lote com a mesh do subconjunto + os PARAMS do material (ausentes
      no grupo padrão -> render no-op). `cor` do material MULTIPLICA a textura (corMul em
      0..1 -> uCorMul); `contorno` é o uRim POR MATERIAL; emissivo/aspereza/semLuz seguem
-     o padrão do uRim no render.js (default = efeito nenhum). Os nomes CASAM os uniforms. */
+     o padrão do uRim no render.js (default = efeito nenhum). Os nomes CASAM os uniforms.
+     PASSO 12b — MISTURA: `mistura:'transparente'` marca o lote (`transparente:true` +
+     `opacidade` 0..1, default 1) pra o render desenhar numa PASSADA EXTRA (blend alpha,
+     ordenada de trás pra frente). `opaco`/`recorte`/ausente = opaco como hoje: o lote NÃO
+     ganha esses campos, então o render o mantém no passe de cena — byte-idêntico. */
   const lotes = [];
   for (const g of grupos.values()) {
     const L = { mesh: g.mesh };
@@ -442,6 +446,7 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
       if (m.aspereza) L.aspereza = +m.aspereza;
       if (m.semLuz) L.semLuz = 1;
       if (m.contorno) L.rim = +m.contorno;
+      if (m.mistura === 'transparente') { L.transparente = true; L.opacidade = m.opacidade == null ? 1 : Math.min(1, Math.max(0, +m.opacidade)); }   // 12b: só 'transparente' pede a passada extra
     }
     lotes.push(L);
   }

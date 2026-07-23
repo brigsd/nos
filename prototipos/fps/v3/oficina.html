@@ -185,19 +185,22 @@
     <div class="dica" id="pcDica">escolha uma cor — pinta as faces selecionadas</div>
   </section>
 
-  <!-- PASSO 12a: MATERIAL OPACO — só aparece com face(s) selecionada(s). Define os
+  <!-- PASSO 12a/12b: MATERIAL — só aparece com face(s) selecionada(s). Define os
        params (cor multiplica a textura, emissivo brilha, aspereza espalha o especular,
-       sem luz chapa) e o botão APLICA às faces (['material',{faces,usa}]) com preview
-       ao vivo. O material é declarado POR NOME (auto mat1/mat2…, reusando um idêntico)
-       em MATERIAIS — mudar o material muda todas as faces dele de uma vez. -->
+       sem luz chapa; 12b: transparente + opacidade -> mistura alpha) e o botão APLICA às
+       faces (['material',{faces,usa}]) com preview ao vivo. O material é declarado POR
+       NOME (auto mat1/mat2…, reusando um idêntico) em MATERIAIS — mudar o material muda
+       todas as faces dele de uma vez. -->
   <section class="bloco" id="blocoMaterial" hidden>
     <div class="rotulo">Material <span id="pmFaces" class="badge vazio">—</span></div>
     <label class="campo"><input id="pmCor" type="color" value="#ffffff" aria-label="cor do material (multiplica a textura; branco = sem tinta)"></label>
     <label class="campo"><span class="rk">emiss.</span><input id="pmEmissivo" type="range" min="0" max="2" step="0.05" value="0"><b class="rv" id="pmEmissivoV">0.00</b></label>
     <label class="campo"><span class="rk">asper.</span><input id="pmAspereza" type="range" min="0" max="1" step="0.05" value="0"><b class="rv" id="pmAsperezaV">0.00</b></label>
     <label class="campo" style="justify-content:flex-start"><input id="pmSemLuz" type="checkbox" style="flex:none;width:auto;margin:0"> <span class="rk" style="width:auto">sem luz (chapado)</span></label>
+    <label class="campo" style="justify-content:flex-start"><input id="pmTransp" type="checkbox" style="flex:none;width:auto;margin:0"> <span class="rk" style="width:auto">transparente (mistura)</span></label>
+    <label class="campo"><span class="rk">opacid.</span><input id="pmOpacidade" type="range" min="0" max="1" step="0.05" value="1"><b class="rv" id="pmOpacidadeV">1.00</b></label>
     <button id="btMaterial" class="btmescla" type="button">Aplicar material às faces</button>
-    <div class="dica">cor multiplica · emissivo brilha (ignora luz) · aspereza espalha o especular · sem luz chapa</div>
+    <div class="dica">cor multiplica · emissivo brilha (ignora luz) · aspereza espalha o especular · sem luz chapa · transparente mistura pela opacidade (passada de trás pra frente)</div>
   </section>
 
   <!-- PASSO 11c: PINCEL MACIO — aparece só com o modo pincel LIGADO. Cor (reusa o
@@ -619,9 +622,10 @@ function serializarPeca(meta, PARAMS, TOPO, PASSOS, MATERIAIS) {
   const passosTxt = (PASSOS || []).map((p) => '  ' + jsPasso(p) + ',').join('\n');
   const temMat = MATERIAIS && Object.keys(MATERIAIS).length > 0;
   const matBloco = temMat ? `
-/* MATERIAIS (passo 12a): materiais POR NOME — a op \`material\` aponta faces pra um
+/* MATERIAIS (passo 12a/12b): materiais POR NOME — a op \`material\` aponta faces pra um
    nome; mudar o material aqui muda todas as faces dele. cor multiplica a textura,
-   emissivo brilha, aspereza espalha o especular, semLuz chapa. Só opaco no 12a. */
+   emissivo brilha, aspereza espalha o especular, semLuz chapa; mistura:'transparente'
+   + opacidade (0..1) mistura numa passada de trás pra frente (12b). */
 export const MATERIAIS = ${jsVal(MATERIAIS)};
 ` : '';
   const argMat = temMat ? ', MATERIAIS' : '';
@@ -1094,10 +1098,12 @@ try {
       const em = $('pmEmissivo'), emV = $('pmEmissivoV'), as = $('pmAspereza'), asV = $('pmAsperezaV');
       if (em && emV) em.addEventListener('input', () => { emV.textContent = (+em.value).toFixed(2); });
       if (as && asV) as.addEventListener('input', () => { asV.textContent = (+as.value).toFixed(2); });
+      const op = $('pmOpacidade'), opV = $('pmOpacidadeV');   // PASSO 12b: opacidade ao vivo
+      if (op && opV) op.addEventListener('input', () => { opV.textContent = (+op.value).toFixed(2); });
       const bt = $('btMaterial');
       if (bt) bt.addEventListener('click', () => {
         if (!malhaCtl) return;
-        malhaCtl.aplicarMaterial({ cor: $('pmCor').value, emissivo: +$('pmEmissivo').value, aspereza: +$('pmAspereza').value, semLuz: $('pmSemLuz').checked });
+        malhaCtl.aplicarMaterial({ cor: $('pmCor').value, emissivo: +$('pmEmissivo').value, aspereza: +$('pmAspereza').value, semLuz: $('pmSemLuz').checked, transparente: $('pmTransp').checked, opacidade: +$('pmOpacidade').value });   // 12b: transparente + opacidade
       });
     }
 
@@ -1388,6 +1394,9 @@ try {
         if (params.emissivo > 0) def.emissivo = +params.emissivo;
         if (params.aspereza > 0) def.aspereza = +params.aspereza;
         if (params.semLuz) def.semLuz = true;
+        // PASSO 12b — MISTURA: marcado 'transparente', o lote vai pra passada extra (blend
+        // de trás pra frente). `opacidade` só entra quando <1 (default 1 = ausente).
+        if (params.transparente) { def.mistura = 'transparente'; const o = +params.opacidade; if (o >= 0 && o < 1) def.opacidade = o; }
         const sig = (d) => JSON.stringify(Object.entries(d).sort());   // assinatura estável (ordem de chave)
         let usa = Object.keys(materiaisAtual).find((n) => sig(materiaisAtual[n]) === sig(def));   // reusa um material idêntico
         if (!usa) { let i = 1; while (materiaisAtual['mat' + i]) i++; usa = 'mat' + i; materiaisAtual[usa] = def; }   // senão o 1º matN livre

@@ -106,6 +106,9 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     // multiplica a textura (neutro); uEmissivo=0 sem brilho próprio; uAspereza=0 sem
     // especular; uSemLuz=0 sombreamento normal.
     uniform float uEmissivo, uAspereza, uSemLuz; uniform vec3 uCorMul;
+    // MISTURA (12b): 1 = OPACO (recorte por discard, tudo byte-idêntico ao de antes);
+    // <1 = TRANSPARENTE, desenhado na passada EXTRA (blend) com alpha = uOpacidade*tx.a.
+    uniform float uOpacidade;
     float shadow(){
       vec3 lc = vLP.xyz / vLP.w * 0.5 + 0.5;
       if (lc.x < 0.0 || lc.x > 1.0 || lc.y < 0.0 || lc.y > 1.0 || lc.z > 1.0) return 1.0;
@@ -116,7 +119,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       return s / 9.0;
     }
     void main(){
-      vec4 tx = texture(uTex, vUV); if (tx.a < 0.5) discard;
+      vec4 tx = texture(uTex, vUV); if (tx.a < 0.5 && uOpacidade >= 1.0) discard;   // 12b: opaco/recorte descarta como antes (uOpacidade=1 -> igual); transparente deixa a borda macia virar alpha baixo
       tx.rgb *= uCorMul;   // MATERIAL cor: multiplica a textura. ×(1,1,1)=no-op — mult por 1.0 é EXATO em IEEE, então byte-idêntico com material desligado
       vec3 N = normalize(vN);
       float diff = max(0.0, dot(N, uSun)) * uDiffOn;
@@ -148,7 +151,7 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       // que a casca esconde). 1 = normais cruas (N*.5+.5); 2 = flat cinza (só forma+luz).
       if (uDebug > 0.5 && uDebug < 1.5) outc = N * 0.5 + 0.5;
       else if (uDebug > 1.5) outc = mix(sky, vec3(0.8) * (amb + uSunCol * sunL), fog);
-      outColor = vec4(outc, 1.0);
+      outColor = vec4(outc, uOpacidade >= 1.0 ? 1.0 : uOpacidade * tx.a);   // 12b: opaco -> alpha 1.0 (byte-idêntico); transparente -> opacidade × alfa da textura
     }`);
 
   const bg = prog(`#version 300 es
@@ -249,7 +252,12 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
     const wrap = (isPOT(cv.width) && isPOT(cv.height)) ? gl.REPEAT : gl.CLAMP_TO_EDGE;
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); return t; }
-  function glMesh(m) { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(m.v), gl.STATIC_DRAW); return { buf: b, n: m.v.length / 8 }; }
+  function glMesh(m) { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(m.v), gl.STATIC_DRAW);
+    /* 12b: centroide LOCAL (média das posições) — só METADADO, pra ordenar a
+       transparência por profundidade. Custa um laço no load (não por quadro) e não
+       toca no buffer: render byte-idêntico. */
+    let cx = 0, cy = 0, cz = 0; const n = m.v.length / 8; for (let i = 0; i < m.v.length; i += 8) { cx += m.v[i]; cy += m.v[i+1]; cz += m.v[i+2]; }
+    return { buf: b, n, centro: n ? [cx / n, cy / n, cz / n] : [0, 0, 0] }; }
   function makeFBO(w, h, suave) {
     /* O filtro vale SÓ pro quadro final da cena. As texturas das peças seguem
        NEAREST sempre — suavizar elas apagaria o pixel art na origem.
@@ -357,7 +365,7 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
       const meshCache = new Map(), texCache = new Map();
       const getMesh = (m) => { let g = meshCache.get(m); if (!g) { g = glMesh(m); meshCache.set(m, g); } return g; };
       const getTex = (t) => { let g = texCache.get(t); if (!g) { g = glTex(t); texCache.set(t, g); } return g; };
-      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0, wind: L.wind || 0, windF: L.windF || 1.3, emissivo: L.emissivo || 0, aspereza: L.aspereza || 0, semLuz: L.semLuz || 0, corMul: L.corMul || null }));
+      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0, wind: L.wind || 0, windF: L.windF || 1.3, emissivo: L.emissivo || 0, aspereza: L.aspereza || 0, semLuz: L.semLuz || 0, corMul: L.corMul || null, transparente: L.transparente || false, opacidade: L.opacidade == null ? 1 : L.opacidade }));   // 12b: transparente=false/opacidade=1 é o padrão OPACO (nenhuma peça de hoje marca -> passe intocado)
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -455,7 +463,10 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
       function resize() { const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = innerWidth * dpr | 0; canvas.height = innerHeight * dpr | 0; }
       addEventListener('resize', () => { resize(); ajustarProporcao(); }); resize();
       let t0 = performance.now(), frames = 0, tPrev = performance.now();
-      const draw = (prg, aL, comExtras) => {
+      /* lotesArg (12b): quais lotes-de-peça desenhar (default = todos). semStage: não
+         prepende o chão (a passada transparente desenha SÓ os lotes transparentes, o
+         chão opaco já saiu no passe de cena). Sem os dois args, é a chamada de sempre. */
+      const draw = (prg, aL, comExtras, lotesArg, semStage) => {
         const uM = gl.getUniformLocation(prg, 'uModel');
         const uR = gl.getUniformLocation(prg, 'uRim');   // null no passe de profundidade
         const uTo = gl.getUniformLocation(prg, 'uToon');
@@ -465,7 +476,9 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
         const uAs = gl.getUniformLocation(prg, 'uAspereza');
         const uSL = gl.getUniformLocation(prg, 'uSemLuz');
         const uCM = gl.getUniformLocation(prg, 'uCorMul');
-        const base = semPalco ? lotes : [stage, ...lotes];
+        const uOp = gl.getUniformLocation(prg, 'uOpacidade');   // MISTURA (12b): 1 (opaco) por lote no passe de cena -> byte-idêntico; null no depth
+        const src = lotesArg || lotes;
+        const base = (semPalco || semStage) ? src : [stage, ...src];
         /* extras só no passe de cor: colisor de depuração projetando sombra no
            chão confundiria mais do que ajuda */
         const all = comExtras && extras.length ? [...base, ...extras] : base;
@@ -479,6 +492,7 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
           if (uAs) gl.uniform1f(uAs, L.aspereza || 0);   // MATERIAL: espalhamento do especular (0 = sem especular)
           if (uSL) gl.uniform1f(uSL, L.semLuz || 0);     // MATERIAL: chapado sem luz (0 = sombreado)
           if (uCM) { const c = L.corMul || CORMUL_UM; gl.uniform3f(uCM, c[0], c[1], c[2]); }   // MATERIAL: cor multiplicadora ((1,1,1) = no-op)
+          if (uOp) gl.uniform1f(uOp, L.opacidade == null ? 1 : L.opacidade);   // MISTURA: 1 = opaco (stage/extras/opacos = 1 -> byte-idêntico); <1 = transparente na passada extra
           gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex);   // ambos os passes: alfa p/ recorte
           gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
           gl.enableVertexAttribArray(aL.pos); gl.vertexAttribPointer(aL.pos, 3, gl.FLOAT, false, 32, 0);
@@ -570,7 +584,33 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
             }
             gl.disable(gl.CULL_FACE); gl.useProgram(scene);
           } }
-        draw(scene, AL, true);
+        /* PASSO 12b — OPACO no passe de cena de hoje, TRANSPARENTE numa passada EXTRA.
+           SEM nenhum lote transparente (todo jogo/peça de hoje), roda a MESMA chamada de
+           sempre e NADA muda no pipeline -> byte-idêntico. Com transparentes: os opacos
+           saem aqui (mesma ordem/código), e os transparentes na passada abaixo. */
+        const lotesTransp = lotes.filter((L) => L.transparente);
+        if (lotesTransp.length) {
+          draw(scene, AL, true, lotes.filter((L) => !L.transparente));   // OPACOS: passe de cena com o chão, como hoje
+          /* PASSADA DE TRANSPARÊNCIA: só os transparentes, de TRÁS PRA FRENTE (distância²
+             do centroide do lote à câmera). depth-TEST fica LIGADO (não mexo: os opacos
+             ainda ocluem), depth-WRITE DESLIGADO (gl.depthMask(false) -> um transparente
+             não esconde o que vem atrás dele), e blend alpha OVER (o precedente das
+             partículas). Restaura depthMask(true)+disable(BLEND) no fim -> as partículas
+             veem o MESMO estado de sempre. Ordenação por LOTE (não por triângulo): dois
+             transparentes muito interpenetrados podem compor fora de ordem (aceitável). */
+          const ord = lotesTransp.map((L) => {
+            const c = L.mesh.centro, M = L.matriz;
+            const wx = M[0]*c[0] + M[4]*c[1] + M[8]*c[2] + M[12];
+            const wy = M[1]*c[0] + M[5]*c[1] + M[9]*c[2] + M[13];
+            const wz = M[2]*c[0] + M[6]*c[1] + M[10]*c[2] + M[14];
+            return { L, d: (wx-camPos[0])**2 + (wy-camPos[1])**2 + (wz-camPos[2])**2 };
+          }).sort((a, b) => b.d - a.d).map((o) => o.L);   // maior distância primeiro = trás -> frente
+          gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+          draw(scene, AL, false, ord, true);   // sem chão, sem extras: só os transparentes ordenados
+          gl.depthMask(true); gl.disable(gl.BLEND);   // devolve o estado que as partículas (e o próximo quadro) esperam
+        } else {
+          draw(scene, AL, true);   // caminho de HOJE, intocado: cena sem transparência
+        }
         // partículas (pólen do palco — paisagens desligam)
         if (!semParts) {
           gl.useProgram(parts); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.depthMask(false);

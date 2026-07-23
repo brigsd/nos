@@ -420,3 +420,79 @@ describe('passo 12a — materiais opacos', () => {
     expect(comMat.lotes.length).toBe(2);
   });
 });
+
+/* PASSO 12b — MISTURA TRANSPARENTE (núcleo + adaptador; o render — passada extra
+   ordenada + byte-idêntico com o recurso desligado — é provado por cmp/probe à parte).
+   Prova por MEDIÇÃO: `mistura:'transparente'` marca o lote (transparente:true +
+   opacidade, clamp em [0,1], default 1); `opaco`/`recorte`/ausente NÃO marcam (seguem
+   opacos); o material entra na canon (por nome) e o replay bate; e executar propaga
+   os campos pro lote (o render lê daí). Cada asserção falha sob neutralização. */
+describe('passo 12b — mistura transparente', () => {
+  const cubo: any[] = ['cubo', { id: 0, lado: 1 }];
+  const fakeCtx = { tex: { texCanvas: (w: number, h: number) => ({ width: w, height: h }) }, m4: { ident: () => new Float32Array(16) } };
+  const MAT = {
+    vidro: { cor: '#7fdfff', mistura: 'transparente', opacidade: 0.42 },
+    fumaca: { mistura: 'transparente' },              // sem opacidade -> default 1
+    pedra: { cor: '#888888' },                        // opaco (mistura ausente)
+    parede: { cor: '#777777', mistura: 'opaco' },     // opaco explícito
+    janela: { cor: '#66ccff', mistura: 'recorte' },   // recorte (o de hoje) = opaco
+  };
+
+  it('1) adaptarV3 marca SÓ o lote transparente (transparente:true + opacidade); opaco/recorte/ausente NÃO marcam', () => {
+    const passos = [cubo,
+      ['material', { faces: [0], usa: 'vidro' }],
+      ['material', { faces: [1], usa: 'pedra' }],
+      ['material', { faces: [2], usa: 'parede' }],
+      ['material', { faces: [3], usa: 'janela' }]];
+    const r: any = adaptarV3(nucleo(passos, {}, {}, MAT), fakeCtx, MAT);
+    const vidro = r.lotes.find((L: any) => L.transparente);
+    expect(vidro).toBeTruthy();
+    expect(vidro.opacidade).toBeCloseTo(0.42, 6);
+    expect(r.lotes.filter((L: any) => L.transparente)).toHaveLength(1);          // só o vidro
+    for (const L of r.lotes) if (L !== vidro) { expect(L.transparente).toBeUndefined(); expect(L.opacidade).toBeUndefined(); }
+  });
+
+  it('2) opacidade: default 1 quando ausente; clamp em [0,1]', () => {
+    const t = adaptarV3(nucleo([cubo, ['material', { faces: [0], usa: 'fumaca' }]], {}, {}, MAT), fakeCtx, MAT).lotes.find((L: any) => L.transparente);
+    expect(t.opacidade).toBe(1);   // 'transparente' sem opacidade -> 1
+    const M2 = { a: { mistura: 'transparente', opacidade: 2 }, b: { mistura: 'transparente', opacidade: -0.5 } };
+    const ra: any = adaptarV3(nucleo([cubo, ['material', { faces: [0], usa: 'a' }]], {}, {}, M2), fakeCtx, M2);
+    const rb: any = adaptarV3(nucleo([cubo, ['material', { faces: [0], usa: 'b' }]], {}, {}, M2), fakeCtx, M2);
+    expect(ra.lotes.find((L: any) => L.transparente).opacidade).toBe(1);   // 2 -> 1
+    expect(rb.lotes.find((L: any) => L.transparente).opacidade).toBe(0);   // -0.5 -> 0
+  });
+
+  it('3) determinismo/replay: a canon carrega o material transparente (por nome), bate bit-a-bit, e a marcação é determinística', () => {
+    const passos = [cubo, ['material', { faces: [0, 1], usa: 'vidro' }]];
+    const canon = neutroCanonico(nucleo(passos, {}, {}, MAT));
+    expect((canon.F.find((row: any[]) => row[0] === 0) as any[])[3]).toBe('vidro');   // material na canon (índice 3)
+    const a = JSON.stringify(neutroCanonico(nucleo(passos, {}, {}, MAT)));
+    const b = JSON.stringify(neutroCanonico(nucleo(JSON.parse(JSON.stringify(passos)), {}, {}, MAT)));
+    expect(a).toBe(b);                                                                 // replay bit-a-bit (2x + round-trip JSON)
+    const o1 = adaptarV3(nucleo(passos, {}, {}, MAT), fakeCtx, MAT).lotes.find((L: any) => L.transparente).opacidade;
+    const o2 = adaptarV3(nucleo(passos, {}, {}, MAT), fakeCtx, MAT).lotes.find((L: any) => L.transparente).opacidade;
+    expect(o1).toBe(o2);
+    expect(a).not.toBe(JSON.stringify(neutroCanonico(nucleo([cubo], {}, {}, MAT))));   // neutralização: sem o passo, a canon difere
+  });
+
+  it('4) executar propaga transparente/opacidade pro lote (o render lê daí)', () => {
+    const obj: any = executar([cubo, ['material', { faces: [0], usa: 'vidro' }]], {}, {}, fakeCtx, MAT);
+    const t = obj.lotes.find((L: any) => L.transparente);
+    expect(t).toBeTruthy();
+    expect(t.opacidade).toBeCloseTo(0.42, 6);
+    const semTransp: any = executar([cubo, ['material', { faces: [0], usa: 'pedra' }]], {}, {}, fakeCtx, MAT);
+    expect(semTransp.lotes.some((L: any) => L.transparente)).toBe(false);             // material opaco: nenhum lote transparente
+  });
+
+  it('5) peça-exemplo _oficina-transp: sem órfãos, 1 lote transparente (opacidade 0.42), núcleo opaco', async () => {
+    const pUrl = new URL('../../prototipos/fps/v3/pecas/_oficina-transp.js', import.meta.url);
+    const peca: any = await import(fileURLToPath(pUrl));
+    const n = nucleo(peca.PASSOS, peca.PARAMS, peca.TOPO, peca.MATERIAIS);
+    expect(n.orfaos).toHaveLength(0);
+    const r: any = adaptarV3(n, fakeCtx, peca.MATERIAIS);
+    const transp = r.lotes.filter((L: any) => L.transparente);
+    expect(transp).toHaveLength(1);
+    expect(transp[0].opacidade).toBeCloseTo(0.42, 6);
+    expect(r.lotes.some((L: any) => L.emissivo && !L.transparente)).toBe(true);       // núcleo aceso é OPACO
+  });
+});
