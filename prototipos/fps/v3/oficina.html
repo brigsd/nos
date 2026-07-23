@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. Passo 6: GIZMO DE EIXOS + PAINEL. Com um vértice selecionado, 3 setas (X vermelho, Y verde, Z azul) de tamanho constante na tela (comprimento dist/8 em mundo) saem do vértice no overlay 2D; o hit-test do pointerdown testa as setas ANTES do vértice — acertou uma seta (distância ao segmento base→ponta, com zona morta na base) -> arrasto TRAVADO no eixo, senão o vértice (arrasto livre do passo 4), senão câmera. O arrasto travado reusa a MESMA máquina (arrasto/malhaCtl/reexec): avanço = (mouse·dir)/compr unidades no eixo (fórmula do doc), d = eixo·avanço, gravado como um moveV normal — então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem. Seta com compr<12px/un (aponta ~pra câmera) fica apagada e não arrasta. O painel #props deixa de ser placeholder: mostra o vértice selecionado (id + x,y,z) e a caixa do objeto (largura/altura/profundidade), de LEITURA durante o arrasto; digitar um valor exato vira um moveV (d = alvo − atual). Passo 7: EXTRUDAR UMA FACE. Além do vértice, dá pra selecionar uma FACE (clicar no corpo dela — a da FRENTE por profundidade do centroide; point-in-polygon nos cantos PROJETADOS; a seleção é ADIADA pro pointerup pra que orbitar pelo corpo do objeto não deselecione o que estava ativo). A face selecionada destaca no overlay e ganha UM handle na NORMAL saindo do centroide (mesmo estilo/projeção do gizmo do passo 6, TRAVADO quando a normal aponta ~pra câmera). Arrastar o handle EXTRUDA: avanço = (mouse·dir)/compr na normal (a mesma fórmula travada do passo 6), preview AO VIVO re-executando a lista com um ['extruda',{face,dist}] TENTATIVO no fim, e ao soltar (passou do LIMIAR_PX) GRAVA ['extruda',{face,dist}] e limpa o redo — a op do núcleo (motor/oficina.js) já existe e está provada, e o anel novo nasce nos ids do BLOCO do passo. Reusa a MESMA máquina arrasto/soltar/reexec, então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem sem código novo. Seleção é vértice XOR face. Tecla E é o atalho opcional do mesmo extrude. Passo 8: MESCLAR + ÍMÃ. MULTI-seleção de vértice — Shift+clique adiciona/remove um vértice (toggle ADIADO pro pointerup como o clique de face; um Shift+arrasto longo pana), clique normal reseta pra um só; o ATIVO é o último clicado e é ele que dirige o gizmo/painel (`selecionado` == o ativo, então com 1 vértice tudo é idêntico aos passos 6/7; `selVertices` guarda a lista ordenada, fonte única em `definirSel`). Selecionar face limpa a multi-seleção e vice-versa (XOR). Tecla M (ou o botão do painel) com 2+ selecionados grava ['mescla',{de:[não-ativos],para:ATIVO}] no fim de PASSOS, reexec, limpa o redo, e a seleção vira só o `para` (os `de` somem) — a op do NÚCLEO (motor/oficina.js) já existe e está provada, NÃO se toca nela. ÍMÃ: com Ctrl (ou ⌘) segurado DURANTE o arrasto LIVRE de um vértice, se o cursor cai a ≤IMA_RAIO px de OUTRO vértice projetado, o arrastado COLA na posição EXATA (em mundo) do alvo (o moveV gravado tem d = posAlvo − posOriginal); sem Ctrl, arrasto livre normal. Reusa a MESMA máquina arrasto/mover/soltar (um ramo `if (ctrl && alvo) d = alvo−orig` no mover livre), então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem — inclusive um Ctrl+Z no meio de um arrasto-com-ímã (Ctrl embaixo) é ignorado pela guarda `if (arrasto) return` do desfazer. Passo 9: PINTAR FACES. ESPELHA o passo 8, mas pra FACE: MULTI-seleção de face via fonte única `definirSelFace` (mantém `faceSelecionada`=ativo e `selFaces` em sincronia — com 1 id idêntico ao passo 7, não regride), Shift+clique numa face com toggle ADIADO pro pointerup (`cliqueSelFace`, testado DEPOIS do vértice — o alvo-ponto vence a área, D1), clique normal reseta pra uma só; seleção é VÉRTICE xor FACE nos dois sentidos. O painel #props ganha um <input type=color> (+presets) que aparece com face(s) selecionada(s) e mostra a cor EFETIVA da ATIVA (read-back, neutro ou COR_PADRAO); o `change` (confirmar uma cor → 1 passo por cor) e cada preset gravam ['pincel',{modo:'face',faces:[ordenadas],cor}] no fim de PASSOS, reexec (o adaptarV3 já monta o SWATCH — cor por face —, o reexec recarrega a textura), limpam o redo. Desfazível (Ctrl+Z). GUARDA: no-op com `arrasto` em curso (mexer em PASSOS com uma edição em voo tangleria a lista — mesma classe da roda/Ctrl+Z dos passos 4/5) e no-op quando TODAS as faces já são efetivamente a cor escolhida (null conta como COR_PADRAO — nada de passo fantasma sub-visual, D3). NÃO toca em motor/oficina.js (`pincel`/`adaptarV3` já existem/provados). Passo 11c: PINTAR ARRASTANDO (o pincel MACIO). Um MODO PINCEL (chip "Pincel" na barra + tecla B; aceso muda o cursor pra mira e abre o bloco do painel) que, LIGADO, faz um arrasto primário na SUPERFÍCIE PINTAR em vez de orbitar/selecionar; DESLIGADO, tudo segue como antes (vértice/face/gizmo/câmera intactos). Ajustes no painel: cor (reusa o <input type=color>+presets do passo 9) + raio e dureza (sliders) viram os cor/raio/dureza da op. Pintar = RAYCAST do cursor (origem camPos(); direção = base()+FOVY+aspect+LENTE, o inverso EXATO do visor.projetar, senão a tinta cai deslocada) → a face da FRENTE (hitFace do passo 7) → interseção com o PLANO dela → ponto de MUNDO → {f,a,b} FACE-LOCAL pela inversão do atlas (a=(u·W−ilha.x)/ilha.w). Os {f,a,b} ACUMULAM numa pincelada (amostra por DISTÂNCIA, um dab a cada ~6px), com PREVIEW ao vivo (reexec com a op tentativa no fim); ao SOLTAR grava ['pincel',{modo:'livre',cor,raio,dureza,pontos:[{f,a,b}]}] no fim de PASSOS e limpa o redo — a op e o adaptarV3 (atlas) do NÚCLEO já existem/provados (11a/11b), NÃO se toca. O atlas (mapa superfície→texel) sai do adaptarV3 no reexec/carregar. Reusa a MESMA máquina arrasto/soltar/reexec (arrasto.pincel), então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem; desfazível (é 1 passo). Guardas: pintura fora do modo pincel não acontece; e no modo pincel um arrasto no VAZIO (sem face) NÃO pinta (orbita, não grava op vazia). -->
+<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. Passo 6: GIZMO DE EIXOS + PAINEL. Com um vértice selecionado, 3 setas (X vermelho, Y verde, Z azul) de tamanho constante na tela (comprimento dist/8 em mundo) saem do vértice no overlay 2D; o hit-test do pointerdown testa as setas ANTES do vértice — acertou uma seta (distância ao segmento base→ponta, com zona morta na base) -> arrasto TRAVADO no eixo, senão o vértice (arrasto livre do passo 4), senão câmera. O arrasto travado reusa a MESMA máquina (arrasto/malhaCtl/reexec): avanço = (mouse·dir)/compr unidades no eixo (fórmula do doc), d = eixo·avanço, gravado como um moveV normal — então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem. Seta com compr<12px/un (aponta ~pra câmera) fica apagada e não arrasta. O painel #props deixa de ser placeholder: mostra o vértice selecionado (id + x,y,z) e a caixa do objeto (largura/altura/profundidade), de LEITURA durante o arrasto; digitar um valor exato vira um moveV (d = alvo − atual). Passo 7: EXTRUDAR UMA FACE. Além do vértice, dá pra selecionar uma FACE (clicar no corpo dela — a da FRENTE por profundidade do centroide; point-in-polygon nos cantos PROJETADOS; a seleção é ADIADA pro pointerup pra que orbitar pelo corpo do objeto não deselecione o que estava ativo). A face selecionada destaca no overlay e ganha UM handle na NORMAL saindo do centroide (mesmo estilo/projeção do gizmo do passo 6, TRAVADO quando a normal aponta ~pra câmera). Arrastar o handle EXTRUDA: avanço = (mouse·dir)/compr na normal (a mesma fórmula travada do passo 6), preview AO VIVO re-executando a lista com um ['extruda',{face,dist}] TENTATIVO no fim, e ao soltar (passou do LIMIAR_PX) GRAVA ['extruda',{face,dist}] e limpa o redo — a op do núcleo (motor/oficina.js) já existe e está provada, e o anel novo nasce nos ids do BLOCO do passo. Reusa a MESMA máquina arrasto/soltar/reexec, então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem sem código novo. Seleção é vértice XOR face. Tecla E é o atalho opcional do mesmo extrude. Passo 8: MESCLAR + ÍMÃ. MULTI-seleção de vértice — Shift+clique adiciona/remove um vértice (toggle ADIADO pro pointerup como o clique de face; um Shift+arrasto longo pana), clique normal reseta pra um só; o ATIVO é o último clicado e é ele que dirige o gizmo/painel (`selecionado` == o ativo, então com 1 vértice tudo é idêntico aos passos 6/7; `selVertices` guarda a lista ordenada, fonte única em `definirSel`). Selecionar face limpa a multi-seleção e vice-versa (XOR). Tecla M (ou o botão do painel) com 2+ selecionados grava ['mescla',{de:[não-ativos],para:ATIVO}] no fim de PASSOS, reexec, limpa o redo, e a seleção vira só o `para` (os `de` somem) — a op do NÚCLEO (motor/oficina.js) já existe e está provada, NÃO se toca nela. ÍMÃ: com Ctrl (ou ⌘) segurado DURANTE o arrasto LIVRE de um vértice, se o cursor cai a ≤IMA_RAIO px de OUTRO vértice projetado, o arrastado COLA na posição EXATA (em mundo) do alvo (o moveV gravado tem d = posAlvo − posOriginal); sem Ctrl, arrasto livre normal. Reusa a MESMA máquina arrasto/mover/soltar (um ramo `if (ctrl && alvo) d = alvo−orig` no mover livre), então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem — inclusive um Ctrl+Z no meio de um arrasto-com-ímã (Ctrl embaixo) é ignorado pela guarda `if (arrasto) return` do desfazer. Passo 9: PINTAR FACES. ESPELHA o passo 8, mas pra FACE: MULTI-seleção de face via fonte única `definirSelFace` (mantém `faceSelecionada`=ativo e `selFaces` em sincronia — com 1 id idêntico ao passo 7, não regride), Shift+clique numa face com toggle ADIADO pro pointerup (`cliqueSelFace`, testado DEPOIS do vértice — o alvo-ponto vence a área, D1), clique normal reseta pra uma só; seleção é VÉRTICE xor FACE nos dois sentidos. O painel #props ganha um <input type=color> (+presets) que aparece com face(s) selecionada(s) e mostra a cor EFETIVA da ATIVA (read-back, neutro ou COR_PADRAO); o `change` (confirmar uma cor → 1 passo por cor) e cada preset gravam ['pincel',{modo:'face',faces:[ordenadas],cor}] no fim de PASSOS, reexec (o adaptarV3 já monta o SWATCH — cor por face —, o reexec recarrega a textura), limpam o redo. Desfazível (Ctrl+Z). GUARDA: no-op com `arrasto` em curso (mexer em PASSOS com uma edição em voo tangleria a lista — mesma classe da roda/Ctrl+Z dos passos 4/5) e no-op quando TODAS as faces já são efetivamente a cor escolhida (null conta como COR_PADRAO — nada de passo fantasma sub-visual, D3). NÃO toca em motor/oficina.js (`pincel`/`adaptarV3` já existem/provados). Passo 11c: PINTAR ARRASTANDO (o pincel MACIO). Um MODO PINCEL (chip "Pincel" na barra + tecla B; aceso muda o cursor pra mira e abre o bloco do painel) que, LIGADO, faz um arrasto primário na SUPERFÍCIE PINTAR em vez de orbitar/selecionar; DESLIGADO, tudo segue como antes (vértice/face/gizmo/câmera intactos). Ajustes no painel: cor (reusa o <input type=color>+presets do passo 9) + raio e dureza (sliders) viram os cor/raio/dureza da op. Pintar = RAYCAST do cursor (origem camPos(); direção = base()+FOVY+aspect+LENTE, o inverso EXATO do visor.projetar, senão a tinta cai deslocada) → a face da FRENTE (hitFace do passo 7) → interseção com o PLANO dela → ponto de MUNDO → {f,a,b} FACE-LOCAL pela inversão do atlas (a=(u·W−ilha.x)/ilha.w). Os {f,a,b} ACUMULAM numa pincelada (amostra por DISTÂNCIA, um dab a cada ~6px), com PREVIEW ao vivo (reexec com a op tentativa no fim); ao SOLTAR grava ['pincel',{modo:'livre',cor,raio,dureza,pontos:[{f,a,b}]}] no fim de PASSOS e limpa o redo — a op e o adaptarV3 (atlas) do NÚCLEO já existem/provados (11a/11b), NÃO se toca. O atlas (mapa superfície→texel) sai do adaptarV3 no reexec/carregar. Reusa a MESMA máquina arrasto/soltar/reexec (arrasto.pincel), então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem; desfazível (é 1 passo). Guardas: pintura fora do modo pincel não acontece; e no modo pincel um arrasto no VAZIO (sem face) NÃO pinta (orbita, não grava op vazia). Passo 13b: ESPAÇO ANIMAÇÃO — a INTERFACE da animação rígida por parte (o MOTOR é o 13a/D-95: op ['parte',{nome,faces}], seção ANIMACOES, montarAnimar→peca.animar). Um SELETOR DE ESPAÇO no topo (chips Modelar/Animação, estilo do Pincel) entra na autoria sem perder câmera/seleção/objeto: no espaço Animação aparecem o painel de partes/animações/trilhas (à direita) e a LINHA DO TEMPO embaixo (régua + faixas), e os hit-tests de modelagem (vértice/gizmo/extrude/pincel) ficam desligados — só a seleção de FACE segue viva pra NOMEAR PARTE. Nomear parte grava ['parte',{nome,faces:[ordenadas]}] no fim de PASSOS (desfazível pela pilha do passo 5, pivô=centroide default); a lista de partes seleciona as faces da parte clicada. As animações vivem em `animacoesAtual` (a seção ANIMACOES, MUTÁVEL como MATERIAIS): criar animação (duracao/repete), adicionar trilha (parte + canal rotX/Y/Z·posX/Y/Z·escala) e chaves [tempo,valor] na faixa. PREVIEW ao vivo JÓIA-SAFE: o reexec fia ANIMACOES no `executar` (o mesmo do 13a monta o animar via montarAnimar) e EMBRULHA o animar num wrapper que lê `previewT` — scrub congela a pose (previewT=segundos), play volta ao relógio (previewT=null→laço) — sem tocar em render.js (segue chamando animar(T,lotes) por quadro). serializarPeca ganha ANIMACOES (bloco `export const ANIMACOES` + arg no construir, como MATERIAIS): a peça exportada REABRE bit-a-bit idêntica. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
@@ -116,6 +116,61 @@
     border: 1px solid #f9c22b66; border-radius: 6px; padding: 6px 8px; background: #f9c22b12; line-height: 1.45; }
   #props .aviso[hidden] { display: none; }
 
+  /* PASSO 13b — ESPAÇO ANIMAÇÃO. O bloco de autoria (nomear parte + lista de partes +
+     animações + trilhas) mora no painel direito (#blocoAnim), aparece só no espaço
+     Animação; a LINHA DO TEMPO (régua + faixas de trilha) mora numa barra embaixo
+     (#linha), à esquerda do painel — o layout do doc (D-73): "Animação abre uma linha
+     do tempo embaixo + a lista de partes". */
+  #props .bloco[hidden] { display: none; }
+  #props .btmini { width: 100%; margin-top: 8px; background: var(--accent); color: #10131c; font: inherit;
+    font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: 6px; padding: 6px 8px;
+    cursor: pointer; letter-spacing: .02em; }
+  #props .btmini:hover { filter: brightness(1.08); }
+  #props .btmini:disabled { background: #0f1320; color: var(--dim); border-color: var(--line); cursor: default; filter: none; }
+  #props .btmini.sec { background: transparent; color: var(--ink); border-color: var(--line); font-weight: 400; }
+  #props .btmini.sec:hover { border-color: var(--accent); filter: none; }
+  #props input[type=text], #props select { width: 100%; min-width: 0; background: #0c0f16; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font: inherit; font-size: 12px; }
+  #props input[type=text]:focus, #props select:focus { outline: none; border-color: var(--accent); }
+  #props .lista { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
+  #props .parteChip, #props .animChip { font-size: 10.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--ink); background: #0c0f16; cursor: pointer; user-select: none; }
+  #props .parteChip:hover, #props .animChip:hover { border-color: var(--accent); }
+  #props .parteChip.on, #props .animChip.on { color: #10131c; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  #props .vazio-lista { font-size: 10px; color: var(--dim); font-style: italic; }
+  #props .linha2 { display: flex; gap: 6px; align-items: center; margin: 6px 0; }
+  #props .linha2 label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; flex: none; }
+  #props .linha2 input[type=number] { flex: 1; }
+
+  /* LINHA DO TEMPO embaixo (só no espaço Animação). À esquerda do painel (right =
+     largura do painel), acima da barra de status (bottom 26px). */
+  #linha { position: fixed; left: 0; right: min(320px, 32vw); bottom: 26px; z-index: 9;
+    background: #141826f2; border-top: 1px solid var(--line); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; max-height: 210px; }
+  #linha[hidden] { display: none; }
+  #linha .lat-topo { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  #linha .lat-play { font-size: 12px; font-weight: 700; color: #10131c; background: var(--hud); border: 1px solid var(--hud);
+    border-radius: 6px; padding: 3px 12px; cursor: pointer; min-width: 60px; }
+  #linha .lat-play:hover { filter: brightness(1.08); }
+  #linha .lat-tempo { font-size: 11px; color: var(--hud); font-variant-numeric: tabular-nums; min-width: 96px; }
+  #linha .lat-anim { font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #linha .lat-regua { display: flex; align-items: stretch; height: 22px; border-bottom: 1px solid var(--line); }
+  #linha .lat-rot { width: 108px; flex: none; font-size: 9.5px; color: var(--dim); display: flex; align-items: center;
+    padding: 0 8px; border-right: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #linha .lat-regua-in { flex: 1; position: relative; cursor: ew-resize; background:
+    repeating-linear-gradient(90deg, #0c0f1600 0, #0c0f1600 24px, #ffffff10 24px, #ffffff10 25px); }
+  #linha .lat-faixas { overflow-y: auto; overflow-x: hidden; }
+  #linha .lat-linhaT { display: flex; align-items: stretch; height: 26px; border-bottom: 1px solid #2a2f4566; }
+  #linha .lat-faixa { flex: 1; position: relative; cursor: crosshair; }
+  #linha .lat-faixa .chave { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px;
+    border-radius: 50%; background: var(--hud); border: 1px solid #0b0e16; cursor: pointer; }
+  #linha .lat-faixa .chave.on { background: var(--amber); box-shadow: 0 0 0 2px #f9c22b66; z-index: 2; }
+  #linha .lat-del { width: 22px; flex: none; border: none; background: transparent; color: var(--dim); cursor: pointer; font-size: 13px; }
+  #linha .lat-del:hover { color: var(--amber); }
+  #linha #anPlayhead { position: fixed; width: 0; border-left: 1px solid var(--amber); pointer-events: none; z-index: 10; }
+  #linha #anPlayhead::before { content: ''; position: absolute; top: 0; left: -4px; border: 4px solid transparent; border-top-color: var(--amber); }
+  #linha .lat-vazio { padding: 12px; font-size: 10.5px; color: var(--dim); font-style: italic; }
+
   /* barra de STATUS embaixo: nome da peça · câmera · fps · dev-string */
   #status { position: fixed; bottom: 0; left: 0; right: 0; height: 26px; z-index: 11;
     display: flex; align-items: center; gap: 16px; padding: 0 12px; white-space: nowrap; overflow: hidden;
@@ -142,8 +197,11 @@
   <span class="marca">OFICINA</span>
   <div class="grupo"><span class="rot">aba</span>
     <span class="chip">Desenho</span><span class="chip on">Objeto</span><span class="chip">Som</span></div>
+  <!-- PASSO 13b: os espaços de trabalho (D-73) — Modelar (default) e Animação são um
+       SELETOR (estilo do chip Pincel): trocar mantém câmera/seleção/objeto, só muda os
+       painéis. Material segue contextual (aparece com face selecionada), como hoje. -->
   <div class="grupo"><span class="rot">espaço</span>
-    <span class="chip on">Modelar</span><span class="chip">Material</span><span class="chip">Animação</span></div>
+    <span class="chip on" id="chipModelar" title="modelagem: vértice, face, gizmo, extrude">Modelar</span><span class="chip">Material</span><span class="chip" id="chipAnim" title="animação rígida por parte: nomear partes + linha do tempo">Animação</span></div>
   <!-- PASSO 11c: PINCEL (pintura) — liga/desliga o pintar-arrastando na superfície.
        A tecla B faz o mesmo. Aceso = pintando; apagado = tudo como antes. -->
   <div class="grupo"><span class="rot">ferramenta</span>
@@ -158,9 +216,9 @@
 
 <aside id="props">
   <h2>Propriedades</h2>
-  <div class="sub">espaço Modelar · vértice e caixa</div>
+  <div class="sub" id="propsSub">espaço Modelar · vértice e caixa</div>
 
-  <section class="bloco">
+  <section class="bloco" id="blocoVertice">
     <div class="rotulo">Vértice <span id="pvSel" class="badge vazio">—</span></div>
     <label class="campo"><span class="eixo ex">X</span><input id="pvx" type="number" step="0.01" disabled></label>
     <label class="campo"><span class="eixo ey">Y</span><input id="pvy" type="number" step="0.01" disabled></label>
@@ -221,7 +279,7 @@
     <div class="dica">arraste na superfície pra pintar · Ctrl+Z desfaz a pincelada</div>
   </section>
 
-  <section class="bloco">
+  <section class="bloco" id="blocoCaixa">
     <div class="rotulo">Caixa do objeto</div>
     <div class="dims">
       <div class="dim"><span class="dk">largura</span><b id="pdx">—</b></div>
@@ -246,8 +304,65 @@
     <button id="btSolido" class="btmescla" type="button" hidden>Marcar <span id="pSolidoN">2</span> faces como sólidas · colisão</button>
   </section>
 
+  <!-- PASSO 13b: ESPAÇO ANIMAÇÃO — autoria da animação rígida por parte. Só aparece no
+       espaço Animação. Nomear parte (a op ['parte',{nome,faces}] do 13a) a partir das
+       faces selecionadas, a lista de partes (clicar seleciona as faces dela), criar/
+       ajustar animações (duracao/repete) e trilhas (parte + canal). As CHAVES vivem na
+       linha do tempo embaixo; aqui edita-se a chave selecionada. -->
+  <section class="bloco" id="blocoAnim" hidden>
+    <div class="rotulo">Nomear parte <span id="anParteN" class="badge vazio">—</span></div>
+    <label class="campo"><input id="anNomeParte" type="text" placeholder="nome da parte (ex.: roda)" autocomplete="off"></label>
+    <button id="anBtParte" class="btmini" type="button" disabled>Nomear parte das faces selecionadas</button>
+    <div class="dica" id="anParteDica">selecione face(s) na cena e dê um nome — vira um alvo de animação</div>
+  </section>
+
+  <section class="bloco" id="blocoPartes" hidden>
+    <div class="rotulo">Partes <span id="anPartesN" class="badge">0</span></div>
+    <div class="lista" id="anPartes"><span class="vazio-lista">nenhuma parte nomeada ainda</span></div>
+    <div class="dica">clique numa parte pra selecionar as faces dela</div>
+  </section>
+
+  <section class="bloco" id="blocoAnims" hidden>
+    <div class="rotulo">Animações <span id="anAnimsN" class="badge">0</span></div>
+    <div class="lista" id="anLista"><span class="vazio-lista">nenhuma animação</span></div>
+    <button id="anNova" class="btmini sec" type="button">+ nova animação</button>
+    <div id="anCfg" hidden>
+      <div class="linha2"><label>duração</label><input id="anDur" type="number" min="0" step="0.1" value="2"><span style="font-size:10px;color:var(--dim)">s</span></div>
+      <label class="campo" style="justify-content:flex-start"><input id="anRepete" type="checkbox" checked style="flex:none;width:auto;margin:0"> <span class="rk" style="width:auto">repete (laço)</span></label>
+      <div class="rotulo" style="margin-top:10px">Nova trilha</div>
+      <label class="campo"><select id="anParteTrilha" aria-label="parte da trilha"></select></label>
+      <label class="campo"><select id="anCanal" aria-label="canal da trilha">
+        <option value="rotX">rotX</option><option value="rotY" selected>rotY</option><option value="rotZ">rotZ</option>
+        <option value="posX">posX</option><option value="posY">posY</option><option value="posZ">posZ</option>
+        <option value="escala">escala</option>
+      </select></label>
+      <button id="anAddTrilha" class="btmini" type="button">+ trilha (parte + canal)</button>
+    </div>
+  </section>
+
+  <section class="bloco" id="blocoChave" hidden>
+    <div class="rotulo">Chave <span id="anChaveN" class="badge vazio">—</span></div>
+    <div class="linha2"><label>tempo</label><input id="anChaveT" type="number" min="0" step="0.05"></div>
+    <div class="linha2"><label>valor</label><input id="anChaveV" type="number" step="0.05"></div>
+    <button id="anApagarChave" class="btmini sec" type="button">Apagar chave</button>
+    <div class="dica">arraste a chave na faixa pra mover no tempo · ou edite os campos</div>
+  </section>
+
   <div class="leitura" id="pLeitura">arrastando — painel em leitura</div>
 </aside>
+
+<!-- PASSO 13b: LINHA DO TEMPO (só no espaço Animação). Régua (scrub + playhead) + uma
+     FAIXA por trilha com as chaves como pontos posicionados por tempo. -->
+<div id="linha" hidden>
+  <div class="lat-topo">
+    <button id="anPlay" class="lat-play" type="button">▶ play</button>
+    <span id="anTempo" class="lat-tempo">0.00 / 0.00 s</span>
+    <span id="anAnimNome" class="lat-anim">—</span>
+  </div>
+  <div class="lat-regua"><div class="lat-rot">tempo →</div><div class="lat-regua-in" id="anRegua"></div></div>
+  <div class="lat-faixas" id="anTrilhas"><div class="lat-vazio">crie uma animação e adicione uma trilha (parte + canal) pra ver as faixas</div></div>
+  <div id="anPlayhead" hidden></div>
+</div>
 
 <div id="ajuda">
   <b>clique num vértice</b> pega e arrasta · <b>setas X/Y/Z</b> travam no eixo · <b>clique numa face</b> seleciona · <b>arraste a seta da normal</b> (ou <b>E</b>) extruda<br>
@@ -275,7 +390,7 @@
    "abrir solta o cursor travado, senão não dá pra clicar em nada") — NENHUM
    requestPointerLock; os passos futuros clicam em vértice/face. */
 import { criarVisor } from './motor/render.js';
-import { nucleo, executar, neutroCanonico, colisaoDe, adaptarV3 } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números); passo 4: re-executa a lista ao vivo (executar/nucleo) e compara canônico; passo 10: colisaoDe (colisão sugerida no painel + a CHAMADA gravada no export); passo 11c: adaptarV3 pro ATLAS (mapa superfície→texel do raycast do pincel)
+import { nucleo, executar, neutroCanonico, colisaoDe, adaptarV3, montarAnimar } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números); passo 4: re-executa a lista ao vivo (executar/nucleo) e compara canônico; passo 10: colisaoDe (colisão sugerida no painel + a CHAMADA gravada no export); passo 11c: adaptarV3 pro ATLAS (mapa superfície→texel do raycast do pincel); passo 13b: montarAnimar pro gancho de matriz-em-T do preview (prova página==Node)
 import { m4 } from './motor/mat4.js';
 import * as tex from './motor/tex.js';
 import * as geo from './motor/geo.js';
@@ -404,6 +519,42 @@ const AMOSTRA_PX = 6;   // amostragem por DISTÂNCIA na tela: só um dab novo a 
    lotes) e o export grava. Aplicar um material registra um nome aqui e grava
    ['material',{faces,usa}]. */
 let materiaisAtual = {};
+
+/* PASSO 13b — ESPAÇO ANIMAÇÃO. Estado da autoria/preview da animação rígida por parte.
+   O MOTOR (op `parte`, seção ANIMACOES, montarAnimar → peca.animar) é o do 13a (D-95);
+   aqui é só a INTERFACE, sem tocar em motor/oficina.js nem render.js.
+     animLigado    — estamos no espaço Animação? (chip "Animação", estilo do Pincel).
+                     LIGADO: painel de animação + linha do tempo, e o reexec fia
+                     ANIMACOES no executar (preview ao vivo); DESLIGADO: tudo modela
+                     como antes (ANIMACOES não vai pro executar → animar undefined →
+                     peça estática, byte-idêntica).
+     animacoesAtual— a seção ANIMACOES da peça, MUTÁVEL na sessão (espelha mod.ANIMACOES
+                     ou {}); o export a grava (como MATERIAIS) e o preview a monta.
+                     Forma: {nome:{duracao,repete,trilhas:[{parte,canal,chaves:[[t,v]]}]}}.
+     animAtual     — nome da animação em edição (a que a linha do tempo mostra).
+     previewT      — o tempo CONGELADO do scrub (segundos); null = tocando (relógio de
+                     parede). O reexec entrega ao visor um `animar` WRAPPER que lê ISTO:
+                     animar=(Twall,lotes)=>base(previewT!=null?previewT:Twall,lotes) — o
+                     render.js NÃO muda (chama animar(T,lotes) como sempre).
+     tocando       — play em laço? (previewT=null e o playhead anda com o relógio).
+     tempoMostrado — o tempo do último quadro (pro playhead e pro pause pegar onde parou).
+     chaveSel      — {ti,ki} da chave selecionada na faixa (edita valor/tempo/apaga). */
+let animLigado = false;
+let animacoesAtual = {};
+let animAtual = null;
+let previewT = 0;             // começa PAUSADO em t=0 (pose estável); play zera pra null
+let tocando = false;
+let tempoMostrado = 0;
+let chaveSel = null;
+const CANAIS_ANIM = ['rotX', 'rotY', 'rotZ', 'posX', 'posY', 'posZ', 'escala'];   // espelha CANAIS do motor (motor/oficina.js) — canal fora disto o montarAnimar GRITA
+/* controladores/renderizadores assinados no try quando a peça abre (no-op antes). O
+   chip da barra e os ganchos de __oficina alcançam via estes; a lógica que mexe em
+   PASSOS/ANIMACOES + reexec mora no try (como malhaCtl). */
+let animCtl = null;
+let setEspacoAnim = () => {};
+let renderAnim = () => {};
+let atualizarBotaoParte = () => {};
+let atualizarAnimQuadro = () => {};   // chamado por quadro (visor.rodar, no try EXTERNO) — módulo-escopo pra alcançar de lá
 
 /* PASSO 5 — DESFAZER / REFAZER das edições DESTA sessão. O objeto É a lista
    (passo 4): toda edição é uma operação no FIM de PASSOS, então desfazer = tirar
@@ -614,13 +765,19 @@ function jsPasso(p) { const op = jsStr(p[0]); return (p.length > 1 && p[1] !== u
 /* a STRING .js completa. `PASSOS` uma op por linha (2 espaços), como o toco. PASSO
    12a: se a peça tem MATERIAIS (não-vazio), grava o `export const MATERIAIS` e passa ele
    pra executar/colisaoDe; peça SEM material sai IDÊNTICA ao de antes (sem a linha, sem o
-   arg) — a compat do formato salvo. */
-function serializarPeca(meta, PARAMS, TOPO, PASSOS, MATERIAIS) {
+   arg) — a compat do formato salvo. PASSO 13b: idem pra ANIMACOES (a seção da animação
+   rígida por parte, 13a) — grava `export const ANIMACOES` e passa pro `executar` (NÃO pro
+   colisaoDe: colisão é só geometria). Como ANIMACOES vem DEPOIS de MATERIAIS no executar
+   (posicional), com animação mas sem material passo `{}` no lugar; peça SEM animação sai
+   idêntica ao de antes. As ops `parte` (13a) já estão no PASSOS — só a seção ANIMACOES é
+   nova no arquivo. */
+function serializarPeca(meta, PARAMS, TOPO, PASSOS, MATERIAIS, ANIMACOES) {
   const nome = (meta && meta.nome) || 'peca';
   const tipo = (meta && meta.tipo) || 'objeto';
   const desc = (meta && meta.desc) || '';
   const passosTxt = (PASSOS || []).map((p) => '  ' + jsPasso(p) + ',').join('\n');
   const temMat = MATERIAIS && Object.keys(MATERIAIS).length > 0;
+  const temAnim = ANIMACOES && Object.keys(ANIMACOES).length > 0;
   const matBloco = temMat ? `
 /* MATERIAIS (passo 12a/12b): materiais POR NOME — a op \`material\` aponta faces pra um
    nome; mudar o material aqui muda todas as faces dele. cor multiplica a textura,
@@ -628,7 +785,15 @@ function serializarPeca(meta, PARAMS, TOPO, PASSOS, MATERIAIS) {
    + opacidade (0..1) mistura numa passada de trás pra frente (12b). */
 export const MATERIAIS = ${jsVal(MATERIAIS)};
 ` : '';
+  const animBloco = temAnim ? `
+/* ANIMACOES (passo 13a/13b): seção da ANIMAÇÃO RÍGIDA POR PARTE (não constrói geometria).
+   Cada animação tem \`duracao\`, \`repete\` (laço) e \`trilhas\` — cada trilha amarra um
+   CANAL (rotX/Y/Z, posX/Y/Z, escala) de uma PARTE (nomeada por ['parte',...] nos PASSOS)
+   a chaves \`[tempo, valor]\` (interpolação SUAVE). \`montarAnimar\` fia isto em peca.animar. */
+export const ANIMACOES = ${jsVal(ANIMACOES)};
+` : '';
   const argMat = temMat ? ', MATERIAIS' : '';
+  const argConstruir = temAnim ? `, ${temMat ? 'MATERIAIS' : '{}'}, ANIMACOES` : argMat;   // ANIMACOES é posicional (6º) — com anim sem material, {} no lugar de MATERIAIS
   return `/* ${nome} — peça-objeto gerada pela OFICINA (exportar, passo 10). Descrita
    100% como lista de PASSOS + PARAMS/TOPO e reconstruída por \`executar\`; a Oficina
    relê este mesmo arquivo pra reabrir a edição (por isso PARAMS/TOPO/PASSOS são
@@ -642,7 +807,7 @@ export const PARAMS = ${jsVal(PARAMS || {})};
 
 /* topológico: mudar RECONSTRÓI e pode deixar os passos seguintes órfãos. */
 export const TOPO = ${jsVal(TOPO || {})};
-${matBloco}
+${matBloco}${animBloco}
 /* exportado (não \`const\` privado): sem isto a Oficina não relê a lista e o
    arquivo nunca mais reabre pra edição. Os passos citam o NOME do parâmetro. */
 export const PASSOS = [
@@ -658,7 +823,7 @@ export const meta = {
   colisao: colisaoDe(PASSOS, PARAMS, TOPO${argMat}),
 };
 
-export function construir(ctx) { return executar(PASSOS, PARAMS, TOPO, ctx${argMat}); }
+export function construir(ctx) { return executar(PASSOS, PARAMS, TOPO, ctx${argConstruir}); }
 `;
 }
 
@@ -731,7 +896,7 @@ canvas.addEventListener('pointerdown', (e) => {
      togglea; Shift+arrasto LONGO pana), então NÃO retorna — cai no setup de pan
      embaixo e o soltar decide toggle-vs-pan pelo limiar. */
   if (!arrasto && pointers.size === 1 && e.pointerType === 'mouse' && e.button === 0 && e.shiftKey && malhaCtl) {
-    const idSel = malhaCtl.hit(e.clientX, e.clientY);
+    const idSel = animLigado ? null : malhaCtl.hit(e.clientX, e.clientY);   // PASSO 13b: no espaço Animação o Shift+clique NÃO pega vértice (só face, pra nomear parte)
     if (idSel != null) cliqueSel = { id: idSel, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId };
     else { const fSel = malhaCtl.hitFace(e.clientX, e.clientY); if (fSel != null) cliqueSelFace = { fid: fSel, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId }; }
   }
@@ -753,42 +918,49 @@ canvas.addEventListener('pointerdown', (e) => {
     // vazio: sem face sob o cursor — cai pro setup de câmera embaixo (orbita)
   }
   if (!arrasto && pointers.size === 1 && primario && malhaCtl && !pincelLigado) {
-    /* PASSO 6 — ORDEM do hit-test (D1: o vértice clicado DIRETO vence a seta que
-       passa por cima dele). 1) um vértice OUTRO que o selecionado, sob o cursor,
-       vence o gizmo → arrasto LIVRE (você mirou o ponto, não o cabo); 2) senão a
-       seta do gizmo → arrasto TRAVADO no eixo; 3) senão o PRÓPRIO selecionado (a
-       base do gizmo, na zona morta) → arrasto LIVRE. */
-    const id = malhaCtl.hit(e.clientX, e.clientY);
-    if (id != null && id !== selecionado) {
-      arrasto = malhaCtl.iniciar(id, e.clientX, e.clientY, e.pointerId);
-      canvas.classList.add('arrastando');
-      e.preventDefault();
-      return;   // vértice DIRETO (≠ selecionado): vence a seta, NÃO é câmera
+    /* PASSO 13b — no espaço Animação, os hit-tests de VÉRTICE/GIZMO/HANDLE (modelagem)
+       ficam desligados: só a SELEÇÃO DE FACE segue viva (pra nomear parte). No espaço
+       Modelar, tudo idêntico ao de antes. */
+    if (!animLigado) {
+      /* PASSO 6 — ORDEM do hit-test (D1: o vértice clicado DIRETO vence a seta que
+         passa por cima dele). 1) um vértice OUTRO que o selecionado, sob o cursor,
+         vence o gizmo → arrasto LIVRE (você mirou o ponto, não o cabo); 2) senão a
+         seta do gizmo → arrasto TRAVADO no eixo; 3) senão o PRÓPRIO selecionado (a
+         base do gizmo, na zona morta) → arrasto LIVRE. */
+      const id = malhaCtl.hit(e.clientX, e.clientY);
+      if (id != null && id !== selecionado) {
+        arrasto = malhaCtl.iniciar(id, e.clientX, e.clientY, e.pointerId);
+        canvas.classList.add('arrastando');
+        e.preventDefault();
+        return;   // vértice DIRETO (≠ selecionado): vence a seta, NÃO é câmera
+      }
+      const g = malhaCtl.hitGizmo(e.clientX, e.clientY);
+      if (g) {
+        arrasto = malhaCtl.iniciarEixo(g, e.clientX, e.clientY, e.pointerId);
+        canvas.classList.add('arrastando');
+        e.preventDefault();
+        return;   // ACERTOU seta: arrasto travado por eixo, NÃO é câmera
+      }
+      if (id != null) {   // aqui id === selecionado: a base do gizmo → arrasto livre
+        arrasto = malhaCtl.iniciar(id, e.clientX, e.clientY, e.pointerId);
+        canvas.classList.add('arrastando');
+        e.preventDefault();
+        return;   // ACERTOU o vértice selecionado: NÃO é câmera
+      }
+      /* PASSO 7 — chega aqui só se NÃO foi vértice nem seta do gizmo. 3) o HANDLE da
+         normal (só existe em modo FACE) → arrasto de EXTRUDE. Vem DEPOIS do vértice/
+         gizmo: o alvo direto vence o handle (mesma precedência do D1). */
+      const h = malhaCtl.hitHandle(e.clientX, e.clientY);
+      if (h) {
+        arrasto = malhaCtl.iniciarExtrude(h, e.clientX, e.clientY, e.pointerId);
+        canvas.classList.add('arrastando');
+        e.preventDefault();
+        return;   // ACERTOU o handle da normal: arrasto de EXTRUDE, NÃO é câmera
+      }
     }
-    const g = malhaCtl.hitGizmo(e.clientX, e.clientY);
-    if (g) {
-      arrasto = malhaCtl.iniciarEixo(g, e.clientX, e.clientY, e.pointerId);
-      canvas.classList.add('arrastando');
-      e.preventDefault();
-      return;   // ACERTOU seta: arrasto travado por eixo, NÃO é câmera
-    }
-    if (id != null) {   // aqui id === selecionado: a base do gizmo → arrasto livre
-      arrasto = malhaCtl.iniciar(id, e.clientX, e.clientY, e.pointerId);
-      canvas.classList.add('arrastando');
-      e.preventDefault();
-      return;   // ACERTOU o vértice selecionado: NÃO é câmera
-    }
-    /* PASSO 7 — chega aqui só se NÃO foi vértice nem seta do gizmo. 3) o HANDLE da
-       normal (só existe em modo FACE) → arrasto de EXTRUDE; 4) o CORPO de uma face
-       → clique-candidato de seleção (adiado). Vem DEPOIS do vértice/gizmo: o alvo
-       direto vence o handle (mesma precedência do D1). */
-    const h = malhaCtl.hitHandle(e.clientX, e.clientY);
-    if (h) {
-      arrasto = malhaCtl.iniciarExtrude(h, e.clientX, e.clientY, e.pointerId);
-      canvas.classList.add('arrastando');
-      e.preventDefault();
-      return;   // ACERTOU o handle da normal: arrasto de EXTRUDE, NÃO é câmera
-    }
+    /* 4) o CORPO de uma face → clique-candidato de seleção (adiado pro up). Ativo nos
+       DOIS espaços: em Modelar seleciona pra extrudar/pintar, em Animação pra nomear
+       parte. */
     const fid = malhaCtl.hitFace(e.clientX, e.clientY);
     if (fid != null) {
       /* corpo de uma FACE: a seleção é ADIADA pro pointerup (só um clique curto
@@ -888,9 +1060,14 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());   // senão o
    setModoPincel/setPincel (não da máquina da malha), então funcionam assim que a
    página carrega. Pintar em si precisa da malha (guardado no pointerdown). */
 { const chip = $('chipPincel'); if (chip) chip.addEventListener('click', () => setModoPincel(!pincelLigado)); }
+/* PASSO 13b — SELETOR DE ESPAÇO (Modelar/Animação): módulo-escopo como o chip do Pincel;
+   setEspacoAnim é a função REAL (assinada no try quando a peça abre) — no clique do
+   usuário ela já vale. */
+{ const cA = $('chipAnim'); if (cA) cA.addEventListener('click', () => setEspacoAnim(true)); }
+{ const cM = $('chipModelar'); if (cM) cM.addEventListener('click', () => setEspacoAnim(false)); }
 addEventListener('keydown', (e) => {
   if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName)) return;   // não alterna com o foco num campo
-  if ((e.key === 'b' || e.key === 'B') && !e.ctrlKey && !e.metaKey && !e.altKey) { if (arrasto) return; setModoPincel(!pincelLigado); }   // guarda: não vira o modo no meio de um arrasto
+  if ((e.key === 'b' || e.key === 'B') && !e.ctrlKey && !e.metaKey && !e.altKey) { if (arrasto || animLigado) return; setModoPincel(!pincelLigado); }   // guarda: não vira o modo no meio de um arrasto NEM no espaço Animação
 });
 { const c = $('pkCor'); if (c) c.addEventListener('input', () => setPincel({ cor: c.value })); }
 { const pr = $('pkPresets'); if (pr) pr.addEventListener('click', (e) => { const b = e.target.closest('.sw'); if (!b) return; const cor = b.getAttribute('data-cor'); const c = $('pkCor'); if (c) c.value = cor; setPincel({ cor }); }); }
@@ -929,6 +1106,8 @@ try {
     if (!Array.isArray(PASSOS)) throw new Error('a peça não exporta PASSOS — o envelope pede PARAMS/TOPO/PASSOS exportados');
     const PARAMS = mod.PARAMS ?? {}, TOPO = mod.TOPO ?? {};
     materiaisAtual = mod.MATERIAIS ?? {};   // PASSO 12a: os materiais da peça (por nome); a sessão pode acrescentar/aplicar
+    animacoesAtual = mod.ANIMACOES ? JSON.parse(JSON.stringify(mod.ANIMACOES)) : {};   // PASSO 13b: a seção ANIMACOES da peça (cópia MUTÁVEL); a sessão cria/edita e o export a grava
+    animAtual = Object.keys(animacoesAtual)[0] || null;   // se a peça já traz animações, a 1ª entra em edição
     const { V, F } = nucleo(PASSOS, PARAMS, TOPO, materiaisAtual);
     neutro = { V, F };   // módulo-escopo: o hit-test do #c e o overlay leem o MESMO neutro
 
@@ -941,7 +1120,18 @@ try {
        objeto com o vértice movido — o ciclo fechado do doc. */
     const ctxMotor = { TS, tex, geo, m4 };
     const reexec = (passos) => {                       // lista -> render (executar) + overlay (nucleo)
-      visor.carregar(executar(passos, PARAMS, TOPO, ctxMotor, materiaisAtual));   // PASSO 12a: MATERIAIS -> lotes por material (o render aplica cada param por lote)
+      /* PASSO 13b — PREVIEW da animação, JÓIA-SAFE. No espaço Animação fia ANIMACOES no
+         executar (o mesmo `executar(...,MATERIAIS,ANIMACOES)` do 13a monta o animar via
+         montarAnimar) e EMBRULHA o animar num wrapper que lê `previewT`: scrub congela a
+         pose (previewT=segundos), play volta ao relógio (previewT=null → laço). O
+         render.js NÃO muda — segue chamando animar(T,lotes) por quadro. Fora do espaço
+         Animação, ANIMACOES vai {} → animar undefined → peça estática (byte-idêntica). */
+      const peca = executar(passos, PARAMS, TOPO, ctxMotor, materiaisAtual, animLigado ? animacoesAtual : {});
+      if (animLigado && typeof peca.animar === 'function') {
+        const base = peca.animar;
+        peca.animar = (Twall, lotes) => base(previewT != null ? previewT : Twall, lotes);
+      }
+      visor.carregar(peca);   // PASSO 12a: MATERIAIS -> lotes por material (o render aplica cada param por lote)
       const r = nucleo(passos, PARAMS, TOPO, materiaisAtual);
       neutro = { V: r.V, F: r.F };
       atlasAtual = adaptarV3(r, ctxMotor).atlas;   // PASSO 11c: o mapa superfície→{u,v} do atlas por face, mantido FRESCO pro raycast do pincel (a geometria mudou → o atlas também). A peça é pequena; o adaptador é o MESMO do render (motor/oficina.js, provado).
@@ -984,6 +1174,16 @@ try {
     }
     atualizarPainel = () => {
       const badge = $('pvSel'); if (!badge) return;   // markup ausente: no-op (robustez)
+      /* PASSO 13b — ESPAÇOS: Modelar mostra vértice/caixa/colisão (+ cor/material por
+         seleção); Animação mostra o bloco de autoria + a linha do tempo. Trocar de
+         espaço NÃO mexe em câmera/seleção/objeto — só em QUAIS painéis aparecem (D-73). */
+      const modelar = !animLigado;
+      const sub = $('propsSub'); if (sub) sub.textContent = modelar ? 'espaço Modelar · vértice e caixa' : 'espaço Animação · partes e linha do tempo';
+      for (const bid of ['blocoVertice', 'blocoCaixa', 'blocoColisao']) { const el = $(bid); if (el) el.hidden = !modelar; }
+      for (const bid of ['blocoAnim', 'blocoPartes', 'blocoAnims']) { const el = $(bid); if (el) el.hidden = modelar; }
+      { const bl = $('blocoChave'); if (bl) bl.hidden = modelar || !chaveSel; }
+      { const lt = $('linha'); if (lt) lt.hidden = modelar; }
+      atualizarBotaoParte();
       const temSel = selecionado != null && neutro && neutro.V.has(selecionado);
       const editavel = temSel && !arrasto;
       badge.classList.toggle('vazio', !temSel);
@@ -1019,7 +1219,7 @@ try {
       // enquanto o input está em foco (o usuário mexendo no seletor), como os campos XYZ.
       const blocoCor = $('blocoCor');
       if (blocoCor) {
-        blocoCor.hidden = !temFace;
+        blocoCor.hidden = !temFace || !modelar;   // PASSO 13b: cor é do espaço Modelar (some na Animação)
         if (temFace) {
           const pcFaces = $('pcFaces');
           if (pcFaces) { pcFaces.textContent = '#' + faceSelecionada + (selFaces.length > 1 ? ` +${selFaces.length - 1}` : ''); pcFaces.classList.remove('vazio'); }
@@ -1031,7 +1231,7 @@ try {
       // o material EFETIVO da ATIVA (read-back: neutro.F.material, ou "sem" + nº de faces).
       const blocoMaterial = $('blocoMaterial');
       if (blocoMaterial) {
-        blocoMaterial.hidden = !temFace;
+        blocoMaterial.hidden = !temFace || !modelar;   // PASSO 13b: material é do espaço Modelar (some na Animação)
         if (temFace) {
           const pmFaces = $('pmFaces');
           if (pmFaces) {
@@ -1118,7 +1318,7 @@ try {
        TOPO) e POSTa pro servidor de dev; sem servidor, baixa o .js (fallback). */
     { const bt = $('btSalvar'); if (bt) bt.addEventListener('click', async () => {
         bt.disabled = true;
-        try { await salvarPeca(mod.meta.nome, serializarPeca(mod.meta, PARAMS, TOPO, PASSOS, materiaisAtual)); }
+        try { await salvarPeca(mod.meta.nome, serializarPeca(mod.meta, PARAMS, TOPO, PASSOS, materiaisAtual, animacoesAtual)); }
         finally { bt.disabled = false; }
       }); }
 
@@ -1136,6 +1336,7 @@ try {
       reexec(PASSOS);                                 // o objeto se refaz da lista encurtada
       atualizarPassos();
       atualizarPainel();                              // PASSO 6: o painel segue a edição
+      renderAnim();                                   // PASSO 13b: desfazer um ['parte',...] some da lista de partes
       return true;
     };
     refazer = () => {
@@ -1145,6 +1346,7 @@ try {
       reexec(PASSOS);
       atualizarPassos();
       atualizarPainel();
+      renderAnim();                                   // PASSO 13b: refazer um ['parte',...] volta pra lista de partes
       return true;
     };
 
@@ -1645,6 +1847,342 @@ try {
       },
     };
 
+    /* ==== PASSO 13b: ESPAÇO ANIMAÇÃO — autoria + preview da animação rígida por parte ==
+       O MOTOR (op `parte`, ANIMACOES, montarAnimar) é o do 13a (D-95): aqui NÃO se toca em
+       motor/oficina.js nem render.js. Nomear parte grava ['parte',{nome,faces}] no fim de
+       PASSOS (desfazível pela pilha do passo 5); as animações/trilhas/chaves vivem em
+       `animacoesAtual` (a seção ANIMACOES, MUTÁVEL) e o preview sai do `reexec` que fia
+       ANIMACOES no executar + o wrapper de previewT. `refrescarPreview` = reexec(PASSOS)
+       (reconstrói a peça + o wrapper com o animacoesAtual/previewT atuais). */
+    const refrescarPreview = () => reexec(PASSOS);
+
+    /* partes NOMEADAS do estado atual: agrupa as faces por f.parte (o neutro é a verdade —
+       'última atribuição vence' do 13a). Ordem: 1ª aparição por id. Fonte única da lista de
+       partes, dos selects de trilha e do casamento parte↔faces (selecionar a parte). */
+    function partesNomeadas() {
+      const m = new Map();
+      if (neutro && neutro.F) for (const f of [...neutro.F.values()].sort((a, b) => a.id - b.id)) {
+        if (f.parte) { if (!m.has(f.parte)) m.set(f.parte, []); m.get(f.parte).push(f.id); }
+      }
+      return [...m.entries()].map(([nome, faces]) => ({ nome, faces }));
+    }
+    /* valor interpolado (smoothstep, ESPELHA avaliarChaves do motor) — só pro DEFAULT de
+       uma chave nova clicada na faixa (não pula a pose). O preview REAL vem do motor. */
+    function valorNoTempo(tr, t) {
+      const ch = tr.chaves; if (!ch || !ch.length) return 0;
+      if (t <= ch[0][0]) return ch[0][1];
+      if (t >= ch[ch.length - 1][0]) return ch[ch.length - 1][1];
+      let i = 0; while (i < ch.length - 1 && t > ch[i + 1][0]) i++;
+      const [t0, v0] = ch[i], [t1, v1] = ch[i + 1]; const u = (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
+      return v0 + (v1 - v0) * (u * u * (3 - 2 * u));
+    }
+    const anDur = () => { const A = animAtual && animacoesAtual[animAtual]; return A && A.duracao > 0 ? +A.duracao : 0; };
+    /* tempo do quadro pro playhead: CONGELADO em previewT (scrub/pause) OU do relógio de
+       parede (play) com o MESMO laço/clamp do motor (montarAnimar). */
+    function tempoDeQuadro(T) {
+      const A = animAtual && animacoesAtual[animAtual];
+      const dur = anDur();
+      if (previewT != null) return Math.max(0, Math.min(previewT, dur || previewT));
+      if (!A || dur <= 0) return 0;
+      return A.repete ? (T % dur) : Math.min(T, dur);
+    }
+    function atualizarPlay() { const b = $('anPlay'); if (b) b.textContent = tocando ? '⏸ pause' : '▶ play'; }
+    function atualizarTempoLabel(t) { const el = $('anTempo'); if (el) el.textContent = `${(t || 0).toFixed(2)} / ${anDur().toFixed(2)} s`; }
+    /* posiciona o PLAYHEAD (barra fixed) sobre a régua, na fração tempo/duração. Lê o rect
+       da régua a cada chamada → acompanha resize/troca de espaço sem estado guardado. */
+    function posicionarPlayhead(t) {
+      const ph = $('anPlayhead'), reg = $('anRegua'), lin = $('linha');
+      if (!ph || !reg || !lin) return;
+      const dur = anDur(), r = reg.getBoundingClientRect();
+      if (!animLigado || !r.width || dur <= 0) { ph.hidden = true; return; }
+      const frac = Math.max(0, Math.min(1, t / dur));
+      ph.hidden = false;
+      ph.style.left = (r.left + frac * r.width) + 'px';
+      ph.style.top = r.top + 'px';
+      ph.style.height = (lin.getBoundingClientRect().bottom - r.top) + 'px';
+    }
+    atualizarAnimQuadro = (T) => {   // chamado por quadro no espaço Animação (playhead segue o play)
+      const t = tempoDeQuadro(T);
+      tempoMostrado = t;
+      posicionarPlayhead(t);
+      atualizarTempoLabel(t);
+    };
+
+    /* o BOTÃO "nomear parte" (habilitado com face[s] selecionada[s], fora de arrasto) +
+       o badge de contagem. Chamado por atualizarPainel (segue a seleção de face). */
+    atualizarBotaoParte = () => {
+      const bt = $('anBtParte'); if (!bt) return;
+      const n = selFaces.length;
+      bt.disabled = !(n >= 1 && !!neutro && !arrasto);
+      const badge = $('anParteN');
+      if (badge) { badge.textContent = n ? `${n} face${n > 1 ? 's' : ''}` : '—'; badge.classList.toggle('vazio', !n); }
+      const dica = $('anParteDica');
+      if (dica) dica.textContent = n ? `${n} face(s) selecionada(s) — dê um nome` : 'selecione face(s) na cena e dê um nome — vira um alvo de animação';
+    };
+
+    /* RECONSTRÓI a UI da animação (lista de partes, lista de animações, config, faixas +
+       chaves, editor de chave). Chamado quando os DADOS mudam (não por quadro) — não
+       sobrescreve um input em foco. */
+    renderAnim = () => {
+      if (!$('blocoAnim')) return;
+      const partes = partesNomeadas();
+      // lista de PARTES (clicar seleciona as faces dela)
+      const elP = $('anPartes');
+      if (elP) {
+        elP.innerHTML = '';
+        if (!partes.length) elP.innerHTML = '<span class="vazio-lista">nenhuma parte nomeada ainda</span>';
+        else for (const p of partes) { const b = document.createElement('button'); b.type = 'button'; b.className = 'parteChip'; b.dataset.parte = p.nome; b.textContent = `${p.nome} · ${p.faces.length}f`; elP.appendChild(b); }
+      }
+      { const n = $('anPartesN'); if (n) n.textContent = String(partes.length); }
+      // select de PARTE da nova trilha (preserva a escolha se ainda existe)
+      const selPT = $('anParteTrilha');
+      if (selPT) {
+        const cur = selPT.value; selPT.innerHTML = '';
+        if (!partes.length) { const o = document.createElement('option'); o.value = ''; o.textContent = '(nomeie uma parte)'; selPT.appendChild(o); }
+        else for (const p of partes) { const o = document.createElement('option'); o.value = p.nome; o.textContent = p.nome; selPT.appendChild(o); }
+        if (partes.some((p) => p.nome === cur)) selPT.value = cur;
+      }
+      // lista de ANIMAÇÕES
+      const nomes = Object.keys(animacoesAtual);
+      const elA = $('anLista');
+      if (elA) {
+        elA.innerHTML = '';
+        if (!nomes.length) elA.innerHTML = '<span class="vazio-lista">nenhuma animação</span>';
+        else for (const nm of nomes) { const b = document.createElement('button'); b.type = 'button'; b.className = 'animChip' + (nm === animAtual ? ' on' : ''); b.dataset.anim = nm; b.textContent = nm; elA.appendChild(b); }
+      }
+      { const n = $('anAnimsN'); if (n) n.textContent = String(nomes.length); }
+      const A = animAtual ? animacoesAtual[animAtual] : null;
+      { const cfg = $('anCfg'); if (cfg) cfg.hidden = !A; }
+      if (A) {
+        const dur = $('anDur'); if (dur && document.activeElement !== dur) dur.value = String(A.duracao);
+        const rep = $('anRepete'); if (rep && document.activeElement !== rep) rep.checked = !!A.repete;
+      }
+      { const nm = $('anAnimNome'); if (nm) nm.textContent = animAtual ? `animação: ${animAtual}` : '—'; }
+      // FAIXAS: uma linha por trilha, chaves como pontos posicionados por tempo/duração
+      const faixas = $('anTrilhas');
+      if (faixas) {
+        faixas.innerHTML = '';
+        if (!A || !A.trilhas.length) faixas.innerHTML = '<div class="lat-vazio">crie uma animação e adicione uma trilha (parte + canal) pra ver as faixas</div>';
+        else {
+          const dur = A.duracao > 0 ? A.duracao : 1;
+          A.trilhas.forEach((tr, ti) => {
+            const row = document.createElement('div'); row.className = 'lat-linhaT';
+            const rot = document.createElement('div'); rot.className = 'lat-rot'; rot.textContent = `${tr.parte} · ${tr.canal}`;
+            const faixa = document.createElement('div'); faixa.className = 'lat-faixa'; faixa.dataset.ti = String(ti);
+            (tr.chaves || []).forEach((k, ki) => {
+              const dot = document.createElement('div');
+              dot.className = 'chave' + (chaveSel && chaveSel.ti === ti && chaveSel.ki === ki ? ' on' : '');
+              dot.style.left = (100 * Math.max(0, Math.min(1, k[0] / dur))) + '%';
+              dot.dataset.ti = String(ti); dot.dataset.ki = String(ki); dot.title = `t=${k[0]} · v=${k[1]}`;
+              faixa.appendChild(dot);
+            });
+            const del = document.createElement('button'); del.type = 'button'; del.className = 'lat-del'; del.title = 'remover trilha'; del.dataset.rmtrilha = String(ti); del.textContent = '×';
+            row.appendChild(rot); row.appendChild(faixa); row.appendChild(del);
+            faixas.appendChild(row);
+          });
+        }
+      }
+      // editor da CHAVE selecionada
+      const temChave = chaveSel && A && A.trilhas[chaveSel.ti] && A.trilhas[chaveSel.ti].chaves[chaveSel.ki];
+      { const bl = $('blocoChave'); if (bl) bl.hidden = !animLigado || !temChave; }
+      if (temChave) {
+        const k = A.trilhas[chaveSel.ti].chaves[chaveSel.ki];
+        const tt = $('anChaveT'); if (tt && document.activeElement !== tt) tt.value = String(k[0]);
+        const vv = $('anChaveV'); if (vv && document.activeElement !== vv) vv.value = String(k[1]);
+        const badge = $('anChaveN'); if (badge) { badge.textContent = `${A.trilhas[chaveSel.ti].canal} @ ${k[0]}s`; badge.classList.remove('vazio'); }
+      }
+      posicionarPlayhead(tempoMostrado);
+    };
+
+    /* ENTRA/SAI do espaço Animação (chip "Animação"/"Modelar", estilo do Pincel). É
+       ESPAÇO, não aba: câmera/seleção/objeto ficam; só muda quais painéis aparecem e se o
+       reexec fia a animação. Entrar limpa a seleção de VÉRTICE (sem gizmo), guarda a de
+       FACE (pra nomear parte), desliga o pincel e pausa em t=0. */
+    setEspacoAnim = (on) => {
+      const novo = !!on;
+      const cM = $('chipModelar'), cA = $('chipAnim');
+      if (novo === animLigado) { if (cM) cM.classList.toggle('on', !animLigado); if (cA) cA.classList.toggle('on', animLigado); renderAnim(); atualizarPainel(); return; }
+      animLigado = novo;
+      if (cM) cM.classList.toggle('on', !animLigado);
+      if (cA) cA.classList.toggle('on', animLigado);
+      if (animLigado) {
+        setModoPincel(false);           // pincel e animação são exclusivos
+        definirSel([]);                 // sai do modo vértice (sem gizmo); a FACE selecionada persiste
+        tocando = false; previewT = 0; tempoMostrado = 0; chaveSel = null;
+        if (!animAtual) animAtual = Object.keys(animacoesAtual)[0] || null;
+      } else {
+        tocando = false; previewT = 0;  // sair: sem preview de animação
+      }
+      reexec(PASSOS);                   // (des)liga o `animar` wrapper na peça carregada
+      renderAnim();
+      atualizarPainel();
+      atualizarPlay();
+      posicionarPlayhead(tempoMostrado);
+      atualizarTempoLabel(tempoMostrado);
+    };
+
+    animCtl = {
+      /* NOMEAR PARTE: grava ['parte',{nome,faces:[ORDENADAS]}] no fim de PASSOS (a op do
+         13a — desfazível pela pilha do passo 5), reexec, limpa o redo. Pivô = CENTROIDE
+         (default do adaptarV3); pivô explícito fica de fora (ver relatório). GUARDAS
+         (espelham pintar/material): no-op no arrasto, no-op sem face, no-op se a MESMA
+         parte já existe com AS MESMAS faces (sem passo fantasma). Devolve o passo (ou null). */
+      nomearParte(nome) {
+        if (arrasto) return null;
+        const nm = String(nome || '').trim();
+        if (!nm) return null;
+        const faces = selFaces.filter((id) => neutro && neutro.F.has(id)).sort((a, b) => a - b);
+        if (!faces.length) return null;
+        const ja = partesNomeadas().find((p) => p.nome === nm);
+        if (ja && JSON.stringify(ja.faces) === JSON.stringify(faces)) return null;   // idêntica: sem passo fantasma
+        const passo = ['parte', { nome: nm, faces }];
+        PASSOS.push(passo);
+        redo.length = 0;
+        reexec(PASSOS);
+        atualizarPassos();
+        renderAnim();
+        atualizarPainel();
+        console.log(`oficina passo 13b (parte): ['parte', {nome:'${nm}', faces:[${faces.join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+      /* seleciona as FACES de uma parte (feedback visual) — reusa a multi-seleção do passo 9. */
+      selecionarParte(nome) {
+        const p = partesNomeadas().find((x) => x.nome === nome);
+        if (p && malhaCtl) malhaCtl.selecionarFaces(p.faces);
+      },
+      partes: () => partesNomeadas(),
+      /* nova ANIMAÇÃO (duracao 2s, laço, sem trilhas). Sem nome → anim1/anim2… livre. */
+      novaAnimacao(nome) {
+        let nm = String(nome || '').trim();
+        if (!nm) { let i = 1; while (animacoesAtual['anim' + i]) i++; nm = 'anim' + i; }
+        if (!animacoesAtual[nm]) animacoesAtual[nm] = { duracao: 2, repete: true, trilhas: [] };
+        animAtual = nm; chaveSel = null;
+        refrescarPreview(); renderAnim(); atualizarPainel(); atualizarTempoLabel(tempoMostrado);
+        return nm;
+      },
+      selecionarAnim(nome) {
+        if (!animacoesAtual[nome]) return;
+        animAtual = nome; chaveSel = null;
+        refrescarPreview(); renderAnim(); atualizarPainel(); atualizarTempoLabel(tempoMostrado);
+      },
+      setDuracao(v) {
+        const A = animAtual && animacoesAtual[animAtual]; if (!A) return;
+        A.duracao = Math.max(0, +v || 0);
+        if (previewT != null) previewT = Math.min(previewT, A.duracao);
+        refrescarPreview(); renderAnim(); atualizarTempoLabel(tempoMostrado); posicionarPlayhead(tempoMostrado);
+      },
+      setRepete(b) {
+        const A = animAtual && animacoesAtual[animAtual]; if (!A) return;
+        A.repete = !!b; refrescarPreview(); renderAnim();
+      },
+      /* ADICIONAR TRILHA: escolhe uma PARTE (nomeada) + um CANAL (rotX/Y/Z, posX/Y/Z, escala).
+         Canal fora da lista ou parte inexistente → no-op. Devolve {parte,canal} ou null. */
+      addTrilha(parte, canal) {
+        const A = animAtual && animacoesAtual[animAtual]; if (!A) return null;
+        if (!CANAIS_ANIM.includes(canal)) return null;
+        if (!partesNomeadas().some((p) => p.nome === parte)) return null;
+        A.trilhas.push({ parte, canal, chaves: [] });
+        chaveSel = null;
+        refrescarPreview(); renderAnim(); atualizarPainel();
+        console.log(`oficina passo 13b (trilha): '${animAtual}' + {parte:'${parte}', canal:'${canal}'} — ${A.trilhas.length} trilha(s)`);
+        return { parte, canal };
+      },
+      removerTrilha(ti) {
+        const A = animAtual && animacoesAtual[animAtual]; if (!A || !A.trilhas[ti]) return;
+        A.trilhas.splice(ti, 1); chaveSel = null;
+        refrescarPreview(); renderAnim(); atualizarPainel();
+      },
+      /* ADICIONAR CHAVE [tempo,valor] na trilha ti. tempo default = o do playhead
+         (tempoMostrado). Tempo já existente na trilha → sobrescreve o valor (não duplica).
+         Mantém as chaves ORDENADAS (serialização/replay estáveis + o motor assume ordem). */
+      addChave(ti, t, v) {
+        const A = animAtual && animacoesAtual[animAtual]; if (!A || !A.trilhas[ti]) return null;
+        const tempo = t == null ? tempoMostrado : Math.max(0, +t || 0);
+        const valor = +v || 0;
+        const ch = A.trilhas[ti].chaves;
+        const iEx = ch.findIndex((k) => k[0] === tempo);
+        if (iEx >= 0) ch[iEx][1] = valor; else ch.push([tempo, valor]);
+        ch.sort((a, b) => a[0] - b[0]);
+        chaveSel = { ti, ki: ch.findIndex((k) => k[0] === tempo) };
+        refrescarPreview(); renderAnim(); atualizarPainel();
+        console.log(`oficina passo 13b (chave): trilha ${ti} += [${tempo}, ${valor}] — ${ch.length} chave(s)`);
+        return { ti, tempo, valor };
+      },
+      editarChaveValor(ti, ki, v) {
+        const A = animAtual && animacoesAtual[animAtual]; if (!A || !A.trilhas[ti] || !A.trilhas[ti].chaves[ki]) return;
+        A.trilhas[ti].chaves[ki][1] = +v || 0;
+        refrescarPreview(); renderAnim();
+      },
+      editarChaveTempo(ti, ki, t) {
+        const A = animAtual && animacoesAtual[animAtual]; if (!A || !A.trilhas[ti] || !A.trilhas[ti].chaves[ki]) return;
+        const ch = A.trilhas[ti].chaves, valor = ch[ki][1], tempo = Math.max(0, +t || 0);
+        ch.splice(ki, 1);
+        const iEx = ch.findIndex((k) => k[0] === tempo);
+        if (iEx >= 0) ch[iEx][1] = valor; else ch.push([tempo, valor]);
+        ch.sort((a, b) => a[0] - b[0]);
+        chaveSel = { ti, ki: ch.findIndex((k) => k[0] === tempo) };
+        refrescarPreview(); renderAnim(); atualizarPainel();
+      },
+      apagarChave(ti, ki) {
+        const A = animAtual && animacoesAtual[animAtual]; if (!A || !A.trilhas[ti] || !A.trilhas[ti].chaves[ki]) return;
+        A.trilhas[ti].chaves.splice(ki, 1); chaveSel = null;
+        refrescarPreview(); renderAnim(); atualizarPainel();
+      },
+      selChave(ti, ki) {
+        const A = animAtual && animacoesAtual[animAtual];
+        chaveSel = (A && A.trilhas[ti] && A.trilhas[ti].chaves[ki]) ? { ti, ki } : null;
+        renderAnim(); atualizarPainel();
+      },
+      /* SCRUB: congela a pose no tempo t (previewT = segundos, clampeado a [0,dur]). O
+         wrapper do reexec lê previewT AO VIVO — NÃO precisa reexec, a pose re-renderiza
+         estável no próximo quadro. Pausa o play. */
+      scrub(t) {
+        tocando = false;
+        const dur = anDur();
+        previewT = Math.max(0, Math.min(+t || 0, dur || 0));
+        tempoMostrado = previewT;
+        atualizarPlay(); posicionarPlayhead(previewT); atualizarTempoLabel(previewT);
+      },
+      play() { tocando = true; previewT = null; atualizarPlay(); },   // volta ao relógio de parede (laço)
+      pause() { tocando = false; previewT = tempoMostrado; atualizarPlay(); posicionarPlayhead(previewT); atualizarTempoLabel(previewT); },
+      // leituras pra a bancada
+      estado: () => ({ animLigado, animAtual, previewT, tocando, tempo: tempoMostrado, chaveSel: chaveSel ? { ...chaveSel } : null }),
+      animacoes: () => JSON.parse(JSON.stringify(animacoesAtual)),
+    };
+
+    /* ---- fiação da UI da animação (botões/inputs/selects + delegação nas listas) ---- */
+    { const b = $('anBtParte'); if (b) b.addEventListener('click', () => { const nm = $('anNomeParte'); const ok = animCtl.nomearParte(nm ? nm.value : ''); if (ok && nm) nm.value = ''; }); }
+    { const inp = $('anNomeParte'); if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const ok = animCtl.nomearParte(inp.value); if (ok) inp.value = ''; } }); }
+    { const el = $('anPartes'); if (el) el.addEventListener('click', (e) => { const b = e.target.closest('.parteChip'); if (b) animCtl.selecionarParte(b.dataset.parte); }); }
+    { const b = $('anNova'); if (b) b.addEventListener('click', () => animCtl.novaAnimacao()); }
+    { const el = $('anLista'); if (el) el.addEventListener('click', (e) => { const b = e.target.closest('.animChip'); if (b) animCtl.selecionarAnim(b.dataset.anim); }); }
+    { const d = $('anDur'); if (d) d.addEventListener('change', () => animCtl.setDuracao(d.value)); }
+    { const r = $('anRepete'); if (r) r.addEventListener('change', () => animCtl.setRepete(r.checked)); }
+    { const b = $('anAddTrilha'); if (b) b.addEventListener('click', () => { const p = $('anParteTrilha'), c = $('anCanal'); animCtl.addTrilha(p ? p.value : '', c ? c.value : ''); }); }
+    { const t = $('anChaveT'); if (t) t.addEventListener('change', () => { if (chaveSel) animCtl.editarChaveTempo(chaveSel.ti, chaveSel.ki, t.value); }); }
+    { const v = $('anChaveV'); if (v) v.addEventListener('change', () => { if (chaveSel) animCtl.editarChaveValor(chaveSel.ti, chaveSel.ki, v.value); }); }
+    { const b = $('anApagarChave'); if (b) b.addEventListener('click', () => { if (chaveSel) animCtl.apagarChave(chaveSel.ti, chaveSel.ki); }); }
+    { const b = $('anPlay'); if (b) b.addEventListener('click', () => { if (tocando) animCtl.pause(); else animCtl.play(); }); }
+    /* FAIXAS: clicar numa chave a SELECIONA; clicar no × remove a trilha; clicar no corpo da
+       faixa ADICIONA uma chave naquele tempo (valor = a pose interpolada ali, pra não pular). */
+    { const cont = $('anTrilhas'); if (cont) cont.addEventListener('click', (e) => {
+        const dot = e.target.closest('.chave'); if (dot) { animCtl.selChave(+dot.dataset.ti, +dot.dataset.ki); return; }
+        const rm = e.target.closest('.lat-del[data-rmtrilha]'); if (rm) { animCtl.removerTrilha(+rm.dataset.rmtrilha); return; }
+        const faixa = e.target.closest('.lat-faixa'); if (!faixa) return;
+        const ti = +faixa.dataset.ti; const A = animAtual && animacoesAtual[animAtual]; if (!A || !A.trilhas[ti]) return;
+        const r = faixa.getBoundingClientRect(); const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1)));
+        animCtl.addChave(ti, frac * (anDur() || 0), valorNoTempo(A.trilhas[ti], frac * (anDur() || 0)));
+      }); }
+    /* RÉGUA: pointerdown/move faz SCRUB (preview ao vivo da pose naquele T). */
+    { const reg = $('anRegua'); if (reg) {
+        const tDe = (e) => { const r = reg.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1))) * (anDur() || 0); };
+        let scr = false;
+        reg.addEventListener('pointerdown', (e) => { scr = true; try { reg.setPointerCapture(e.pointerId); } catch { /* ok */ } animCtl.scrub(tDe(e)); e.preventDefault(); });
+        reg.addEventListener('pointermove', (e) => { if (scr) animCtl.scrub(tDe(e)); });
+        reg.addEventListener('pointerup', (e) => { scr = false; try { reg.releasePointerCapture(e.pointerId); } catch { /* ok */ } });
+        reg.addEventListener('pointercancel', () => { scr = false; });
+      } }
+
     /* PASSO 7 (opcional) — tecla E: com uma FACE selecionada, extruda por um passo
        padrão (EXTRUDE_E) reusando a MESMA máquina (grava ['extruda',{face,dist}],
        limpa o redo, reexec). Ignorada no meio de um arrasto (guarda) e com o foco
@@ -1653,6 +2191,7 @@ try {
     addEventListener('keydown', (e) => {
       if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName)) return;
       if (e.key !== 'e' && e.key !== 'E') return;
+      if (animLigado) return;   // PASSO 13b: extrude é do espaço Modelar (não vaza pra Animação)
       if (arrasto || faceSelecionada == null || !neutro || !neutro.F.has(faceSelecionada)) return;
       PASSOS.push(['extruda', { face: faceSelecionada, dist: EXTRUDE_E }]);
       redo.length = 0;
@@ -1728,50 +2267,56 @@ try {
     const proj = projetarVertices();
     projAtual = proj;   // PASSO 4: o hit-test do #c reusa ESTE estado de projeção (o mesmo que se desenha)
 
-    desenharFaceSel(proj);   // PASSO 7: preenchimento da face selecionada, SOB as arestas/vértices
+    desenharFaceSel(proj);   // PASSO 7/9: preenchimento das faces SELECIONADAS (nos dois espaços — no Animação mostra as faces da parte que se nomeia/seleciona)
 
-    // ARESTAS: dois passes — halo escuro largo + núcleo claro fino — pra ler tanto
-    // sobre a grama clara quanto sobre a casca escura do objeto.
-    octx.lineJoin = 'round'; octx.lineCap = 'round';
-    octx.strokeStyle = 'rgba(12, 15, 23, 0.34)'; octx.lineWidth = 2.4; tracarArestas(proj);
-    octx.strokeStyle = 'rgba(223, 229, 247, 0.55)'; octx.lineWidth = 1;   tracarArestas(proj);
+    /* PASSO 13b — no espaço Animação a MALHA (arestas/vértices/gizmo/handle) some: só o
+       destaque de face fica. A malha renderizada ANIMA (por matriz), mas o overlay
+       projeta o NEUTRO (pose de repouso) — mostrar o wireframe aqui pareceria "solto" da
+       peça em movimento. No Modelar, tudo idêntico ao de antes. */
+    if (!animLigado) {
+      // ARESTAS: dois passes — halo escuro largo + núcleo claro fino — pra ler tanto
+      // sobre a grama clara quanto sobre a casca escura do objeto.
+      octx.lineJoin = 'round'; octx.lineCap = 'round';
+      octx.strokeStyle = 'rgba(12, 15, 23, 0.34)'; octx.lineWidth = 2.4; tracarArestas(proj);
+      octx.strokeStyle = 'rgba(223, 229, 247, 0.55)'; octx.lineWidth = 1;   tracarArestas(proj);
 
-    // VÉRTICES: ponto claro com contorno escuro — legível nos dois fundos. Os
-    // SELECIONADOS (passo 8, multi) ficam roxo-acento; o ATIVO (que dirige gizmo/
-    // painel e é o `para` da mescla) é o maior e, HAVENDO VÁRIOS, ganha um anel
-    // âmbar — "o merge cola no que tem o anel".
-    for (const [id, q] of proj) {
-      const ativo = id === selecionado;
-      const sel = ativo || selVertices.includes(id);
-      octx.beginPath(); octx.arc(q.x, q.y, ativo ? 5.5 : sel ? 4.5 : 3, 0, Math.PI * 2);
-      octx.fillStyle = sel ? 'rgba(168, 132, 243, 0.98)' : 'rgba(234, 239, 252, 0.96)'; octx.fill();
-      octx.lineWidth = sel ? 1.8 : 1.2; octx.strokeStyle = 'rgba(11, 14, 22, 0.92)'; octx.stroke();
-      if (ativo && selVertices.length > 1) {   // o ATIVO como alvo da mescla: anel âmbar
-        octx.beginPath(); octx.arc(q.x, q.y, 8.5, 0, Math.PI * 2);
-        octx.lineWidth = 1.6; octx.strokeStyle = 'rgba(249, 194, 43, 0.95)'; octx.stroke();
-      }
-    }
-    // PASSO 8 — ALVO DO ÍMÃ: durante um arrasto livre com Ctrl, um anel verde-HUD
-    // no vértice em que o arrastado vai COLAR (a posição exata pra onde ele salta).
-    if (arrasto && imaAlvoAtual != null) {
-      const q = proj.get(imaAlvoAtual);
-      if (q) { octx.beginPath(); octx.arc(q.x, q.y, 9.5, 0, Math.PI * 2); octx.lineWidth = 2.4; octx.strokeStyle = 'rgba(205, 223, 108, 0.95)'; octx.stroke(); }
-    }
-
-    // ETIQUETAS de id (opcional, tecla i): fininhas, desligadas por padrão.
-    if (verIds) {
-      octx.font = '10px ui-monospace, Menlo, monospace'; octx.textBaseline = 'middle'; octx.textAlign = 'left';
+      // VÉRTICES: ponto claro com contorno escuro — legível nos dois fundos. Os
+      // SELECIONADOS (passo 8, multi) ficam roxo-acento; o ATIVO (que dirige gizmo/
+      // painel e é o `para` da mescla) é o maior e, HAVENDO VÁRIOS, ganha um anel
+      // âmbar — "o merge cola no que tem o anel".
       for (const [id, q] of proj) {
-        const s = String(id), tx = q.x + 6, ty = q.y - 6;
-        octx.lineWidth = 2.6; octx.strokeStyle = 'rgba(11, 14, 22, 0.85)'; octx.strokeText(s, tx, ty);
-        octx.fillStyle = 'rgba(205, 223, 108, 0.95)'; octx.fillText(s, tx, ty);
+        const ativo = id === selecionado;
+        const sel = ativo || selVertices.includes(id);
+        octx.beginPath(); octx.arc(q.x, q.y, ativo ? 5.5 : sel ? 4.5 : 3, 0, Math.PI * 2);
+        octx.fillStyle = sel ? 'rgba(168, 132, 243, 0.98)' : 'rgba(234, 239, 252, 0.96)'; octx.fill();
+        octx.lineWidth = sel ? 1.8 : 1.2; octx.strokeStyle = 'rgba(11, 14, 22, 0.92)'; octx.stroke();
+        if (ativo && selVertices.length > 1) {   // o ATIVO como alvo da mescla: anel âmbar
+          octx.beginPath(); octx.arc(q.x, q.y, 8.5, 0, Math.PI * 2);
+          octx.lineWidth = 1.6; octx.strokeStyle = 'rgba(249, 194, 43, 0.95)'; octx.stroke();
+        }
       }
-    }
+      // PASSO 8 — ALVO DO ÍMÃ: durante um arrasto livre com Ctrl, um anel verde-HUD
+      // no vértice em que o arrastado vai COLAR (a posição exata pra onde ele salta).
+      if (arrasto && imaAlvoAtual != null) {
+        const q = proj.get(imaAlvoAtual);
+        if (q) { octx.beginPath(); octx.arc(q.x, q.y, 9.5, 0, Math.PI * 2); octx.lineWidth = 2.4; octx.strokeStyle = 'rgba(205, 223, 108, 0.95)'; octx.stroke(); }
+      }
 
-    // GIZMO DE MOVER (passo 6): as 3 setas do vértice SELECIONADO, POR CIMA de tudo.
-    desenharGizmo();
-    // HANDLE DE EXTRUDE (passo 7): a seta da normal da FACE selecionada, por cima.
-    desenharHandle();
+      // ETIQUETAS de id (opcional, tecla i): fininhas, desligadas por padrão.
+      if (verIds) {
+        octx.font = '10px ui-monospace, Menlo, monospace'; octx.textBaseline = 'middle'; octx.textAlign = 'left';
+        for (const [id, q] of proj) {
+          const s = String(id), tx = q.x + 6, ty = q.y - 6;
+          octx.lineWidth = 2.6; octx.strokeStyle = 'rgba(11, 14, 22, 0.85)'; octx.strokeText(s, tx, ty);
+          octx.fillStyle = 'rgba(205, 223, 108, 0.95)'; octx.fillText(s, tx, ty);
+        }
+      }
+
+      // GIZMO DE MOVER (passo 6): as 3 setas do vértice SELECIONADO, POR CIMA de tudo.
+      desenharGizmo();
+      // HANDLE DE EXTRUDE (passo 7): a seta da normal da FACE selecionada, por cima.
+      desenharHandle();
+    }
   }
 
   /* desenha o gizmo do vértice selecionado (nada se não há seleção). Fonte única
@@ -1908,7 +2453,7 @@ try {
 
   visor.rodar(
     (fps) => atualizarStatus(fps),          // onFrame (~2×/s): mexe no DOM devagar
-    () => { aplicarCamera(); desenharMalha(); },   // antesDoQuadro: injeta a câmera do editor E redesenha a malha, em sincronia com o quadro
+    (dt, T) => { aplicarCamera(); desenharMalha(); if (animLigado) atualizarAnimQuadro(T); },   // antesDoQuadro: câmera + overlay + PASSO 13b: o PLAYHEAD segue o relógio (T em s) no play (o MESMO T que o render passa ao animar)
   );
 
   /* ganchos de VERIFICAÇÃO (a bancada headless usa; inertes no uso normal).
@@ -1999,8 +2544,8 @@ try {
     temSolido: () => { const F = neutro && neutro.F; return F ? [...F.values()].some((f) => f.solido) : false; },   // há ALGUMA face sólida?
     colisao: () => { try { return colisaoDe(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual); } catch { return null; } },   // {forma,raio,altura,base} do estado atual (a MESMA função que o arquivo salvo chama no load)
     painelColisao: () => ({ forma: $('pcolForma').textContent, raio: $('pcolR').textContent, altura: $('pcolH').textContent, base: $('pcolB').textContent, aviso: !$('pcolAviso').hidden, btSolido: !$('btSolido').hidden }),   // leitura do bloco Colisão pra a bancada afirmar
-    serializar: () => serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual),   // a STRING .js do export (do estado ATUAL, com MATERIAIS)
-    salvar: () => salvarPeca(mod.meta.nome, serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual)),   // dispara o salvar (POST → fallback download); devolve {via,...}
+    serializar: () => serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual, animacoesAtual),   // a STRING .js do export (do estado ATUAL, com MATERIAIS + ANIMACOES)
+    salvar: () => salvarPeca(mod.meta.nome, serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual, animacoesAtual)),   // dispara o salvar (POST → fallback download); devolve {via,...}
     ultimoDownload: () => (ultimoDownload ? { ...ultimoDownload } : null),            // o último download disparado pelo fallback (null = nenhum ainda)
     nomePeca: () => mod.meta.nome,                                                    // o nome do arquivo que o salvar usa
     /* ---- PASSO 11c: pincel macio — pintar arrastando (a bancada mede/afirma) ---- */
@@ -2025,6 +2570,60 @@ try {
         const hx = (n) => n.toString(16).padStart(2, '0');
         for (let x = 0; x < cv.width; x++) { const o = (y * cv.width + x) * 4; const h = '#' + hx(im[o]) + hx(im[o + 1]) + hx(im[o + 2]); if (!out.includes(h)) out.push(h); }
         return out;
+      } catch { return null; }
+    },
+    /* ---- PASSO 13b: ESPAÇO ANIMAÇÃO — autoria + preview (a bancada dirige/mede/afirma) ---- */
+    espacoAnim: () => animLigado,                                                     // estamos no espaço Animação?
+    ligarAnim: (b) => { setEspacoAnim(b); return animLigado; },                        // entra/sai do espaço (== clicar o chip Animação/Modelar)
+    animEstado: () => (animCtl ? animCtl.estado() : null),                            // {animLigado,animAtual,previewT,tocando,tempo,chaveSel}
+    animacoes: () => (animCtl ? animCtl.animacoes() : {}),                            // a seção ANIMACOES ATUAL (cópia; o que o export grava)
+    partesAnim: () => (animCtl ? animCtl.partes() : []),                              // [{nome,faces}] das partes nomeadas (do neutro)
+    nomearParte: (nome) => (animCtl ? animCtl.nomearParte(nome) : null),             // grava ['parte',{nome,faces:selecionadas}]; devolve o passo (ou null)
+    selecionarParte: (nome) => { if (animCtl) animCtl.selecionarParte(nome); },        // seleciona as faces da parte (feedback visual)
+    novaAnimacao: (nome) => (animCtl ? animCtl.novaAnimacao(nome) : null),           // cria uma animação; devolve o nome
+    selecionarAnim: (nome) => { if (animCtl) animCtl.selecionarAnim(nome); },          // troca a animação em edição
+    setDuracao: (v) => { if (animCtl) animCtl.setDuracao(v); },                        // ajusta a duração da animação atual
+    setRepete: (b) => { if (animCtl) animCtl.setRepete(b); },                          // liga/desliga o laço
+    addTrilha: (parte, canal) => (animCtl ? animCtl.addTrilha(parte, canal) : null), // adiciona uma trilha (parte + canal); devolve {parte,canal} ou null
+    removerTrilha: (ti) => { if (animCtl) animCtl.removerTrilha(ti); },
+    addChave: (ti, t, v) => (animCtl ? animCtl.addChave(ti, t, v) : null),           // insere [tempo,valor] na trilha ti (tempo default = playhead)
+    editarChaveValor: (ti, ki, v) => { if (animCtl) animCtl.editarChaveValor(ti, ki, v); },
+    editarChaveTempo: (ti, ki, t) => { if (animCtl) animCtl.editarChaveTempo(ti, ki, t); },
+    apagarChave: (ti, ki) => { if (animCtl) animCtl.apagarChave(ti, ki); },
+    selChave: (ti, ki) => { if (animCtl) animCtl.selChave(ti, ki); },
+    scrub: (t) => { if (animCtl) animCtl.scrub(t); return previewT; },                 // congela a pose no tempo t (preview ao vivo); devolve previewT
+    play: () => { if (animCtl) animCtl.play(); return tocando; },
+    pause: () => { if (animCtl) animCtl.pause(); return { tocando, previewT }; },
+    previewT: () => previewT,                                                         // o tempo congelado atual (null = tocando)
+    canais: () => CANAIS_ANIM.slice(),                                               // os canais válidos (espelho de CANAIS do motor)
+    painelAnim: () => ({                                                              // leitura do painel/linha do tempo pra a bancada afirmar
+      chipAnim: $('chipAnim') ? $('chipAnim').classList.contains('on') : false,
+      chipModelar: $('chipModelar') ? $('chipModelar').classList.contains('on') : false,
+      blocoAnim: $('blocoAnim') ? !$('blocoAnim').hidden : false,
+      linha: $('linha') ? !$('linha').hidden : false,
+      blocoVertice: $('blocoVertice') ? !$('blocoVertice').hidden : false,
+      btParte: $('anBtParte') ? !$('anBtParte').disabled : false,
+      nPartes: $('anPartes') ? $('anPartes').querySelectorAll('.parteChip').length : 0,
+      nAnims: $('anLista') ? $('anLista').querySelectorAll('.animChip').length : 0,
+      nFaixas: $('anTrilhas') ? $('anTrilhas').querySelectorAll('.lat-linhaT').length : 0,
+      nChaves: $('anTrilhas') ? $('anTrilhas').querySelectorAll('.chave').length : 0,
+      playhead: $('anPlayhead') ? !$('anPlayhead').hidden : false,
+      tempo: $('anTempo') ? $('anTempo').textContent : '',
+      play: $('anPlay') ? $('anPlay').textContent : '',
+    }),
+    reguaRect: () => { const r = $('anRegua'); if (!r) return null; const b = r.getBoundingClientRect(); return { left: b.left, top: b.top, width: b.width, height: b.height }; },   // geometria da régua (a bancada posiciona o cursor pra scrub REAL)
+    /* pose de uma PARTE em T (a MATRIZ do animar): monta o preview do rascunho como o
+       reexec e devolve a matriz do 1º lote da parte. Prova página==Node + determinismo. */
+    matrizParteEmT: (parte, T) => {
+      try {
+        const r = adaptarV3(nucleo(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual), { TS, tex, geo, m4 }, materiaisAtual);
+        const info = r.lotes.map((L) => L.parte || null);
+        const animar = montarAnimar(animacoesAtual, info, r.partes);
+        if (!animar) return null;
+        const L = r.lotes.map(() => ({ matriz: m4.ident() }));
+        animar(T, L);
+        const i = info.indexOf(parte);
+        return i >= 0 ? [...L[i].matriz] : null;
       } catch { return null; }
     },
   };
