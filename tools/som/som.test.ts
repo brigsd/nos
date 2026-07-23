@@ -169,3 +169,43 @@ describe('a peça-som _bolha', () => {
     expect(bolha.meta.duracao).toBeGreaterThan(0.1);
   });
 });
+
+/* o CATÁLOGO de presets (S4): cada preset é uma peça-som no MESMO formato do _bolha
+   (PARAMS+PASSOS+semente+meta+construir), semeada dos números tunados do som.js. Aqui é a
+   camada de DADOS (headless): grafo limpo, saída definida, canônico estável, meta.duracao
+   coerente. O "soa do tipo certo" (curto/largo/sustentado/tonal/grave) é medido na bancada
+   `analisar` (precisa de OfflineAudioContext, browser). */
+const carregar = (nome: string) => import(fileURLToPath(new URL(`../../prototipos/fps/v3/pecas-som/${nome}.js`, import.meta.url)));
+describe('o catálogo de presets (S4)', () => {
+  const PRESETS = ['_passo', '_vento', '_bolha', '_agua'];
+  it.each(PRESETS)('%s: carrega, sem órfão, saída definida, canônico estável, meta coerente', async (nome) => {
+    const mod: any = await carregar(nome);
+    expect(Array.isArray(mod.PASSOS)).toBe(true);
+    expect(typeof mod.semente).toBe('number');                 // semente FIXA = determinístico
+    const g = somNucleo(mod.PASSOS, mod.PARAMS, mod.semente);
+    expect(g.orfaos).toHaveLength(0);                          // grafo limpo (nenhuma referência pendurada)
+    expect(g.saida).not.toBeNull();                           // tem um nó de áudio livre = a saída
+    expect(JSON.stringify(somCanonico(g))).toBe(JSON.stringify(somCanonico(somNucleo(mod.PASSOS, mod.PARAMS, mod.semente))));
+    expect(mod.meta.nome).toBe(nome);
+    expect(mod.meta.duracao).toBeCloseTo(duracaoDoGrafo(g), 6);   // meta.duracao CALCULADA bate com o grafo
+    expect(typeof mod.construir).toBe('function');             // o mesmo envelope da peça-objeto
+  });
+
+  it('_vento: dois moduladores (deriva do bandpass em freq + tremor da turbulência em ganho) e a SOMA dos caminhos', async () => {
+    const vento: any = await carregar('_vento');
+    const g = somNucleo(vento.PASSOS, vento.PARAMS, vento.semente);
+    const lfos = g.nos.filter((n: any) => n.tipo === 'lfo');
+    expect(lfos).toHaveLength(2);
+    expect(lfos.some((n: any) => n.alvo && n.alvo.param === 'freq')).toBe(true);    // deriva varre a freq do bandpass
+    expect(lfos.some((n: any) => n.alvo && n.alvo.param === 'ganho')).toBe(true);   // tremor treme o ganho
+    expect(g.nos.some((n: any) => n.tipo === 'soma' && n.de.length === 2)).toBe(true);   // mistura os 2 caminhos (mixerG)
+    expect(g.saida).toBe('rajada');
+  });
+
+  it('_passo: dois `ruido` (corpo grave + grão de impacto) somados na saída (o granular condensado)', async () => {
+    const passo: any = await carregar('_passo');
+    const g = somNucleo(passo.PASSOS, passo.PARAMS, passo.semente);
+    expect(g.nos.filter((n: any) => n.tipo === 'ruido')).toHaveLength(2);
+    expect(g.nos.find((n: any) => n.id === g.saida)!.tipo).toBe('soma');
+  });
+});

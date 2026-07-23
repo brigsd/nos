@@ -241,7 +241,18 @@ import { somNucleo, somCanonico } from './motor/somnucleo.js';
 import { analisar, desenharEspectrograma, frasesDescritores } from './motor/somanalise.js';
 
 const SR = 44100;                       // taxa fixa do render (determinismo, igual à bancada sintetizar)
-const EVENTOS = ['_bolha'];             // eventos disponíveis em pecas-som/ (S4 traz o catálogo de presets)
+/* CATÁLOGO curado de PRESETS (S4): nome amigável → arquivo em pecas-som/. Presets são
+   sons PRONTOS pra variar, semeados dos parâmetros já tunados do `som.js` do jogo — o nível
+   FÁCIL do vocabulário (D-73): escolher um CARREGA o evento EDITÁVEL (o editor de blocos do
+   S3 + o ouvido do S3.5 já valem — preset é peça inicial, não engrenagem à parte). Lista
+   curada e hardcoded (não precisa de rota de servidor). */
+const CATALOGO = [
+  { nome: 'Passo', arq: '_passo' },     // pisada: grão de impacto + corpo grave (PISOS.grama)
+  { nome: 'Vento', arq: '_vento' },     // rajada: ruído filtrado, largo, sustentado, ondulando
+  { nome: 'Bolha', arq: '_bolha' },     // bolha d'água: glissando de seno pra cima (tonal)
+  { nome: 'Água',  arq: '_agua' },      // lambida: ruído grave abafado (o lowpass da lambida)
+];
+const EVENTOS = CATALOGO.map((c) => c.arq);   // os arquivos disponíveis em pecas-som/
 
 const P = new URLSearchParams(location.search);
 const alvoInicial = (P.get('som') || '_bolha').replace(/[^a-z0-9_-]/gi, '');
@@ -657,8 +668,8 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault(); if (tocando && !loopLigado) parar(); else tocar();
   }
 });
-{ const sel = $('seletor');
-  for (const nome of EVENTOS) { const o = document.createElement('option'); o.value = nome; o.textContent = nome; sel.append(o); }
+{ const sel = $('seletor');   // o SELETOR lista o CATÁLOGO curado (nome amigável → arquivo)
+  for (const { nome, arq } of CATALOGO) { const o = document.createElement('option'); o.value = arq; o.textContent = nome; sel.append(o); }
   sel.value = EVENTOS.includes(alvoInicial) ? alvoInicial : EVENTOS[0];
   sel.addEventListener('change', async () => { parar(); try { await carregar(sel.value); } catch (e) { mostrarErro('evento não abriu: ' + e.message); } });
 }

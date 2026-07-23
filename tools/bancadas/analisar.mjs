@@ -15,6 +15,11 @@
          acima de 700 Hz despenca) — discrimina "cortou agudo" de "só abaixou volume";
      (4) DETERMINÍSTICO: o mesmo evento → o MESMO espectrograma (hash de pixels) e os
          MESMOS descritores; evento diferente → mudam (relógio congelado).
+     (5+6) CATÁLOGO DE PRESETS (S4): cada preset semeado do som.js soa do TIPO certo —
+         passo CURTO+LARGO (centroide alto-ish, cauda ~0), vento SUSTENTADO+LARGO+ONDULADO
+         (energia a turbFreq no envelope, o tremor do lfo), bolha TONAL varrendo pra cima,
+         agua GRAVE (centroide baixo) — e cada um DIFERE do outro (brilho/flatness/duração),
+         todos válidos (0 órfão) e determinísticos (render 2× byte-a-byte, delta 0).
    Sem rede externa (server local + Chromium do sandbox). O "soa bonito?" é do
    ideador; isto barra a regressão muda do que dá pra MEDIR e VER.
      npm run analisar
@@ -72,6 +77,25 @@ const R = await page.evaluate(async (SR) => {
     const b0 = Math.max(1, Math.floor(fLo / espec.freqPorBin)), b1 = Math.min(espec.bins - 1, Math.ceil(fHi / espec.freqPorBin));
     let s = 0, n = 0; for (let q = 0; q < espec.quadros; q++) for (let b = b0; b <= b1; b++) { s += Math.pow(10, espec.db[q * espec.bins + b] / 20); n++; }
     return s / Math.max(1, n);
+  };
+  // medidores de amostra (o par dos da bancada sintetizar) — pro catálogo de presets do S4
+  const rms = (a) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * a[i]; return Math.sqrt(s / a.length); };
+  const rmsJanela = (a, t0, t1) => { const i0 = Math.max(0, t0 * SR | 0), i1 = Math.min(a.length, t1 * SR | 0); let s = 0; for (let i = i0; i < i1; i++) s += a[i] * a[i]; return Math.sqrt(s / Math.max(1, i1 - i0)); };
+  const maxDelta = (a, b) => { let m = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) { const d = Math.abs(a[i] - b[i]); if (d > m) m = d; } return m; };
+  const bin = (x, f, sr) => { const w = 2 * Math.PI * f / sr; const c = 2 * Math.cos(w); let s1 = 0, s2 = 0; for (let i = 0; i < x.length; i++) { const s0 = x[i] + c * s1 - s2; s2 = s1; s1 = s0; } const re = s1 - s2 * Math.cos(w), im = s2 * Math.sin(w); return Math.sqrt(re * re + im * im) / x.length; };
+  const envBloco = (a, bloco) => { const out = []; for (let i = 0; i + bloco <= a.length; i += bloco) { let s = 0; for (let j = 0; j < bloco; j++) s += a[i + j] * a[i + j]; out.push(Math.sqrt(s / bloco)); } let m = 0; for (const v of out) m += v; m /= out.length || 1; return Float32Array.from(out, (v) => v - m); };
+  /* FLATNESS espectral (geo-média / aritmética das magnitudes, SÓ nos quadros COM energia):
+     ~1 = LARGO/ruidoso (energia espalhada), ~0 = TONAL (uma linha). Discrimina ruído de tom. */
+  const flatness = (an) => {
+    const e = an.espectrograma, p = an.descritores.pitch;
+    const q0 = Math.max(0, p.quadroInicio), q1 = p.quadroFim >= 0 ? p.quadroFim : e.quadros - 1;
+    let acc = 0, nf = 0;
+    for (let q = q0; q <= q1; q++) {
+      let ls = 0, sm = 0, n = 0;
+      for (let b = 1; b < e.bins; b++) { const m = Math.pow(10, e.db[q * e.bins + b] / 20); ls += Math.log(m + 1e-12); sm += m; n++; }
+      if (!n) continue; acc += (sm > 0 ? Math.exp(ls / n) / (sm / n) : 0); nf++;
+    }
+    return nf ? acc / nf : 0;
   };
 
   const out = {};
@@ -135,6 +159,39 @@ const R = await page.evaluate(async (SR) => {
     h1, hLp, h440,
   };
 
+  // ===== 5. CATÁLOGO DE PRESETS (S4): cada um SOA como deve + DISCRIMINA do outro =====
+  const nucleo = await import('/prototipos/fps/v3/motor/somnucleo.js');
+  const presetMod = {
+    _passo: await import('/prototipos/fps/v3/pecas-som/_passo.js'),
+    _vento: await import('/prototipos/fps/v3/pecas-som/_vento.js'),
+    _bolha: bolha,
+    _agua: await import('/prototipos/fps/v3/pecas-som/_agua.js'),
+  };
+  const medirPreset = async (mod) => {
+    const g = nucleo.somNucleo(mod.PASSOS, mod.PARAMS, mod.semente);
+    const a1 = await renderarOffline(mod, { sampleRate: SR });
+    const a2 = await renderarOffline(mod, { sampleRate: SR });
+    const an = analisar(a1, SR);
+    const d = an.descritores, dur = d.duracao;
+    return {
+      nNos: g.nos.length, saida: g.saida, orfaos: g.orfaos.length, replayDelta: maxDelta(a1, a2), rms: rms(a1),
+      dur, centroide: d.brilho.centroideHz, pitchIni: d.pitch.inicioHz, pitchFim: d.pitch.fimHz, ataqueMs: d.envelope.ataqueMs,
+      flatness: flatness(an),
+      rmsIni: rmsJanela(a1, 0, 0.06), rmsFim: rmsJanela(a1, 0.15, Math.min(dur, 0.33)),
+      rmsSust: rmsJanela(a1, 1.0, 2.0),   // energia UM SEGUNDO+ adentro: só o SUSTENTADO tem (os curtos já acabaram em <0.4 s → 0)
+    };
+  };
+  const cat = {};
+  for (const [k, m] of Object.entries(presetMod)) cat[k] = await medirPreset(m);
+  // ONDULAÇÃO do vento: energia a turbFreq no envelope de amplitude, COM vs SEM turbulência
+  const vento = presetMod._vento;
+  const modHz = vento.PARAMS.turbFreq;
+  const semTurb = { PASSOS: vento.PASSOS, semente: vento.semente, PARAMS: { ...vento.PARAMS, turbProf: 0 } };
+  const av = await renderarOffline(vento, { sampleRate: SR });
+  const as = await renderarOffline(semTurb, { sampleRate: SR });
+  const bloco = Math.round(SR / 100), envSr = SR / bloco;
+  out.presets = { cat, n: Object.keys(cat).length, ripple: { modHz, com: bin(envBloco(av, bloco), modHz, envSr), sem: bin(envBloco(as, bloco), modHz, envSr) } };
+
   return out;
 }, SR);
 
@@ -176,6 +233,35 @@ ok(D.hashIgual && D.centIgual && D.ataqueIgual, 'MESMO evento → MESMO espectro
 ok(D.hashMudaFiltro, 'evento diferente (com filtro) → hash MUDA', `${D.h1} → ${D.hLp}`);
 ok(D.hashMudaSeno, 'evento diferente (seno) → hash MUDA', `${D.h1} → ${D.h440}`);
 
+const PR = R.presets, C = PR.cat;
+console.log(`\n[5] catálogo de PRESETS (S4): ${PR.n} sons semeados do som.js, cada um soando do TIPO certo`);
+// (a) cada preset é VÁLIDO (sem órfão) e DETERMINÍSTICO (render 2× byte-a-byte, delta 0) e faz som
+for (const [k, m] of Object.entries(C)) {
+  ok(m.orfaos === 0 && m.saida != null && m.replayDelta === 0 && m.rms > 0.005,
+    `${k}: válido (0 órfão, saída='${m.saida}') · determinístico (replay delta 0) · faz som`, `rms ${f(m.rms, 4)} · delta ${m.replayDelta}`);
+}
+// (b) PASSO: curto (energia cedo, cauda ~0), ataque bem cedo, LARGO/ruidoso, centroide alto-ish
+const P4 = C._passo;
+ok(P4.rmsIni > P4.rmsFim * 6 && P4.ataqueMs < 40, 'passo: CURTO — energia cedo e cauda ~0 (não sustenta), ataque bem cedo', `ini ${f(P4.rmsIni, 4)} vs fim ${f(P4.rmsFim, 4)} · ataque ${f(P4.ataqueMs, 1)} ms`);
+ok(P4.flatness > 0.4 && P4.centroide > 1500, 'passo: LARGO/ruidoso (energia espalhada) e centroide alto-ish', `flatness ${f(P4.flatness, 3)} · brilho ${f(P4.centroide, 0)} Hz`);
+// (c) VENTO: sustentado (dura + energia lá no fim), LARGO, e ONDULAÇÃO do lfo (turbulência)
+const V4 = C._vento;
+ok(V4.dur > 2.0 && V4.rmsSust > 0.02, 'vento: SUSTENTADO — ainda soa 1–2 s adentro, onde todo curto já morreu (não é estalo)', `dur ${f(V4.dur, 2)} s · rms em [1,2]s ${f(V4.rmsSust, 4)}`);
+ok(V4.flatness > 0.25, 'vento: LARGO (ruído filtrado, não tonal)', `flatness ${f(V4.flatness, 3)}`);
+ok(PR.ripple.com > PR.ripple.sem * 4, `vento: ONDULAÇÃO — energia a ${PR.ripple.modHz} Hz no envelope (o tremor do lfo) COM >> SEM`, `${f(PR.ripple.com, 5)} vs ${f(PR.ripple.sem, 5)} (${f(PR.ripple.com / (PR.ripple.sem || 1e-9), 1)}x)`);
+// (d) BOLHA: tonal e varre PRA CIMA (já provado no [1]; aqui pelo mesmo eixo do catálogo)
+const B4 = C._bolha;
+ok(B4.flatness < 0.05 && B4.pitchFim > B4.pitchIni + 200, 'bolha: TONAL (flatness baixa) e o tom varre PRA CIMA', `flatness ${f(B4.flatness, 3)} · ${f(B4.pitchIni, 0)}→${f(B4.pitchFim, 0)} Hz`);
+// (e) AGUA: grave/abafada (centroide baixo, o lowpass da lambida)
+const A4 = C._agua;
+ok(A4.centroide < 500, 'agua: GRAVE/abafada (centroide baixo — o passa-baixa da lambida)', `${f(A4.centroide, 0)} Hz`);
+// (f) DISCRIMINAÇÃO: passo ≠ vento ≠ bolha ≠ agua — cada eixo separa um par
+console.log('\n[6] os presets DIFEREM entre si (cada medida separa um par)');
+ok(P4.centroide > V4.centroide && V4.centroide > A4.centroide, 'brilho DISCRIMINA: passo > vento > agua (centroide decrescente)', `${f(P4.centroide, 0)} > ${f(V4.centroide, 0)} > ${f(A4.centroide, 0)} Hz`);
+ok(P4.flatness > B4.flatness * 10, 'passo LARGO ≠ bolha TONAL (flatness: um espalha, o outro é linha)', `${f(P4.flatness, 3)} vs ${f(B4.flatness, 3)}`);
+ok(V4.dur > P4.dur * 5, 'vento SUSTENTADO ≠ passo CURTO (duração)', `${f(V4.dur, 2)} s vs ${f(P4.dur, 2)} s`);
+ok(PR.n >= 4, 'o catálogo tem N presets curados (passo/vento/bolha/agua)', `${PR.n} presets`);
+
 if (errs.length) { falhas++; console.log(`\n  FALHA erros de página: ${errs.join(' | ')}`); }
-console.log(falhas ? `\nanalisar: ${falhas} falha(s)` : '\nanalisar: o espectrograma + descritores MEDEM o som — sweep sobe, seno vira linha, filtro corta agudo, tudo determinístico');
+console.log(falhas ? `\nanalisar: ${falhas} falha(s)` : '\nanalisar: o espectrograma + descritores MEDEM o som — sweep sobe, seno vira linha, filtro corta agudo, tudo determinístico; e o CATÁLOGO de presets soa do tipo certo (passo curto/largo, vento sustentado/ondulado, bolha tonal, agua grave) e cada um DIFERE do outro');
 process.exit(falhas ? 1 : 0);

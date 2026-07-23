@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-209 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+212 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -193,7 +193,10 @@
 
 ## prototipos/fps/v3/pecas-som/
 
+- `_agua.js` — PRESET-SOM _agua (Aba Som, S4) — a LAMBIDA de água (onda na margem) re-expressa como GRAFO de evento, com os NÚMEROS do `lambida()` do motor/som.js. Nível FÁ…
 - `_bolha.js` — PEÇA-SOM exemplo da Aba Som (passo 1): a BOLHA da água re-expressa como GRAFO de evento — prova que o vocabulário (oscilador + alturaEnv + envelope) faz um s…
+- `_passo.js` — PRESET-SOM _passo (Aba Som, S4) — a PISADA re-expressa como GRAFO de evento, com os NÚMEROS já tunados do `passo()`/`PISOS.grama` do motor/som.js. É o nível …
+- `_vento.js` — PRESET-SOM _vento (Aba Som, S4) — a RAJADA de vento re-expressa como GRAFO de evento, com os NÚMEROS tunados do vento do motor/som.js. Nível FÁCIL do vocabul…
 
 ## scripts/
 

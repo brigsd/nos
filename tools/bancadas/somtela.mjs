@@ -16,7 +16,9 @@
      (6) o PLAY toca a versão ATUAL (editada) — tocarEvento liga o grafo editado;
      (7) O OUVIDO (S3.5): a aba DESENHA o espectrograma (canvas não-vazio) + os descritores legíveis,
          e eles BATEM com um analisar(renderarOffline(_bolha)) independente; editar o sweep SOBE o brilho;
-     (8) sem regressão — a aba abre sem erro de console e a aba Objeto (oficina.html) intacta.
+     (8) O CATÁLOGO (S4): o seletor LISTA os presets curados (nome amigável → arquivo) e escolher um
+         CARREGA o evento EDITÁVEL (cards do S3 + espectrograma do S3.5), sem erro — screenshot de passo/vento;
+     (9) sem regressão — a aba abre sem erro de console e a aba Objeto (oficina.html) intacta.
    Relógio congelado (Date.now/Math.random) pro screenshot ser determinístico.
      npm run somtela
      node tools/bancadas/somtela.mjs */
@@ -258,8 +260,33 @@ await P.recarregar();
 await page.evaluate(() => window.__som.aguardar());
 await page.screenshot({ path: join(OUT, 'som-espectrograma.png') });
 
-/* ===== 8. sem regressão: aba sem erro de console + a aba Objeto intacta ===== */
-console.log('\n[8] sem regressão');
+/* ===== 8. CATÁLOGO DE PRESETS (S4): o seletor LISTA o catálogo e CARREGA cada um EDITÁVEL ===== */
+console.log('\n[8] catálogo de presets (S4): o seletor lista o catálogo e carrega cada preset editável');
+const opcoes = await page.$$eval('#seletor option', (os) => os.map((o) => ({ arq: o.value, nome: o.textContent })));
+ok(opcoes.length >= 4 && ['_passo', '_vento', '_bolha', '_agua'].every((a) => opcoes.some((o) => o.arq === a)),
+  'o seletor lista o CATÁLOGO curado (nome amigável → arquivo)', opcoes.map((o) => `${o.nome}=${o.arq}`).join(' · '));
+/* o caminho do USUÁRIO: escolher no <select> dispara o change → carregar → carrega o preset */
+const escolher = async (arq) => { await page.selectOption('#seletor', arq); await page.waitForFunction((n) => window.__som.evento().nome === n, arq, { timeout: 8000 }).catch(() => {}); await page.evaluate(() => window.__som.aguardar()); };
+await escolher('_vento');
+ok((await page.evaluate(() => window.__som.evento())).nome === '_vento', 'escolher no SELETOR CARREGA o preset (change → carregar, o caminho do usuário)', `evento = '${(await page.evaluate(() => window.__som.evento())).nome}'`);
+for (const arq of ['_passo', '_vento', '_agua']) {
+  const m = await page.evaluate((n) => window.__som.recarregar(n), arq);   // o probe chama a MESMA carregar
+  const g = await P.grafo();
+  const esp = await page.evaluate(() => window.__som.espec());
+  const an = await page.evaluate(() => window.__som.analise());
+  const nCards = await P.nCards();
+  ok(m.len > 0 && g.orfaos.length === 0 && g.saida != null && esp.pixelsAcesos > 500 && esp.nDescs === 5 && nCards === g.nNos,
+    `${arq}: carrega EDITÁVEL (${g.nNos} cards/nós · saída='${g.saida}' · 0 órfão) + espectrograma desenhado (S3.5)`,
+    `dur ${f(an.duracao, 2)}s · brilho ${f(an.centroide, 0)}Hz · ${esp.pixelsAcesos}px · ${nCards} cards`);
+}
+/* screenshots dos espectrogramas de PASSO e VENTO na aba (o deliverable do S4) — pelo SELETOR
+   real, pra o dropdown bater com o evento carregado; relógio congelado (render determinístico) */
+await escolher('_passo'); await page.screenshot({ path: join(OUT, 'som-preset-passo.png') });
+await escolher('_vento'); await page.screenshot({ path: join(OUT, 'som-preset-vento.png') });
+await escolher('_bolha');   // volta pro _bolha limpo
+
+/* ===== 9. sem regressão: aba sem erro de console + a aba Objeto intacta ===== */
+console.log('\n[9] sem regressão');
 ok(errs.length === 0, 'a aba Som abre e edita SEM erro de console', errs.length ? errs.join(' | ') : '0 erros');
 const errsSom = errs.length;
 await page.goto(`${base}/oficina.html?peca=_oficina-toco`, { waitUntil: 'load' });
@@ -271,6 +298,6 @@ ok(errs.length === errsSom, 'a aba Objeto abre sem NOVO erro de console', errs.l
 await browser.close();
 server.close();
 
-console.log(`\nscreenshots: ${join(OUT, 'som-aba.png')} · ${join(OUT, 'som-editor.png')} · ${join(OUT, 'som-espectrograma.png')}`);
-console.log(falhas ? `\nsomtela: ${falhas} falha(s)` : '\nsomtela: o editor lista os blocos, editar muda o som ao vivo (determinístico), add/ligar/remover montam o grafo, a validação grita sem quebrar, o Play toca a versão editada, Objeto intacta');
+console.log(`\nscreenshots: ${join(OUT, 'som-aba.png')} · ${join(OUT, 'som-editor.png')} · ${join(OUT, 'som-espectrograma.png')} · ${join(OUT, 'som-preset-passo.png')} · ${join(OUT, 'som-preset-vento.png')}`);
+console.log(falhas ? `\nsomtela: ${falhas} falha(s)` : '\nsomtela: o editor lista os blocos, editar muda o som ao vivo (determinístico), add/ligar/remover montam o grafo, a validação grita sem quebrar, o Play toca a versão editada, o seletor lista e carrega o CATÁLOGO de presets (S4), Objeto intacta');
 process.exit(falhas ? 1 : 0);
