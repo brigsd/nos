@@ -1,8 +1,10 @@
 <!doctype html>
-<!-- som.html — a CASCA da ABA SOM (S2, D-99): a aba nova (sem câmera/malha) que carrega um evento de pecas-som, DESENHA a onda e TOCA ao vivo (Web Audio).
-     Contexto próprio (D-73): "forma de onda no centro, blocos à direita, play embaixo". A onda vem do `renderarOffline` (evento -> Float32Array -> canvas 2D,
-     determinístico); o Play cria um AudioContext no GESTO do usuário e liga o evento pela `tocarEvento`. Blocos à direita são PLACEHOLDER (chegam no S3). Reusa
-     motor/somnucleo.js + motor/somweb.js (o núcleo provado no S1); o som.js do JOGO fica INTOCADO — só importo os módulos NOVOS. -->
+<!-- som.html — a ABA SOM. S2 (D-100) foi a CASCA: carregar um evento de pecas-som, DESENHAR a onda e TOCAR ao vivo. S3 (aqui) transforma o painel direito, que era LEITURA
+     do grafo + placeholder, no EDITOR ao vivo dos BLOCOS: cada nó vira um card com seus params como CONTROLES (slider pra número, dropdown pra enum), mexer re-renderiza a onda NA
+     HORA (renderarOffline) e o próximo Play toca a versão editada (tocarEvento) — o "mexeu-ouviu". Adicionar/remover/ligar bloco montam/editam o grafo (a lista de PASSOS É o objeto);
+     órfão/ciclo/sem-saída GRITAM na UI (via somNucleo.orfaos) sem quebrar a página. Reusa o motor provado no S1 (somnucleo.js + somweb.js); o som.js do JOGO fica INTOCADO — só importo
+     os módulos NOVOS. Caminho de edição escolhido (S3): os controles editam o VALOR EFETIVO (INLINE) do nó — ao carregar, os PARAMS nomeados da peça são RESOLVIDOS pra número; PARAMS
+     nomeados de verdade (editar o dimensional) fica pro futuro. Ver docs/oficina.md "## Aba Som" (ordem S3) e DECISIONS D-99/D-100. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
@@ -35,7 +37,7 @@
 
   /* PALCO central: a FORMA DE ONDA (a "cena no centro" da aba Som). Ocupa o miolo, à
      esquerda do painel e acima do transporte/status. O <canvas> preenche o palco. */
-  #palco { position: fixed; top: 44px; right: min(320px, 32vw); left: 0; bottom: 80px; z-index: 1;
+  #palco { position: fixed; top: 44px; right: min(340px, 34vw); left: 0; bottom: 80px; z-index: 1;
     background: #0b0e16; border-right: 1px solid var(--line); }
   #onda { display: block; width: 100%; height: 100%; }
   /* PLAYHEAD: linha que corre sobre a onda enquanto toca (bônus). Não rouba clique. */
@@ -47,32 +49,81 @@
     font-size: 12px; color: var(--dim); }
   #vazio[hidden] { display: none; }
 
-  /* painel de PROPRIEDADES à direita — PLACEHOLDER da autoria (os BLOCOS chegam no S3).
-     Mostra o grafo do evento em leitura, pra o autor ver de que blocos a onda saiu. */
-  #props { position: fixed; top: 44px; right: 0; bottom: 26px; width: min(320px, 32vw); z-index: 9;
+  /* painel EDITOR à direita (S3): deixa de ser leitura e vira o construtor dos blocos —
+     cada nó um card com params como controles, botões pra adicionar, e a validação surfada. */
+  #props { position: fixed; top: 44px; right: 0; bottom: 26px; width: min(340px, 34vw); z-index: 9;
     background: #141826e6; border-left: 1px solid var(--line); padding: 14px; overflow: auto; }
   #props h2 { margin: 0 0 4px; font-size: 12px; letter-spacing: .04em; color: var(--ink); }
-  #props .sub { font-size: 10px; color: var(--dim); margin-bottom: 14px; }
+  #props .sub { font-size: 10px; color: var(--dim); margin-bottom: 14px; line-height: 1.4; }
   #props .bloco { border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px;
     background: #0f132066; margin-bottom: 12px; }
   #props .rotulo { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim);
     display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
-  #props .no { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 11px; }
-  #props .no .id { color: var(--hud); font-variant-numeric: tabular-nums; }
-  #props .no .tp { color: var(--dim); }
-  #props .no .saidaTag { margin-left: auto; font-size: 9px; color: #10131c; background: var(--hud);
-    border-radius: 999px; padding: 1px 7px; font-weight: 700; }
-  #props .no .modTag { margin-left: auto; font-size: 9px; color: var(--dim); border: 1px solid var(--line);
-    border-radius: 999px; padding: 1px 7px; }
   #props .ph { font-size: 9px; color: var(--dim); border: 1px dashed var(--line); border-radius: 4px;
     padding: 2px 7px; text-transform: uppercase; letter-spacing: .08em; }
-  #props .placeholder { border: 1px dashed var(--line); border-radius: 8px; padding: 12px;
-    text-align: center; font-size: 10.5px; color: var(--dim); line-height: 1.5; background: #0c0f1633; }
-  #props .grita { font-size: 10px; color: var(--amber); margin-top: 8px; line-height: 1.4; }
+
+  /* os BOTÕES de adicionar bloco — uma fila de chips-botão, um por tipo do vocabulário. */
+  #props .botoesAdd { display: flex; flex-wrap: wrap; gap: 5px; }
+  #props .botoesAdd button { font: inherit; font-size: 10.5px; color: var(--ink); background: #0c0f16;
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+  #props .botoesAdd button:hover { border-color: var(--accent); color: #fff; }
+  #props .botoesAdd button:active { transform: translateY(1px); }
+
+  /* cada NÓ do grafo é um CARD (estilo dos painéis de material/animação: lista, não teia de fios). */
+  #props .cardNo { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px 10px;
+    background: #0f132088; margin-bottom: 9px; }
+  #props .cardNo.saida { border-color: #cddf6c66; }
+  #props .cardNo.invalido { border-color: #f9c22b88; background: #f9c22b0d; }
+  #props .cabeca { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  #props .cabeca .id { color: var(--hud); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #props .cabeca .tp { color: var(--dim); font-size: 10px; }
+  #props .cabeca .saidaTag { font-size: 9px; color: #10131c; background: var(--hud); border-radius: 999px;
+    padding: 1px 7px; font-weight: 700; }
+  #props .cabeca .saidaTag[hidden] { display: none; }
+  #props .cabeca .modTag { font-size: 9px; color: var(--dim); border: 1px solid var(--line);
+    border-radius: 999px; padding: 1px 7px; }
+  #props .cabeca .del { margin-left: auto; width: 20px; height: 20px; flex: none; border: 1px solid var(--line);
+    border-radius: 5px; background: #0c0f16; color: var(--dim); cursor: pointer; font-size: 12px; line-height: 1;
+    display: grid; place-items: center; padding: 0; }
+  #props .cabeca .del:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* CONTROLES: slider+número pra param numérico, dropdown pra enum, dropdown(s) pra o fio. */
+  #props .campo { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
+  #props .campo .rk { width: 62px; flex: none; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); }
+  #props input[type=range] { flex: 1; min-width: 0; height: 4px; -webkit-appearance: none; appearance: none;
+    background: var(--line); border-radius: 3px; cursor: pointer; accent-color: var(--accent); }
+  #props input[type=range]:focus { outline: none; }
+  #props input[type=number].rvn { width: 58px; flex: none; background: #0c0f16; color: var(--hud);
+    border: 1px solid var(--line); border-radius: 5px; padding: 3px 5px; font: inherit; font-size: 10.5px;
+    font-variant-numeric: tabular-nums; text-align: right; }
+  #props input[type=number].rvn:focus { outline: none; border-color: var(--accent); }
+  #props select { min-width: 0; background: #0c0f16; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 5px; padding: 3px 6px; font: inherit; font-size: 10.5px; cursor: pointer; }
+  #props select:focus { outline: none; border-color: var(--accent); }
+  #props select:disabled { color: var(--dim); opacity: .7; }
+  #props .campo select { flex: 1; }
+  #props .fio { display: flex; align-items: center; gap: 7px; margin: 6px 0 2px; }
+  #props .fio .rk { width: 62px; flex: none; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); }
+  #props .fio select { flex: 1; }
+  #props .fio.alvo select.param { flex: none; width: 84px; }
+  #props .fio .chips { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+  #props .fio .chip2 { font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--dim); background: #0c0f16; cursor: pointer; user-select: none; }
+  #props .fio .chip2:hover { border-color: var(--accent); }
+  #props .fio .chip2.on { color: #10131c; background: var(--hud); border-color: var(--hud); font-weight: 700; }
+  #props .fio .vaziofio { font-size: 9.5px; color: var(--dim); font-style: italic; }
+  #props .motivoNo { font-size: 9.5px; color: var(--amber); margin-top: 7px; line-height: 1.4; }
+  #props .motivoNo[hidden] { display: none; }
+
+  /* AVISO geral (sem-saída / múltiplas / erro): o resto do grafo ainda renderiza. */
+  #props .grita { font-size: 10px; color: var(--amber); margin-top: 4px; line-height: 1.45;
+    border: 1px solid #f9c22b40; border-radius: 6px; padding: 8px 10px; background: #f9c22b0f; }
   #props .grita[hidden] { display: none; }
+  #props .vazio-lista { font-size: 10px; color: var(--dim); font-style: italic; text-align: center;
+    border: 1px dashed var(--line); border-radius: 6px; padding: 12px; }
 
   /* TRANSPORTE embaixo (play/loop/tempo) — à esquerda do painel, acima do status. */
-  #transporte { position: fixed; left: 0; right: min(320px, 32vw); bottom: 26px; height: 54px; z-index: 9;
+  #transporte { position: fixed; left: 0; right: min(340px, 34vw); bottom: 26px; height: 54px; z-index: 9;
     display: flex; align-items: center; gap: 12px; padding: 0 14px;
     background: #141826f2; border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
   #transporte .play { font-size: 13px; font-weight: 700; color: #10131c; background: var(--hud);
@@ -120,17 +171,14 @@
 </div>
 
 <aside id="props">
-  <h2>Som — evento</h2>
-  <div class="sub">a forma de onda no centro é este grafo, renderizado</div>
+  <h2>Som — editor de blocos</h2>
+  <div class="sub">monte e edite o grafo — mexer num controle re-renderiza a onda e o Play toca a versão editada</div>
   <div class="bloco">
-    <div class="rotulo"><span>grafo do sinal</span><span class="ph" id="phNos">— nós</span></div>
-    <div id="nos"></div>
-    <div class="grita" id="grita" hidden></div>
+    <div class="rotulo"><span>adicionar bloco</span><span class="ph" id="phNos">— nós</span></div>
+    <div class="botoesAdd" id="botoesAdd"></div>
   </div>
-  <div class="bloco">
-    <div class="rotulo"><span>blocos</span><span class="ph">S3</span></div>
-    <div class="placeholder">Montar e editar os blocos ao vivo<br>(oscilador · ruído · filtro · envelope)<br>chega no passo S3.</div>
-  </div>
+  <div id="cards"></div>
+  <div class="grita" id="grita" hidden></div>
 </aside>
 
 <footer id="transporte">
@@ -153,17 +201,16 @@
 <div id="erro"></div>
 
 <script type="module">
-/* A CASCA da aba Som (S2). VER a onda e OUVIR o evento, reusando o motor provado no S1:
-   `renderarOffline` (evento -> Float32Array, offline e determinístico — a "câmera" do
-   som) desenha a onda; `tocarEvento` (evento -> AudioContext ao vivo) faz o Play. Nada
-   de câmera nem malha — a aba Som é contexto próprio (D-73). O `som.js` do JOGO não é
-   tocado: só importo os módulos NOVOS do S1. */
+/* A ABA SOM. S2 provou VER a onda e OUVIR (renderarOffline -> canvas, tocarEvento -> AudioContext).
+   S3 monta o EDITOR ao vivo: o painel direito vira a lista de cards (um por nó), com params como
+   controles; editar/adicionar/remover/ligar mexem na lista de PASSOS (o objeto É a lista de passos),
+   re-renderam a onda na hora, e a validação (somNucleo.orfaos) é surfada sem quebrar. Reuso o motor
+   provado no S1 (somnucleo/somweb); o som.js do JOGO não é tocado — só importo os módulos NOVOS. */
 import { renderarOffline, tocarEvento } from './motor/somweb.js';
-import { somNucleo } from './motor/somnucleo.js';
+import { somNucleo, somCanonico } from './motor/somnucleo.js';
 
 const SR = 44100;                       // taxa fixa do render (determinismo, igual à bancada sintetizar)
-const EVENTOS = ['_bolha'];             // eventos disponíveis em pecas-som/ (S4 traz o catálogo de presets;
-                                        // listar o diretório pediria uma rota no servidor — fica pra depois)
+const EVENTOS = ['_bolha'];             // eventos disponíveis em pecas-som/ (S4 traz o catálogo de presets)
 
 const P = new URLSearchParams(location.search);
 const alvoInicial = (P.get('som') || '_bolha').replace(/[^a-z0-9_-]/gi, '');
@@ -174,8 +221,56 @@ function mostrarErro(msg) { elErro.textContent = msg; elErro.style.display = 'gr
 
 const palco = $('palco'), onda = $('onda'), cursor = $('cursor'), vazio = $('vazio');
 
+/* ============================================================================
+   VOCABULÁRIO da UI — o espelho de somnucleo.js do lado dos CONTROLES. Cada tipo diz
+   seu papel no grafo (fonte/proc/modulador), como se LIGA (`de` de um/muitos/freq, ou
+   `alvo`), e cada param se é NÚMERO (slider+campo, com faixa sensata) ou ENUM (dropdown).
+   As faixas dos sliders são padrões que ADAPTAM pra caber o valor carregado (um param
+   fora da faixa não fica inalcançável). `def` é o valor de nascimento do bloco novo.
+============================================================================ */
+const OSC = ['seno', 'quadrada', 'triangular', 'serra'];
+const VOCAB = {
+  oscilador: { papel: 'fonte', params: [
+    { k: 'tipo', tipo: 'enum', ops: OSC, def: 'seno' },
+    { k: 'freq', tipo: 'num', min: 20, max: 4000, step: 1, def: 440 } ] },
+  ruido: { papel: 'fonte', params: [
+    { k: 'cor', tipo: 'enum', ops: ['branco', 'rosa'], def: 'branco' },
+    { k: 'k', tipo: 'num', min: 0.005, max: 0.3, step: 0.005, def: 0.02 } ] },
+  filtro: { papel: 'proc', de: 'um', params: [
+    { k: 'tipo', tipo: 'enum', ops: ['passa-baixa', 'passa-alta', 'passa-banda'], def: 'passa-baixa' },
+    { k: 'freq', tipo: 'num', min: 20, max: 8000, step: 10, def: 800 },
+    { k: 'q', tipo: 'num', min: 0.1, max: 24, step: 0.1, def: 1 } ] },
+  envelope: { papel: 'proc', de: 'um', params: [
+    { k: 'ataque', tipo: 'num', min: 0, max: 0.5, step: 0.001, def: 0.01 },
+    { k: 'pico', tipo: 'num', min: 0, max: 1, step: 0.01, def: 1 },
+    { k: 'decaimento', tipo: 'num', min: 0, max: 1, step: 0.005, def: 0.1 },
+    { k: 'duracao', tipo: 'num', min: 0.02, max: 2, step: 0.005, def: 0.2 } ] },
+  ganho: { papel: 'proc', de: 'um', params: [
+    { k: 'valor', tipo: 'num', min: 0, max: 2, step: 0.01, def: 1 } ] },
+  soma: { papel: 'proc', de: 'muitos', params: [] },
+  lfo: { papel: 'modulador', alvo: true, params: [
+    { k: 'tipo', tipo: 'enum', ops: OSC, def: 'seno' },
+    { k: 'freq', tipo: 'num', min: 0.1, max: 40, step: 0.1, def: 5 },
+    /* profundidade é nas UNIDADES do param alvo (Hz p/ freq, linear p/ ganho): faixa
+       ampla + o campo de número alcança valores exatos/pequenos. */
+    { k: 'profundidade', tipo: 'num', min: 0, max: 1000, step: 0.1, def: 100 } ] },
+  alturaEnv: { papel: 'modulador', de: 'freq', params: [
+    { k: 'freq0', tipo: 'num', min: 20, max: 4000, step: 1, def: 200 },
+    { k: 'freq1', tipo: 'num', min: 20, max: 4000, step: 1, def: 800 },
+    { k: 'tempo', tipo: 'num', min: 0.005, max: 1, step: 0.005, def: 0.1 } ] },
+};
+/* PARAM_MOD (espelho do núcleo): que param cada tipo pode ser MIRADO por um modulador. */
+const PARAM_MOD = { oscilador: ['freq'], filtro: ['freq', 'q'], lfo: ['freq'],
+  ganho: ['ganho'], envelope: ['ganho'], soma: ['ganho'], ruido: [], alturaEnv: [] };
+const AUDIO_OPS = new Set(['oscilador', 'ruido', 'filtro', 'envelope', 'ganho', 'soma']);
+const PREFIXO = { oscilador: 'osc', ruido: 'rui', filtro: 'flt', envelope: 'env', ganho: 'gan', soma: 'mix', lfo: 'lfo', alturaEnv: 'alt' };
+/* chaves NUMÉRICAS de cada tipo (as que podem vir como NOME de PARAM na peça e viram número no load) */
+const NUMERICOS = { oscilador: ['freq'], ruido: ['k', 'dur'], lfo: ['freq', 'profundidade'],
+  filtro: ['freq', 'q'], envelope: ['ataque', 'pico', 'decaimento', 'duracao'],
+  alturaEnv: ['freq0', 'freq1', 'tempo'], ganho: ['valor'], soma: [] };
+
 /* ---- estado ------------------------------------------------------------- */
-let eventoAtual = null;                 // { PASSOS, PARAMS, semente, meta }
+let eventoAtual = null;                 // { PASSOS(inline, mutável — o objeto), PARAMS:{}, semente, meta }
 let amostrasAtual = new Float32Array(0);// as amostras desenhadas (fonte do probe)
 let ctx = null;                         // AudioContext AO VIVO — criado só no gesto do usuário
 let vozAtual = null;                    // retorno do tocarEvento (saida ligada no destino)
@@ -217,25 +312,201 @@ function desenharOnda(a) {
   vazio.hidden = true;
 }
 
-/* lista o GRAFO no painel (leitura) — de que blocos a onda saiu; foreshadow do S3. */
-function pintarGrafo(ev) {
-  const cont = $('nos'); cont.textContent = '';
-  let g; try { g = somNucleo(ev.PASSOS, ev.PARAMS ?? {}, ev.semente ?? 0); } catch (e) { g = null; }
-  if (!g) { $('phNos').textContent = '— erro'; return; }
-  $('phNos').textContent = `${g.nos.length} nós`;
-  for (const no of g.nos) {
-    const row = document.createElement('div'); row.className = 'no';
-    const id = document.createElement('span'); id.className = 'id'; id.textContent = no.id;
-    const tp = document.createElement('span'); tp.className = 'tp'; tp.textContent = no.tipo;
-    row.append(id, tp);
-    if (no.id === g.saida) { const t = document.createElement('span'); t.className = 'saidaTag'; t.textContent = 'saída'; row.append(t); }
-    else if (no.papel === 'modulador') { const t = document.createElement('span'); t.className = 'modTag'; t.textContent = 'mod'; row.append(t); }
-    cont.append(row);
-  }
-  const grita = $('grita');
-  if (g.orfaos && g.orfaos.length) { grita.hidden = false; grita.textContent = `grita: ${g.orfaos.map((o) => o.motivo).join(' · ')}`; }
-  else grita.hidden = true;
+/* ============================================================================
+   O EDITOR. `eventoAtual.PASSOS` é a lista de passos MUTÁVEL — a fonte da verdade (o
+   objeto É a lista de passos). Editar um controle muta um passo e chama `reexec`
+   (re-renderiza a onda + valida). Add/remove/ligar mudam a estrutura e re-MONTAM o
+   painel. O núcleo (somNucleo) julga: órfão/ciclo/sem-saída gritam, o resto renderiza.
+============================================================================ */
+const fmtNum = (v) => { v = Number(v); if (!Number.isFinite(v)) return '0'; return String(Math.round(v * 1000) / 1000); };
+const idSet = () => new Set(eventoAtual.PASSOS.map(([, a]) => a && a.id).filter((x) => x != null));
+const idMapa = () => { const m = new Map(); for (const [op, a] of eventoAtual.PASSOS) if (a && a.id != null) m.set(a.id, op); return m; };
+const idx = (id) => eventoAtual.PASSOS.findIndex(([, a]) => a && a.id === id);
+const audioIds = (self) => [...idMapa()].filter(([id, op]) => AUDIO_OPS.has(op) && id !== self).map(([id]) => id);
+const freqAlvos = (self) => [...idMapa()].filter(([id, op]) => (PARAM_MOD[op] || []).includes('freq') && id !== self).map(([id]) => id);
+const modAlvos = (self) => [...idMapa()].filter(([id, op]) => (PARAM_MOD[op] || []).length && id !== self).map(([id]) => id);
+
+/* resolve um valor (número OU nome de PARAM) pra número; ao carregar a peça, inlina os
+   PARAMS nomeados no valor efetivo (o caminho de edição do S3 — ver o cabeçalho). */
+function resolveNum(v, PARAMS) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && v in PARAMS) return resolveNum(PARAMS[v], PARAMS);
+  return v;
 }
+function inlinePassos(PASSOS, PARAMS) {
+  return PASSOS.map(([op, a = {}]) => {
+    const b = { ...a };
+    for (const k of (NUMERICOS[op] || [])) if (k in b) b[k] = resolveNum(b[k], PARAMS);
+    if (Array.isArray(b.de)) b.de = b.de.slice();
+    if (b.alvo && typeof b.alvo === 'object') b.alvo = { ...b.alvo };
+    return [op, b];
+  });
+}
+
+/* ---- controles individuais ---------------------------------------------- */
+function controleNum(i, a, pr) {
+  const val = Number(a[pr.k] ?? pr.def);
+  const lab = document.createElement('label'); lab.className = 'campo';
+  const rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = pr.k;
+  const sl = document.createElement('input'); sl.type = 'range'; sl.dataset.k = pr.k;
+  sl.min = String(Math.min(pr.min, val)); sl.max = String(Math.max(pr.max, val)); sl.step = String(pr.step); sl.value = String(val);
+  const nv = document.createElement('input'); nv.type = 'number'; nv.className = 'rvn'; nv.dataset.k = pr.k; nv.step = String(pr.step); nv.value = fmtNum(val);
+  sl.addEventListener('input', () => { const v = Number(sl.value); nv.value = fmtNum(v); setNum(i, pr.k, v); });
+  nv.addEventListener('input', () => { const v = Number(nv.value); if (!Number.isFinite(v)) return; if (v >= Number(sl.min) && v <= Number(sl.max)) sl.value = String(v); setNum(i, pr.k, v); });
+  lab.append(rk, sl, nv);
+  return lab;
+}
+function controleEnum(i, a, pr) {
+  const val = a[pr.k] ?? pr.def;
+  const lab = document.createElement('label'); lab.className = 'campo';
+  const rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = pr.k;
+  const sel = document.createElement('select'); sel.dataset.k = pr.k;
+  for (const o of pr.ops) { const op = document.createElement('option'); op.value = o; op.textContent = o; sel.append(op); }
+  sel.value = val;
+  sel.addEventListener('change', () => { eventoAtual.PASSOS[i][1][pr.k] = sel.value; reexec(); });
+  lab.append(rk, sel);
+  return lab;
+}
+/* fio de UM `de`: dropdown dos ids elegíveis (áudio, ou alvos-de-freq no alturaEnv). Uma
+   ligação quebrada (id que sumiu) aparece com '?' pra o autor VER, não some escondida. */
+function fioUm(i, a, ids, rot) {
+  const cur = typeof a.de === 'string' ? a.de : '';
+  const row = document.createElement('div'); row.className = 'fio';
+  const rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = rot || 'de';
+  const sel = document.createElement('select');
+  const opts = ['', ...ids]; if (cur && !ids.includes(cur)) opts.push(cur);
+  for (const id of opts) { const o = document.createElement('option'); o.value = id; o.textContent = id === '' ? '(nada)' : id + (ids.includes(id) ? '' : ' ?'); sel.append(o); }
+  sel.value = cur;
+  sel.addEventListener('change', () => { eventoAtual.PASSOS[i][1].de = sel.value || undefined; reexec(); });
+  row.append(rk, sel); return row;
+}
+/* fio de MUITOS `de` (soma): uma fila de chips-toggle, um por fonte de áudio. */
+function fioMuitos(i, a) {
+  if (!Array.isArray(a.de)) a.de = a.de == null ? [] : [a.de];
+  const row = document.createElement('div'); row.className = 'fio soma';
+  const rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = 'de';
+  const chips = document.createElement('div'); chips.className = 'chips';
+  for (const [id, op] of idMapa()) {
+    if (!AUDIO_OPS.has(op) || id === a.id) continue;
+    const chip = document.createElement('span'); chip.className = 'chip2'; chip.textContent = id;
+    if (a.de.includes(id)) chip.classList.add('on');
+    chip.addEventListener('click', () => { const j = a.de.indexOf(id); if (j >= 0) a.de.splice(j, 1); else a.de.push(id); chip.classList.toggle('on'); reexec(); });
+    chips.append(chip);
+  }
+  if (!chips.children.length) { const e = document.createElement('span'); e.className = 'vaziofio'; e.textContent = 'sem fontes ainda'; chips.append(e); }
+  row.append(rk, chips); return row;
+}
+/* fio de ALVO (lfo): dropdown do nó-alvo + dropdown do param válido (por PARAM_MOD). */
+function fioAlvo(i, a) {
+  const row = document.createElement('div'); row.className = 'fio alvo';
+  const rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = 'alvo';
+  const nos = modAlvos(a.id);
+  const curNo = (a.alvo && a.alvo.no) || '';
+  const selNo = document.createElement('select');
+  const optsNo = ['', ...nos]; if (curNo && !nos.includes(curNo)) optsNo.push(curNo);
+  for (const id of optsNo) { const o = document.createElement('option'); o.value = id; o.textContent = id === '' ? '(nada)' : id + (nos.includes(id) ? '' : ' ?'); selNo.append(o); }
+  selNo.value = curNo;
+  const selP = document.createElement('select'); selP.className = 'param';
+  const opNo = idMapa().get(curNo);
+  const params = opNo ? (PARAM_MOD[opNo] || []) : [];
+  for (const p of params) { const o = document.createElement('option'); o.value = p; o.textContent = p; selP.append(o); }
+  selP.value = (a.alvo && a.alvo.param) || params[0] || '';
+  if (!params.length) selP.disabled = true;
+  selNo.addEventListener('change', () => {
+    const no = selNo.value;
+    if (!no) eventoAtual.PASSOS[i][1].alvo = null;
+    else { const ps = PARAM_MOD[idMapa().get(no)] || []; eventoAtual.PASSOS[i][1].alvo = { no, param: ps[0] }; }
+    montarPainel(); reexec();
+  });
+  selP.addEventListener('change', () => { if (eventoAtual.PASSOS[i][1].alvo) eventoAtual.PASSOS[i][1].alvo.param = selP.value; reexec(); });
+  row.append(rk, selNo, selP); return row;
+}
+
+/* monta o painel: um card por PASSO, na ordem (índice do card === índice do passo, o
+   que casa com o `passo` que o núcleo cita nos gritos). Chamado no load e a cada
+   mudança de ESTRUTURA (add/remove/ligar-alvo/soma). Slides NÃO re-montam (não perder o
+   arrasto) — só `reexec`. */
+function montarPainel() {
+  const cont = $('cards'); cont.textContent = '';
+  if (!eventoAtual.PASSOS.length) { const v = document.createElement('div'); v.className = 'vazio-lista'; v.textContent = 'grafo vazio — adicione um bloco acima'; cont.append(v); validar(); return; }
+  eventoAtual.PASSOS.forEach(([op, a], i) => {
+    const spec = VOCAB[op];
+    const card = document.createElement('div'); card.className = 'cardNo'; card.dataset.idx = String(i);
+    if (a && a.id != null) card.dataset.id = a.id;
+    const cab = document.createElement('div'); cab.className = 'cabeca';
+    const idEl = document.createElement('span'); idEl.className = 'id'; idEl.textContent = (a && a.id) || op;
+    const tpEl = document.createElement('span'); tpEl.className = 'tp'; tpEl.textContent = op;
+    cab.append(idEl, tpEl);
+    const sTag = document.createElement('span'); sTag.className = 'saidaTag'; sTag.textContent = 'saída'; sTag.hidden = true; cab.append(sTag);
+    if (spec && spec.papel === 'modulador') { const m = document.createElement('span'); m.className = 'modTag'; m.textContent = 'mod'; cab.append(m); }
+    const del = document.createElement('button'); del.className = 'del'; del.type = 'button'; del.title = 'remover bloco'; del.textContent = '✕';
+    del.addEventListener('click', () => remover(i));
+    cab.append(del); card.append(cab);
+    if (!spec) { const w = document.createElement('div'); w.className = 'fio'; w.textContent = `(${op})`; card.append(w); cont.append(card); return; }
+    for (const pr of spec.params) card.append(pr.tipo === 'enum' ? controleEnum(i, a, pr) : controleNum(i, a, pr));
+    if (spec.de === 'um') card.append(fioUm(i, a, audioIds(a.id)));
+    else if (spec.de === 'muitos') card.append(fioMuitos(i, a));
+    else if (spec.de === 'freq') card.append(fioUm(i, a, freqAlvos(a.id), 'de → freq'));
+    if (spec.alvo) card.append(fioAlvo(i, a));
+    const mv = document.createElement('div'); mv.className = 'motivoNo'; mv.hidden = true; card.append(mv);
+    cont.append(card);
+  });
+  validar();
+}
+
+/* valida o grafo atual e SURFA na UI: marca a saída, pinta os nós com grito (por índice
+   de passo) e mostra o aviso geral. NÃO quebra — try/catch; o grafo bom ainda renderiza. */
+function validar() {
+  let g = null, erro = null;
+  try { g = somNucleo(eventoAtual.PASSOS, {}, eventoAtual.semente); } catch (e) { erro = e; }
+  const box = $('grita');
+  const cards = [...document.querySelectorAll('.cardNo')];
+  for (const c of cards) { c.classList.remove('saida', 'invalido'); const s = c.querySelector('.saidaTag'); if (s) s.hidden = true; const m = c.querySelector('.motivoNo'); if (m) { m.hidden = true; m.textContent = ''; } }
+  $('phNos').textContent = g ? `${g.nos.length} nós` : 'erro';
+  if (erro) { box.hidden = false; box.textContent = 'erro no grafo: ' + erro.message; return g; }
+  if (g.saida != null) { const c = cards.find((c) => c.dataset.id === g.saida); if (c) { c.classList.add('saida'); const s = c.querySelector('.saidaTag'); if (s) s.hidden = false; } }
+  const porPasso = new Map();
+  for (const o of g.orfaos) if (o.passo >= 0) { if (!porPasso.has(o.passo)) porPasso.set(o.passo, []); porPasso.get(o.passo).push(o.motivo); }
+  for (const c of cards) { const p = Number(c.dataset.idx); if (porPasso.has(p)) { c.classList.add('invalido'); const m = c.querySelector('.motivoNo'); if (m) { m.hidden = false; m.textContent = porPasso.get(p).join(' · '); } } }
+  const globais = g.orfaos.filter((o) => o.passo < 0).map((o) => o.motivo);
+  if (globais.length) { box.hidden = false; box.textContent = 'grita: ' + globais.join(' · '); }
+  else if (g.orfaos.length) { box.hidden = false; box.textContent = `${g.orfaos.length} aviso(s) — veja os blocos em âmbar`; }
+  else box.hidden = true;
+  return g;
+}
+
+/* REEXEC: re-renderiza a onda a partir do PASSOS atual (+ valida), COALESCENDO chamadas
+   rápidas (arrastar um slider dispara muitas) — a última vence, e todo mundo que esperava
+   resolve quando o render final termina (o probe da bancada dá `await`). */
+let reexecRodando = false, reexecRefazer = false; const reexecEsperando = [];
+function reexec() {
+  return new Promise((res) => { reexecEsperando.push(res); if (reexecRodando) { reexecRefazer = true; return; } loopReexec(); });
+}
+async function loopReexec() {
+  reexecRodando = true;
+  do {
+    reexecRefazer = false;
+    validar();
+    try { const a = await renderarOffline(eventoAtual, { sampleRate: SR }); amostrasAtual = a; desenharOnda(a); atualizarStatus(); }
+    catch (e) { /* render não deve estourar (grafo inline); se estourar, mantém a última onda e o aviso já está na UI */ }
+  } while (reexecRefazer);
+  reexecRodando = false;
+  reexecEsperando.splice(0).forEach((w) => w());
+}
+
+/* ---- mutações do grafo (as ações do editor; o probe da bancada chama as MESMAS) ---- */
+function setNum(i, k, v) { eventoAtual.PASSOS[i][1][k] = v; return reexec(); }
+function novoId(op) { const p = PREFIXO[op] || op; const ids = idSet(); let i = 1; while (ids.has(p + i)) i++; return p + i; }
+function addBloco(op) {
+  if (!VOCAB[op]) return null;
+  const def = {}; for (const pr of VOCAB[op].params) def[pr.k] = pr.def;
+  const a = { id: novoId(op), ...def };
+  if (op === 'soma') a.de = [];
+  eventoAtual.PASSOS.push([op, a]);
+  montarPainel();
+  return reexec();
+}
+function remover(i) { eventoAtual.PASSOS.splice(i, 1); montarPainel(); return reexec(); }
 
 function fmt(s) { return (s || 0).toFixed(2); }
 function atualizarStatus() {
@@ -246,25 +517,24 @@ function atualizarStatus() {
   $('dur').textContent = `${fmt(durTotal)} s`;
   $('namostras').textContent = `${amostrasAtual.length} amostras`;
   $('sr').textContent = `${SR} Hz`;
-  $('tempo').textContent = `0.00 / ${fmt(durTotal)} s`;
+  $('tempo').textContent = tocando ? $('tempo').textContent : `0.00 / ${fmt(durTotal)} s`;
   atualizarEstadoAudio();
 }
 function atualizarEstadoAudio() { $('estado').textContent = `áudio: ${ctx ? ctx.state : 'sem contexto'}`; }
 
-/* ---- carregar um evento de pecas-som/ e desenhar a onda ------------------- */
+/* ---- carregar um evento de pecas-som/ pro editor: INLINA os PARAMS nomeados no valor
+   efetivo, monta os cards e renderiza a onda (a validação corre junto). ------------- */
 async function carregar(nome) {
   const mod = await import(`./pecas-som/${nome}.js`);
-  eventoAtual = { PASSOS: mod.PASSOS, PARAMS: mod.PARAMS ?? {}, semente: mod.semente ?? 0, meta: mod.meta, _nome: nome };
-  amostrasAtual = await renderarOffline(eventoAtual, { sampleRate: SR });
-  desenharOnda(amostrasAtual);
-  pintarGrafo(eventoAtual);
-  atualizarStatus();
+  eventoAtual = { PASSOS: inlinePassos(mod.PASSOS, mod.PARAMS ?? {}), PARAMS: {}, semente: mod.semente ?? 0, meta: mod.meta, _nome: nome };
+  montarPainel();
+  await reexec();
   const url = new URL(location.href); url.searchParams.set('som', nome); history.replaceState(null, '', url);
 }
 
 /* ---- TOCAR AO VIVO. Web Audio exige um GESTO do usuário: só aqui (clique/espaço)
-   crio e resumo o AudioContext. `tocarEvento` liga a `saida` no `ctx.destination`
-   (som de verdade) e devolve a voz — a mesma máquina do offline, num contexto vivo. */
+   crio e resumo o AudioContext. `tocarEvento` monta o PASSOS ATUAL (a versão editada) e
+   liga a `saida` no `ctx.destination` — a mesma máquina do offline, num contexto vivo. */
 async function tocar() {
   if (!eventoAtual) return;
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -313,10 +583,14 @@ window.addEventListener('keydown', (e) => {
   sel.value = EVENTOS.includes(alvoInicial) ? alvoInicial : EVENTOS[0];
   sel.addEventListener('change', async () => { parar(); try { await carregar(sel.value); } catch (e) { mostrarErro('evento não abriu: ' + e.message); } });
 }
+{ const barra = $('botoesAdd');       // um botão por tipo do vocabulário
+  for (const op of Object.keys(VOCAB)) { const b = document.createElement('button'); b.type = 'button'; b.dataset.op = op; b.textContent = op; b.title = `adicionar ${op}`; b.addEventListener('click', () => addBloco(op)); barra.append(b); }
+}
 window.addEventListener('resize', () => { if (amostrasAtual.length) desenharOnda(amostrasAtual); });
 
 /* ---- probe pra a bancada (só NÚMEROS/hashes — nada de despejar amostras pela ponte).
-   Prova que o DESENHO reflete as AMOSTRAS e que o Play liga o grafo vivo. */
+   As mutações do editor (add/remove/ligar/setParam) chamam as MESMAS funções da UI, e
+   devolvem a promise do `reexec` — a bancada dá `await` e lê a onda já re-renderizada. */
 function hashImg() {
   const g = onda.getContext('2d');
   const d = g.getImageData(0, 0, onda.width, onda.height).data;
@@ -345,6 +619,12 @@ function medirDesenho() {
   }
   return { larguraOnda: W, alturaOnda: H, pixelsAcesos: acesos, picoColunaDesenho: picoCol, maiorExtensao: maiorExt };
 }
+/* leitura do grafo atual (o que a UI segura) — via o núcleo, pra provar a consistência. */
+function grafoAtual() {
+  let g; try { g = somNucleo(eventoAtual.PASSOS, {}, eventoAtual.semente); } catch (e) { return { erro: e.message }; }
+  return { nNos: g.nos.length, saida: g.saida, ids: g.nos.map((n) => n.id), tipos: g.nos.map((n) => n.tipo),
+    nArestas: g.arestas.length, orfaos: g.orfaos.map((o) => o.motivo) };
+}
 
 window.__som = {
   pronto: () => window.__ready === true,
@@ -359,6 +639,20 @@ window.__som = {
   saidaLigada: () => ultimaSaidaLigada,
   tocando: () => tocando,
   loop: () => loopLigado,
+  // S3 — o editor: estado do grafo + as ações (mesmas funções da UI), pra a bancada medir
+  passos: () => JSON.parse(JSON.stringify(eventoAtual.PASSOS)),
+  grafo: () => grafoAtual(),
+  canonico: () => JSON.stringify(somCanonico(somNucleo(eventoAtual.PASSOS, {}, eventoAtual.semente))),
+  nCards: () => document.querySelectorAll('.cardNo').length,
+  nInvalidos: () => document.querySelectorAll('.cardNo.invalido').length,
+  aviso: () => { const b = $('grita'); return b.hidden ? '' : b.textContent; },
+  aguardar: () => reexec(),
+  addBloco: (op) => addBloco(op),
+  remover: (id) => { const i = idx(id); if (i < 0) return null; return remover(i); },
+  setParam: (id, k, v) => { const i = idx(id); if (i < 0) return null; return setNum(i, k, v); },
+  setEnum: (id, k, v) => { const i = idx(id); if (i < 0) return null; eventoAtual.PASSOS[i][1][k] = v; return reexec(); },
+  ligar: (id, de) => { const i = idx(id); if (i < 0) return null; eventoAtual.PASSOS[i][1].de = de; montarPainel(); return reexec(); },
+  ligarAlvo: (id, no, param) => { const i = idx(id); if (i < 0) return null; eventoAtual.PASSOS[i][1].alvo = no ? { no, param } : null; montarPainel(); return reexec(); },
 };
 
 /* ---- boot --------------------------------------------------------------- */
