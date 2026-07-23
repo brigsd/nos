@@ -134,8 +134,9 @@ import { criarServidor } from '../servir.mjs';   // PASSO 10: o servidor de dev 
 /* PASSO 4: replay INDEPENDENTE em Node — o núcleo neutro e o canônico, mais
    PARAMS/TOPO do toco, pra re-executar a lista EDITADA (vinda do navegador) e
    provar que refaz o mesmo objeto (o critério do doc), fora do browser. */
-import { nucleo, neutroCanonico, adaptarV3 } from '../../prototipos/fps/v3/motor/oficina.js';   // PASSO 11a: adaptarV3 headless (ctx de mentira) pra medir a estrutura do atlas (ilhas disjuntas)
+import { nucleo, neutroCanonico, adaptarV3, executar, montarAnimar, avaliarChaves } from '../../prototipos/fps/v3/motor/oficina.js';   // PASSO 11a: adaptarV3 headless (ctx de mentira) pra medir a estrutura do atlas; 13a: executar/montarAnimar/avaliarChaves pra a animação rígida por parte
 import * as toco from '../../prototipos/fps/v3/pecas/_oficina-toco.js';
+import * as anim from '../../prototipos/fps/v3/pecas/_oficina-anim.js';   // PASSO 13a: a peça-exemplo da animação (engrenagem gira + braço balança)
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -151,6 +152,7 @@ const OUT10 = resolve(REPO, 'scratchpad/passo10');
 const OUT11 = resolve(REPO, 'scratchpad/passo11a');
 const OUT11C = resolve(REPO, 'scratchpad/passo11c');
 const OUT12 = resolve(REPO, 'scratchpad/passo12a');
+const OUT13 = resolve(REPO, 'scratchpad/passo13a');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -2294,9 +2296,141 @@ await page.evaluate(() => window.__oficina.orbitar({ az: 0.4, el: 0.7, dist: 1.9
 await page.screenshot({ path: join(OUT12, 'oficina-material-transp.png') });
 await aoBaseline();
 
+/* ==== PASSO 13a: ANIMAÇÃO RÍGIDA POR PARTE (em laço) =========================
+   O MOTOR da animação: a op `parte` nomeia faces, o adaptarV3 agrupa por (parte,
+   material) e resolve o pivô (explícito ou CENTROIDE), e montarAnimar devolve
+   `animar(T,lotes)` que escreve a matriz de cada parte POR ÍNDICE (infoPorLote,
+   paralelo aos lotes do render) — o render.js NÃO muda (diff vazio, jóia intacta).
+   Prova por MEDIÇÃO, headless (motor) + na página (relógio congelado). */
+mkdirSync(OUT13, { recursive: true });
+const ctx13 = { tex: { texCanvas: (w, h, fn) => ({ width: w, height: h, fn }) } };   // ctx headless (sem m4: executar não precisa de matriz pra medir a estrutura)
+const IDENT16 = () => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+const aplica13 = (M, p) => [M[0] * p[0] + M[4] * p[1] + M[8] * p[2] + M[12], M[1] * p[0] + M[5] * p[1] + M[9] * p[2] + M[13], M[2] * p[0] + M[6] * p[1] + M[10] * p[2] + M[14]];
+
+// (13a op parte) seta f.parte; registra pivô; face inexistente GRITA sem corromper; reatribuir = última vence
+const nParte = nucleo([['cubo', { id: 0, lado: 1 }], ['parte', { nome: 'x', faces: [0, 1], pivo: [0.1, 0.2, 0.3] }]], {}, {});
+const nParteOrf = nucleo([['cubo', { id: 0, lado: 1 }], ['parte', { nome: 'x', faces: [0, 999] }]], {}, {});
+const nParteRe = nucleo([['cubo', { id: 0, lado: 1 }], ['parte', { nome: 'a', faces: [0] }], ['parte', { nome: 'b', faces: [0] }]], {}, {});
+ok('(13a op parte) nomeia faces (f.parte), registra pivô, face inexistente GRITA (malha intacta), reatribuir = última vence',
+   nParte.F.get(0).parte === 'x' && nParte.F.get(2).parte === null && JSON.stringify(nParte.partes.x.pivo) === '[0.1,0.2,0.3]' &&
+   nParteOrf.orfaos.length === 1 && nParteOrf.orfaos[0].op === 'parte' && nParteOrf.orfaos[0].ref === 999 && nParteOrf.V.size === 8 && nParteOrf.F.size === 6 &&
+   nParteRe.F.get(0).parte === 'b',
+   `pivô ${JSON.stringify(nParte.partes.x.pivo)} · órfão #${nParteOrf.orfaos[0].ref} (V=${nParteOrf.V.size}/F=${nParteOrf.F.size}) · reatribuído -> '${nParteRe.F.get(0).parte}'`);
+
+// (13a canon) f.parte ENTRA na canon (replay determinístico); face SEM parte fica BYTE-idêntica (o toco: todas as linhas F de 6)
+const canonComParte = neutroCanonico(nParte);
+const rowComParte = canonComParte.F.find((r) => r[0] === 0), rowSemParte = canonComParte.F.find((r) => r[0] === 2);
+const canonTocoRows13 = neutroCanonico(nucleo(toco.PASSOS, toco.PARAMS, toco.TOPO)).F;
+const cAnimA = JSON.stringify(neutroCanonico(nucleo(anim.PASSOS, anim.PARAMS, anim.TOPO, anim.MATERIAIS)));
+const cAnimB = JSON.stringify(neutroCanonico(nucleo(JSON.parse(JSON.stringify(anim.PASSOS)), anim.PARAMS, anim.TOPO, anim.MATERIAIS)));
+ok('(13a canon) f.parte entra na canon (linha de 7); face SEM parte fica de 6 (byte-compat: toco intacto); determinismo + round-trip',
+   rowComParte[rowComParte.length - 1] === 'x' && rowComParte.length === 7 && rowSemParte.length === 6 &&
+   canonTocoRows13.every((r) => r.length === 6) && cAnimA === cAnimB,
+   `parte na linha ${rowComParte.length} vs sem-parte ${rowSemParte.length} · toco ${canonTocoRows13.length} linhas de 6 · anim canon ${cAnimA.length} chars estável`);
+
+// (13a agrupamento) (parte,material): a 'roda' abarca 2 materiais -> 2 lotes (mesma parte), + o braço; triângulos conservados; compat toco 1 lote
+const rAnim13 = adaptarV3(nucleo(anim.PASSOS, anim.PARAMS, anim.TOPO, anim.MATERIAIS), ctx13, anim.MATERIAIS);
+const infoLote13 = rAnim13.lotes.map((L) => L.parte || null);
+const rTocoUmLote = adaptarV3(nucleo(toco.PASSOS, toco.PARAMS, toco.TOPO), ctx13);
+const somaAnim13 = rAnim13.lotes.reduce((s, L) => s + L.mesh.v.length, 0);
+const somaSemGrupo = adaptarV3(nucleo([...anim.PASSOS.filter((p) => p[0] !== 'parte' && p[0] !== 'material')], anim.PARAMS, anim.TOPO), ctx13).lotes.reduce((s, L) => s + L.mesh.v.length, 0);
+ok('(13a agrupamento) (parte,material): a roda (2 materiais) vira 2 lotes + o braço = 3, todos com L.parte; triângulos CONSERVAM; toco sem-parte-sem-material = 1 lote',
+   rAnim13.lotes.length === 3 && JSON.stringify(infoLote13) === '["roda","roda","braco"]' && somaAnim13 === somaSemGrupo && rTocoUmLote.lotes.length === 1 && rTocoUmLote.lotes[0].parte === null,
+   `lotes ${rAnim13.lotes.length} ${JSON.stringify(infoLote13)} · floats agrupados ${somaAnim13} == sem-grupo ${somaSemGrupo} · toco ${rTocoUmLote.lotes.length} lote(s)`);
+
+// (13a pivô) 'roda' SEM pivo -> CENTROIDE (puxado pro dente em +x); 'braco' COM pivo explícito na base
+ok('(13a pivô) default = CENTROIDE da parte (roda, sem pivo -> puxado pro dente +x); override = pivô EXPLÍCITO (braço na base bracoX)',
+   anim.PASSOS.find((p) => p[0] === 'parte' && p[1].nome === 'roda')[1].pivo === undefined && rAnim13.partes.roda.pivo[0] > 0 &&
+   JSON.stringify(rAnim13.partes.braco.pivo) === JSON.stringify([anim.PARAMS.bracoX, 0, 0]),
+   `roda pivô=centroide ${rAnim13.partes.roda.pivo.map((n) => n.toFixed(3))} (x>0) · braço pivô=explícito ${JSON.stringify(rAnim13.partes.braco.pivo)}`);
+
+// (13a interpolador) avaliarChaves em t conhecido: pontas, chave, meio (smoothstep(.5)=.5) e quarto (.15625 — DISCRIMINA de linear .25)
+const K13 = [[0, 10], [2, 20]];
+const q13 = avaliarChaves(K13, 0.5), meio13 = avaliarChaves(K13, 1);
+ok('(13a interpolador) avaliarChaves: antes->1º, depois->último, na chave, meio=15 (smoothstep .5=.5), quarto=11.5625 (≠ linear 12.5)',
+   avaliarChaves(K13, -1) === 10 && avaliarChaves(K13, 9) === 20 && avaliarChaves(K13, 0) === 10 && meio13 === 15 && Math.abs(q13 - 11.5625) < 1e-9,
+   `[-1]->${avaliarChaves(K13, -1)} [9]->${avaliarChaves(K13, 9)} meio->${meio13} quarto->${q13} (linear daria 12.5)`);
+
+// (13a montarAnimar) casa por ÍNDICE, matriz determinística (mesmo T), move (T=0≠T=1), 2 lotes da roda com a MESMA matriz, PIVÔ fixo, vazio->undefined, canal ruim GRITA
+const animarFn = montarAnimar(anim.ANIMACOES, infoLote13, rAnim13.partes);
+const rodar13 = (T) => { const L = rAnim13.lotes.map(() => ({ matriz: IDENT16() })); animarFn(T, L); return L.map((l) => l.matriz); };
+const m0 = rodar13(0), m0b = rodar13(0), m1 = rodar13(1);
+const pivoRoda = rAnim13.partes.roda.pivo, fixo13 = aplica13(m0[0], pivoRoda);   // T=0: rotY=0, mas a matriz T(piv)·I·T(-piv)=I -> o pivô fica no lugar em qualquer T
+const fixo13b = aplica13(m1[0], pivoRoda);
+let canalGritou13 = false; try { montarAnimar({ x: { trilhas: [{ parte: 'roda', canal: 'giroZ', chaves: [[0, 0]] }] } }, infoLote13, rAnim13.partes); } catch (e) { canalGritou13 = /canal/.test(e.message); }
+ok('(13a montarAnimar) matriz por ÍNDICE: determinística (T=0 2x igual), MOVE (T=0≠T=1), 2 lotes da roda = MESMA matriz, PIVÔ fixo, {}->undefined, canal ruim GRITA',
+   JSON.stringify(m0) === JSON.stringify(m0b) && JSON.stringify(m0) !== JSON.stringify(m1) && JSON.stringify(m1[0]) === JSON.stringify(m1[1]) &&
+   Math.hypot(fixo13[0] - pivoRoda[0], fixo13[1] - pivoRoda[1], fixo13[2] - pivoRoda[2]) < 1e-9 && Math.hypot(fixo13b[0] - pivoRoda[0], fixo13b[1] - pivoRoda[1], fixo13b[2] - pivoRoda[2]) < 1e-9 &&
+   montarAnimar({}, infoLote13, rAnim13.partes) === undefined && canalGritou13,
+   `T0==T0 & T0!=T1 & lote0==lote1(roda) · pivô fica a ${Math.hypot(fixo13b[0] - pivoRoda[0], fixo13b[1] - pivoRoda[1], fixo13b[2] - pivoRoda[2]).toExponential(1)} dele · {}->undefined · canal GRITA`);
+
+// (13a executar) fia ANIMACOES -> animar; SEM ANIMACOES -> undefined (o render vê peca.animar||null=null -> byte-idêntico)
+const objComAnim = executar(anim.PASSOS, anim.PARAMS, anim.TOPO, ctx13, anim.MATERIAIS, anim.ANIMACOES);
+const objSemAnim = executar(anim.PASSOS, anim.PARAMS, anim.TOPO, ctx13, anim.MATERIAIS);
+ok('(13a executar) fia ANIMACOES -> animar presente; SEM ANIMACOES -> animar undefined (compat: peca.animar||null = null)',
+   typeof objComAnim.animar === 'function' && objSemAnim.animar === undefined,
+   `com ANIMACOES: ${typeof objComAnim.animar} · sem: ${objSemAnim.animar}`);
+
+// (13a JÓIA) render.js diff vazio vs origin/main — o passo dirige pelo hook `animar` que já existe
+const { execFileSync } = await import('node:child_process');
+let renderDiff13 = 'ERRO';
+try { renderDiff13 = execFileSync('git', ['diff', '--stat', 'origin/main', '--', 'prototipos/fps/v3/motor/render.js'], { cwd: REPO, encoding: 'utf8' }).trim(); } catch (e) { renderDiff13 = 'git falhou: ' + e.message; }
+ok('(13a JÓIA) render.js (motor COMPARTILHADO com o JOGO) tem diff VAZIO vs origin/main — a animação dirige pelo hook existente',
+   renderDiff13 === '', `git diff --stat render.js: ${renderDiff13 === '' ? 'VAZIO' : JSON.stringify(renderDiff13)}`);
+
+// ---- na PÁGINA: relógio congelado no visor.html + página==Node bit-a-bit ----
+const visorBase = base.replace('oficina.html', 'visor.html');
+const page13 = await browser.newPage({ viewport: { width: 900, height: 560 } });
+page13.on('pageerror', (e) => console.error('PAGEERR(13a):', e.message));
+await page13.addInitScript(() => { const _raf = window.requestAnimationFrame.bind(window); window.__FIXO = 0; window.requestAnimationFrame = (cb) => _raf(() => cb(window.__FIXO)); });   // CONGELA o relógio: cada quadro usa __FIXO (ms)
+await page13.goto(`${visorBase}?peca=_oficina-anim&a=35`, { waitUntil: 'load' });   // ?a fixa a câmera: a órbita não varia entre fases -> a ÚNICA coisa T-dependente é a animação (pólen desligado na peça)
+await page13.waitForFunction(() => window.__ready === true, { timeout: 15000 }).catch(() => {});
+const ready13 = await page13.evaluate(() => window.__ready === true);
+ok('(13a visor) _oficina-anim abre no visor.html (window.__ready)', ready13);
+
+// página==Node: a canon com f.parte refaz IGUAL (replay determinístico da peça com parte)
+const canonPage13 = await page13.evaluate(async () => {
+  const m = await import('/prototipos/fps/v3/motor/oficina.js');
+  const p = await import('/prototipos/fps/v3/pecas/_oficina-anim.js');
+  return JSON.stringify(m.neutroCanonico(m.nucleo(p.PASSOS, p.PARAMS, p.TOPO, p.MATERIAIS)));
+});
+ok('(13a replay) uma peça COM parte faz replay página==Node bit-a-bit (a canon com f.parte é idêntica)',
+   canonPage13 === cAnimA, `canônico ${cAnimA.length} chars, ${canonPage13 === cAnimA ? 'idêntico' : 'DIVERGE'}`);
+
+// página==Node: as MATRIZES da animação em vários T batem bit-a-bit (DETERMINISMO ABSOLUTO — mesmo T, mesma matriz, página e Node)
+const TS13 = [0, 0.5, 1, 1.7, 4];
+const matrizesNode13 = TS13.map((T) => { const L = rAnim13.lotes.map(() => ({ matriz: IDENT16() })); animarFn(T, L); return L.map((l) => l.matriz); });
+const matrizesPage13 = await page13.evaluate(async (TS) => {
+  const m = await import('/prototipos/fps/v3/motor/oficina.js');
+  const p = await import('/prototipos/fps/v3/pecas/_oficina-anim.js');
+  const ctx = { tex: { texCanvas: (w, h, fn) => ({ width: w, height: h, fn }) } };
+  const r = m.adaptarV3(m.nucleo(p.PASSOS, p.PARAMS, p.TOPO, p.MATERIAIS), ctx, p.MATERIAIS);
+  const info = r.lotes.map((L) => L.parte || null);
+  const animar = m.montarAnimar(p.ANIMACOES, info, r.partes);
+  return TS.map((T) => { const L = r.lotes.map(() => ({ matriz: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] })); animar(T, L); return L.map((l) => [...l.matriz]); });
+}, TS13);
+ok('(13a determinismo) as MATRIZES da animação em 5 tempos batem página==Node BIT-A-BIT (mesmo T -> mesma matriz, sem Date/random)',
+   JSON.stringify(matrizesNode13) === JSON.stringify(matrizesPage13),
+   `${TS13.length} tempos × 3 lotes: ${JSON.stringify(matrizesNode13) === JSON.stringify(matrizesPage13) ? 'idênticas' : 'DIVERGEM'}`);
+
+// relógio CONGELADO: mesma fase 2x = idêntico; T=0 vs T=1 = a parte MOVEU (>> 0). CLIP abaixo do HUD (o fps do topo muda por timing, não é a cena)
+const CLIP13 = { x: 120, y: 90, width: 660, height: 430 };
+const settle13 = async (n = 10) => { for (let i = 0; i < n; i++) await page13.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(0)))); };
+const fase13 = async (fixoMs) => { await page13.evaluate((f) => { window.__FIXO = f; }, fixoMs); await settle13(); return decodePNG(await page13.screenshot({ clip: CLIP13 })); };
+await settle13(20);   // warmup: canvas/FBO estabilizam antes da 1ª captura
+const f0a = await fase13(0), f0b = await fase13(0), f1a = await fase13(1000), f1b = await fase13(1000), f0c = await fase13(0);
+const dSame0 = diffPix(f0a, f0b), dSame1 = diffPix(f1a, f1b), dMove = diffPix(f0a, f1a), dVolta = diffPix(f0a, f0c);
+ok('(13a anima de verdade) relógio congelado: mesma fase 2x = IDÊNTICO (T0 e T1), e T=0 vs T=1 os pixels DIFEREM (a parte moveu); volta a T=0 = idêntico',
+   dSame0 === 0 && dSame1 === 0 && dMove > 3000 && dVolta === 0,
+   `T0=T0 ${dSame0}px · T1=T1 ${dSame1}px · T0≠T1 ${dMove}px (movimento) · volta ${dVolta}px`);
+await page13.evaluate(() => { window.__FIXO = 700; });   // uma pose bonita (engrenagem girada + braço no meio do swing) pro screenshot
+await settle13();
+await page13.screenshot({ path: join(OUT13, 'oficina-anim.png') });
+await page13.close();
+
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}\n               ${join(OUT10, 'oficina-sem-solido-aviso.png')}\n               ${join(OUT10, 'oficina-colisao-painel.png')}\n               ${join(OUT11, 'oficina-atlas-toco.png')}\n               ${join(OUT11C, 'oficina-pincel-macio.png')}\n               ${join(OUT12, 'oficina-material-brasa.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}\n               ${join(OUT10, 'oficina-sem-solido-aviso.png')}\n               ${join(OUT10, 'oficina-colisao-painel.png')}\n               ${join(OUT11, 'oficina-atlas-toco.png')}\n               ${join(OUT11C, 'oficina-pincel-macio.png')}\n               ${join(OUT12, 'oficina-material-brasa.png')}\n               ${join(OUT13, 'oficina-anim.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex); passo 10: EXPORTAR + COLISÃO — o painel reflete colisaoDe (raio/altura/base) e o botão REAL grava ['solido',{faces:[ordenadas]}] (neutro.F.solido vira true, desfazível, no-op se já-sólido, ignorado no arrasto); a serialização IDA-E-VOLTA depois de editar (arrasto+extruda+pincel+solido) reabre BIT-A-BIT idêntica (página == Node, com a CHAMADA colisaoDe(PASSOS, PARAMS, TOPO) gravada, não o valor); o servir.mjs REAL grava pecas/<nome>.js num dir TEMP (arquivo === conteúdo, re-import replica), rejeita ../.., /etc, a/b, .., espaço e símbolo sem escrever fora, e serve com Cache-Control: no-store; uma peça sem solido mostra o AVISO e a colisão vira o objeto INTEIRO (marcar o topo a muda: altura 1→0); e sem a rota o Salvar cai no download sem quebrar; passo 11a: ATLAS POR FACE (fundação da textura pintável) — o adaptarV3 troca o SWATCH por um atlas de ${N_FACE} ILHAS DISJUNTAS (grade ${R11.atlas.cols}×${R11.atlas.rows}, ilha ${R11.atlas.tile}px, gutter ${R11.atlas.gutter}px, textura ${R11.atlas.W}×${R11.atlas.H}), o FURO da caixa GLOBAL (fundo #8 e topo #9 quase no mesmo XZ, IoU ${iouGlobal.toFixed(2)}) some com ilhas separadas, e o toco renderiza cada face na SUA cor IGUAL ao swatch (topo #9 madeira clara rgb ${rgbTopo11.r.toFixed(0)},${rgbTopo11.g.toFixed(0)},${rgbTopo11.b.toFixed(0)}; cmp byte-a-byte swatch↔atlas = 0 pixels no relatório). O mapa por face (ilha + projeta) fica anexado em atlas pro pincel macio do 11b; passo 11b (MOTOR): PINCEL MACIO no núcleo — a op 'livre' grava a tinta ANCORADA à face ({a,b} face-local, o mesmo s,t da projeção — não um texel cru) e o adaptarV3 rasteriza um DAB radial macio na ilha (centro=cor rgb ${centroL11}, +8px=base rgb ${bordaL11}, meio esmaece rgb ${meioL11}); determinístico (canon 2x + round-trip JSON estáveis, a tinta ENTRA na canon), a tinta ACOMPANHA a face num moveV (o centro segue cor mesmo com o UV do canto deslizando), órfão grita (#999, malha intacta), raio maior tinge mais texels (0.2→${tPeq11} < 0.4→${tGde11}) e dureza controla a borda, e o dab fica PRESO na célula (não vaza pra vizinha) — o modo 'face' segue BYTE-idêntico (o toco canoniza igual, linha F de 6); passo 11c: PINCEL MACIO na INTERFACE (pintar arrastando) — o modo pincel (chip "Pincel" + tecla B) LIGADO faz o arrasto na superfície PINTAR em vez de orbitar/selecionar (grava ['pincel',{modo:'livre',cor,raio,dureza,pontos:[{f,a,b}]}], câmera parada, nenhum vértice mexido), DESLIGADO tudo segue como antes (arrasto de vértice ainda grava moveV); o RAYCAST do cursor é o inverso EXATO de projetar (com lente) — o ponto de superfície projeta de volta a ${erroRT.toFixed(2)}px do cursor —, acha a face da FRENTE (hitFace) e intersecta o plano dela → {f,a,b} FACE-LOCAL (abInMundo bate o raycast); os pontos caem na face certa (#9) e ACOMPANHAM o arrasto (a monotônico, spread ${aSpread.toFixed(2)}); a pincelada APARECE no render (o centro vira azul rgb ${rgbDepois11c.r | 0},${rgbDepois11c.g | 0},${rgbDepois11c.b | 0}; a borda não pintada segue madeira), replay página==Node bit-a-bit (a tinta livre entra na canon), undo/redo voltam a superfície ao baseline/depois, os sliders de raio/dureza refletem na op e no tamanho da mancha (raio 0.08→${nTexPeq} texels < 0.5→${nTexGde}), a roda e o Ctrl+Z DURANTE a pincelada são ignorados (reusa a máquina arrasto/soltar), um arrasto no VAZIO no modo pincel não grava op vazia (orbita), e um arrasto atravessando o topo e um lado grava pontos em faces diferentes num só passo (${JSON.stringify(facesCross)}); passo 12a: MATERIAIS OPACOS — a UI aplica um material às faces selecionadas (grava ['material',{faces:[9],usa:'${usa12}'}], seta f.material só na face 9, registra ${JSON.stringify(mat12[usa12])} — aspereza:0 omitido —, painel mostra), o material ENTRA na canon e o replay página==Node é bit-a-bit (${canonPage12.length} chars, difere da canon SEM material), aplicar o mesmo material de novo é no-op (sem passo fantasma), o adaptarV3 AGRUPA por material em 3 LOTES (brasa emissivo 1.4+semLuz, casca aspereza 0.9, + o padrão) conservando os triângulos (${somaMat}==${somaBase}), e o Ctrl+Z tira o passo (a face volta a sem material). A JÓIA (render.js compartilhado com o JOGO) fica BYTE-idêntica com material desligado — provado por cmp à parte.`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex); passo 10: EXPORTAR + COLISÃO — o painel reflete colisaoDe (raio/altura/base) e o botão REAL grava ['solido',{faces:[ordenadas]}] (neutro.F.solido vira true, desfazível, no-op se já-sólido, ignorado no arrasto); a serialização IDA-E-VOLTA depois de editar (arrasto+extruda+pincel+solido) reabre BIT-A-BIT idêntica (página == Node, com a CHAMADA colisaoDe(PASSOS, PARAMS, TOPO) gravada, não o valor); o servir.mjs REAL grava pecas/<nome>.js num dir TEMP (arquivo === conteúdo, re-import replica), rejeita ../.., /etc, a/b, .., espaço e símbolo sem escrever fora, e serve com Cache-Control: no-store; uma peça sem solido mostra o AVISO e a colisão vira o objeto INTEIRO (marcar o topo a muda: altura 1→0); e sem a rota o Salvar cai no download sem quebrar; passo 11a: ATLAS POR FACE (fundação da textura pintável) — o adaptarV3 troca o SWATCH por um atlas de ${N_FACE} ILHAS DISJUNTAS (grade ${R11.atlas.cols}×${R11.atlas.rows}, ilha ${R11.atlas.tile}px, gutter ${R11.atlas.gutter}px, textura ${R11.atlas.W}×${R11.atlas.H}), o FURO da caixa GLOBAL (fundo #8 e topo #9 quase no mesmo XZ, IoU ${iouGlobal.toFixed(2)}) some com ilhas separadas, e o toco renderiza cada face na SUA cor IGUAL ao swatch (topo #9 madeira clara rgb ${rgbTopo11.r.toFixed(0)},${rgbTopo11.g.toFixed(0)},${rgbTopo11.b.toFixed(0)}; cmp byte-a-byte swatch↔atlas = 0 pixels no relatório). O mapa por face (ilha + projeta) fica anexado em atlas pro pincel macio do 11b; passo 11b (MOTOR): PINCEL MACIO no núcleo — a op 'livre' grava a tinta ANCORADA à face ({a,b} face-local, o mesmo s,t da projeção — não um texel cru) e o adaptarV3 rasteriza um DAB radial macio na ilha (centro=cor rgb ${centroL11}, +8px=base rgb ${bordaL11}, meio esmaece rgb ${meioL11}); determinístico (canon 2x + round-trip JSON estáveis, a tinta ENTRA na canon), a tinta ACOMPANHA a face num moveV (o centro segue cor mesmo com o UV do canto deslizando), órfão grita (#999, malha intacta), raio maior tinge mais texels (0.2→${tPeq11} < 0.4→${tGde11}) e dureza controla a borda, e o dab fica PRESO na célula (não vaza pra vizinha) — o modo 'face' segue BYTE-idêntico (o toco canoniza igual, linha F de 6); passo 11c: PINCEL MACIO na INTERFACE (pintar arrastando) — o modo pincel (chip "Pincel" + tecla B) LIGADO faz o arrasto na superfície PINTAR em vez de orbitar/selecionar (grava ['pincel',{modo:'livre',cor,raio,dureza,pontos:[{f,a,b}]}], câmera parada, nenhum vértice mexido), DESLIGADO tudo segue como antes (arrasto de vértice ainda grava moveV); o RAYCAST do cursor é o inverso EXATO de projetar (com lente) — o ponto de superfície projeta de volta a ${erroRT.toFixed(2)}px do cursor —, acha a face da FRENTE (hitFace) e intersecta o plano dela → {f,a,b} FACE-LOCAL (abInMundo bate o raycast); os pontos caem na face certa (#9) e ACOMPANHAM o arrasto (a monotônico, spread ${aSpread.toFixed(2)}); a pincelada APARECE no render (o centro vira azul rgb ${rgbDepois11c.r | 0},${rgbDepois11c.g | 0},${rgbDepois11c.b | 0}; a borda não pintada segue madeira), replay página==Node bit-a-bit (a tinta livre entra na canon), undo/redo voltam a superfície ao baseline/depois, os sliders de raio/dureza refletem na op e no tamanho da mancha (raio 0.08→${nTexPeq} texels < 0.5→${nTexGde}), a roda e o Ctrl+Z DURANTE a pincelada são ignorados (reusa a máquina arrasto/soltar), um arrasto no VAZIO no modo pincel não grava op vazia (orbita), e um arrasto atravessando o topo e um lado grava pontos em faces diferentes num só passo (${JSON.stringify(facesCross)}); passo 12a: MATERIAIS OPACOS — a UI aplica um material às faces selecionadas (grava ['material',{faces:[9],usa:'${usa12}'}], seta f.material só na face 9, registra ${JSON.stringify(mat12[usa12])} — aspereza:0 omitido —, painel mostra), o material ENTRA na canon e o replay página==Node é bit-a-bit (${canonPage12.length} chars, difere da canon SEM material), aplicar o mesmo material de novo é no-op (sem passo fantasma), o adaptarV3 AGRUPA por material em 3 LOTES (brasa emissivo 1.4+semLuz, casca aspereza 0.9, + o padrão) conservando os triângulos (${somaMat}==${somaBase}), e o Ctrl+Z tira o passo (a face volta a sem material). A JÓIA (render.js compartilhado com o JOGO) fica BYTE-idêntica com material desligado — provado por cmp à parte; passo 13a: ANIMAÇÃO RÍGIDA POR PARTE — a op \`parte\` nomeia faces (f.parte na canon, órfão grita, última vence) e face SEM parte fica byte-idêntica (toco: ${canonTocoRows13.length} linhas de 6); o adaptarV3 agrupa por (parte,material) — a roda (2 materiais) vira 2 lotes + o braço, triângulos conservados (${somaAnim13}), toco sem-parte-sem-material = 1 lote; o pivô default é o CENTROIDE (roda puxada pro dente) e o override é EXPLÍCITO (braço na base); o interpolador (avaliarChaves) é smoothstep (meio 15, quarto 11.5625 ≠ linear 12.5); montarAnimar escreve a matriz por ÍNDICE (infoPorLote ${JSON.stringify(infoLote13)}), determinística (mesmo T -> mesma matriz), com o pivô fixo, {}->undefined e canal ruim gritando; executar fia ANIMACOES (sem -> animar undefined = byte-idêntico); a peça COM parte faz replay página==Node bit-a-bit e as MATRIZES batem página==Node em 5 tempos; e no relógio congelado a mesma fase 2x é idêntica (${dSame0}px) e T=0 vs T=1 os pixels DIFEREM (${dMove}px — a parte moveu). A JÓIA render.js tem diff VAZIO (${renderDiff13 === '' ? 'confirmado' : renderDiff13}) — a animação dirige pelo hook animar(T,lotes) que já existia.`);

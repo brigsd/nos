@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — módulo .js do motor v3 (sem tipos; roda puro no vitest/esbuild)
-import { nucleo, neutroCanonico, adaptarV3, executar, colisaoDe, BLOCO } from '../../prototipos/fps/v3/motor/oficina.js';
+import { nucleo, neutroCanonico, adaptarV3, executar, colisaoDe, BLOCO, montarAnimar, avaliarChaves } from '../../prototipos/fps/v3/motor/oficina.js';
 
 const P = (extra: any[] = []) => [
   ['cilindro', { id: 0, raio: 'r', altura: 'h', lados: 'lados' }],
@@ -494,5 +494,166 @@ describe('passo 12b — mistura transparente', () => {
     expect(transp).toHaveLength(1);
     expect(transp[0].opacidade).toBeCloseTo(0.42, 6);
     expect(r.lotes.some((L: any) => L.emissivo && !L.transparente)).toBe(true);       // núcleo aceso é OPACO
+  });
+});
+
+/* PASSO 13a — ANIMAÇÃO RÍGIDA POR PARTE (motor headless; a prova de MOVIMENTO na tela
+   — relógio congelado — é da bancada). Prova por MEDIÇÃO: a op `parte` nomeia faces e
+   registra o pivô (canon carrega f.parte, byte-compat pra face sem parte); adaptarV3
+   agrupa por (parte, material) e resolve o pivô (explícito ou CENTROIDE); o interpolador
+   bate valores conhecidos (inclusive antes/depois/meio); montarAnimar casa parte<->lote
+   por ÍNDICE (infoPorLote) e escreve a matriz determinística; executar fia ANIMACOES. */
+describe('passo 13a — animação rígida por parte', () => {
+  const cubo: any[] = ['cubo', { id: 0, lado: 1 }];
+  const fakeCtx = { tex: { texCanvas: (w: number, h: number, fn: any) => ({ width: w, height: h, fn }) }, m4: { ident: () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]) } };
+  const J = (x: any) => JSON.stringify(x);
+  const aplica = (M: number[], p: number[]) => [
+    M[0] * p[0] + M[4] * p[1] + M[8] * p[2] + M[12],
+    M[1] * p[0] + M[5] * p[1] + M[9] * p[2] + M[13],
+    M[2] * p[0] + M[6] * p[1] + M[10] * p[2] + M[14],
+  ];
+
+  it('1) op parte: seta f.parte; registra pivô; face inexistente GRITA sem corromper; reatribuir = última vence', () => {
+    const n = nucleo([cubo, ['parte', { nome: 'x', faces: [0, 1], pivo: [0.1, 0.2, 0.3] }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.F.get(0).parte).toBe('x');
+    expect(n.F.get(1).parte).toBe('x');
+    expect(n.F.get(2).parte).toBe(null);                     // face não citada intacta
+    expect(n.partes.x.pivo).toEqual([0.1, 0.2, 0.3]);        // pivô registrado (passa por vec)
+    // face inexistente: grita, malha e demais faces intactas
+    const orf = nucleo([cubo, ['parte', { nome: 'x', faces: [0, 999] }]], {}, {});
+    expect(orf.orfaos.some((o: any) => o.op === 'parte' && o.ref === 999)).toBe(true);
+    expect(orf.F.get(0).parte).toBe('x'); expect(orf.V.size).toBe(8); expect(orf.F.size).toBe(6);
+    expect(orf.partes.x.pivo).toBe(null);                    // sem pivo -> null (adaptador usa centroide)
+    // reatribuir: a última parte que cita a face manda
+    const re = nucleo([cubo, ['parte', { nome: 'a', faces: [0] }], ['parte', { nome: 'b', faces: [0] }]], {}, {});
+    expect(re.F.get(0).parte).toBe('b');
+  });
+
+  it('2) canon inclui f.parte (guardado); face SEM parte fica byte-idêntica (linha de 6); determinismo/replay', () => {
+    const n = nucleo([cubo, ['parte', { nome: 'x', faces: [0] }]], {}, {});
+    const canon = neutroCanonico(n);
+    const r0 = canon.F.find((r: any[]) => r[0] === 0) as any[];
+    const r1 = canon.F.find((r: any[]) => r[0] === 1) as any[];
+    expect(r0[r0.length - 1]).toBe('x');                     // f.parte anexado (cauda)
+    expect(r0.length).toBe(7);
+    expect(r1.length).toBe(6);                               // face sem parte: linha inalterada (byte-compat)
+    // determinismo (2x) + round-trip JSON da LISTA; e a canon COM parte difere da SEM (parte é gravado)
+    const a = J(neutroCanonico(nucleo([cubo, ['parte', { nome: 'x', faces: [0] }]], {}, {})));
+    const b = J(neutroCanonico(nucleo(JSON.parse(J([cubo, ['parte', { nome: 'x', faces: [0] }]])), {}, {})));
+    expect(a).toBe(b);
+    expect(a).not.toBe(J(neutroCanonico(nucleo([cubo], {}, {}))));
+    // a compat NÃO é frágil: uma peça só-material/tinta (sem parte) segue com a MESMA canon do 12b
+    const semParte = nucleo([cubo, ['pincel', { modo: 'face', faces: [0], cor: '#123456' }]], {}, {});
+    for (const row of neutroCanonico(semParte).F) expect((row as any[]).every((c) => typeof c !== 'string' || c !== 'x')).toBe(true);
+  });
+
+  it('3) adaptarV3 agrupa por (parte, material); centroide default; pivô explícito; L.parte no lote; compat 1-lote', () => {
+    const MAT = { metal: { cor: '#888888' }, marca: { cor: '#ff7326', emissivo: 1 } };
+    // 1 parte 'roda' abrangendo 2 materiais -> 2 lotes, AMBOS com L.parte='roda'
+    const passos = [['cubo', { id: 0, lado: 2 }], ['parte', { nome: 'roda', faces: [0, 1, 2, 3, 4, 5] }],
+      ['material', { faces: [0], usa: 'marca' }], ['material', { faces: [1, 2, 3, 4, 5], usa: 'metal' }]];
+    const r: any = adaptarV3(nucleo(passos, {}, {}, MAT), fakeCtx, MAT);
+    expect(r.lotes).toHaveLength(2);
+    expect(r.lotes.every((L: any) => L.parte === 'roda')).toBe(true);
+    expect(r.lotes.reduce((s: number, L: any) => s + L.mesh.v.length, 0)).toBe(288);   // triângulos conservados (cubo inteiro)
+    // centroide default = média dos verts distintos da parte. Cubo lado 2: verts em x,z∈[-1,1], y∈[0,2] -> centro (0,1,0)
+    expect(r.partes.roda.pivo).toEqual([0, 1, 0]);
+    // pivô EXPLÍCITO sobrepõe o centroide
+    const rEx: any = adaptarV3(nucleo([['cubo', { id: 0, lado: 2 }], ['parte', { nome: 'roda', faces: [0], pivo: [5, 6, 7] }]], {}, {}), fakeCtx);
+    expect(rEx.partes.roda.pivo).toEqual([5, 6, 7]);
+    // compat: sem parte E sem material -> 1 lote, L.parte null, partes {}
+    const rc: any = adaptarV3(nucleo([cubo], {}, {}), fakeCtx);
+    expect(rc.lotes).toHaveLength(1);
+    expect(rc.lotes[0].parte).toBe(null);
+    expect(rc.partes).toEqual({});
+  });
+
+  it('4) interpolador (avaliarChaves): antes/depois das pontas, na chave, meio e quarto de segmento (smoothstep)', () => {
+    const K = [[0, 10], [2, 20]];
+    expect(avaliarChaves(K, -1)).toBe(10);        // antes da 1ª -> 1º valor
+    expect(avaliarChaves(K, 5)).toBe(20);         // depois da última -> último valor
+    expect(avaliarChaves(K, 0)).toBe(10);         // na chave
+    expect(avaliarChaves(K, 2)).toBe(20);
+    expect(avaliarChaves(K, 1)).toBe(15);         // meio: smoothstep(0.5)=0.5 -> 15
+    expect(avaliarChaves(K, 0.5)).toBeCloseTo(11.5625, 9);   // quarto: s=0.15625 (DISCRIMINA de linear=12.5)
+    // três chaves: encontra o segmento certo
+    const K3 = [[0, 0], [1, 100], [2, 0]];
+    expect(avaliarChaves(K3, 1)).toBe(100);       // na chave do meio
+    expect(avaliarChaves(K3, 0.5)).toBeCloseTo(50, 9);       // meio do 1º segmento
+    expect(avaliarChaves(K3, 1.5)).toBeCloseTo(50, 9);       // meio do 2º segmento
+    expect(avaliarChaves([], 3)).toBe(0);         // sem chaves -> 0 (defensivo)
+  });
+
+  it('5) montarAnimar: casa parte<->lote por ÍNDICE, matriz determinística, pivô fixo, vazio->undefined, canal ruim GRITA', () => {
+    const infoPorLote = ['roda', 'roda', 'braco', null];   // paralelo aos lotes (o 4º sem parte)
+    const partes = { roda: { pivo: [0, 1, 0] }, braco: { pivo: [1, 0, 0] } };
+    const ANIM = { girar: { duracao: 4, repete: true, trilhas: [{ parte: 'roda', canal: 'rotY', chaves: [[0, 0], [4, Math.PI * 2]] }] } };
+    const animar = montarAnimar(ANIM, infoPorLote, partes);
+    expect(typeof animar).toBe('function');
+    const mk = () => infoPorLote.map(() => ({ matriz: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }));
+    const A = mk(); animar(0, A);
+    const B = mk(); animar(0, B);
+    expect(J(A.map((l) => l.matriz))).toBe(J(B.map((l) => l.matriz)));   // determinismo: mesmo T -> mesma matriz
+    const C = mk(); animar(1, C);
+    expect(J(A.map((l) => l.matriz))).not.toBe(J(C.map((l) => l.matriz)));   // T=0 != T=1 (moveu)
+    expect(J(C[0].matriz)).toBe(J(C[1].matriz));    // os 2 lotes da 'roda' recebem A MESMA matriz
+    expect(J(C[2].matriz)).toBe(J([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]));   // 'braco' não animado aqui -> ident intacta
+    expect(J(C[3].matriz)).toBe(J([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]));   // lote sem parte -> ident intacta
+    // o PIVÔ fica FIXO sob a matriz (a parte gira EM TORNO dele)
+    const fixo = aplica(C[0].matriz, [0, 1, 0]);
+    expect(fixo[0]).toBeCloseTo(0, 9); expect(fixo[1]).toBeCloseTo(1, 9); expect(fixo[2]).toBeCloseTo(0, 9);
+    // valor esperado do rotY em T=1: lt=1, u=0.25, s=0.15625 -> ang=2π·0.15625 (bloco rotacional bate cos/sin float64)
+    const ang = 2 * Math.PI * 0.15625;
+    expect(C[0].matriz[0]).toBeCloseTo(Math.cos(ang), 9);
+    expect(C[0].matriz[2]).toBeCloseTo(-Math.sin(ang), 9);
+    // ANIMACOES vazio -> undefined (o render vê peca.animar||null = null -> byte-idêntico)
+    expect(montarAnimar({}, infoPorLote, partes)).toBeUndefined();
+    // canal desconhecido GRITA ao montar (erro alto e cedo, como op desconhecida)
+    expect(() => montarAnimar({ x: { trilhas: [{ parte: 'roda', canal: 'giroZ', chaves: [[0, 0]] }] } }, infoPorLote, partes)).toThrow(/canal/);
+    // trilha aponta pra parte SEM lote -> no-op (nada a mover, sem quebrar)
+    const semLote = montarAnimar({ y: { repete: true, duracao: 2, trilhas: [{ parte: 'fantasma', canal: 'posX', chaves: [[0, 0], [2, 9]] }] } }, infoPorLote, partes);
+    const D = mk(); expect(() => semLote(1, D)).not.toThrow();
+    expect(J(D.map((l) => l.matriz))).toBe(J(mk().map((l) => l.matriz)));   // ninguém mexeu
+  });
+
+  it('6) executar fia ANIMACOES -> animar; sem ANIMACOES -> undefined (compat); canais pos/escala compõem', () => {
+    const MAT = { m: { cor: '#888888' } };
+    const passos = [cubo, ['parte', { nome: 'p', faces: [0, 1, 2, 3, 4, 5], pivo: [0, 0, 0] }], ['material', { faces: [0, 1, 2, 3, 4, 5], usa: 'm' }]];
+    // repete:false pra o fim da linha do tempo (lt=min(T,dur)=dur) dar os valores de PONTA exatos
+    const ANIM = { mover: { duracao: 2, repete: false, trilhas: [{ parte: 'p', canal: 'posY', chaves: [[0, 0], [2, 1]] }, { parte: 'p', canal: 'escala', chaves: [[0, 1], [2, 2]] }] } };
+    const obj: any = executar(passos, {}, {}, fakeCtx, MAT, ANIM);
+    expect(typeof obj.animar).toBe('function');
+    const semAnim: any = executar(passos, {}, {}, fakeCtx, MAT);
+    expect(semAnim.animar).toBeUndefined();   // ANIMACOES omitido -> undefined
+    // no fim (T=2 -> lt=min(2,2)=2): posY=1, escala=2 -> a matriz translada Y e escala 2
+    const lotes = obj.lotes.map((L: any) => ({ matriz: L.matriz }));
+    obj.animar(2, lotes);
+    const M = lotes[0].matriz;
+    // um ponto (1,0,0): escala 2 -> (2,0,0); +posY 1 -> (2,1,0). Pivô [0,0,0] não desloca.
+    const p = aplica(M, [1, 0, 0]);
+    expect(p[0]).toBeCloseTo(2, 9); expect(p[1]).toBeCloseTo(1, 9); expect(p[2]).toBeCloseTo(0, 9);
+    // e o WRAP do laço: repete:true em T=dur volta pro início (lt = dur % dur = 0) -> valores iniciais
+    const ANIMr = { mover: { duracao: 2, repete: true, trilhas: [{ parte: 'p', canal: 'posY', chaves: [[0, 0], [2, 1]] }] } };
+    const objR: any = executar(passos, {}, {}, fakeCtx, MAT, ANIMr);
+    const lotesR = objR.lotes.map((L: any) => ({ matriz: L.matriz }));
+    objR.animar(2, lotesR);   // T=2 % 2 = 0 -> posY=0 -> identidade
+    expect(aplica(lotesR[0].matriz, [1, 0, 0])).toEqual([1, 0, 0]);
+  });
+
+  it('7) peça-exemplo _oficina-anim: sem órfãos, 2 partes (roda centroide, braco pivô explícito), animar presente', async () => {
+    const pUrl = new URL('../../prototipos/fps/v3/pecas/_oficina-anim.js', import.meta.url);
+    const peca: any = await import(fileURLToPath(pUrl));
+    const n = nucleo(peca.PASSOS, peca.PARAMS, peca.TOPO, peca.MATERIAIS);
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.partes.roda.pivo).toBe(null);                       // roda SEM pivo -> centroide no adaptador
+    expect(n.partes.braco.pivo).toEqual([peca.PARAMS.bracoX, 0, 0]);   // braco COM pivo explícito na base
+    const r: any = adaptarV3(n, fakeCtx, peca.MATERIAIS);
+    expect(r.lotes.map((L: any) => L.parte)).toEqual(['roda', 'roda', 'braco']);   // infoPorLote paralelo
+    expect(r.partes.braco.pivo).toEqual([peca.PARAMS.bracoX, 0, 0]);
+    expect(r.partes.roda.pivo[0]).toBeGreaterThan(0);             // centroide puxado pro dente (+x): prova o default
+    const obj: any = executar(peca.PASSOS, peca.PARAMS, peca.TOPO, fakeCtx, peca.MATERIAIS, peca.ANIMACOES);
+    expect(typeof obj.animar).toBe('function');
+    expect(peca.meta.colisao.forma).toBe('cilindro');
   });
 });

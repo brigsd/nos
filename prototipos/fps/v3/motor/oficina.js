@@ -59,7 +59,7 @@ function distintos(vs) { return new Set(vs).size; }
    suficiente pra provar o modelo e as partes difíceis; as ~20 da tabela do doc
    entram depois, cada uma como mais uma entrada aqui.
 ---------------------------------------------------------------------------- */
-function Face(id, vs) { return { id, vs, cor: null, material: null, liso: false, solido: false, tinta: [] }; }
+function Face(id, vs) { return { id, vs, cor: null, material: null, parte: null, liso: false, solido: false, tinta: [] }; }
 
 function addV(st, id, pos) {
   if (st.V.has(id)) throw new Error(`oficina: colisão de id de vértice ${id} (bloco pequeno? passo mal-formado?)`);
@@ -211,6 +211,22 @@ const OPS = {
     if (!Object.hasOwn(st.materiais, usa)) return grita(st, i, 'material', usa, `material '${usa}' não existe em MATERIAIS`);
     for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'material', fid, 'face inexistente'); continue; } f.material = usa; }
   },
+
+  /* parte (passo 13a): dá NOME a um conjunto de faces (`f.parte = nome`) — é o ALVO
+     que a ANIMAÇÃO (e no futuro o material) usam pra mover/deformar aquele pedaço
+     como peça sólida. Registra a parte no neutro (`st.partes[nome] = {pivo}`): `pivo`
+     (opcional `[x,y,z]`) é o ponto em torno do qual ela gira/escala — dimensional
+     (passa por `st.vec`, então pode citar um PARAM, como os outros pontos); AUSENTE,
+     o adaptarV3 usa o CENTROIDE da parte como default. Identidade posicional: face
+     inexistente GRITA (órfão), como as outras ops — nunca corrompe (lei do envelope).
+     Uma face pertence a NO MÁXIMO uma parte: reatribuir sobrescreve `f.parte` — ÚLTIMA
+     VENCE (o último `parte` que cita a face manda). `neutroCanonico` anexa `f.parte`
+     (replay determinístico); o pivô é metadado de animação, não muda a MALHA. */
+  parte(st, a, i) {
+    const nome = a.nome;
+    st.partes[nome] = { pivo: a.pivo != null ? st.vec(a.pivo) : null };   // registro nome->{pivo}; pivo null => centroide (no adaptador)
+    for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'parte', fid, 'face inexistente'); continue; } f.parte = nome; }   // última atribuição vence
+  },
 };
 
 /* ----------------------------------------------------------------------------
@@ -229,7 +245,9 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}) {
   /* materiais: o dicionário POR NOME (a peça declara em MATERIAIS) que a op
      `material` valida contra e o adaptarV3 lê pra montar os params por lote. Como
      PARAMS/TOPO, é dado da peça — o padrão {} deixa toda peça sem material intacta. */
-  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], num, vec, materiais: MATERIAIS };
+  /* partes (13a): registro nome->{pivo} que a op `parte` preenche e o adaptarV3
+     lê pra resolver o pivô (explícito) ou cair no centroide da parte. */
+  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], partes: {}, num, vec, materiais: MATERIAIS };
 
   PASSOS.forEach((passo, i) => {
     const [op, args = {}] = passo;
@@ -238,7 +256,7 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}) {
     fn(st, args, i);
   });
 
-  return { V: st.V, F: st.F, orfaos: st.orfaos, merges: st.merges };
+  return { V: st.V, F: st.F, orfaos: st.orfaos, merges: st.merges, partes: st.partes };
 }
 
 /* forma canônica e ORDENADA do neutro — a base de toda comparação (replay da
@@ -255,6 +273,12 @@ export function neutroCanonico(neutro) {
          ao de antes — a compat pra trás é inegociável. Forma fixa [a,b,cor,raio,dureza]
          por dab, na ordem de pintura, pra o JSON ir-e-voltar igual (determinismo). */
       if (f.tinta && f.tinta.length) row.push(f.tinta.map((t) => [t.a, t.b, t.cor ?? null, t.raio, t.dureza]));
+      /* parte (13a): mesmo padrão do tinta — só anexa quando a face TEM parte. Face
+         SEM parte => linha byte-idêntica ao de antes (peças/testes de 1..12b não mudam
+         de canon). Vem DEPOIS do tinta (o outro opcional-de-cauda): tinta é array, parte
+         é string — tipos disjuntos, sem ambiguidade. É f.parte (o nome) que entra na
+         canon do replay; o pivô é metadado de animação, não muda a MALHA. */
+      if (f.parte) row.push(f.parte);
       return row;
     }),
     orfaos: neutro.orfaos.map((o) => ({ passo: o.passo, op: o.op, ref: o.ref ?? null, motivo: o.motivo })),
@@ -409,12 +433,18 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
      pro lote PADRÃO (params no-op). Todos DIVIDEM a MESMA textura-atlas — cada lote é
      só o subconjunto de triângulos do seu grupo. Peça sem NENHUM material => um único
      grupo (null), na ORDEM de id => mesh BYTE-idêntico ao 11a (compat inegociável). */
-  const grupos = new Map();   // chave (f.material || '') -> { mat:nome|null, mesh:{v} }
+  /* PASSO 13a — agrupa pela DUPLA (parte, material). Cada parte nomeada vira lote(s)
+     próprio(s) (pra ganhar MATRIZ própria na animação); cada material segue com seus
+     params. A chave junta os dois com um separador (\u0000) que nenhum nome contém.
+     COMPAT INEGOCIÁVEL: face SEM parte E SEM material => chave '\u0000' pra TODAS =>
+     UM só grupo, na ordem de id => mesh BYTE-idêntico ao 12b/11a (a ordem por id se
+     mantém — `faces` já vem ordenado). O grupo carrega `parte` (nome|null) pro lote. */
+  const grupos = new Map();   // chave `${parte}\u0000${material}` -> { parte, mat, mesh:{v} }
   for (const f of faces) {
     if (f.vs.some((v) => !V.has(v))) continue;   // defensivo: nunca desenha canto pendurado
-    const ch = f.material || '';
+    const ch = `${f.parte || ''}\u0000${f.material || ''}`;
     let g = grupos.get(ch);
-    if (!g) { g = { mat: f.material || null, mesh: { v: [] } }; grupos.set(ch, g); }
+    if (!g) { g = { parte: f.parte || null, mat: f.material || null, mesh: { v: [] } }; grupos.set(ch, g); }
     const projeta = atlasFace.get(f.id).projeta;
     const nf = nFace.get(f.id);
     const c0 = f.vs[0];
@@ -438,7 +468,7 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
      ganha esses campos, então o render o mantém no passe de cena — byte-idêntico. */
   const lotes = [];
   for (const g of grupos.values()) {
-    const L = { mesh: g.mesh };
+    const L = { mesh: g.mesh, parte: g.parte || null };   // 13a: o NOME da parte do lote (null = sem parte). O render IGNORA (não lê .parte); a animação casa POR ÍNDICE via infoPorLote.
     const m = g.mat ? (MATERIAIS[g.mat] || {}) : null;
     if (m) {
       if (m.cor) L.corMul = hexRGB(m.cor).map((c) => c / 255);
@@ -451,6 +481,25 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
     lotes.push(L);
   }
 
+  /* PASSO 13a — PARTES resolvidas (nome -> {pivo}) pra a animação. O pivô é o EXPLÍCITO
+     (`neutro.partes[nome].pivo`, do arquivo) OU, ausente, o CENTROIDE da parte: a média
+     das posições dos vértices DISTINTOS de todas as faces dela, no espaço LOCAL do modelo
+     (o mesmo espaço do mesh, antes do uModel). É metadado de animação — NÃO entra no mesh
+     nem na canon; peça sem parte devolve {} (compat: nenhum consumidor de hoje lê isto). */
+  const registro = neutro.partes || {};
+  const vertsParte = new Map();   // nome -> Set(ids distintos)
+  for (const f of faces) if (f.parte) { let s = vertsParte.get(f.parte); if (!s) { s = new Set(); vertsParte.set(f.parte, s); } for (const v of f.vs) s.add(v); }
+  const partes = {};
+  for (const nome of new Set([...Object.keys(registro), ...vertsParte.keys()])) {
+    let pivo = registro[nome] && registro[nome].pivo;   // explícito (já passado por vec no núcleo)
+    if (!pivo) {   // default: centroide da parte
+      let cx = 0, cy = 0, cz = 0, n = 0;
+      for (const v of (vertsParte.get(nome) || [])) { const p = V.get(v); if (!p) continue; cx += p[0]; cy += p[1]; cz += p[2]; n++; }
+      pivo = n ? [cx / n, cy / n, cz / n] : [0, 0, 0];
+    }
+    partes[nome] = { pivo };
+  }
+
   /* atlas: o mapa por face pro passo 11b (superfície -> texel). `daFace(id)` dá a
      ILHA (retângulo interno em texels: {x,y,w,h}, a região pintável) e
      `projeta(pontoMundo) -> [u,v]` no atlas 0..1 (o MESMO UV do mesh). O 11b
@@ -458,24 +507,141 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
      pincelada nunca escapa pra vizinha). Anexado ao retorno; `executar`/a peça
      consomem {mesh,tex} e ignoram este campo. */
   const atlas = { W, H, cols, rows, tile: ATLAS_TILE, gutter: ATLAS_GUTTER, daFace: (id) => atlasFace.get(id) };
-  return { lotes, tex, atlas };
+  return { lotes, tex, atlas, partes };
+}
+
+/* ----------------------------------------------------------------------------
+   PASSO 13a — ANIMAÇÃO RÍGIDA POR PARTE (em laço). Matemática de matriz 4x4 LOCAL
+   (funções PURAS, sem Date/Math.random) pra o determinismo ser ABSOLUTO: mesmo T
+   -> mesmas matrizes, byte-a-byte, na página e em Node. Coluna-major como o motor
+   (mat4.js) e o WebGL esperam — o que casa com o `uniformMatrix4fv(.., false, M)`
+   do render.js. Não uso o `ctx.m4` porque ele só tem rotY/translate; escrevo os
+   ops que faltam (rotX/rotZ/escala) aqui, LOCAIS ao oficina.js (não toco no motor).
+---------------------------------------------------------------------------- */
+function mMul(a, b) {   // a·b coluna-major (idêntico ao m4.mul do motor)
+  const o = new Array(16);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++)
+    o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+  return o;
+}
+function mTranslate(x, y, z) { return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]; }
+function mScale(s) { return [s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1]; }
+function mRotX(a) { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]; }
+function mRotY(a) { const c = Math.cos(a), s = Math.sin(a); return [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]; }   // == m4.rotY
+function mRotZ(a) { const c = Math.cos(a), s = Math.sin(a); return [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]; }
+
+/* os canais que uma trilha pode dirigir. Canal fora desta lista GRITA (throw) ao
+   montar — como uma op desconhecida no núcleo, o erro é ALTO e cedo, nunca silêncio. */
+const CANAIS = new Set(['rotX', 'rotY', 'rotZ', 'posX', 'posY', 'posZ', 'escala']);
+
+/* avaliarChaves(chaves, t): interpola as CHAVES `[[tempo,valor],...]` (assumidas
+   ORDENADAS por tempo) no instante `t`. SUAVE por padrão: smoothstep por SEGMENTO
+   (s = u²(3−2u)) — ease-in/out, derivada 0 nas pontas do segmento, sem overshoot.
+   Antes da 1ª chave -> 1º valor; depois da última -> último valor (clamp nas pontas).
+   Exportada pra o teste unitário do interpolador bater valores conhecidos. PURA. */
+export function avaliarChaves(chaves, t) {
+  const n = chaves.length;
+  if (!n) return 0;
+  if (t <= chaves[0][0]) return chaves[0][1];
+  if (t >= chaves[n - 1][0]) return chaves[n - 1][1];
+  let i = 0; while (i < n - 1 && t > chaves[i + 1][0]) i++;
+  const [t0, v0] = chaves[i], [t1, v1] = chaves[i + 1];
+  const dt = t1 - t0;
+  const u = dt > 0 ? (t - t0) / dt : 0;
+  const s = u * u * (3 - 2 * u);   // smoothstep
+  return v0 + (v1 - v0) * s;
+}
+
+/* monta a MATRIZ LOCAL de uma parte em torno do pivô: M = T(pos)·T(piv)·R·S·T(−piv),
+   com R = Rz·Ry·Rx (ordem fixa) e S escala uniforme. Aplicada como uModel a cada
+   vértice LOCAL do lote (o render multiplica uModel·pos). Pura, coluna-major. */
+function matrizLocal(a, piv) {
+  const R = mMul(mRotZ(a.rotZ), mMul(mRotY(a.rotY), mRotX(a.rotX)));
+  let M = mMul(R, mScale(a.escala));               // R·S
+  M = mMul(M, mTranslate(-piv[0], -piv[1], -piv[2]));   // R·S·T(−piv)
+  M = mMul(mTranslate(piv[0], piv[1], piv[2]), M);      // T(piv)·R·S·T(−piv)
+  M = mMul(mTranslate(a.posX, a.posY, a.posZ), M);      // T(pos)·…
+  return M;
+}
+
+/* montarAnimar(ANIMACOES, infoPorLote, partes) -> função `animar(T, lotes)` (ou
+   undefined se ANIMACOES vazio). ANIMACOES é uma seção da peça (como MATERIAIS):
+   `{ nome: { duracao, repete, trilhas:[{parte,canal,chaves}] } }`.
+
+   COMO CASA parte<->lote SEM TOCAR NO render.js: o render mapeia `peca.lotes` 1:1 na
+   MESMA ORDEM e chama `animar(T, lotes)` a cada quadro (cada lote tem `.matriz`=uModel).
+   Então capturo no closure `infoPorLote` — um array PARALELO aos lotes (infoPorLote[i]
+   = nome-da-parte-do-lote-i, ou null) — e caso POR ÍNDICE. NUNCA leio um campo novo dos
+   lotes do render (o render nem copia `.parte`).
+
+   Por quadro, pra cada animação: tempo local `lt = repete ? (dur>0 ? T%dur : 0) :
+   min(T,dur)`. Pra cada trilha: avalia as chaves em `lt` (SUAVE) e ACUMULA por parte —
+   rotX.Y.Z e posX.Y.Z SOMAM (0 default), `escala` MULTIPLICA (1 default, pra compor sem zerar).
+   Monta a matriz da parte em torno do pivô (parte.pivo ?? centroide, já resolvido no
+   adaptarV3) e escreve em TODO lote i cuja parte casa. Partes/lotes não animados ficam
+   com a identidade que o executar já pôs (nunca escrevo neles). Determinístico. */
+export function montarAnimar(ANIMACOES = {}, infoPorLote = [], partes = {}) {
+  const nomes = Object.keys(ANIMACOES || {});
+  if (!nomes.length) return undefined;
+
+  /* índices de lote por parte, do MAPA paralelo (a fonte da verdade do casamento). */
+  const lotesDaParte = new Map();
+  infoPorLote.forEach((p, i) => { if (!p) return; let a = lotesDaParte.get(p); if (!a) { a = []; lotesDaParte.set(p, a); } a.push(i); });
+
+  /* pré-processa: valida canais (GRITA cedo), ordena as chaves, deriva a duração
+     (default = maior tempo de chave da animação). Feito UMA vez, não por quadro. */
+  const anims = nomes.map((nome) => {
+    const A = ANIMACOES[nome] || {};
+    const trilhas = (A.trilhas || []).map((tr) => {
+      if (!CANAIS.has(tr.canal)) throw new Error(`oficina: canal '${tr.canal}' desconhecido na animação '${nome}' (parte '${tr.parte}') — só ${[...CANAIS].join('/')}`);
+      const chaves = (tr.chaves || []).slice().sort((x, y) => x[0] - y[0]);
+      return { parte: tr.parte, canal: tr.canal, chaves };
+    });
+    let maxT = 0; for (const tr of trilhas) if (tr.chaves.length) maxT = Math.max(maxT, tr.chaves[tr.chaves.length - 1][0]);
+    return { repete: !!A.repete, duracao: A.duracao != null ? +A.duracao : maxT, trilhas };
+  });
+
+  return function animar(T, lotes) {
+    const acc = new Map();   // parte -> {rotX,rotY,rotZ,posX,posY,posZ,escala}, ZERADO por quadro (determinismo)
+    const getAcc = (p) => { let a = acc.get(p); if (!a) { a = { rotX: 0, rotY: 0, rotZ: 0, posX: 0, posY: 0, posZ: 0, escala: 1 }; acc.set(p, a); } return a; };
+    for (const A of anims) {
+      const lt = A.repete ? (A.duracao > 0 ? T % A.duracao : 0) : Math.min(T, A.duracao);
+      for (const tr of A.trilhas) {
+        const v = avaliarChaves(tr.chaves, lt);
+        const a = getAcc(tr.parte);
+        if (tr.canal === 'escala') a.escala *= v; else a[tr.canal] += v;
+      }
+    }
+    for (const [parte, a] of acc) {
+      const idx = lotesDaParte.get(parte);
+      if (!idx || !idx.length) continue;   // trilha aponta pra parte sem lote (nenhuma face) -> nada a mover
+      const piv = (partes[parte] && partes[parte].pivo) || [0, 0, 0];
+      const M = matrizLocal(a, piv);
+      for (const i of idx) if (lotes[i]) lotes[i].matriz = M;   // escreve por ÍNDICE; o render lê L.matriz como uModel
+    }
+  };
 }
 
 /* ----------------------------------------------------------------------------
    API pública que a PEÇA usa.
 ---------------------------------------------------------------------------- */
 /* executar: roda a lista e devolve o objeto pronto pro visor
-   ({lotes:[{mesh:{v}, tex, matriz, ...params-de-material}], ...}). É núcleo +
-   adaptador. MATERIAIS (passo 12a) é dado da peça, como PARAMS/TOPO — vem por ÚLTIMO
-   e o padrão {} deixa toda peça sem material com UM lote só, byte-idêntico ao 11a.
-   Os lotes DIVIDEM a mesma tex/matriz; cada um carrega os params do seu material. */
-export function executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}) {
+   ({lotes:[{mesh:{v}, tex, matriz, ...params-de-material}], animar?, camera}). É núcleo
+   + adaptador. MATERIAIS (12a) e ANIMACOES (13a) são dados da peça, como PARAMS/TOPO —
+   vêm por ÚLTIMO e opcionais: {} deixa toda peça sem material com UM lote só (byte-idêntico
+   ao 11a) e ANIMACOES vazio -> `animar` undefined -> o render vê `peca.animar||null`=null
+   -> byte-idêntico (nenhuma peça de hoje anima). Cada lote ganha a SUA identidade (não uma
+   compartilhada) pra a animação sobrescrever o lote certo sem alias; `animar` casa
+   parte<->lote por ÍNDICE via `infoPorLote`, PARALELO aos lotes que o render vai mapear. */
+export function executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = {}) {
   const neutro = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS);
   if (!ctx || !ctx.tex || !ctx.tex.texCanvas) throw new Error('oficina.executar precisa de ctx {tex,...} do motor v3');
   if (neutro.orfaos.length && typeof console !== 'undefined') console.warn(`oficina: ${neutro.orfaos.length} órfão(s) —`, neutro.orfaos);
-  const { lotes, tex } = adaptarV3(neutro, ctx, MATERIAIS);
-  const matriz = ctx.m4 ? ctx.m4.ident() : undefined;
-  return { lotes: lotes.map((L) => ({ ...L, tex, matriz })), camera: { e: 1.05, r: 2.9 } };
+  const { lotes, tex, partes } = adaptarV3(neutro, ctx, MATERIAIS);
+  const infoPorLote = lotes.map((L) => L.parte || null);   // PARALELO aos lotes (mesma ordem que o render mapeia)
+  const animar = montarAnimar(ANIMACOES, infoPorLote, partes);
+  const ident = () => (ctx.m4 ? ctx.m4.ident() : undefined);
+  return { lotes: lotes.map((L) => ({ ...L, tex, matriz: ident() })), animar, camera: { e: 1.05, r: 2.9 } };
 }
 
 /* colisaoDe: SÓ a geometria (sem adaptador/textura/pincel) -> descritor de
