@@ -906,7 +906,7 @@ Ordem de construção da Aba Som (paralela à da Oficina; estado `[x]/[~]/[ ]`):
 
 - S1 `[x]` **Núcleo do evento + adaptador Web Audio + bancada de replay** (D-99): `somnucleo.js` (grafo em dados, determinístico, `oscilador`/`ruido`/`filtro`/`envelope`/`ganho`/`soma` + `lfo` + `alturaEnv`, órfão/ciclo gritam, `somCanonico`) + `somweb.js` (grafo→Web Audio, `renderarOffline`) + a bancada `sintetizar` (replay byte-a-byte) + o evento-exemplo `_bolha`. O `som.js` do jogo intocado.
 - S2 `[x]` **Casca da aba Som** (D-100): a página nova `som.html` (forma de onda no centro + Play/loop/espaço), carrega e toca um evento (`_bolha`); desenha a onda de `renderarOffline` (determinística) e liga o grafo vivo no Play. O chip "Som" do editor navega pra cá. `som.js` do jogo intocado.
-- S3 `[ ]` **Blocos ao vivo**: montar/editar o grafo (os nós + params) com audição imediata.
+- S3 `[x]` **Blocos ao vivo** (D-101): o painel direito virou o EDITOR — cada nó um card com sliders/dropdowns, adicionar/ligar/remover blocos, e editar re-renderiza a onda na hora (o Play toca a versão editada). Validação surfada sem quebrar. Só `som.html`.
 - S4 `[ ]` **Presets**: o catálogo semeado dos parâmetros já tunados do `som.js` (passo/vento/bolha).
 - S5 `[ ]` **Exportar + amarrar no jogo**: serializa o evento num `.js` que reabre bit-a-bit, e o `som.js` passa a ser o adaptador que o jogo chama.
 
