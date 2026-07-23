@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 228,
-    "worldTime": 13680
+    "tickCount": 230,
+    "worldTime": 13800
   },
   "width": 64,
   "height": 64,
@@ -6683,6 +6683,23 @@
       "type": "core_pulse",
       "tick": 228,
       "worldTime": 13680
+    },
+    {
+      "type": "native_spoke",
+      "tick": 229,
+      "worldTime": 13740,
+      "nativeId": "brasa",
+      "message": "Pão quentinho e histórias quentes. Venham aquecer o coração!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 229,
+      "worldTime": 13740
+    },
+    {
+      "type": "core_pulse",
+      "tick": 230,
+      "worldTime": 13800
     }
   ],
   "natives": {
