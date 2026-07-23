@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — módulo .js do motor v3 (sem tipos; roda puro no vitest/esbuild)
-import { nucleo, neutroCanonico, adaptarV3, executar, colisaoDe, BLOCO, montarAnimar, avaliarChaves } from '../../prototipos/fps/v3/motor/oficina.js';
+import { nucleo, neutroCanonico, adaptarV3, executar, colisaoDe, BLOCO, montarAnimar, avaliarChaves, bindPoseOssos } from '../../prototipos/fps/v3/motor/oficina.js';
 
 const P = (extra: any[] = []) => [
   ['cilindro', { id: 0, raio: 'r', altura: 'h', lados: 'lados' }],
@@ -655,5 +655,189 @@ describe('passo 13a — animação rígida por parte', () => {
     const obj: any = executar(peca.PASSOS, peca.PARAMS, peca.TOPO, fakeCtx, peca.MATERIAIS, peca.ANIMACOES);
     expect(typeof obj.animar).toBe('function');
     expect(peca.meta.colisao.forma).toBe('cilindro');
+  });
+});
+
+/* PASSO 14a — ESQUELETO com DEFORMAÇÃO SUAVE (linear blend skinning; motor headless — a
+   prova de que DEFORMA na tela, relógio congelado, é da bancada). Prova por MEDIÇÃO: a op
+   `pesar` acumula peso por (vértice, osso) e grita órfão (osso/vértice/face) sem corromper;
+   a canon anexa o peso do vértice (compat: sem peso -> byte-idêntica); resolverEsqueleto
+   grita ciclo/pai/teto; adaptarV3 emite o mesh de 16 floats + top-4 normalizado (8 floats
+   sem esqueleto — compat); o skinning é LBS determinístico (bind pose = identidade; filho
+   gira no pivô; raiz fica; MISTO = combinação convexa); executar fia ESQUELETO. */
+describe('passo 14a — esqueleto com deformação suave', () => {
+  const cubo: any[] = ['cubo', { id: 0, lado: 1 }];
+  const fakeCtx = { tex: { texCanvas: (w: number, h: number, fn: any) => ({ width: w, height: h, fn }) }, m4: { ident: () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]) } };
+  const J = (x: any) => JSON.stringify(x);
+  const ESQ = { ossos: [{ nome: 'b0' }, { nome: 'b1', pai: 'b0', pivo: [0, 1, 0] }] };   // b0 raiz, b1 filho na junta y=1
+  const aplica = (M: ArrayLike<number>, p: number[]) => [
+    M[0] * p[0] + M[4] * p[1] + M[8] * p[2] + M[12],
+    M[1] * p[0] + M[5] * p[1] + M[9] * p[2] + M[13],
+    M[2] * p[0] + M[6] * p[1] + M[10] * p[2] + M[14],
+  ];
+
+  it('1) op pesar: acumula por (vértice,osso); órfão de osso/vértice/face GRITA sem corromper; peso viaja por ID', () => {
+    // acumula: dois pesar no mesmo (v,osso) somam
+    const n = nucleo([cubo, ['pesar', { osso: 'b0', vs: [0], peso: 0.3 }], ['pesar', { osso: 'b0', vs: [0], peso: 0.2 }], ['pesar', { osso: 'b1', vs: [0], peso: 0.5 }]], {}, {}, {}, ESQ);
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.pesos.get(0).get('b0')).toBeCloseTo(0.5, 9);   // 0.3 + 0.2 ACUMULADOS
+    expect(n.pesos.get(0).get('b1')).toBeCloseTo(0.5, 9);
+    // faces: pesa TODOS os vértices distintos da face
+    const nf = nucleo([cubo, ['pesar', { osso: 'b0', faces: [0], peso: 1 }]], {}, {}, {}, ESQ);
+    expect([...nf.pesos.keys()].sort((a, b) => a - b)).toEqual([0, 1, 2, 3]);   // a face 0 (fundo) tem 4 cantos
+    // órfão: osso fora do ESQUELETO grita, malha intacta, nada pesado
+    const o1 = nucleo([cubo, ['pesar', { osso: 'fantasma', vs: [0], peso: 1 }]], {}, {}, {}, ESQ);
+    expect(o1.orfaos.some((x: any) => x.op === 'pesar' && x.ref === 'fantasma')).toBe(true);
+    expect(o1.pesos.size).toBe(0); expect(o1.V.size).toBe(8);
+    // órfão: vértice inexistente grita, o VÁLIDO ainda é pesado
+    const o2 = nucleo([cubo, ['pesar', { osso: 'b0', vs: [0, 999], peso: 1 }]], {}, {}, {}, ESQ);
+    expect(o2.orfaos.some((x: any) => x.op === 'pesar' && x.ref === 999)).toBe(true);
+    expect(o2.pesos.has(0)).toBe(true); expect(o2.V.size).toBe(8);
+    // órfão: face inexistente grita
+    const o3 = nucleo([cubo, ['pesar', { osso: 'b0', faces: [999], peso: 1 }]], {}, {}, {}, ESQ);
+    expect(o3.orfaos.some((x: any) => x.op === 'pesar' && x.ref === 999)).toBe(true);
+    // sem ESQUELETO, pesar grita (não há osso pra pesar)
+    const sem = nucleo([cubo, ['pesar', { osso: 'b0', vs: [0], peso: 1 }]], {}, {});
+    expect(sem.orfaos.some((x: any) => x.op === 'pesar')).toBe(true);
+    expect(sem.pesos.size).toBe(0);
+  });
+
+  it('2) canon: peso do vértice na CAUDA (compat: sem peso -> linha de 4 byte-idêntica); determinismo/replay', () => {
+    const passos = [cubo, ['pesar', { osso: 'b0', vs: [0], peso: 0.5 }], ['pesar', { osso: 'b1', vs: [0], peso: 0.5 }]];
+    const canon = neutroCanonico(nucleo(passos, {}, {}, {}, ESQ));
+    const r0 = canon.V.find((r: any[]) => r[0] === 0) as any[];
+    const r1 = canon.V.find((r: any[]) => r[0] === 1) as any[];
+    expect(r0.length).toBe(5);                                   // [id,x,y,z, PESO]
+    expect(r0[4]).toEqual([['b0', 0.5], ['b1', 0.5]]);           // pares [osso,peso] ORDENADOS por nome do osso (o peso CRU acumulado)
+    expect(r1.length).toBe(4);                                   // vértice SEM peso: linha de 4 (byte-compat)
+    // determinismo (2x) + round-trip JSON da LISTA; e a canon COM peso difere da SEM
+    const a = J(neutroCanonico(nucleo(passos, {}, {}, {}, ESQ)));
+    const b = J(neutroCanonico(nucleo(JSON.parse(J(passos)), {}, {}, {}, ESQ)));
+    expect(a).toBe(b);
+    expect(a).not.toBe(J(neutroCanonico(nucleo([cubo], {}, {}, {}, ESQ))));
+    // COMPAT NÃO-FRÁGIL: uma peça SEM esqueleto/pesar canoniza IGUAL ao de antes (toda linha V de 4)
+    const semEsq = neutroCanonico(nucleo([cubo, ['pincel', { modo: 'face', faces: [0], cor: '#123456' }]], {}, {}));
+    for (const row of semEsq.V) expect((row as any[]).length).toBe(4);
+  });
+
+  it('3) resolverEsqueleto: ciclo, pai inexistente e teto de ossos GRITAM (alto e cedo, malha não corrompe)', () => {
+    expect(() => nucleo([cubo], {}, {}, {}, { ossos: [{ nome: 'a', pai: 'b' }, { nome: 'b', pai: 'a' }] })).toThrow(/ciclo/);
+    expect(() => nucleo([cubo], {}, {}, {}, { ossos: [{ nome: 'a', pai: 'naoexiste' }] })).toThrow(/pai/);
+    expect(() => nucleo([cubo], {}, {}, {}, { ossos: Array.from({ length: 33 }, (_, i) => ({ nome: 'o' + i })) })).toThrow(/teto/);
+    // pivô passa por vec -> cita PARAM
+    const n = nucleo([cubo], { alt: 1.7 }, {}, {}, { ossos: [{ nome: 'x', pivo: [0, 'alt', 0] }] });
+    expect(n.esqueleto.ossos[0].pivo).toEqual([0, 1.7, 0]);
+  });
+
+  it('4) adaptarV3: mesh de 16 floats + top-4 normalizado quando há esqueleto; 8 floats (byte-compat) sem ele', () => {
+    // sem esqueleto: 8 floats/vértice, lote SEM esqueleto (o caminho de hoje, intocado)
+    const rc: any = adaptarV3(nucleo([cubo], {}, {}), fakeCtx);
+    expect(rc.lotes[0].mesh.v.length % 8).toBe(0);
+    expect(rc.lotes[0].esqueleto).toBeUndefined();
+    expect(rc.esqueleto).toBe(null);
+    // com esqueleto: 16 floats/vértice, lote marcado, nOssos correto
+    const n = nucleo([cubo, ['pesar', { osso: 'b0', vs: [0, 1, 2, 3], peso: 1 }], ['pesar', { osso: 'b1', vs: [4, 5, 6, 7], peso: 1 }]], {}, {}, {}, ESQ);
+    const r: any = adaptarV3(n, fakeCtx, {});
+    expect(r.lotes[0].mesh.v.length % 16).toBe(0);
+    expect(r.lotes[0].esqueleto).toBe(true);
+    expect(r.lotes[0].nOssos).toBe(2);
+    // vértice 0 (100% b0) -> boneIndex 0, peso 1; vértice sem peso -> tudo 0 (o shader cai na identidade)
+    // primeiro triângulo da face 0 (fundo): canto 0 primeiro. layout: pos3 uv2 nrm3 idx4 w4
+    const v0 = r.lotes[0].mesh.v.slice(0, 16);
+    expect(v0.slice(8, 12)).toEqual([0, 0, 0, 0]);   // boneIndex (b0 = 0)
+    expect(v0.slice(12, 16)).toEqual([1, 0, 0, 0]);  // peso normalizado
+    // TOP-4 + normaliza: 5 ossos num vértice -> só os 4 maiores, somando 1
+    const ESQ5 = { ossos: [{ nome: 'a' }, { nome: 'b' }, { nome: 'c' }, { nome: 'd' }, { nome: 'e' }] };
+    const n5 = nucleo([cubo,
+      ['pesar', { osso: 'a', vs: [0], peso: 5 }], ['pesar', { osso: 'b', vs: [0], peso: 4 }],
+      ['pesar', { osso: 'c', vs: [0], peso: 3 }], ['pesar', { osso: 'd', vs: [0], peso: 2 }],
+      ['pesar', { osso: 'e', vs: [0], peso: 1 }]], {}, {}, {}, ESQ5);
+    const r5: any = adaptarV3(n5, fakeCtx, {});
+    const w0 = r5.lotes[0].mesh.v.slice(12, 16) as number[];   // pesos do vértice 0
+    expect(w0.reduce((s, x) => s + x, 0)).toBeCloseTo(1, 9);   // normalizado (soma 1)
+    expect((r5.lotes[0].mesh.v.slice(8, 12) as number[]).sort((a, b) => a - b)).toEqual([0, 1, 2, 3]);   // os 4 MAIORES (a,b,c,d), 'e' (o menor) fora
+    expect(w0[0]).toBeCloseTo(5 / 14, 9);   // a=5 sobre a soma dos top-4 (5+4+3+2=14)
+  });
+
+  it('5) skinning (montarAnimar+skin): bind pose = identidade; filho gira no pivô; raiz fica; MISTO = combinação convexa; determinístico', () => {
+    const infoPorLote = [null];   // 1 lote skinado
+    const esqR = nucleo([cubo], {}, {}, {}, ESQ).esqueleto;   // esqueleto RESOLVIDO (pivô default + idx) — o que executar passa
+    const ANIM = { curl: { duracao: 2, repete: false, trilhas: [{ parte: 'b1', canal: 'rotZ', chaves: [[0, 0], [2, Math.PI / 2]] }] } };
+    const animar = montarAnimar(ANIM, infoPorLote, {}, esqR);
+    expect(typeof animar).toBe('function');
+    const mk = () => [{ matriz: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], ossos: new Float32Array(32) }];
+    // T=0: bind pose -> AMBOS os ossos identidade (deforma 0)
+    const A = mk(); animar(0, A);
+    const I16 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    expect(Array.from(A[0].ossos.slice(0, 16))).toEqual(I16);    // b0 identidade
+    expect(Array.from(A[0].ossos.slice(16, 32))).toEqual(I16);   // b1 identidade (bind pose)
+    // T=2 (fim, rotZ=90°): b0 fica identidade; b1 gira EM TORNO do pivô [0,1,0]
+    const B = mk(); animar(2, B);
+    expect(Array.from(B[0].ossos.slice(0, 16))).toEqual(I16);    // raiz FICA
+    const skB1 = B[0].ossos.slice(16, 32);
+    const piv = aplica(skB1, [0, 1, 0]);                          // o pivô é PONTO FIXO da rotação do osso
+    expect(piv[0]).toBeCloseTo(0, 9); expect(piv[1]).toBeCloseTo(1, 9); expect(piv[2]).toBeCloseTo(0, 9);
+    // um ponto do filho (topo [0,2,0]) gira 90° em torno de [0,1,0]: (0,2,0)->(-1,1,0)
+    const topo = aplica(skB1, [0, 2, 0]);
+    expect(topo[0]).toBeCloseTo(-1, 9); expect(topo[1]).toBeCloseTo(1, 9); expect(topo[2]).toBeCloseTo(0, 9);
+    // MISTO 50/50: um ponto vale 0.5·skinB0·p + 0.5·skinB1·p -> ESTRITAMENTE ENTRE os dois (convexo, não rígido)
+    const p = [0, 2, 0];
+    const a0 = aplica(B[0].ossos.slice(0, 16), p), a1 = aplica(skB1, p);
+    const mix = [0.5 * a0[0] + 0.5 * a1[0], 0.5 * a0[1] + 0.5 * a1[1], 0.5 * a0[2] + 0.5 * a1[2]];
+    const d0 = Math.hypot(mix[0] - a0[0], mix[1] - a0[1], mix[2] - a0[2]);
+    const d1 = Math.hypot(mix[0] - a1[0], mix[1] - a1[1], mix[2] - a1[2]);
+    expect(d0).toBeGreaterThan(1e-6); expect(d1).toBeGreaterThan(1e-6);   // não é rígido de NENHUM dos dois
+    expect(mix[0]).toBeCloseTo((a0[0] + a1[0]) / 2, 9);                    // é a MÉDIA exata (peso 50/50)
+    // determinismo: mesmo T -> mesmas matrizes bit-a-bit
+    const C = mk(); animar(2, C);
+    expect(J(Array.from(B[0].ossos))).toBe(J(Array.from(C[0].ossos)));
+    // ANIMACOES vazio -> undefined (mesmo com esqueleto: o render vê animar||null=null)
+    expect(montarAnimar({}, infoPorLote, {}, esqR)).toBeUndefined();
+  });
+
+  it('6) osso vs parte: a trilha resolve o alvo — nome de OSSO dirige skinning (L.ossos), nome de PARTE dirige L.matriz', () => {
+    // um lote skinado (parte null) + uma trilha que mira o OSSO b1: escreve L.ossos, NÃO L.matriz
+    const ANIM = { a: { duracao: 2, repete: false, trilhas: [{ parte: 'b1', canal: 'rotZ', chaves: [[0, 0], [2, 1]] }] } };
+    const esqR = nucleo([cubo], {}, {}, {}, ESQ).esqueleto;
+    const animar = montarAnimar(ANIM, [null], {}, esqR);
+    const L = [{ matriz: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], ossos: new Float32Array(32) }];
+    animar(2, L);
+    expect(J(L[0].matriz)).toBe(J([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]));   // matriz INTOCADA (b1 é osso, não parte)
+    expect(Array.from(L[0].ossos.slice(16, 32))).not.toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);   // mas o osso b1 mexeu
+  });
+
+  it('7) executar fia ESQUELETO -> lotes skinados com L.ossos bind pose; SEM ESQUELETO byte-compat (sem L.ossos, mesh 8 floats)', () => {
+    const passos = [cubo, ['pesar', { osso: 'b0', vs: [0, 1, 2, 3], peso: 1 }], ['pesar', { osso: 'b1', vs: [4, 5, 6, 7], peso: 1 }]];
+    const obj: any = executar(passos, {}, {}, fakeCtx, {}, {}, ESQ);   // sem ANIMACOES: bind pose estática
+    expect(obj.lotes[0].esqueleto).toBe(true);
+    expect(obj.lotes[0].ossos).toBeInstanceOf(Float32Array);
+    expect(obj.lotes[0].ossos.length).toBe(32);                        // 2 ossos × 16
+    expect(Array.from(obj.lotes[0].ossos)).toEqual(Array.from(bindPoseOssos(2)));   // bind pose = identidades
+    expect(obj.animar).toBeUndefined();                                // sem ANIMACOES
+    // SEM esqueleto: nenhum L.ossos, lote não-skinado, mesh 8 floats (o caminho de hoje)
+    const semEsq: any = executar([cubo], {}, {}, fakeCtx);
+    expect(semEsq.lotes[0].esqueleto).toBeUndefined();
+    expect(semEsq.lotes[0].ossos).toBeUndefined();
+    expect(semEsq.lotes[0].mesh.v.length % 8).toBe(0);
+  });
+
+  it('8) peça-exemplo _oficina-esqueleto: sem órfãos, 3 ossos encadeados, 16 vértices pesados, todos os lotes skinados, animar presente', async () => {
+    const pUrl = new URL('../../prototipos/fps/v3/pecas/_oficina-esqueleto.js', import.meta.url);
+    const peca: any = await import(fileURLToPath(pUrl));
+    const n = nucleo(peca.PASSOS, peca.PARAMS, peca.TOPO, peca.MATERIAIS, peca.ESQUELETO);
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.esqueleto.ossos.map((o: any) => o.nome)).toEqual(['b0', 'b1', 'b2']);
+    expect(n.esqueleto.ossos[1].pai).toBe('b0');
+    expect(n.esqueleto.ossos[2].pai).toBe('b1');                       // cadeia b0<-b1<-b2
+    expect(n.pesos.size).toBe(16);                                     // 4 anéis × 4 cantos
+    const obj: any = executar(peca.PASSOS, peca.PARAMS, peca.TOPO, fakeCtx, peca.MATERIAIS, peca.ANIMACOES, peca.ESQUELETO);
+    expect(obj.lotes.every((L: any) => L.esqueleto)).toBe(true);       // peça skinada -> TODO lote é skinado
+    expect(obj.lotes.every((L: any) => L.mesh.v.length % 16 === 0)).toBe(true);
+    expect(typeof obj.animar).toBe('function');
+    expect(peca.meta.colisao.forma).toBe('cilindro');
+    // anima de verdade: T=0 (bind) != T=1.5 (pico) nas matrizes de osso
+    const rodar = (T: number) => { const L = obj.lotes.map((l: any) => ({ matriz: l.matriz, ossos: new Float32Array(l.ossos) })); obj.animar(T, L); return J(Array.from(L[0].ossos)); };
+    expect(rodar(0)).not.toBe(rodar(1.5));
+    expect(rodar(1.5)).toBe(rodar(1.5));                               // determinístico
   });
 });

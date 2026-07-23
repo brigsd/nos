@@ -154,6 +154,88 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
       outColor = vec4(outc, uOpacidade >= 1.0 ? 1.0 : uOpacidade * tx.a);   // 12b: opaco -> alpha 1.0 (byte-idêntico); transparente -> opacidade × alfa da textura
     }`);
 
+  /* PASSO 14a — VARIANTE SKINADA da cena (ESQUELETO com deformação suave, linear blend
+     skinning). É ADITIVA, no precedente da passada transparente do 12b: um PROGRAMA NOVO
+     com um FORMATO DE VÉRTICE MAIOR (índice+peso de osso -> 16 floats/vértice, stride 64),
+     desenhado num caminho SEPARADO. O shader de cena, o de profundidade e o de contorno
+     de HOJE, e o glMesh/stride de 8 floats, ficam INTOCADOS — quem NÃO tem osso (todo o
+     jogo + as peças 1..13) renderiza BYTE-idêntico. O VS soma `peso·skin(osso)·pos` (o
+     skin vem em L.ossos, escrito pelo animador por quadro); wsum ~0 (vértice sem osso) ->
+     BIND POSE (pos/normal cruas = identidade), o default que NÃO deforma. O FS é uma CÓPIA
+     VERBATIM do shader de cena (MESMA iluminação/material/névoa/debug) — o de cena não é
+     tocado (a trava da jóia); as duas cópias devem seguir juntas. MAX_OSSOS casa com o
+     TETO_OSSOS do oficina.js (que GRITA se exceder), então boneIndex nunca sai do array. */
+  const MAX_OSSOS = 32;   // == TETO_OSSOS no oficina.js. 32 × mat4 = 128 vec4 de uniforme no VS (folga sob o mínimo 256 do WebGL2)
+  const sceneSkin = prog(`#version 300 es
+    in vec3 aPos; in vec2 aUV; in vec3 aNrm; in vec4 aBoneI; in vec4 aBoneW;
+    uniform mat4 uMVP, uLMVP, uModel; uniform vec3 uCam; uniform mat4 uOssos[${MAX_OSSOS}];
+    out vec2 vUV; out vec3 vN; out float vD; out vec4 vLP; out vec3 vW;
+    ${WIND}
+    void main(){
+      // LINEAR BLEND SKINNING: pos = Σ peso_i · skin(osso_i) · pos_repouso. skin vem em
+      // uOssos (o animador escreve L.ossos por quadro). wsum ~0 (vértice SEM peso) -> bind
+      // pose (pos/normal CRUAS = identidade), o default seguro que NÃO deforma.
+      vec4 P = vec4(aPos, 1.0);
+      vec4 sp = uOssos[int(aBoneI.x)] * P * aBoneW.x + uOssos[int(aBoneI.y)] * P * aBoneW.y
+              + uOssos[int(aBoneI.z)] * P * aBoneW.z + uOssos[int(aBoneI.w)] * P * aBoneW.w;
+      float wsum = aBoneW.x + aBoneW.y + aBoneW.z + aBoneW.w;
+      vec3 pos = wsum > 0.5 ? sp.xyz : aPos;
+      vec3 nsk = mat3(uOssos[int(aBoneI.x)]) * aNrm * aBoneW.x + mat3(uOssos[int(aBoneI.y)]) * aNrm * aBoneW.y
+               + mat3(uOssos[int(aBoneI.z)]) * aNrm * aBoneW.z + mat3(uOssos[int(aBoneI.w)]) * aNrm * aBoneW.w;
+      vec3 nrm = wsum > 0.5 ? nsk : aNrm;
+      vec4 w = uModel * vec4(pos, 1.0);
+      w.xyz = vento(pos, w.xyz, length(uModel[0].xyz));   // MESMO vento da cena (gate uWind=0 = sem efeito)
+      vW = w.xyz;
+      gl_Position = uMVP * w; vUV = aUV; vN = mat3(uModel) * nrm;
+      vD = distance(w.xyz, uCam); vLP = uLMVP * w; }`, `#version 300 es
+    precision highp float;
+    in vec2 vUV; in vec3 vN; in float vD; in vec4 vLP; in vec3 vW;
+    uniform sampler2D uTex, uShadow;
+    uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; uniform vec3 uCam; uniform float uRim; out vec4 outColor; ${PACK}
+    uniform float uShadowTexel, uDiffOn, uBounce, uToon, uDebug;
+    uniform float uEmissivo, uAspereza, uSemLuz; uniform vec3 uCorMul;
+    uniform float uOpacidade;
+    float shadow(){
+      vec3 lc = vLP.xyz / vLP.w * 0.5 + 0.5;
+      if (lc.x < 0.0 || lc.x > 1.0 || lc.y < 0.0 || lc.y > 1.0 || lc.z > 1.0) return 1.0;
+      float cur = lc.z - 0.0035; float s = 0.0; float t = uShadowTexel;
+      for (int i=-1;i<=1;i++) for (int j=-1;j<=1;j++){
+        float d = unpackDepth(texture(uShadow, lc.xy + vec2(float(i),float(j))*t));
+        s += cur <= d ? 1.0 : 0.0; }
+      return s / 9.0;
+    }
+    void main(){
+      vec4 tx = texture(uTex, vUV); if (tx.a < 0.5 && uOpacidade >= 1.0) discard;
+      tx.rgb *= uCorMul;
+      vec3 N = normalize(vN);
+      float diff = max(0.0, dot(N, uSun)) * uDiffOn;
+      vec3 amb = mix(uGround, mix(uSkyHz, uSkyTop, clamp(N.y,0.0,1.0)), N.y*0.5+0.5) * 0.5;
+      amb += uGround * uBounce * max(0.0, -N.y);
+      float sh = shadow(); float sunL = diff * sh;
+      if (uToon > 0.5) sunL = sunL > 0.6 ? 1.15 : sunL > 0.24 ? 0.55 : 0.0;
+      vec3 lit = tx.rgb * (amb + uSunCol * sunL);
+      if (uAspereza > 0.0) {
+        vec3 H = normalize(uSun + normalize(uCam - vW));
+        float esp = pow(max(0.0, dot(N, H)), mix(48.0, 6.0, clamp(uAspereza, 0.0, 1.0)));
+        lit += uSunCol * esp * diff * sh;
+      }
+      if (uRim > 0.0) {
+        float r = 1.0 - abs(dot(N, normalize(uCam - vW)));
+        lit = mix(lit, vec3(0.11, 0.09, 0.12), uRim * smoothstep(0.78, 0.97, r));
+      }
+      if (uSemLuz > 0.5) lit = tx.rgb;
+      if (uEmissivo > 0.0) {
+        lit = mix(lit, tx.rgb, min(uEmissivo, 1.0));
+        lit += tx.rgb * max(uEmissivo - 1.0, 0.0);
+      }
+      vec3 sky = uSkyHz;
+      float fog = clamp(1.0 - (vD - uFog.x)/uFog.y, 0.0, 1.0);
+      vec3 outc = mix(sky, lit, fog);
+      if (uDebug > 0.5 && uDebug < 1.5) outc = N * 0.5 + 0.5;
+      else if (uDebug > 1.5) outc = mix(sky, vec3(0.8) * (amb + uSunCol * sunL), fog);
+      outColor = vec4(outc, uOpacidade >= 1.0 ? 1.0 : uOpacidade * tx.a);
+    }`);
+
   const bg = prog(`#version 300 es
 in vec2 aPos; out vec2 vUV; void main(){ vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.0,1.0);} `,
     `#version 300 es
@@ -228,6 +310,8 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
   const AL = { pos: gl.getAttribLocation(scene,'aPos'), uv: gl.getAttribLocation(scene,'aUV'), nrm: gl.getAttribLocation(scene,'aNrm') };
   const DL = { pos: gl.getAttribLocation(depthProg,'aPos'), uv: gl.getAttribLocation(depthProg,'aUV') };
   const OL = { pos: gl.getAttribLocation(outline,'aPos'), nrm: gl.getAttribLocation(outline,'aNrm') };
+  /* 14a: atributos da variante SKINADA (stride 64: pos@0 uv@12 nrm@20 boneI@32 boneW@48). */
+  const SKL = { pos: gl.getAttribLocation(sceneSkin,'aPos'), uv: gl.getAttribLocation(sceneSkin,'aUV'), nrm: gl.getAttribLocation(sceneSkin,'aNrm'), bi: gl.getAttribLocation(sceneSkin,'aBoneI'), bw: gl.getAttribLocation(sceneSkin,'aBoneW') };
 
   /* uniforms de TIER: escritos aqui e sempre que um tier muda (aplicarTiers).
      Ficam fora do laço de quadro de propósito — mudam por escolha do jogador,
@@ -235,11 +319,18 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
   const U_TEXEL = gl.getUniformLocation(scene, 'uShadowTexel');
   const U_DIFF = gl.getUniformLocation(scene, 'uDiffOn');
   const U_BOUNCE = gl.getUniformLocation(scene, 'uBounce');
+  const SK_TEXEL = gl.getUniformLocation(sceneSkin, 'uShadowTexel');   // 14a: os MESMOS tiers no programa skinado
+  const SK_DIFF = gl.getUniformLocation(sceneSkin, 'uDiffOn');
+  const SK_BOUNCE = gl.getUniformLocation(sceneSkin, 'uBounce');
   function subirUniformesDeTier() {
     gl.useProgram(scene);
     gl.uniform1f(U_TEXEL, 1 / SM);
     gl.uniform1f(U_DIFF, LT.diff);
     gl.uniform1f(U_BOUNCE, LT.bounce);
+    gl.useProgram(sceneSkin);   // 14a: espelha no skinado (mesma sombra/luz/rebote)
+    gl.uniform1f(SK_TEXEL, 1 / SM);
+    gl.uniform1f(SK_DIFF, LT.diff);
+    gl.uniform1f(SK_BOUNCE, LT.bounce);
   }
   subirUniformesDeTier();
 
@@ -257,6 +348,12 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
        transparência por profundidade. Custa um laço no load (não por quadro) e não
        toca no buffer: render byte-idêntico. */
     let cx = 0, cy = 0, cz = 0; const n = m.v.length / 8; for (let i = 0; i < m.v.length; i += 8) { cx += m.v[i]; cy += m.v[i+1]; cz += m.v[i+2]; }
+    return { buf: b, n, centro: n ? [cx / n, cy / n, cz / n] : [0, 0, 0] }; }
+  /* 14a: mesh SKINADO (16 floats/vértice, stride 64 — pos3 uv2 nrm3 boneI4 boneW4). SÓ
+     pra lote com esqueleto; o glMesh (8 floats) fica INTOCADO pra todo o resto. n conta
+     por 16; o centroide (só metadado, não usado no caminho skinado) varre os 3 primeiros. */
+  function glMeshSkin(m) { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(m.v), gl.STATIC_DRAW);
+    let cx = 0, cy = 0, cz = 0; const n = m.v.length / 16; for (let i = 0; i < m.v.length; i += 16) { cx += m.v[i]; cy += m.v[i+1]; cz += m.v[i+2]; }
     return { buf: b, n, centro: n ? [cx / n, cy / n, cz / n] : [0, 0, 0] }; }
   function makeFBO(w, h, suave) {
     /* O filtro vale SÓ pro quadro final da cena. As texturas das peças seguem
@@ -331,7 +428,9 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
   const lightView = m4.lookAt([SUN_DIR[0]*8, SUN_DIR[1]*8, SUN_DIR[2]*8], [0, 0.5, 0], [0, 1, 0]);
   const lMVPf = new Float32Array(m4.mul(m4.ortho(-4, 4, -4, 4, 0.1, 20), lightView));
 
-  let lotes = [];       // [{mesh:{buf,n}, tex, matriz}]
+  let lotes = [];       // [{mesh:{buf,n}, tex, matriz}] — SÓ os NÃO-skinados (os passes de HOJE iteram este; sem esqueleto ele tem TUDO, byte-idêntico)
+  let lotesSkin = [];   // 14a: os lotes COM esqueleto (formato 16 floats) — desenhados no caminho skinado SEPARADO. Vazio (todo jogo/peça de hoje) => nada a mais roda.
+  let lotesAnim = [];   // 14a: TODOS os lotes na ordem de peca.lotes — o que `animar` recebe (infoPorLote é paralelo a ele). Compartilha os objetos-lote com lotes/lotesSkin por referência.
   let animar = null;
   let semPalco = false; // peça-chão (palco:false) É o chão: dispensa a grama padrão
   let semParts = false; // paisagens desligam o pólen (particulas:false)
@@ -364,8 +463,15 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
          passam objetos frescos por lote. */
       const meshCache = new Map(), texCache = new Map();
       const getMesh = (m) => { let g = meshCache.get(m); if (!g) { g = glMesh(m); meshCache.set(m, g); } return g; };
+      const getMeshSkin = (m) => { let g = meshCache.get(m); if (!g) { g = glMeshSkin(m); meshCache.set(m, g); } return g; };   // 14a: mesh de 16 floats
       const getTex = (t) => { let g = texCache.get(t); if (!g) { g = glTex(t); texCache.set(t, g); } return g; };
-      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0, wind: L.wind || 0, windF: L.windF || 1.3, emissivo: L.emissivo || 0, aspereza: L.aspereza || 0, semLuz: L.semLuz || 0, corMul: L.corMul || null, transparente: L.transparente || false, opacidade: L.opacidade == null ? 1 : L.opacidade }));   // 12b: transparente=false/opacidade=1 é o padrão OPACO (nenhuma peça de hoje marca -> passe intocado)
+      /* 14a: cada lote guarda `esqueleto` (bool) e, se skinado, `ossos` (Float32Array de mat4s
+         que o animador escreve). Peça SEM esqueleto: todo `esqueleto` é false -> `lotes` fica com
+         TUDO (o filtro é identidade) e `lotesSkin` vazio -> os passes de HOJE rodam EXATAMENTE como
+         antes (byte-idêntico). O mesh skinado usa glMeshSkin (16 floats); o resto, glMesh (8). */
+      lotesAnim = peca.lotes.map(L => ({ mesh: L.esqueleto ? getMeshSkin(L.mesh) : getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0, wind: L.wind || 0, windF: L.windF || 1.3, emissivo: L.emissivo || 0, aspereza: L.aspereza || 0, semLuz: L.semLuz || 0, corMul: L.corMul || null, transparente: L.transparente || false, opacidade: L.opacidade == null ? 1 : L.opacidade, esqueleto: L.esqueleto || false, ossos: L.ossos || null }));   // 12b: transparente=false/opacidade=1 é o padrão OPACO (nenhuma peça de hoje marca -> passe intocado)
+      lotes = lotesAnim.filter(L => !L.esqueleto);       // os passes de HOJE (sombra/contorno/cena/transp) — só NÃO-skinados
+      lotesSkin = lotesAnim.filter(L => L.esqueleto);    // o caminho skinado SEPARADO
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -511,7 +617,7 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
         const windT = T;
         const dt = Math.min(0.1, (now - tPrev) / 1000); tPrev = now;   // trava dt (aba em 2º plano não "pula")
         if (antesDoQuadro) antesDoQuadro(dt, T);
-        if (animar) animar(T, lotes);
+        if (animar) animar(T, lotesAnim);   // 14a: recebe TODOS os lotes (não-skin + skin) na ordem de peca.lotes; escreve L.matriz (parte) e/ou L.ossos (osso). Sem skin, lotesAnim === lotes em conteúdo -> idêntico ao 13a.
         let camPos, lookAtM;
         if (freeCam) {
           const { pos, yaw, pitch } = freeCam;
@@ -610,6 +716,52 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
           gl.depthMask(true); gl.disable(gl.BLEND);   // devolve o estado que as partículas (e o próximo quadro) esperam
         } else {
           draw(scene, AL, true);   // caminho de HOJE, intocado: cena sem transparência
+        }
+        /* 2b: PASSO 14a — CENA SKINADA (esqueleto com deformação suave). Caminho SEPARADO:
+           programa skinado, stride 64, uOssos POR LOTE. SÓ roda com lote skinado — todo o
+           jogo e as peças de hoje têm lotesSkin VAZIO, então NADA aqui roda e o pipeline é o
+           de sempre (byte-idêntico). Opaco, DEPOIS dos opacos de cena, com depth-test já
+           LIGADO (o chão/opacos ocluem). LIMITAÇÃO ANOTADA (o corte do 14a): lote skinado NÃO
+           entra no passe de SOMBRA nem no de CONTORNO — não projeta sombra nem ganha line-art
+           (nem em bind pose), como o 12b deixou a sombra da transparência dura. */
+        if (lotesSkin.length) {
+          gl.useProgram(sceneSkin);
+          gl.uniformMatrix4fv(gl.getUniformLocation(sceneSkin,'uMVP'), false, mvpf);
+          gl.uniformMatrix4fv(gl.getUniformLocation(sceneSkin,'uLMVP'), false, lMVPf);
+          gl.uniform3fv(gl.getUniformLocation(sceneSkin,'uCam'), camPos);
+          gl.uniform3fv(gl.getUniformLocation(sceneSkin,'uSun'), SUN_DIR); gl.uniform3fv(gl.getUniformLocation(sceneSkin,'uSunCol'), SUN_COL);
+          gl.uniform3fv(gl.getUniformLocation(sceneSkin,'uSkyTop'), SKY_TOP); gl.uniform3fv(gl.getUniformLocation(sceneSkin,'uSkyHz'), SKY_HZ);
+          gl.uniform3fv(gl.getUniformLocation(sceneSkin,'uGround'), GROUND_AMB);
+          gl.uniform2f(gl.getUniformLocation(sceneSkin,'uFog'), fogCfg[0], fogCfg[1]);
+          gl.uniform2f(gl.getUniformLocation(sceneSkin,'uWindDir'), windDir[0], windDir[1]);
+          gl.uniform1f(gl.getUniformLocation(sceneSkin,'uWindT'), windT);
+          gl.uniform1i(gl.getUniformLocation(sceneSkin,'uTex'), 0); gl.uniform1i(gl.getUniformLocation(sceneSkin,'uShadow'), 1);
+          gl.uniform1f(gl.getUniformLocation(sceneSkin,'uDebug'), DEBUG);
+          gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, shadowFBO.tex);
+          const sM = gl.getUniformLocation(sceneSkin,'uModel'), sOs = gl.getUniformLocation(sceneSkin,'uOssos');
+          const sR = gl.getUniformLocation(sceneSkin,'uRim'), sTo = gl.getUniformLocation(sceneSkin,'uToon');
+          const sWnd = gl.getUniformLocation(sceneSkin,'uWind'), sWF = gl.getUniformLocation(sceneSkin,'uWindF');
+          const sEm = gl.getUniformLocation(sceneSkin,'uEmissivo'), sAs = gl.getUniformLocation(sceneSkin,'uAspereza');
+          const sSL = gl.getUniformLocation(sceneSkin,'uSemLuz'), sCM = gl.getUniformLocation(sceneSkin,'uCorMul'), sOp = gl.getUniformLocation(sceneSkin,'uOpacidade');
+          for (const L of lotesSkin) {
+            gl.uniformMatrix4fv(sM, false, L.matriz);
+            if (L.ossos) gl.uniformMatrix4fv(sOs, false, L.ossos);   // as matrizes de osso do quadro (o animador escreveu); ausente -> uOssos retém o de antes (bind pose inicial)
+            gl.uniform1f(sR, L.rim || 0); gl.uniform1f(sTo, L.toon || 0);
+            gl.uniform1f(sWnd, L.wind || 0); gl.uniform1f(sWF, L.windF || 1.3);
+            gl.uniform1f(sEm, L.emissivo || 0); gl.uniform1f(sAs, L.aspereza || 0); gl.uniform1f(sSL, L.semLuz || 0);
+            const c = L.corMul || CORMUL_UM; gl.uniform3f(sCM, c[0], c[1], c[2]);
+            gl.uniform1f(sOp, L.opacidade == null ? 1 : L.opacidade);
+            gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex);
+            gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
+            gl.enableVertexAttribArray(SKL.pos); gl.vertexAttribPointer(SKL.pos, 3, gl.FLOAT, false, 64, 0);
+            gl.enableVertexAttribArray(SKL.uv); gl.vertexAttribPointer(SKL.uv, 2, gl.FLOAT, false, 64, 12);
+            gl.enableVertexAttribArray(SKL.nrm); gl.vertexAttribPointer(SKL.nrm, 3, gl.FLOAT, false, 64, 20);
+            gl.enableVertexAttribArray(SKL.bi); gl.vertexAttribPointer(SKL.bi, 4, gl.FLOAT, false, 64, 32);
+            gl.enableVertexAttribArray(SKL.bw); gl.vertexAttribPointer(SKL.bw, 4, gl.FLOAT, false, 64, 48);
+            gl.drawArrays(gl.TRIANGLES, 0, L.mesh.n);
+          }
+          gl.disableVertexAttribArray(SKL.bi); gl.disableVertexAttribArray(SKL.bw);   // desliga os arrays de OSSO (só o skinado usa) -> estado de vertex-attrib volta ao de antes do passe
+          gl.useProgram(scene);   // devolve o programa que o resto do quadro espera
         }
         // partículas (pólen do palco — paisagens desligam)
         if (!semParts) {

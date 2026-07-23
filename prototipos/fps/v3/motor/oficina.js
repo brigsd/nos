@@ -53,6 +53,42 @@ function colapsaCiclo(vs) {
 function distintos(vs) { return new Set(vs).size; }
 
 /* ----------------------------------------------------------------------------
+   ESQUELETO (passo 14a) — deformação suave (linear blend skinning). Declarável
+   em CÓDIGO (a UI é o 14b): `ESQUELETO = { ossos: [ { nome, pai?, pivo? } ] }`.
+   `pai` = nome do osso-pai (hierarquia; raiz sem pai). `pivo` = a cabeça do osso
+   no espaço do modelo (passa por `vec`, então pode citar PARAM); default [0,0,0].
+   O bind (repouso) é a IDENTIDADE no pivô -> bindGlobal(osso) = T(pivo). Aqui só
+   se RESOLVE e VALIDA: pai existe, sem ciclo, dentro do teto. Erro estrutural
+   GRITA ALTO (throw) — cedo, como a guarda de overflow do cilindro (D3) e o canal
+   desconhecido do 13a; nunca vira segunda-verdade silenciosa. (Referência a osso
+   inexistente pela op `pesar` é ÓRFÃO, não throw — grita sem corromper a malha.) */
+const TETO_OSSOS = 32;    // teto de ossos por peça: 32 × mat4 = 128 vec4 de uniforme no VS skinado (folga sob o mínimo 256 do WebGL2). Exceder GRITA.
+const N_INFLU = 4;        // TOP-N influências por vértice (padrão 4; menos serve pro low-poly, os slots sobrando ficam peso 0)
+function resolverEsqueleto(ESQUELETO, vec) {
+  const ossos = (ESQUELETO.ossos || []).map((o) => ({
+    nome: o.nome,
+    pai: o.pai != null ? o.pai : null,
+    pivo: o.pivo != null ? vec(o.pivo) : [0, 0, 0],   // dimensional (pode citar PARAM), como os outros pontos
+  }));
+  if (ossos.length > TETO_OSSOS) throw new Error(`oficina: esqueleto com ${ossos.length} ossos excede o teto de ${TETO_OSSOS} (limite de uniformes do VS skinado)`);
+  const nomes = new Set();
+  for (const o of ossos) { if (nomes.has(o.nome)) throw new Error(`oficina: osso duplicado '${o.nome}' no ESQUELETO`); nomes.add(o.nome); }
+  const idx = new Map(ossos.map((o, i) => [o.nome, i]));
+  for (const o of ossos) if (o.pai != null && !idx.has(o.pai)) throw new Error(`oficina: osso '${o.nome}' tem pai '${o.pai}' que não existe no ESQUELETO`);
+  // ciclo: subir a cadeia de pais de cada osso; revisitar => ciclo (grita alto)
+  for (const raiz of ossos) {
+    const visto = new Set();
+    let cur = raiz;
+    while (cur.pai != null) {
+      if (visto.has(cur.nome)) throw new Error(`oficina: ciclo de pai no esqueleto (osso '${raiz.nome}')`);
+      visto.add(cur.nome);
+      cur = ossos[idx.get(cur.pai)];
+    }
+  }
+  return { ossos, idx };
+}
+
+/* ----------------------------------------------------------------------------
    VOCABULÁRIO de operações. Cada uma recebe (st, args, i) e muta o estado
    neutro. Toda referência a um id inexistente é registrada em `orfaos` e o
    passo é PULADO — grita, nunca corrompe (lei do envelope). Passo 1 traz só o
@@ -227,6 +263,25 @@ const OPS = {
     st.partes[nome] = { pivo: a.pivo != null ? st.vec(a.pivo) : null };   // registro nome->{pivo}; pivo null => centroide (no adaptador)
     for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'parte', fid, 'face inexistente'); continue; } f.parte = nome; }   // última atribuição vence
   },
+
+  /* pesar (passo 14a): soma `peso` de influência do OSSO aos VÉRTICES dados (`vs`)
+     ou aos vértices das `faces`. Ops `pesar` ACUMULAM por (vértice, osso) — o
+     adaptarV3 depois NORMALIZA (somam 1) e mantém as TOP-N (N=4) influências. O
+     peso viaja com o ID do vértice (V): toda cópia dele no mesh loose herda o
+     mesmo índice+peso. Identidade posicional (lei do envelope): osso fora do
+     ESQUELETO GRITA (órfão), vértice/face inexistente GRITA (órfão) — nunca
+     corrompe. Vértice SEM peso nenhum fica preso à IDENTIDADE (bind pose, não
+     deforma) — o default seguro, resolvido no shader. `neutroCanonico` anexa o
+     peso do vértice (replay determinístico); vértice sem peso => canon intacta. */
+  pesar(st, a, i) {
+    const osso = a.osso;
+    if (!st.ossoSet || !st.ossoSet.has(osso)) return grita(st, i, 'pesar', osso, st.ossoSet ? `osso '${osso}' não existe em ESQUELETO` : 'peça sem ESQUELETO (nenhum osso pra pesar)');
+    const peso = st.num(a.peso ?? 0);
+    const alvos = new Set();
+    for (const v of a.vs ?? []) { if (!st.V.has(v)) { grita(st, i, 'pesar', v, 'vértice inexistente'); continue; } alvos.add(v); }
+    for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'pesar', fid, 'face inexistente'); continue; } for (const v of f.vs) if (st.V.has(v)) alvos.add(v); }
+    for (const v of alvos) { let m = st.pesos.get(v); if (!m) { m = new Map(); st.pesos.set(v, m); } m.set(osso, (m.get(osso) || 0) + peso); }   // ACUMULA por (vértice, osso)
+  },
 };
 
 /* ----------------------------------------------------------------------------
@@ -234,7 +289,7 @@ const OPS = {
    `dict` funde PARAMS e TOPO — os passos citam o NOME (raio: 'troncoR'), então
    trocar o valor reconstrói sem tocar em número nenhum da lista.
 ---------------------------------------------------------------------------- */
-export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}) {
+export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO = null) {
   const dict = { ...PARAMS, ...TOPO };
   const num = (v) => {
     if (typeof v === 'number') return v;
@@ -247,7 +302,12 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}) {
      PARAMS/TOPO, é dado da peça — o padrão {} deixa toda peça sem material intacta. */
   /* partes (13a): registro nome->{pivo} que a op `parte` preenche e o adaptarV3
      lê pra resolver o pivô (explícito) ou cair no centroide da parte. */
-  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], partes: {}, num, vec, materiais: MATERIAIS };
+  /* ESQUELETO (14a): resolvido+validado ANTES dos passos (o `pesar` valida `osso`
+     contra `ossoSet`). Ausente (o caso de 1..13 e do jogo) => esqueleto null,
+     pesos vazio -> canon e mesh byte-idênticos ao de antes (compat inegociável). */
+  const esqueleto = ESQUELETO ? resolverEsqueleto(ESQUELETO, vec) : null;
+  const ossoSet = esqueleto ? new Set(esqueleto.ossos.map((o) => o.nome)) : null;
+  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], partes: {}, num, vec, materiais: MATERIAIS, esqueleto, ossoSet, pesos: new Map() };
 
   PASSOS.forEach((passo, i) => {
     const [op, args = {}] = passo;
@@ -256,7 +316,7 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}) {
     fn(st, args, i);
   });
 
-  return { V: st.V, F: st.F, orfaos: st.orfaos, merges: st.merges, partes: st.partes };
+  return { V: st.V, F: st.F, orfaos: st.orfaos, merges: st.merges, partes: st.partes, esqueleto: st.esqueleto, pesos: st.pesos };
 }
 
 /* forma canônica e ORDENADA do neutro — a base de toda comparação (replay da
@@ -264,8 +324,20 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}) {
    explícitos. JSON dela ida-e-volta é idêntico bit-a-bit quando o objeto é o
    mesmo. */
 export function neutroCanonico(neutro) {
+  const pesos = neutro.pesos;   // 14a: Map(vid -> Map(osso -> peso ACUMULADO)); ausente/vazio => nada muda
   return {
-    V: [...neutro.V.entries()].sort((a, b) => a[0] - b[0]).map(([id, p]) => [id, p[0], p[1], p[2]]),
+    /* V ganha uma CAUDA opcional (o peso do vértice) só quando ele TEM peso — o
+       mesmo padrão do tinta/parte na F. Vértice sem peso => linha [id,x,y,z] de 4,
+       BYTE-idêntica ao de antes (peças/testes de 1..13 e o toco não mudam de canon).
+       O peso viaja na canon como pares [osso,peso] ORDENADOS por nome do osso
+       (determinístico e independente da ordem do ESQUELETO); é o peso CRU acumulado
+       (o efeito do replay das ops `pesar`), não o normalizado (isso é do adaptador). */
+    V: [...neutro.V.entries()].sort((a, b) => a[0] - b[0]).map(([id, p]) => {
+      const row = [id, p[0], p[1], p[2]];
+      const pw = pesos && pesos.get(id);
+      if (pw && pw.size) row.push([...pw.entries()].sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0)));
+      return row;
+    }),
     F: [...neutro.F.values()].sort((a, b) => a.id - b.id).map((f) => {
       const row = [f.id, f.vs.slice(), f.cor ?? null, f.material ?? null, !!f.liso, !!f.solido];
       /* tinta (pincel macio, 11b): só entra quando a face TEM dab. Assim toda peça
@@ -439,6 +511,34 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
      COMPAT INEGOCIÁVEL: face SEM parte E SEM material => chave '\u0000' pra TODAS =>
      UM só grupo, na ordem de id => mesh BYTE-idêntico ao 12b/11a (a ordem por id se
      mantém — `faces` já vem ordenado). O grupo carrega `parte` (nome|null) pro lote. */
+  /* PASSO 14a — ESQUELETO (ADITIVO). SEM esqueleto (todo o jogo + peças de 1..13):
+     `skin` é false, o mesh sai em 8 floats/vértice pela MESMA linha de push de antes
+     -> BYTE-idêntico (a compat inegociável). COM esqueleto: o mesh ganha 8 floats a
+     mais por vértice (índice+peso de OSSO, 4 influências cada) -> 16 floats, e todo
+     lote é marcado `esqueleto` pro render usar o caminho skinado SEPARADO. O peso
+     viaja com o ID do vértice: `infoV(v)` dá as MESMAS 4 influências pra toda cópia
+     dele no mesh loose. boneIndex = posição do osso no ESQUELETO (a MESMA ordem que
+     o animador usa). Vértice sem peso -> tudo 0 (o shader cai na identidade = bind
+     pose, não deforma — o default seguro). */
+  const skin = !!neutro.esqueleto;
+  const nOssos = skin ? neutro.esqueleto.ossos.length : 0;
+  let infoV = () => null;
+  if (skin) {
+    const ordemOsso = new Map(neutro.esqueleto.ossos.map((o, k) => [o.nome, k]));
+    const infoOssoPorV = new Map();
+    for (const [vid, m] of (neutro.pesos || new Map())) {
+      const arr = [...m.entries()].filter(([, w]) => w > 0)
+        .sort((a, b) => (b[1] - a[1]) || (ordemOsso.get(a[0]) - ordemOsso.get(b[0])));   // maior peso 1º; empate -> ordem do osso (determinístico)
+      const top = arr.slice(0, N_INFLU);
+      let soma = 0; for (const [, w] of top) soma += w;
+      const idx = [0, 0, 0, 0], w = [0, 0, 0, 0];
+      if (soma > 0) top.forEach(([osso, wt], k) => { idx[k] = ordemOsso.get(osso); w[k] = wt / soma; });   // TOP-N + NORMALIZA (somam 1)
+      infoOssoPorV.set(vid, { idx, w });
+    }
+    const ZERO = { idx: [0, 0, 0, 0], w: [0, 0, 0, 0] };
+    infoV = (v) => infoOssoPorV.get(v) || ZERO;
+  }
+
   const grupos = new Map();   // chave `${parte}\u0000${material}` -> { parte, mat, mesh:{v} }
   for (const f of faces) {
     if (f.vs.some((v) => !V.has(v))) continue;   // defensivo: nunca desenha canto pendurado
@@ -453,7 +553,8 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
         const p = V.get(v);
         const uv = projeta(p);
         const n = f.liso && nSuave.has(v) ? nSuave.get(v) : nf;
-        g.mesh.v.push(p[0], p[1], p[2], uv[0], uv[1], n[0], n[1], n[2]);
+        g.mesh.v.push(p[0], p[1], p[2], uv[0], uv[1], n[0], n[1], n[2]);   // 8 floats — INTOCADO (byte-idêntico sem esqueleto)
+        if (skin) { const iw = infoV(v); g.mesh.v.push(iw.idx[0], iw.idx[1], iw.idx[2], iw.idx[3], iw.w[0], iw.w[1], iw.w[2], iw.w[3]); }   // +8 floats de OSSO (índice×4, peso×4)
       }
     }
   }
@@ -478,6 +579,7 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
       if (m.contorno) L.rim = +m.contorno;
       if (m.mistura === 'transparente') { L.transparente = true; L.opacidade = m.opacidade == null ? 1 : Math.min(1, Math.max(0, +m.opacidade)); }   // 12b: só 'transparente' pede a passada extra
     }
+    if (skin) { L.esqueleto = true; L.nOssos = nOssos; }   // 14a: lote skinado (mesh 16 floats) -> render usa o caminho skinado SEPARADO
     lotes.push(L);
   }
 
@@ -507,7 +609,7 @@ export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
      pincelada nunca escapa pra vizinha). Anexado ao retorno; `executar`/a peça
      consomem {mesh,tex} e ignoram este campo. */
   const atlas = { W, H, cols, rows, tile: ATLAS_TILE, gutter: ATLAS_GUTTER, daFace: (id) => atlasFace.get(id) };
-  return { lotes, tex, atlas, partes };
+  return { lotes, tex, atlas, partes, esqueleto: neutro.esqueleto || null };   // 14a: o esqueleto resolvido (ou null) segue pro executar/montarAnimar
 }
 
 /* ----------------------------------------------------------------------------
@@ -564,6 +666,59 @@ function matrizLocal(a, piv) {
   return M;
 }
 
+const IDENT16 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+/* PASSO 14a — SKINNING (linear blend skinning), determinístico e coluna-major como o
+   resto. localAnimBone(a): a transformada LOCAL do OSSO a partir dos canais, SEM o
+   pivô (diferente da parte rígida): num esqueleto o pivô do osso É a origem do frame
+   local do osso (embutida na cadeia de offsets), então a rotação já gira em torno
+   dele. M = T(pos)·Rz·Ry·Rx·S — identidade quando o osso não é animado. */
+function localAnimBone(a) {
+  const R = mMul(mRotZ(a.rotZ), mMul(mRotY(a.rotY), mRotX(a.rotX)));
+  let M = mMul(R, mScale(a.escala));                     // R·S em torno da ORIGEM (= o pivô do osso, no frame local)
+  M = mMul(mTranslate(a.posX, a.posY, a.posZ), M);       // T(pos)·R·S
+  return M;
+}
+
+/* calcularSkin(esqueleto, accOf) -> Float32Array de N mat4s: a matriz de SKIN de cada
+   osso, NA ORDEM do ESQUELETO (= a ordem do boneIndex que o adaptarV3 gravou no mesh).
+   LBS padrão, com o bind (repouso) = IDENTIDADE no pivô:
+     bindGlobal(osso)     = T(pivo)                                   (offsets telescopam)
+     globalCorrente(osso) = globalCorrente(pai) · T(pivo−pivoPai) · localAnim(osso)
+     skin(osso)           = globalCorrente(osso) · inverse(bindGlobal) = globalCorrente · T(−pivo)
+   Sem animação -> localAnim=I -> globalCorrente=T(pivo) -> skin=I (bind pose, deforma 0).
+   Osso-filho girado R -> skin = T(pivo)·R·T(−pivo): gira EM TORNO do pivô (a junta); os
+   vértices do pai (skin=I) ficam. inverse(bindGlobal) é T(−pivo) EXATO (bind é translação
+   pura) — sem inversa geral 4x4, sem erro numérico. globalDe é memoizado + recursivo: a
+   ordem de declaração não importa (ciclo já barrado no resolverEsqueleto). PURA. */
+function calcularSkin(esqueleto, accOf) {
+  const ossos = esqueleto.ossos, idx = esqueleto.idx;
+  const globalCache = new Array(ossos.length).fill(null);
+  const globalDe = (bi) => {
+    if (globalCache[bi]) return globalCache[bi];
+    const o = ossos[bi];
+    const paiIdx = o.pai != null ? idx.get(o.pai) : -1;
+    const paiG = paiIdx >= 0 ? globalDe(paiIdx) : IDENT16;
+    const paiPivo = paiIdx >= 0 ? ossos[paiIdx].pivo : [0, 0, 0];
+    const off = mTranslate(o.pivo[0] - paiPivo[0], o.pivo[1] - paiPivo[1], o.pivo[2] - paiPivo[2]);   // rest-relative ao pai
+    const a = accOf(o.nome);
+    const g = mMul(paiG, mMul(off, a ? localAnimBone(a) : IDENT16));
+    globalCache[bi] = g;
+    return g;
+  };
+  const out = new Float32Array(ossos.length * 16);
+  for (let bi = 0; bi < ossos.length; bi++) {
+    const o = ossos[bi];
+    const sk = mMul(globalDe(bi), mTranslate(-o.pivo[0], -o.pivo[1], -o.pivo[2]));   // skin = global · T(−pivo)
+    for (let k = 0; k < 16; k++) out[bi * 16 + k] = sk[k];
+  }
+  return out;
+}
+
+/* bind pose (N identidades): o L.ossos inicial de um lote skinado — o que o render sobe
+   quando a peça NÃO tem `animar` (deforma 0 = repouso). Float32Array pra subir direto. */
+export function bindPoseOssos(n) { const out = new Float32Array(n * 16); for (let i = 0; i < n; i++) out.set(IDENT16, i * 16); return out; }
+
 /* montarAnimar(ANIMACOES, infoPorLote, partes) -> função `animar(T, lotes)` (ou
    undefined se ANIMACOES vazio). ANIMACOES é uma seção da peça (como MATERIAIS):
    `{ nome: { duracao, repete, trilhas:[{parte,canal,chaves}] } }`.
@@ -580,13 +735,20 @@ function matrizLocal(a, piv) {
    Monta a matriz da parte em torno do pivô (parte.pivo ?? centroide, já resolvido no
    adaptarV3) e escreve em TODO lote i cuja parte casa. Partes/lotes não animados ficam
    com a identidade que o executar já pôs (nunca escrevo neles). Determinístico. */
-export function montarAnimar(ANIMACOES = {}, infoPorLote = [], partes = {}) {
+export function montarAnimar(ANIMACOES = {}, infoPorLote = [], partes = {}, esqueleto = null) {
   const nomes = Object.keys(ANIMACOES || {});
   if (!nomes.length) return undefined;
 
   /* índices de lote por parte, do MAPA paralelo (a fonte da verdade do casamento). */
   const lotesDaParte = new Map();
   infoPorLote.forEach((p, i) => { if (!p) return; let a = lotesDaParte.get(p); if (!a) { a = []; lotesDaParte.set(p, a); } a.push(i); });
+
+  /* PASSO 14a — esqueleto: o alvo de uma trilha pode ser um OSSO (nome no ESQUELETO) ou
+     uma PARTE (13a). `ossoSet` resolve os dois: alvo em ossoSet dirige o SKINNING (as
+     matrizes de osso do quadro, escritas em L.ossos de TODO lote skinado); alvo fora
+     dele segue a parte rígida (L.matriz). Sem esqueleto (1..13), ossoSet vazio -> tudo
+     idêntico ao 13a. */
+  const ossoSet = esqueleto ? new Set(esqueleto.ossos.map((o) => o.nome)) : new Set();
 
   /* pré-processa: valida canais (GRITA cedo), ordena as chaves, deriva a duração
      (default = maior tempo de chave da animação). Feito UMA vez, não por quadro. */
@@ -613,11 +775,20 @@ export function montarAnimar(ANIMACOES = {}, infoPorLote = [], partes = {}) {
       }
     }
     for (const [parte, a] of acc) {
+      if (ossoSet.has(parte)) continue;   // 14a: alvo é um OSSO -> vai pelo skinning abaixo, não como parte rígida
       const idx = lotesDaParte.get(parte);
       if (!idx || !idx.length) continue;   // trilha aponta pra parte sem lote (nenhuma face) -> nada a mover
       const piv = (partes[parte] && partes[parte].pivo) || [0, 0, 0];
       const M = matrizLocal(a, piv);
       for (const i of idx) if (lotes[i]) lotes[i].matriz = M;   // escreve por ÍNDICE; o render lê L.matriz como uModel
+    }
+    /* 14a: as matrizes de osso do quadro (mesmo que NENHUM osso seja animado — a bind
+       pose = identidades) num Float32Array, escrito em L.ossos de TODO lote skinado. O
+       render sobe L.ossos em uOssos[] e usa o programa skinado. accOf lê o acc por NOME
+       de osso (undefined = osso não animado -> localAnim identidade). */
+    if (esqueleto) {
+      const skinBuf = calcularSkin(esqueleto, (nome) => acc.get(nome));
+      for (let i = 0; i < infoPorLote.length; i++) if (lotes[i]) lotes[i].ossos = skinBuf;   // todo lote de peça skinada é skinado
     }
   };
 }
@@ -633,15 +804,18 @@ export function montarAnimar(ANIMACOES = {}, infoPorLote = [], partes = {}) {
    -> byte-idêntico (nenhuma peça de hoje anima). Cada lote ganha a SUA identidade (não uma
    compartilhada) pra a animação sobrescrever o lote certo sem alias; `animar` casa
    parte<->lote por ÍNDICE via `infoPorLote`, PARALELO aos lotes que o render vai mapear. */
-export function executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = {}) {
-  const neutro = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS);
+export function executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = {}, ESQUELETO = null) {
+  const neutro = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS, ESQUELETO);   // 14a: ESQUELETO por ÚLTIMO + opcional (compat: sem ele, tudo byte-idêntico)
   if (!ctx || !ctx.tex || !ctx.tex.texCanvas) throw new Error('oficina.executar precisa de ctx {tex,...} do motor v3');
   if (neutro.orfaos.length && typeof console !== 'undefined') console.warn(`oficina: ${neutro.orfaos.length} órfão(s) —`, neutro.orfaos);
-  const { lotes, tex, partes } = adaptarV3(neutro, ctx, MATERIAIS);
+  const { lotes, tex, partes, esqueleto } = adaptarV3(neutro, ctx, MATERIAIS);
   const infoPorLote = lotes.map((L) => L.parte || null);   // PARALELO aos lotes (mesma ordem que o render mapeia)
-  const animar = montarAnimar(ANIMACOES, infoPorLote, partes);
+  const animar = montarAnimar(ANIMACOES, infoPorLote, partes, esqueleto);   // 14a: esqueleto resolvido -> trilhas de OSSO viram L.ossos
   const ident = () => (ctx.m4 ? ctx.m4.ident() : undefined);
-  return { lotes: lotes.map((L) => ({ ...L, tex, matriz: ident() })), animar, camera: { e: 1.05, r: 2.9 } };
+  /* 14a: lote skinado nasce na BIND POSE (L.ossos = N identidades) — o render sobe isso
+     e a peça renderiza em repouso mesmo SEM `animar`. Com `animar`, ele sobrescreve por
+     quadro. Lote sem esqueleto não ganha L.ossos (o render nem olha). */
+  return { lotes: lotes.map((L) => ({ ...L, tex, matriz: ident(), ...(L.esqueleto ? { ossos: bindPoseOssos(L.nOssos) } : {}) })), animar, camera: { e: 1.05, r: 2.9 } };
 }
 
 /* colisaoDe: SÓ a geometria (sem adaptador/textura/pincel) -> descritor de
