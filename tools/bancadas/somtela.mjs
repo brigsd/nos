@@ -14,7 +14,9 @@
          UI, página VIVA, o resto renderiza (grafo.orfaos não vazio, sem crash);
      (5) CONSISTÊNCIA: o grafo que a UI segura passa por somCanonico ida-e-volta idêntico;
      (6) o PLAY toca a versão ATUAL (editada) — tocarEvento liga o grafo editado;
-     (7) sem regressão — a aba abre sem erro de console e a aba Objeto (oficina.html) intacta.
+     (7) O OUVIDO (S3.5): a aba DESENHA o espectrograma (canvas não-vazio) + os descritores legíveis,
+         e eles BATEM com um analisar(renderarOffline(_bolha)) independente; editar o sweep SOBE o brilho;
+     (8) sem regressão — a aba abre sem erro de console e a aba Objeto (oficina.html) intacta.
    Relógio congelado (Date.now/Math.random) pro screenshot ser determinístico.
      npm run somtela
      node tools/bancadas/somtela.mjs */
@@ -224,8 +226,40 @@ await page.keyboard.press('Space');
 await page.waitForTimeout(150);
 ok((await page.evaluate(() => window.__som.estadoAudio())) === 'running' && (await page.evaluate(() => window.__som.saidaLigada())), 'a tecla ESPAÇO também liga o grafo (gesto pelo teclado)');
 
-/* ===== 7. sem regressão: aba sem erro de console + a aba Objeto intacta ===== */
-console.log('\n[7] sem regressão');
+/* ===== 7. O OUVIDO NA ABA (S3.5): o espectrograma DESENHA e os descritores BATEM ===== */
+console.log('\n[7] o ouvido na aba: espectrograma desenhado + descritores batem com analisar(renderarOffline)');
+await P.recarregar();                                     // _bolha limpo
+await page.evaluate(() => window.__som.aguardar());
+const espDes = await page.evaluate(() => window.__som.espec());
+ok(espDes.pixelsAcesos > 500 && espDes.nDescs === 5, 'a aba DESENHA o espectrograma (canvas não-vazio) + os 5 descritores legíveis', `${espDes.pixelsAcesos} px acesos · ${espDes.nDescs} descritores · ${espDes.W}x${espDes.H}`);
+const anAba = await page.evaluate(() => window.__som.analise());
+/* referência INDEPENDENTE: analisar(renderarOffline(_bolha)) computado à parte na própria página */
+const anRef = await page.evaluate(async () => {
+  const web = await import('./motor/somweb.js');
+  const ana = await import('./motor/somanalise.js');
+  const bolha = await import('./pecas-som/_bolha.js');
+  const a = await web.renderarOffline(bolha, { sampleRate: 44100 });
+  const r = ana.analisar(a, 44100).descritores;
+  return { centroide: r.brilho.centroideHz, pitchIni: r.pitch.inicioHz, pitchFim: r.pitch.fimHz, pitchMax: r.pitch.maxHz, ataqueMs: r.envelope.ataqueMs, duracao: r.duracao };
+});
+const bate = (a, b) => Math.abs(a - b) < 1e-6;
+ok(bate(anAba.centroide, anRef.centroide) && bate(anAba.pitchFim, anRef.pitchFim) && bate(anAba.ataqueMs, anRef.ataqueMs) && bate(anAba.duracao, anRef.duracao),
+  'os descritores da ABA batem com analisar(renderarOffline(_bolha)) independente', `brilho ${f(anAba.centroide, 1)} Hz · tom→${f(anAba.pitchFim, 0)} Hz · ataque ${f(anAba.ataqueMs, 1)} ms`);
+ok(anRef.pitchFim > anRef.pitchIni + 200 && anRef.pitchMax > 850 && anRef.centroide > 440 && anRef.centroide < 650 && anRef.ataqueMs < 35,
+  'e os NÚMEROS discriminam a bolha: tom sobe →~1000, brilho ~500, ataque cedo', `${f(anRef.pitchIni, 0)}→${f(anRef.pitchFim, 0)} Hz · brilho ${f(anRef.centroide, 0)} Hz · ataque ${f(anRef.ataqueMs, 1)} ms`);
+/* editar o topo do sweep SOBE o brilho na aba — o ouvido segue a edição (não só a onda) */
+const brilhoAntes = (await page.evaluate(() => window.__som.analise())).centroide;
+await P.setParam('sweep', 'freq1', 3000);
+await page.evaluate(() => window.__som.aguardar());
+const brilhoDepois = (await page.evaluate(() => window.__som.analise())).centroide;
+ok(brilhoDepois > brilhoAntes * 1.2, 'editar (sweep freq1 1000→3000) SOBE o brilho na aba (o ouvido reflete a edição)', `${f(brilhoAntes, 1)} → ${f(brilhoDepois, 1)} Hz`);
+await P.recarregar();
+/* screenshot da aba COM o espectrograma (o deliverable do S3.5) — estado limpo, relógio congelado */
+await page.evaluate(() => window.__som.aguardar());
+await page.screenshot({ path: join(OUT, 'som-espectrograma.png') });
+
+/* ===== 8. sem regressão: aba sem erro de console + a aba Objeto intacta ===== */
+console.log('\n[8] sem regressão');
 ok(errs.length === 0, 'a aba Som abre e edita SEM erro de console', errs.length ? errs.join(' | ') : '0 erros');
 const errsSom = errs.length;
 await page.goto(`${base}/oficina.html?peca=_oficina-toco`, { waitUntil: 'load' });
@@ -237,6 +271,6 @@ ok(errs.length === errsSom, 'a aba Objeto abre sem NOVO erro de console', errs.l
 await browser.close();
 server.close();
 
-console.log(`\nscreenshots: ${join(OUT, 'som-aba.png')} · ${join(OUT, 'som-editor.png')}`);
+console.log(`\nscreenshots: ${join(OUT, 'som-aba.png')} · ${join(OUT, 'som-editor.png')} · ${join(OUT, 'som-espectrograma.png')}`);
 console.log(falhas ? `\nsomtela: ${falhas} falha(s)` : '\nsomtela: o editor lista os blocos, editar muda o som ao vivo (determinístico), add/ligar/remover montam o grafo, a validação grita sem quebrar, o Play toca a versão editada, Objeto intacta');
 process.exit(falhas ? 1 : 0);

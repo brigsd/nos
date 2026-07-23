@@ -29,6 +29,7 @@
     "servir": "node tools/servir.mjs",
     "executar": "node tools/bancadas/executar.mjs",
     "sintetizar": "node tools/bancadas/sintetizar.mjs",
+    "analisar": "node tools/bancadas/analisar.mjs",
     "somtela": "node tools/bancadas/somtela.mjs",
     "jogar": "node tools/bancadas/jogar.mjs",
     "porteiro": "node tools/bancadas/porteiro.mjs",

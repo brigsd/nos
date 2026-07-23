@@ -1,5 +1,7 @@
 <!doctype html>
-<!-- som.html — a ABA SOM. S2 (D-100) foi a CASCA: carregar um evento de pecas-som, DESENHAR a onda e TOCAR ao vivo. S3 (aqui) transforma o painel direito, que era LEITURA
+<!-- som.html — a ABA SOM. S2 (D-100) foi a CASCA: carregar um evento de pecas-som, DESENHAR a onda e TOCAR ao vivo. S3 transforma o painel direito no EDITOR ao vivo dos blocos. S3.5
+     acrescenta o OUVIDO: abaixo da onda, um ESPECTROGRAMA (tempo × frequência × energia, via motor/somanalise.js) + uma tira de DESCRITORES legíveis (tom/faixa/brilho/ataque/duração),
+     que atualizam junto com a onda a cada reexec — os olhos do usuário não-especialista pro que o som FAZ. S3 (aqui) transforma o painel direito, que era LEITURA
      do grafo + placeholder, no EDITOR ao vivo dos BLOCOS: cada nó vira um card com seus params como CONTROLES (slider pra número, dropdown pra enum), mexer re-renderiza a onda NA
      HORA (renderarOffline) e o próximo Play toca a versão editada (tocarEvento) — o "mexeu-ouviu". Adicionar/remover/ligar bloco montam/editam o grafo (a lista de PASSOS É o objeto);
      órfão/ciclo/sem-saída GRITAM na UI (via somNucleo.orfaos) sem quebrar a página. Reusa o motor provado no S1 (somnucleo.js + somweb.js); o som.js do JOGO fica INTOCADO — só importo
@@ -35,19 +37,36 @@
     border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
   #modos select:focus { outline: none; border-color: var(--accent); }
 
-  /* PALCO central: a FORMA DE ONDA (a "cena no centro" da aba Som). Ocupa o miolo, à
-     esquerda do painel e acima do transporte/status. O <canvas> preenche o palco. */
+  /* PALCO central: as CENAS do som — a FORMA DE ONDA em cima e o ESPECTROGRAMA embaixo
+     (o "ouvido" do S3.5: tempo × frequência × energia), com a tira de DESCRITORES
+     legíveis no rodapé. À esquerda do painel e acima do transporte/status. */
   #palco { position: fixed; top: 44px; right: min(340px, 34vw); left: 0; bottom: 80px; z-index: 1;
-    background: #0b0e16; border-right: 1px solid var(--line); }
-  #onda { display: block; width: 100%; height: 100%; }
-  /* PLAYHEAD: linha que corre sobre a onda enquanto toca (bônus). Não rouba clique. */
-  #cursor { position: absolute; top: 0; bottom: 0; left: 0; width: 0; z-index: 2;
+    background: #0b0e16; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+  /* as duas cenas empilhadas + o playhead correndo por cima DAS DUAS (mesmo eixo de tempo) */
+  #cenas { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  #ondaWrap { position: relative; flex: 0 0 34%; min-height: 0; border-bottom: 1px solid var(--line); }
+  #especWrap { position: relative; flex: 1 1 auto; min-height: 0; }
+  #onda, #espec { display: block; width: 100%; height: 100%; }
+  .rotCena { position: absolute; top: 5px; left: 8px; z-index: 3; pointer-events: none;
+    font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: #ffffff66; }
+  /* PLAYHEAD: linha que corre sobre as cenas enquanto toca (bônus). Não rouba clique. */
+  #cursor { position: absolute; top: 0; bottom: 0; left: 0; width: 0; z-index: 4;
     border-left: 1px solid var(--amber); pointer-events: none; opacity: 0; transition: opacity .12s; }
   #cursor::before { content: ''; position: absolute; top: 0; left: -4px;
     border: 4px solid transparent; border-top-color: var(--amber); }
   #vazio { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
-    font-size: 12px; color: var(--dim); }
+    font-size: 12px; color: var(--dim); z-index: 3; }
   #vazio[hidden] { display: none; }
+  /* a tira de DESCRITORES: o "que o som faz" em linguagem de gente (tom/faixa/brilho/ataque/duração).
+     ALTURA FIXA de propósito — assim popular a tira não empurra a altura das cenas (senão o canvas
+     da onda re-dimensiona entre renders e o hash de pixels deixa de bater). */
+  #descs { flex: 0 0 auto; height: 34px; display: flex; align-items: center; gap: 5px 16px;
+    padding: 0 12px; background: #0f1320cc; border-top: 1px solid var(--line); font-size: 11px;
+    white-space: nowrap; overflow: hidden; }
+  #descs .par { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+  #descs .dLab { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); }
+  #descs .dVal { color: var(--hud); font-variant-numeric: tabular-nums; }
+  #descs .dHint { color: var(--dim); font-size: 9px; font-style: italic; }
 
   /* painel EDITOR à direita (S3): deixa de ser leitura e vira o construtor dos blocos —
      cada nó um card com params como controles, botões pra adicionar, e a validação surfada. */
@@ -165,9 +184,19 @@
 </header>
 
 <div id="palco">
-  <canvas id="onda"></canvas>
-  <div id="cursor"></div>
-  <div id="vazio">carregando evento…</div>
+  <div id="cenas">
+    <div id="ondaWrap">
+      <span class="rotCena">forma de onda</span>
+      <canvas id="onda"></canvas>
+      <div id="vazio">carregando evento…</div>
+    </div>
+    <div id="especWrap">
+      <span class="rotCena">espectrograma · tempo × frequência</span>
+      <canvas id="espec"></canvas>
+    </div>
+    <div id="cursor"></div>
+  </div>
+  <div id="descs"></div>
 </div>
 
 <aside id="props">
@@ -208,6 +237,8 @@
    provado no S1 (somnucleo/somweb); o som.js do JOGO não é tocado — só importo os módulos NOVOS. */
 import { renderarOffline, tocarEvento } from './motor/somweb.js';
 import { somNucleo, somCanonico } from './motor/somnucleo.js';
+/* S3.5 — o "ouvido": a análise pura (espectrograma + descritores) do render atual. */
+import { analisar, desenharEspectrograma, frasesDescritores } from './motor/somanalise.js';
 
 const SR = 44100;                       // taxa fixa do render (determinismo, igual à bancada sintetizar)
 const EVENTOS = ['_bolha'];             // eventos disponíveis em pecas-som/ (S4 traz o catálogo de presets)
@@ -220,6 +251,7 @@ const elErro = $('erro');
 function mostrarErro(msg) { elErro.textContent = msg; elErro.style.display = 'grid'; }
 
 const palco = $('palco'), onda = $('onda'), cursor = $('cursor'), vazio = $('vazio');
+const cenas = $('cenas'), ondaWrap = $('ondaWrap'), espec = $('espec'), especWrap = $('especWrap'), descs = $('descs');
 
 /* ============================================================================
    VOCABULÁRIO da UI — o espelho de somnucleo.js do lado dos CONTROLES. Cada tipo diz
@@ -272,6 +304,7 @@ const NUMERICOS = { oscilador: ['freq'], ruido: ['k', 'dur'], lfo: ['freq', 'pro
 /* ---- estado ------------------------------------------------------------- */
 let eventoAtual = null;                 // { PASSOS(inline, mutável — o objeto), PARAMS:{}, semente, meta }
 let amostrasAtual = new Float32Array(0);// as amostras desenhadas (fonte do probe)
+let analiseAtual = null;                // { espectrograma, descritores } do render atual (o "ouvido")
 let ctx = null;                         // AudioContext AO VIVO — criado só no gesto do usuário
 let vozAtual = null;                    // retorno do tocarEvento (saida ligada no destino)
 let ultimaSaidaLigada = false;          // o último tocarEvento devolveu uma saida?
@@ -286,7 +319,7 @@ let ondaW = 0, ondaH = 0;               // tamanho do backing store (device px) 
 
 function desenharOnda(a) {
   const dpr = window.devicePixelRatio || 1;
-  const rect = palco.getBoundingClientRect();
+  const rect = ondaWrap.getBoundingClientRect();
   const Wc = Math.max(1, Math.round(rect.width)), Hc = Math.max(1, Math.round(rect.height));
   onda.width = Math.round(Wc * dpr); onda.height = Math.round(Hc * dpr);
   ondaW = onda.width; ondaH = onda.height;
@@ -310,6 +343,52 @@ function desenharOnda(a) {
   }
   g.stroke();
   vazio.hidden = true;
+}
+
+/* ---- O OUVIDO (S3.5): analisa o render atual e DESENHA o espectrograma + a tira de
+   descritores legíveis. `analisar` é puro/determinístico (motor/somanalise.js); aqui
+   só dimensiono o canvas e pinto (x=tempo, y=frequência com o grave embaixo, cor=energia
+   em dB), com a trilha de tom por cima e o eixo de frequência rotulado (bônus). Roda
+   junto do `desenharOnda` a cada reexec — os OLHOS do usuário pro que o som faz. */
+function desenharAnalise(a) {
+  if (!a || !a.length) { analiseAtual = null; descs.textContent = ''; return; }
+  const res = analisar(a, SR);
+  analiseAtual = res;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = especWrap.getBoundingClientRect();
+  const Wc = Math.max(1, Math.round(rect.width)), Hc = Math.max(1, Math.round(rect.height));
+  espec.width = Math.round(Wc * dpr); espec.height = Math.round(Hc * dpr);
+  const g = espec.getContext('2d');
+  desenharEspectrograma(g, espec.width, espec.height, res.espectrograma,
+    { trilhaPitch: res.descritores.pitch, espessura: Math.max(1, Math.round(1.5 * dpr)) });
+  desenharEixoFreq(g, espec.width, espec.height, res.espectrograma, dpr);
+  montarDescs(res.descritores);
+}
+/* eixo de frequência: linhas fracas + rótulos a cada 1 kHz (device px, sem transform —
+   casa com o desenharEspectrograma, que escreve em pixels de dispositivo via ImageData). */
+function desenharEixoFreq(g, W, H, esp, dpr) {
+  const fMax = esp.freqMax; if (!(fMax > 0)) return;
+  g.save();
+  g.font = `${Math.round(10 * dpr)}px ui-monospace, Menlo, monospace`; g.textBaseline = 'bottom';
+  for (let fHz = 1000; fHz < fMax; fHz += 1000) {
+    const y = (1 - fHz / fMax) * H;
+    g.strokeStyle = 'rgba(255,255,255,0.10)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(W, y + 0.5); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillText(`${fHz / 1000}k`, 4 * dpr, y - 2 * dpr);
+  }
+  g.restore();
+}
+/* a tira de leitura: os rótulos amigáveis (uma verdade só — frasesDescritores do módulo). */
+function montarDescs(d) {
+  descs.textContent = '';
+  for (const { rotulo, valor } of frasesDescritores(d)) {
+    const par = document.createElement('span'); par.className = 'par';
+    const l = document.createElement('span'); l.className = 'dLab'; l.textContent = rotulo;
+    const v = document.createElement('span'); v.className = 'dVal'; v.textContent = valor;
+    par.append(l, v); descs.append(par);
+  }
+  const hint = document.createElement('span'); hint.className = 'dHint'; hint.textContent = 'brilho = quão agudo soa';
+  descs.append(hint);
 }
 
 /* ============================================================================
@@ -487,7 +566,7 @@ async function loopReexec() {
   do {
     reexecRefazer = false;
     validar();
-    try { const a = await renderarOffline(eventoAtual, { sampleRate: SR }); amostrasAtual = a; desenharOnda(a); atualizarStatus(); }
+    try { const a = await renderarOffline(eventoAtual, { sampleRate: SR }); amostrasAtual = a; desenharOnda(a); desenharAnalise(a); atualizarStatus(); }
     catch (e) { /* render não deve estourar (grafo inline); se estourar, mantém a última onda e o aviso já está na UI */ }
   } while (reexecRefazer);
   reexecRodando = false;
@@ -565,7 +644,7 @@ function tickCursor() {
   const durTotal = amostrasAtual.length / SR || durVoz;
   const el = ctx.currentTime - t0Play;
   const frac = durTotal > 0 ? Math.min(1, el / durTotal) : 0;
-  cursor.style.left = (frac * palco.clientWidth) + 'px';
+  cursor.style.left = (frac * cenas.clientWidth) + 'px';
   $('tempo').textContent = `${fmt(Math.min(el, durTotal))} / ${fmt(durTotal)} s`;
   if (tocando) { rafPend = true; requestAnimationFrame(tickCursor); }
 }
@@ -586,7 +665,7 @@ window.addEventListener('keydown', (e) => {
 { const barra = $('botoesAdd');       // um botão por tipo do vocabulário
   for (const op of Object.keys(VOCAB)) { const b = document.createElement('button'); b.type = 'button'; b.dataset.op = op; b.textContent = op; b.title = `adicionar ${op}`; b.addEventListener('click', () => addBloco(op)); barra.append(b); }
 }
-window.addEventListener('resize', () => { if (amostrasAtual.length) desenharOnda(amostrasAtual); });
+window.addEventListener('resize', () => { if (amostrasAtual.length) { desenharOnda(amostrasAtual); desenharAnalise(amostrasAtual); } });
 
 /* ---- probe pra a bancada (só NÚMEROS/hashes — nada de despejar amostras pela ponte).
    As mutações do editor (add/remove/ligar/setParam) chamam as MESMAS funções da UI, e
@@ -625,6 +704,24 @@ function grafoAtual() {
   return { nNos: g.nos.length, saida: g.saida, ids: g.nos.map((n) => n.id), tipos: g.nos.map((n) => n.tipo),
     nArestas: g.arestas.length, orfaos: g.orfaos.map((o) => o.motivo) };
 }
+/* S3.5 — os NÚMEROS que a ABA está mostrando (os descritores do render atual): a bancada
+   compara com um analisar(renderarOffline(evento)) independente pra provar que BATEM. */
+function analiseNumeros() {
+  if (!analiseAtual) return null;
+  const d = analiseAtual.descritores, e = analiseAtual.espectrograma;
+  return { centroide: d.brilho.centroideHz, pitchIni: d.pitch.inicioHz, pitchFim: d.pitch.fimHz,
+    pitchMin: d.pitch.minHz, pitchMax: d.pitch.maxHz, ataqueMs: d.envelope.ataqueMs, duracao: d.duracao,
+    quadros: e.quadros, bins: e.bins };
+}
+/* varre os pixels do espectrograma: quantos NÃO são o fundo (o magma t=0 ~ (0,0,4)) — canvas
+   não-vazio — e quantos rótulos a tira de descritores tem. */
+function medirEspec() {
+  if (!espec.width) return { W: 0, H: 0, pixelsAcesos: 0, nDescs: descs.querySelectorAll('.par').length };
+  const g = espec.getContext('2d');
+  const d = g.getImageData(0, 0, espec.width, espec.height).data;
+  let acesos = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 24 || d[i + 1] > 24 || d[i + 2] > 24) acesos++;
+  return { W: espec.width, H: espec.height, pixelsAcesos: acesos, nDescs: descs.querySelectorAll('.par').length };
+}
 
 window.__som = {
   pronto: () => window.__ready === true,
@@ -632,6 +729,9 @@ window.__som = {
   amostras: () => medirAmostras(),
   desenho: () => medirDesenho(),
   hashOnda: () => hashImg(),
+  // S3.5 — o ouvido na aba: os descritores mostrados + o espectrograma desenhado
+  analise: () => analiseNumeros(),
+  espec: () => medirEspec(),
   recarregar: async (nome) => { await carregar(nome); return medirAmostras(); },
   desenharEvento: async (ev) => { amostrasAtual = await renderarOffline(ev, { sampleRate: SR }); desenharOnda(amostrasAtual); return { len: amostrasAtual.length }; },
   // áudio: prova a fiação que faz som (sem alto-falante na bancada)
