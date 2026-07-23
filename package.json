@@ -28,6 +28,7 @@
     "oficina": "node tools/bancadas/oficina.mjs",
     "servir": "node tools/servir.mjs",
     "executar": "node tools/bancadas/executar.mjs",
+    "sintetizar": "node tools/bancadas/sintetizar.mjs",
     "jogar": "node tools/bancadas/jogar.mjs",
     "porteiro": "node tools/bancadas/porteiro.mjs",
     "auditar": "node tools/bancadas/auditar.mjs",
