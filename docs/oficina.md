@@ -902,6 +902,14 @@ concorrentes — o preset é o ponto de partida, o bloco é a liberdade (é a me
 relação de "partir de algo pronto" dos Presets de objeto). `[PENDENTE: o
 catálogo exato de cada nível — fechar quando a Aba Som for construída]`
 
+Ordem de construção da Aba Som (paralela à da Oficina; estado `[x]/[~]/[ ]`):
+
+- S1 `[x]` **Núcleo do evento + adaptador Web Audio + bancada de replay** (D-99): `somnucleo.js` (grafo em dados, determinístico, `oscilador`/`ruido`/`filtro`/`envelope`/`ganho`/`soma` + `lfo` + `alturaEnv`, órfão/ciclo gritam, `somCanonico`) + `somweb.js` (grafo→Web Audio, `renderarOffline`) + a bancada `sintetizar` (replay byte-a-byte) + o evento-exemplo `_bolha`. O `som.js` do jogo intocado.
+- S2 `[ ]` **Casca da aba Som**: a aba nova (forma de onda no centro + play), carrega e toca um evento.
+- S3 `[ ]` **Blocos ao vivo**: montar/editar o grafo (os nós + params) com audição imediata.
+- S4 `[ ]` **Presets**: o catálogo semeado dos parâmetros já tunados do `som.js` (passo/vento/bolha).
+- S5 `[ ]` **Exportar + amarrar no jogo**: serializa o evento num `.js` que reabre bit-a-bit, e o `som.js` passa a ser o adaptador que o jogo chama.
+
 ## Espaço Animação
 
 ### O que existe hoje
