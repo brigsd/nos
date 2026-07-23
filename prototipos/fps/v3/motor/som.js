@@ -7,6 +7,13 @@
    ouvido reconhece os dois pelos eventos. Passos são síntese granular com corpo
    grave. O contexto só nasce no 1º gesto (política de autoplay). */
 
+/* A PONTE (S5b) — imports NOVOS pro `tocarEvento` reconstruir um evento exportado
+   da Oficina (o núcleo em DADOS -> o adaptador Web Audio, o mesmo par das peças-som)
+   e tocá-lo no mix. ADITIVO: nada da síntese abaixo depende deles nem muda por causa
+   deles; sem chamar `tocarEvento`, este arquivo produz o áudio de sempre. */
+import { somNucleo } from './somnucleo.js';
+import { construirGrafo } from './somweb.js';
+
 export function criarSom() {
   let AC = null, masterG = null, windG = null, rajadaG = null, turbG = null, mixerG = null, assoBioG = null, ventoLP = null, waterG = null, eventosG = null, passosG = null, noiseBuf = null;
   let ambienteVol = 0.8, passosVol = 0.8;
@@ -565,10 +572,27 @@ export function criarSom() {
     waterTimeout = null; ventoTimeout = null; waterScheduled = false;
   }
 
+  /* ---------- A PONTE (S5b): tocar um evento da Oficina NO MIX do jogo ----------
+     tocarEvento(evento, {quando}) monta o grafo do evento exportado (peça-som:
+     {PASSOS, PARAMS, semente}) pelo MESMO núcleo+adaptador das peças e liga a SAÍDA
+     no barramento `eventosG` — entra no mix e fica sob o volume de AMBIENTE, NUNCA em
+     AC.destination (que furaria o mix). Garante o contexto REUSANDO o `ensure` (a
+     mesma init do 1º gesto, sem duplicar nem alterar nada). Devolve o handle do grafo
+     ({saida, dur, montados}) pra quem quiser inspecionar; `quando` (s) adia o disparo.
+     Puramente ADITIVO: sem esta chamada, a síntese acima roda intocada. */
+  function tocarEvento(evento, { quando = 0 } = {}) {
+    ensure();
+    if (!AC || !eventosG || !evento) return null;
+    const g = construirGrafo(somNucleo(evento.PASSOS, evento.PARAMS ?? {}, evento.semente ?? 0), AC, AC.currentTime + quando);
+    if (g.saida) g.saida.connect(eventosG);
+    return g;
+  }
+
   return {
     ensure, passo, proximidadeAgua, setVolumes,
     volumes: () => ({ ambiente: ambienteVol, passos: passosVol }),
     debug: () => ({ estado: AC?.state || 'sem-contexto', ambiente: ambienteVol, passos: passosVol, waterGain: waterG?.gain.value ?? 0 }),
     destroy,
+    tocarEvento,
   };
 }

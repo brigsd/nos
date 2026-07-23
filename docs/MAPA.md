@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-215 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+216 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -291,6 +291,7 @@
 - `prancheta.mjs` — prancheta.mjs — a câmera de topo do coder (D-50, pedido do ideador).
 - `res-bench.mjs` — res-bench.mjs — experimento B do D-44: o custo real de subir a resolução INTERNA do render (a alavanca ?res=). Para cada degrau, mede o FPS de verdade (conta…
 - `sintetizar.mjs` — sintetizar.mjs — a bancada do REPLAY da ABA SOM (passo 1), o "cmp de pixel do som". O par do `executar.mjs` (que prova o replay da Oficina em Node), mas aqui…
+- `somab.mjs` — somab.mjs — o A/B do SOM (S5b, o FECHO do ouvido da Aba Som): compara o passo REAL do jogo (a síntese granular do motor/som.js) com o preset `_passo` (pecas-…
 - `somexportar.mjs` — somexportar.mjs — a bancada do EXPORTAR da ABA SOM (S5a), o análogo sonoro do passo 10 do 3D. Sobe o `som.html` num Chromium headless (Playwright, gestos REA…
 - `somtela.mjs` — somtela.mjs — a bancada da ABA SOM. Sobe o `som.html` num Chromium headless (Playwright) e PROVA, com números, o que dá pra verificar sem alto-falante. Cobri…
 

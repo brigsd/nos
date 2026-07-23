@@ -32,6 +32,7 @@
     "analisar": "node tools/bancadas/analisar.mjs",
     "somtela": "node tools/bancadas/somtela.mjs",
     "somexportar": "node tools/bancadas/somexportar.mjs",
+    "somab": "node tools/bancadas/somab.mjs",
     "jogar": "node tools/bancadas/jogar.mjs",
     "porteiro": "node tools/bancadas/porteiro.mjs",
     "auditar": "node tools/bancadas/auditar.mjs",
