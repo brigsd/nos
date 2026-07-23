@@ -156,6 +156,7 @@ const OUT12 = resolve(REPO, 'scratchpad/passo12a');
 const OUT13 = resolve(REPO, 'scratchpad/passo13a');
 const OUT13B = resolve(REPO, 'scratchpad/passo13b');
 const OUT14 = resolve(REPO, 'scratchpad/passo14a');
+const OUT14B = resolve(REPO, 'scratchpad/passo14b');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -2704,9 +2705,203 @@ await page14.evaluate(() => { window.__FIXO = 1500; }); await settle14();
 await page14.screenshot({ path: join(OUT14, 'oficina-esqueleto.png') });
 await page14.close();
 
+/* ==== PASSO 14b: RIGGING — a INTERFACE do esqueleto (montar ossos + PESAR) =============
+   O loop COMPLETO num objeto FRESCO (o toco, sem esqueleto): entrar no espaço Animação,
+   CRIAR 2 ossos (b0 raiz, b1 filho) pelos widgets REAIS, PESAR faces (uma junta 50/50 =
+   dois pesares que ACUMULAM), montar uma trilha girando b1, ver DEFORMAR no preview
+   (pixel-diff, relógio congelado), DESFAZER o pesar, provar que ciclo/pai GRITAM na UI sem
+   quebrar, e SERIALIZAR + reabrir DEFORMANDO igual (PASSOS com `pesar` + ESQUELETO
+   bit-idênticos; a pose skinada e uma posição de vértice batem página==Node). O MOTOR
+   (14a/D-97) NÃO é tocado — a JÓIA fica com diff VAZIO. */
+mkdirSync(OUT14B, { recursive: true });
+const pageC = await browser.newPage({ viewport: { width: 1000, height: 640 } });
+pageC.on('pageerror', (e) => console.error('PAGEERR(14b):', e.message));
+await pageC.addInitScript(() => { const _raf = window.requestAnimationFrame.bind(window); window.__FIXO = 0; window.requestAnimationFrame = (cb) => _raf(() => cb(window.__FIXO)); });   // CONGELA o relógio: o único T-dependente no preview é a deformação (previewT)
+await pageC.goto(`${base}?peca=_oficina-toco`, { waitUntil: 'load' });
+await pageC.waitForFunction(() => window.__ready === true, { timeout: 15000 }).catch(() => {});
+const readyC = await pageC.evaluate(() => window.__ready === true);
+ok('(14b abre) oficina.html abre o toco FRESCO (window.__ready)', readyC);
+
+const rC = () => pageC.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(0)))));
+const settleC = async (n = 8) => { for (let i = 0; i < n; i++) await pageC.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(0)))); };
+const nPC = () => pageC.evaluate(() => window.__oficina.nPassos());
+const baseNC = await nPC();
+
+// ---- (14b espaço) o rigging vive no MESMO espaço Animação (esqueleto/peso = setup de animação) ----
+await pageC.click('#chipAnim'); await rC();
+const pvRig0 = await pageC.evaluate(() => window.__oficina.painelRig());
+ok('(14b espaço) o painel Esqueleto + Peso aparece no espaço Animação (mesmo espaço da animação rígida)',
+   pvRig0.blocoEsqueleto === true && pvRig0.blocoPeso === true, `esqueleto ${pvRig0.blocoEsqueleto} · peso ${pvRig0.blocoPeso}`);
+
+// ---- (14b guarda sem osso) pesar SEM osso (nenhum criado ainda) é NO-OP (não grava lixo) ----
+await pageC.evaluate(() => window.__oficina.selecionarFaces([4])); await rC();
+const pesarSemOsso = await pageC.evaluate(() => window.__oficina.pesar());
+ok('(14b guarda) pesar SEM osso ativo é NO-OP (devolve null, PASSOS não muda — não grava lixo)',
+   pesarSemOsso === null && (await nPC()) === baseNC, `pesar→${pesarSemOsso} · PASSOS ${await nPC()} (baseline ${baseNC})`);
+
+// ---- (14b ossos) cria b0 (raiz) e b1 (filho de b0, pivô [0,0.3,0]) pelos WIDGETS REAIS ----
+await pageC.fill('#rgNome', 'b0');
+await pageC.selectOption('#rgPai', '');       // (raiz)
+await pageC.click('#rgCriar'); await rC();
+await pageC.fill('#rgNome', 'b1');
+await pageC.selectOption('#rgPai', 'b0');       // filho de b0 (o dropdown lista b0 depois de criado)
+await pageC.fill('#rgPivoY', '0.3');
+await pageC.click('#rgCriar'); await rC();
+const ossos14b = await pageC.evaluate(() => window.__oficina.ossos());
+const pvRig1 = await pageC.evaluate(() => window.__oficina.painelRig());
+ok('(14b ossos) cria b0 (raiz) + b1 (filho de b0, pivô [0,0.3,0]) pelos widgets — a hierarquia entra em esqueletoAtual sem erro',
+   ossos14b.length === 2 && ossos14b[0].nome === 'b0' && !ossos14b[0].pai &&
+   ossos14b[1].nome === 'b1' && ossos14b[1].pai === 'b0' && JSON.stringify(ossos14b[1].pivo) === JSON.stringify([0, 0.3, 0]) &&
+   pvRig1.nOssos === 2 && pvRig1.erro === '',
+   `ossos ${JSON.stringify(ossos14b)} · chips ${pvRig1.nOssos} · erro '${pvRig1.erro}'`);
+
+// ---- (14b guarda sem face) com osso ativo mas SEM face selecionada, pesar é NO-OP ----
+await pageC.evaluate(() => window.__oficina.selecionarFaces([]));
+await pageC.evaluate(() => window.__oficina.selecionarOsso('b0')); await rC();
+const pesarSemFace = await pageC.evaluate(() => window.__oficina.pesar());
+ok('(14b guarda) pesar SEM face selecionada é NO-OP (devolve null, PASSOS não muda)',
+   pesarSemFace === null && (await nPC()) === baseNC, `pesar→${pesarSemFace} · PASSOS ${await nPC()}`);
+
+// ---- (14b pesar 50/50 — a JUNTA) as MESMAS faces 0.5 em b0 + 0.5 em b1 (dois pesares ACUMULAM) ----
+// feito ANTES de qualquer outro pesar: a face da junta fica limpa (só os dois 0.5) → 50/50 EXATO.
+const FJUNTA = [4];   // uma face lateral do toco (cantos bottom 4,5 + top 12,13)
+await pageC.evaluate((ids) => window.__oficina.selecionarFaces(ids), FJUNTA); await rC();
+await pageC.evaluate(() => window.__oficina.setPeso(0.5));
+const btPesarHab = await pageC.evaluate(() => window.__oficina.painelRig().btPesar);
+const nP_antesJunta = await nPC();
+await pageC.evaluate(() => window.__oficina.selecionarOsso('b0'));
+await pageC.click('#rgPesar'); await rC();     // 1º pesar: b0 @ 0.5 (botão REAL)
+const ultimoPesarB0 = await pageC.evaluate(() => window.__oficina.ultimoPasso());
+await pageC.evaluate(() => window.__oficina.selecionarOsso('b1'));
+await pageC.click('#rgPesar'); await rC();     // 2º pesar: b1 @ 0.5
+const nP_posJunta = await nPC();
+const pesoB0 = await pageC.evaluate((f) => window.__oficina.pesoDaFace(f, 'b0'), FJUNTA[0]);
+const pesoB1 = await pageC.evaluate((f) => window.__oficina.pesoDaFace(f, 'b1'), FJUNTA[0]);
+ok('(14b pesar) o botão HABILITA com face(s) + osso ativo e grava [\'pesar\',{osso,faces:[ordenadas],peso}] no fim de PASSOS',
+   btPesarHab === true && JSON.stringify(ultimoPesarB0) === JSON.stringify(['pesar', { osso: 'b0', faces: FJUNTA, peso: 0.5 }]),
+   `hab ${btPesarHab} · último ${JSON.stringify(ultimoPesarB0)}`);
+ok('(14b pesar 50/50 ★) dois pesares nas MESMAS faces ACUMULAM: a junta cai 50% em b0 e 50% em b1 (o motor normaliza) — a combinação convexa da junta suave',
+   nP_posJunta === nP_antesJunta + 2 && Math.abs(pesoB0 - 0.5) < 1e-6 && Math.abs(pesoB1 - 0.5) < 1e-6,
+   `PASSOS +${nP_posJunta - nP_antesJunta} · junta b0 ${pesoB0.toFixed(3)} · b1 ${pesoB1.toFixed(3)}`);
+
+// ---- pesa o resto do rig: TOPO (F#9) forte em b1 (pra dobrar) + BASE (F#8) em b0 (fica) ----
+await pageC.evaluate(() => window.__oficina.setPeso(1));
+await pageC.evaluate(() => window.__oficina.selecionarFaces([9])); await pageC.evaluate(() => window.__oficina.selecionarOsso('b1')); await pageC.click('#rgPesar'); await rC();
+await pageC.evaluate(() => window.__oficina.selecionarFaces([8])); await pageC.evaluate(() => window.__oficina.selecionarOsso('b0')); await pageC.click('#rgPesar'); await rC();
+const nP_rig = await nPC();
+ok('(14b pesar) o rig completo tem 4 ops `pesar` no fim de PASSOS (junta 50/50 + topo + base)',
+   nP_rig === baseNC + 4 && (await pageC.evaluate(() => window.__oficina.passos())).filter((p) => p[0] === 'pesar').length === 4,
+   `PASSOS ${baseNC}→${nP_rig}`);
+
+// ---- (14b HEATMAP) o overlay conhece o peso do osso ativo (leitura pesoDaFace) ----
+await pageC.evaluate(() => window.__oficina.selecionarOsso('b1'));
+const pesoTopoB1 = await pageC.evaluate(() => window.__oficina.pesoDaFace(9, 'b1'));
+ok('(14b peso legível) o osso ativo b1 pesa forte o topo (F#9) — o heatmap do overlay lê isso (pesoDaFace)', pesoTopoB1 > 0.9, `peso(F#9, b1) ${pesoTopoB1.toFixed(3)}`);
+
+// ---- (14b trilha osso) o dropdown de alvo lista os OSSOS; monta a trilha girando b1 ----
+const alvos = await pageC.evaluate(() => window.__oficina.alvosTrilha());
+ok('(14b trilha) o dropdown de alvo da trilha lista os OSSOS (b0/b1) além das partes', alvos.includes('b0') && alvos.includes('b1'), `alvos ${JSON.stringify(alvos)}`);
+await pageC.evaluate(() => window.__oficina.novaAnimacao('curvar'));
+await pageC.evaluate(() => window.__oficina.setDuracao(3));
+const trilhaB1 = await pageC.evaluate(() => window.__oficina.addTrilha('b1', 'rotZ'));
+await pageC.evaluate(() => window.__oficina.addChave(0, 0, 0));
+await pageC.evaluate(() => window.__oficina.addChave(0, 1.5, 1.2));
+await rC();
+const animRig = await pageC.evaluate(() => window.__oficina.animacoes());
+ok('(14b trilha) a trilha mira o OSSO b1 (rotZ) — montarAnimar (14a) resolve osso×parte e escreve L.ossos (skinning)',
+   trilhaB1 && trilhaB1.parte === 'b1' && trilhaB1.canal === 'rotZ' &&
+   animRig.curvar && animRig.curvar.trilhas.length === 1 && animRig.curvar.trilhas[0].parte === 'b1' &&
+   JSON.stringify(animRig.curvar.trilhas[0].chaves) === JSON.stringify([[0, 0], [1.5, 1.2]]),
+   `trilha ${JSON.stringify(trilhaB1)} · chaves ${JSON.stringify(animRig.curvar && animRig.curvar.trilhas[0].chaves)}`);
+
+// ---- (14b preview DEFORMA) scrub T=0 (reto) vs T=1.5 (curvado) → pixels DIFEREM; mesma pose 2x = idêntico ----
+const CLIPC = { x: 70, y: 60, width: 560, height: 340 };
+const faseC = async (t) => { await pageC.evaluate((tt) => window.__oficina.scrub(tt), t); await settleC(); return decodePNG(await pageC.screenshot({ clip: CLIPC })); };
+await settleC(16);
+const c0a = await faseC(0), c0b = await faseC(0), c15a = await faseC(1.5), c15b = await faseC(1.5), c0c = await faseC(0);
+const dSameC0 = diffPix(c0a, c0b), dSameC15 = diffPix(c15a, c15b), dDeformC = diffPix(c0a, c15a), dVoltaC = diffPix(c0a, c0c);
+ok('(14b preview DEFORMA) posar b1 (scrub) DOBRA a malha na cena: T=0 (reto) vs T=1.5 (curvado) os pixels DIFEREM; mesma pose 2x = IDÊNTICO; volta a T=0 idêntico',
+   dSameC0 === 0 && dSameC15 === 0 && dDeformC > 800 && dVoltaC === 0,
+   `T0=T0 ${dSameC0}px · T1.5=T1.5 ${dSameC15}px · T0≠T1.5 ${dDeformC}px (dobrou) · volta ${dVoltaC}px`);
+await pageC.evaluate(() => window.__oficina.scrub(1.5)); await settleC();
+await pageC.screenshot({ path: join(OUT14B, 'oficina-rigging.png') });
+
+// ---- (14b undo) Ctrl+Z desfaz o último `pesar` (volta ao neutro daquele passo); Ctrl+Y refaz ----
+await pageC.evaluate(() => window.__oficina.scrub(0)); await settleC();
+const nP_antesUndo = await nPC();
+const canonAntesUndo = await pageC.evaluate(() => JSON.stringify(window.__oficina.canon()));   // STRING (a canon é objeto — comparar por valor)
+const ctrlZC = async () => { await pageC.keyboard.down('Control'); await pageC.keyboard.press('KeyZ'); await pageC.keyboard.up('Control'); await rC(); };
+const ctrlYC = async () => { await pageC.keyboard.down('Control'); await pageC.keyboard.press('KeyY'); await pageC.keyboard.up('Control'); await rC(); };
+await ctrlZC();
+const nP_posUndoC = await nPC();
+const canonPosUndoC = await pageC.evaluate(() => JSON.stringify(window.__oficina.canon()));
+ok('(14b undo) Ctrl+Z desfaz o último `pesar` (PASSOS −1, e a canon MUDA — o peso do vértice voltou ao neutro)',
+   nP_posUndoC === nP_antesUndo - 1 && canonPosUndoC !== canonAntesUndo, `PASSOS ${nP_antesUndo}→${nP_posUndoC} · canon ${canonPosUndoC !== canonAntesUndo ? 'mudou' : 'IGUAL'}`);
+await ctrlYC();
+const canonRedoC = await pageC.evaluate(() => JSON.stringify(window.__oficina.canon()));
+ok('(14b undo) Ctrl+Y refaz o `pesar` (PASSOS volta ao 14, e a canon volta a bater BIT-a-bit com a de antes)',
+   (await nPC()) === nP_antesUndo && canonRedoC === canonAntesUndo, `PASSOS ${await nPC()} (esp ${nP_antesUndo}) · canon ${canonRedoC === canonAntesUndo ? 'idêntica' : 'DIVERGE'}`);
+
+// ---- (14b hierarquia erro) ciclo / pai-inexistente GRITAM na UI SEM quebrar (validação pelo motor) ----
+const esqBom = await pageC.evaluate(() => window.__oficina.esqueleto());   // guarda o rig VÁLIDO
+const erroCiclo = await pageC.evaluate(() => window.__oficina.esqueletoBruto({ ossos: [{ nome: 'a', pai: 'b' }, { nome: 'b', pai: 'a' }] }));
+const pvCiclo = await pageC.evaluate(() => window.__oficina.painelRig());
+const readyCiclo = await pageC.evaluate(() => window.__ready === true);
+ok('(14b hierarquia) um CICLO de pai GRITA (resolverEsqueleto) e o erro aparece na UI SEM quebrar (página viva, render segue)',
+   !!erroCiclo && /ciclo/i.test(erroCiclo) && pvCiclo.erro === erroCiclo && readyCiclo, `erro '${erroCiclo}'`);
+const erroPai = await pageC.evaluate(() => window.__oficina.esqueletoBruto({ ossos: [{ nome: 'x', pai: 'naoexiste' }] }));
+const readyPai = await pageC.evaluate(() => window.__ready === true);
+ok('(14b hierarquia) pai-inexistente GRITA na UI sem quebrar', !!erroPai && /pai/i.test(erroPai) && readyPai, `erro '${erroPai}'`);
+await pageC.evaluate((e) => window.__oficina.esqueletoBruto(e), esqBom);   // restaura o rig válido
+ok('(14b hierarquia) restaurar um esqueleto VÁLIDO limpa o erro', (await pageC.evaluate(() => window.__oficina.esqueletoErro())) === null);
+
+// ---- (14b ROUND-TRIP — o CORAÇÃO) serializar → reimport → PASSOS(pesar)+ESQUELETO bit-idênticos + pose página==Node ----
+const T_MOTOR_C = join(OUT14B, 'motor'), T_RT_C = join(OUT14B, 'rt');
+for (const d of [T_MOTOR_C, T_RT_C]) { rmSync(d, { recursive: true, force: true }); mkdirSync(d, { recursive: true }); }
+writeFileSync(join(T_MOTOR_C, 'oficina.js'), `export * from ${JSON.stringify(relative(T_MOTOR_C, resolve(REPO, 'prototipos/fps/v3/motor/oficina.js')).split(pathSep).join('/'))};\n`);
+const strRig = await pageC.evaluate(() => window.__oficina.serializar());
+const passosRig = await pageC.evaluate(() => window.__oficina.passos());
+const esqRig = await pageC.evaluate(() => window.__oficina.esqueleto());
+const Mrt14b = await reimportar(T_RT_C, strRig, 'rt_rig14b');
+ok('(14b serial) o export tem `export const ESQUELETO` e o construir passa ESQUELETO como 7º arg (DEPOIS de ANIMACOES, com {} no lugar de MATERIAIS ausente)',
+   /export const ESQUELETO = \{/.test(strRig) && /executar\(PASSOS, PARAMS, TOPO, ctx, \{\}, ANIMACOES, ESQUELETO\)/.test(strRig),
+   `bloco ${/export const ESQUELETO = \{/.test(strRig)} · construir ${/executar\(PASSOS, PARAMS, TOPO, ctx, \{\}, ANIMACOES, ESQUELETO\)/.test(strRig)}`);
+ok('(14b serial ★) PASSOS reabrem iguais (com as ops `pesar`) E ESQUELETO bit-a-bit idêntico',
+   JSON.stringify(Mrt14b.PASSOS) === JSON.stringify(passosRig) && JSON.stringify(Mrt14b.ESQUELETO) === JSON.stringify(esqRig) && Mrt14b.PASSOS.some((p) => p[0] === 'pesar'),
+   `PASSOS ${Mrt14b.PASSOS.length} (pesar incl.) · ESQUELETO ${JSON.stringify(Mrt14b.ESQUELETO) === JSON.stringify(esqRig) ? 'idêntico' : 'DIVERGE'}`);
+// a POSE skinada (as MATRIZES de osso do animar) em T=1 bate página==Node bit-a-bit
+const Trig = 1.0;
+const skinPage14b = await pageC.evaluate((T) => window.__oficina.matrizOssoEmT(T), Trig);
+const oNode14b = executar(Mrt14b.PASSOS, Mrt14b.PARAMS, Mrt14b.TOPO, ctx13, {}, Mrt14b.ANIMACOES, Mrt14b.ESQUELETO);
+const Lnode14b = oNode14b.lotes.map((l) => ({ matriz: l.matriz, ossos: l.ossos ? new Float32Array(l.ossos) : null }));
+oNode14b.animar(Trig, Lnode14b);
+const iNode14b = Lnode14b.findIndex((l) => l.ossos);
+const skinNode14b = iNode14b >= 0 ? Array.from(Lnode14b[iNode14b].ossos) : null;
+ok('(14b serial ★) a POSE deformada (matrizes de OSSO em T=1) bate página==Node bit-a-bit (a peça reaberta deforma igual)',
+   skinPage14b != null && skinNode14b != null && JSON.stringify(skinPage14b) === JSON.stringify(skinNode14b),
+   `${skinPage14b ? skinPage14b.length : 0} floats de skin · ${JSON.stringify(skinPage14b) === JSON.stringify(skinNode14b) ? 'idênticas' : 'DIVERGE'}`);
+// a POSIÇÃO de um VÉRTICE SKINADO em T=1 (LBS, o mesmo do 14a): página==Node E fora do repouso
+const rNode14b = nucleo(Mrt14b.PASSOS, Mrt14b.PARAMS, Mrt14b.TOPO, {}, Mrt14b.ESQUELETO);
+const ordem14b = new Map(rNode14b.esqueleto.ossos.map((o, k) => [o.nome, k]));
+const apM = (M, off, p) => [M[off] * p[0] + M[off + 4] * p[1] + M[off + 8] * p[2] + M[off + 12], M[off + 1] * p[0] + M[off + 5] * p[1] + M[off + 9] * p[2] + M[off + 13], M[off + 2] * p[0] + M[off + 6] * p[1] + M[off + 10] * p[2] + M[off + 14]];
+const vJ = 8, pJ = rNode14b.V.get(vJ), wJ = rNode14b.pesos.get(vJ);   // vértice do topo (peso forte em b1)
+let somaW = 0; for (const w of wJ.values()) somaW += w;
+const skinVert = (M) => { const out = [0, 0, 0]; for (const [osso, w] of wJ) { const q = apM(M, ordem14b.get(osso) * 16, pJ); const wn = w / somaW; out[0] += wn * q[0]; out[1] += wn * q[1]; out[2] += wn * q[2]; } return out; };
+const posPage = skinVert(skinPage14b), posNode = skinVert(skinNode14b);
+const distVert = Math.hypot(posPage[0] - posNode[0], posPage[1] - posNode[1], posPage[2] - posNode[2]);
+const deslocou = Math.hypot(posNode[0] - pJ[0], posNode[1] - pJ[1], posNode[2] - pJ[2]);
+ok('(14b serial ★) a POSIÇÃO de um vértice SKINADO em T=1 bate página==Node E saiu do repouso (a deformação é REAL, não bind pose)',
+   distVert < 1e-9 && deslocou > 0.05, `vértice #8: página==Node a ${distVert.toExponential(1)} · deslocou ${deslocou.toFixed(3)} do repouso`);
+
+// ---- (14b JÓIA) o motor do 14a (pesar + resolverEsqueleto + skinning) segue INTACTO — o 14b é SÓ a interface ----
+const motor14bok = /pesar\(st, a, i\)/.test(oficinaSrc14) && /function resolverEsqueleto/.test(oficinaSrc14) && hook14ok;
+ok('(14b JÓIA) o motor do 14a (op `pesar` + resolverEsqueleto + skinning) segue intacto — o 14b é SÓ a interface por cima (git diff de oficina.js/render.js VAZIO, conferido à parte)',
+   motor14bok, `pesar+resolverEsqueleto+hook: ${motor14bok}`);
+await pageC.close();
+
 await browser.close();
 server.close();
 
 console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}\n               ${join(OUT10, 'oficina-sem-solido-aviso.png')}\n               ${join(OUT10, 'oficina-colisao-painel.png')}\n               ${join(OUT11, 'oficina-atlas-toco.png')}\n               ${join(OUT11C, 'oficina-pincel-macio.png')}\n               ${join(OUT12, 'oficina-material-brasa.png')}\n               ${join(OUT13, 'oficina-anim.png')}\n               ${join(OUT13B, 'oficina-anim-ui.png')}\n               ${join(OUT14, 'oficina-esqueleto.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex); passo 10: EXPORTAR + COLISÃO — o painel reflete colisaoDe (raio/altura/base) e o botão REAL grava ['solido',{faces:[ordenadas]}] (neutro.F.solido vira true, desfazível, no-op se já-sólido, ignorado no arrasto); a serialização IDA-E-VOLTA depois de editar (arrasto+extruda+pincel+solido) reabre BIT-A-BIT idêntica (página == Node, com a CHAMADA colisaoDe(PASSOS, PARAMS, TOPO) gravada, não o valor); o servir.mjs REAL grava pecas/<nome>.js num dir TEMP (arquivo === conteúdo, re-import replica), rejeita ../.., /etc, a/b, .., espaço e símbolo sem escrever fora, e serve com Cache-Control: no-store; uma peça sem solido mostra o AVISO e a colisão vira o objeto INTEIRO (marcar o topo a muda: altura 1→0); e sem a rota o Salvar cai no download sem quebrar; passo 11a: ATLAS POR FACE (fundação da textura pintável) — o adaptarV3 troca o SWATCH por um atlas de ${N_FACE} ILHAS DISJUNTAS (grade ${R11.atlas.cols}×${R11.atlas.rows}, ilha ${R11.atlas.tile}px, gutter ${R11.atlas.gutter}px, textura ${R11.atlas.W}×${R11.atlas.H}), o FURO da caixa GLOBAL (fundo #8 e topo #9 quase no mesmo XZ, IoU ${iouGlobal.toFixed(2)}) some com ilhas separadas, e o toco renderiza cada face na SUA cor IGUAL ao swatch (topo #9 madeira clara rgb ${rgbTopo11.r.toFixed(0)},${rgbTopo11.g.toFixed(0)},${rgbTopo11.b.toFixed(0)}; cmp byte-a-byte swatch↔atlas = 0 pixels no relatório). O mapa por face (ilha + projeta) fica anexado em atlas pro pincel macio do 11b; passo 11b (MOTOR): PINCEL MACIO no núcleo — a op 'livre' grava a tinta ANCORADA à face ({a,b} face-local, o mesmo s,t da projeção — não um texel cru) e o adaptarV3 rasteriza um DAB radial macio na ilha (centro=cor rgb ${centroL11}, +8px=base rgb ${bordaL11}, meio esmaece rgb ${meioL11}); determinístico (canon 2x + round-trip JSON estáveis, a tinta ENTRA na canon), a tinta ACOMPANHA a face num moveV (o centro segue cor mesmo com o UV do canto deslizando), órfão grita (#999, malha intacta), raio maior tinge mais texels (0.2→${tPeq11} < 0.4→${tGde11}) e dureza controla a borda, e o dab fica PRESO na célula (não vaza pra vizinha) — o modo 'face' segue BYTE-idêntico (o toco canoniza igual, linha F de 6); passo 11c: PINCEL MACIO na INTERFACE (pintar arrastando) — o modo pincel (chip "Pincel" + tecla B) LIGADO faz o arrasto na superfície PINTAR em vez de orbitar/selecionar (grava ['pincel',{modo:'livre',cor,raio,dureza,pontos:[{f,a,b}]}], câmera parada, nenhum vértice mexido), DESLIGADO tudo segue como antes (arrasto de vértice ainda grava moveV); o RAYCAST do cursor é o inverso EXATO de projetar (com lente) — o ponto de superfície projeta de volta a ${erroRT.toFixed(2)}px do cursor —, acha a face da FRENTE (hitFace) e intersecta o plano dela → {f,a,b} FACE-LOCAL (abInMundo bate o raycast); os pontos caem na face certa (#9) e ACOMPANHAM o arrasto (a monotônico, spread ${aSpread.toFixed(2)}); a pincelada APARECE no render (o centro vira azul rgb ${rgbDepois11c.r | 0},${rgbDepois11c.g | 0},${rgbDepois11c.b | 0}; a borda não pintada segue madeira), replay página==Node bit-a-bit (a tinta livre entra na canon), undo/redo voltam a superfície ao baseline/depois, os sliders de raio/dureza refletem na op e no tamanho da mancha (raio 0.08→${nTexPeq} texels < 0.5→${nTexGde}), a roda e o Ctrl+Z DURANTE a pincelada são ignorados (reusa a máquina arrasto/soltar), um arrasto no VAZIO no modo pincel não grava op vazia (orbita), e um arrasto atravessando o topo e um lado grava pontos em faces diferentes num só passo (${JSON.stringify(facesCross)}); passo 12a: MATERIAIS OPACOS — a UI aplica um material às faces selecionadas (grava ['material',{faces:[9],usa:'${usa12}'}], seta f.material só na face 9, registra ${JSON.stringify(mat12[usa12])} — aspereza:0 omitido —, painel mostra), o material ENTRA na canon e o replay página==Node é bit-a-bit (${canonPage12.length} chars, difere da canon SEM material), aplicar o mesmo material de novo é no-op (sem passo fantasma), o adaptarV3 AGRUPA por material em 3 LOTES (brasa emissivo 1.4+semLuz, casca aspereza 0.9, + o padrão) conservando os triângulos (${somaMat}==${somaBase}), e o Ctrl+Z tira o passo (a face volta a sem material). A JÓIA (render.js compartilhado com o JOGO) fica BYTE-idêntica com material desligado — provado por cmp à parte; passo 13a: ANIMAÇÃO RÍGIDA POR PARTE — a op \`parte\` nomeia faces (f.parte na canon, órfão grita, última vence) e face SEM parte fica byte-idêntica (toco: ${canonTocoRows13.length} linhas de 6); o adaptarV3 agrupa por (parte,material) — a roda (2 materiais) vira 2 lotes + o braço, triângulos conservados (${somaAnim13}), toco sem-parte-sem-material = 1 lote; o pivô default é o CENTROIDE (roda puxada pro dente) e o override é EXPLÍCITO (braço na base); o interpolador (avaliarChaves) é smoothstep (meio 15, quarto 11.5625 ≠ linear 12.5); montarAnimar escreve a matriz por ÍNDICE (infoPorLote ${JSON.stringify(infoLote13)}), determinística (mesmo T -> mesma matriz), com o pivô fixo, {}->undefined e canal ruim gritando; executar fia ANIMACOES (sem -> animar undefined = byte-idêntico); a peça COM parte faz replay página==Node bit-a-bit e as MATRIZES batem página==Node em 5 tempos; e no relógio congelado a mesma fase 2x é idêntica (${dSame0}px) e T=0 vs T=1 os pixels DIFEREM (${dMove}px — a parte moveu). O hook animar(T,lotes) do 13a segue no render.js (${hook14ok ? 'confirmado' : 'AUSENTE'}) — o 14a estendeu o motor (skinning) por cima, aditivo; passo 13b: ESPAÇO ANIMAÇÃO (a INTERFACE) — o chip "Animação" (estilo Pincel) entra no espaço mantendo câmera/seleção/objeto (painel de partes/animações/trilhas + linha do tempo aparecem, modelagem some), NOMEAR parte grava ['parte',{nome,faces:[ordenadas]}] pelo botão REAL (desfazível por Ctrl+Z, refazível), a lista de partes seleciona as faces da parte; cria-se UMA animação (duracao/repete) + trilha (parte+canal, canal/parte inválidos GRITAM) + chaves [t,v] na faixa; o PREVIEW ao vivo (reexec fia ANIMACOES no executar + wrapper de previewT, render.js intocado) discrimina por pixel no relógio congelado: mesmo T 2x = idêntico (${dSameB0}px) e T=0 vs T=2 movem (${dMoveB}px), e o SCRUB REAL na régua re-poza; play zera previewT (laço), pause congela; a serialização IDA-E-VOLTA reabre BIT-A-BIT (PASSOS com a op parte + ANIMACOES idênticos, o construir passa {},ANIMACOES) e a POSE em T=1 bate página==Node. O motor do 13b (montarAnimar + hook) segue intacto (${motor13bok ? 'confirmado' : 'QUEBROU'}) — o 14a é aditivo por cima; passo 14a: ESQUELETO com DEFORMAÇÃO SUAVE (linear blend skinning) — a op \`pesar\` acumula peso por (vértice,osso) e o adaptarV3 normaliza top-4 (mesh de 16 floats só no lote skinado; sem esqueleto = 8 floats, o caminho de hoje intocado), osso/vértice órfão GRITA sem corromper e ciclo/pai/teto(33>32) GRITAM; o skin é LBS determinístico (bind pose = identidade -> deforma 0; a raiz FICA ${baseFica.toExponential(1)}, a ponta GIRA ${pontaGira.toFixed(3)}, a junta MISTA cai ENTRE os dois ossos por média exata — combinação convexa, não rígida), as MATRIZES de osso batem página==Node bit-a-bit em ${TS14.length} tempos, e no relógio congelado o tentáculo DEFORMA na tela (T=0 reto vs T=1.5 curvado ${dDeform}px; mesma fase 2x ${dSameEsq}px). A JÓIA render.js ganhou o programa/stride SKINADO num passe SEPARADO (aditivo, precedente do 12b); o gate BYTE-IDÊNTICO do jogo (arvore3d/ilha-chao/arvore-cartoon × 3, relógio congelado, render.js HEAD↔origin/main) é 9/9 @ 0px, provado À PARTE (scratchpad/frz-jewel).`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex); passo 10: EXPORTAR + COLISÃO — o painel reflete colisaoDe (raio/altura/base) e o botão REAL grava ['solido',{faces:[ordenadas]}] (neutro.F.solido vira true, desfazível, no-op se já-sólido, ignorado no arrasto); a serialização IDA-E-VOLTA depois de editar (arrasto+extruda+pincel+solido) reabre BIT-A-BIT idêntica (página == Node, com a CHAMADA colisaoDe(PASSOS, PARAMS, TOPO) gravada, não o valor); o servir.mjs REAL grava pecas/<nome>.js num dir TEMP (arquivo === conteúdo, re-import replica), rejeita ../.., /etc, a/b, .., espaço e símbolo sem escrever fora, e serve com Cache-Control: no-store; uma peça sem solido mostra o AVISO e a colisão vira o objeto INTEIRO (marcar o topo a muda: altura 1→0); e sem a rota o Salvar cai no download sem quebrar; passo 11a: ATLAS POR FACE (fundação da textura pintável) — o adaptarV3 troca o SWATCH por um atlas de ${N_FACE} ILHAS DISJUNTAS (grade ${R11.atlas.cols}×${R11.atlas.rows}, ilha ${R11.atlas.tile}px, gutter ${R11.atlas.gutter}px, textura ${R11.atlas.W}×${R11.atlas.H}), o FURO da caixa GLOBAL (fundo #8 e topo #9 quase no mesmo XZ, IoU ${iouGlobal.toFixed(2)}) some com ilhas separadas, e o toco renderiza cada face na SUA cor IGUAL ao swatch (topo #9 madeira clara rgb ${rgbTopo11.r.toFixed(0)},${rgbTopo11.g.toFixed(0)},${rgbTopo11.b.toFixed(0)}; cmp byte-a-byte swatch↔atlas = 0 pixels no relatório). O mapa por face (ilha + projeta) fica anexado em atlas pro pincel macio do 11b; passo 11b (MOTOR): PINCEL MACIO no núcleo — a op 'livre' grava a tinta ANCORADA à face ({a,b} face-local, o mesmo s,t da projeção — não um texel cru) e o adaptarV3 rasteriza um DAB radial macio na ilha (centro=cor rgb ${centroL11}, +8px=base rgb ${bordaL11}, meio esmaece rgb ${meioL11}); determinístico (canon 2x + round-trip JSON estáveis, a tinta ENTRA na canon), a tinta ACOMPANHA a face num moveV (o centro segue cor mesmo com o UV do canto deslizando), órfão grita (#999, malha intacta), raio maior tinge mais texels (0.2→${tPeq11} < 0.4→${tGde11}) e dureza controla a borda, e o dab fica PRESO na célula (não vaza pra vizinha) — o modo 'face' segue BYTE-idêntico (o toco canoniza igual, linha F de 6); passo 11c: PINCEL MACIO na INTERFACE (pintar arrastando) — o modo pincel (chip "Pincel" + tecla B) LIGADO faz o arrasto na superfície PINTAR em vez de orbitar/selecionar (grava ['pincel',{modo:'livre',cor,raio,dureza,pontos:[{f,a,b}]}], câmera parada, nenhum vértice mexido), DESLIGADO tudo segue como antes (arrasto de vértice ainda grava moveV); o RAYCAST do cursor é o inverso EXATO de projetar (com lente) — o ponto de superfície projeta de volta a ${erroRT.toFixed(2)}px do cursor —, acha a face da FRENTE (hitFace) e intersecta o plano dela → {f,a,b} FACE-LOCAL (abInMundo bate o raycast); os pontos caem na face certa (#9) e ACOMPANHAM o arrasto (a monotônico, spread ${aSpread.toFixed(2)}); a pincelada APARECE no render (o centro vira azul rgb ${rgbDepois11c.r | 0},${rgbDepois11c.g | 0},${rgbDepois11c.b | 0}; a borda não pintada segue madeira), replay página==Node bit-a-bit (a tinta livre entra na canon), undo/redo voltam a superfície ao baseline/depois, os sliders de raio/dureza refletem na op e no tamanho da mancha (raio 0.08→${nTexPeq} texels < 0.5→${nTexGde}), a roda e o Ctrl+Z DURANTE a pincelada são ignorados (reusa a máquina arrasto/soltar), um arrasto no VAZIO no modo pincel não grava op vazia (orbita), e um arrasto atravessando o topo e um lado grava pontos em faces diferentes num só passo (${JSON.stringify(facesCross)}); passo 12a: MATERIAIS OPACOS — a UI aplica um material às faces selecionadas (grava ['material',{faces:[9],usa:'${usa12}'}], seta f.material só na face 9, registra ${JSON.stringify(mat12[usa12])} — aspereza:0 omitido —, painel mostra), o material ENTRA na canon e o replay página==Node é bit-a-bit (${canonPage12.length} chars, difere da canon SEM material), aplicar o mesmo material de novo é no-op (sem passo fantasma), o adaptarV3 AGRUPA por material em 3 LOTES (brasa emissivo 1.4+semLuz, casca aspereza 0.9, + o padrão) conservando os triângulos (${somaMat}==${somaBase}), e o Ctrl+Z tira o passo (a face volta a sem material). A JÓIA (render.js compartilhado com o JOGO) fica BYTE-idêntica com material desligado — provado por cmp à parte; passo 13a: ANIMAÇÃO RÍGIDA POR PARTE — a op \`parte\` nomeia faces (f.parte na canon, órfão grita, última vence) e face SEM parte fica byte-idêntica (toco: ${canonTocoRows13.length} linhas de 6); o adaptarV3 agrupa por (parte,material) — a roda (2 materiais) vira 2 lotes + o braço, triângulos conservados (${somaAnim13}), toco sem-parte-sem-material = 1 lote; o pivô default é o CENTROIDE (roda puxada pro dente) e o override é EXPLÍCITO (braço na base); o interpolador (avaliarChaves) é smoothstep (meio 15, quarto 11.5625 ≠ linear 12.5); montarAnimar escreve a matriz por ÍNDICE (infoPorLote ${JSON.stringify(infoLote13)}), determinística (mesmo T -> mesma matriz), com o pivô fixo, {}->undefined e canal ruim gritando; executar fia ANIMACOES (sem -> animar undefined = byte-idêntico); a peça COM parte faz replay página==Node bit-a-bit e as MATRIZES batem página==Node em 5 tempos; e no relógio congelado a mesma fase 2x é idêntica (${dSame0}px) e T=0 vs T=1 os pixels DIFEREM (${dMove}px — a parte moveu). O hook animar(T,lotes) do 13a segue no render.js (${hook14ok ? 'confirmado' : 'AUSENTE'}) — o 14a estendeu o motor (skinning) por cima, aditivo; passo 13b: ESPAÇO ANIMAÇÃO (a INTERFACE) — o chip "Animação" (estilo Pincel) entra no espaço mantendo câmera/seleção/objeto (painel de partes/animações/trilhas + linha do tempo aparecem, modelagem some), NOMEAR parte grava ['parte',{nome,faces:[ordenadas]}] pelo botão REAL (desfazível por Ctrl+Z, refazível), a lista de partes seleciona as faces da parte; cria-se UMA animação (duracao/repete) + trilha (parte+canal, canal/parte inválidos GRITAM) + chaves [t,v] na faixa; o PREVIEW ao vivo (reexec fia ANIMACOES no executar + wrapper de previewT, render.js intocado) discrimina por pixel no relógio congelado: mesmo T 2x = idêntico (${dSameB0}px) e T=0 vs T=2 movem (${dMoveB}px), e o SCRUB REAL na régua re-poza; play zera previewT (laço), pause congela; a serialização IDA-E-VOLTA reabre BIT-A-BIT (PASSOS com a op parte + ANIMACOES idênticos, o construir passa {},ANIMACOES) e a POSE em T=1 bate página==Node. O motor do 13b (montarAnimar + hook) segue intacto (${motor13bok ? 'confirmado' : 'QUEBROU'}) — o 14a é aditivo por cima; passo 14a: ESQUELETO com DEFORMAÇÃO SUAVE (linear blend skinning) — a op \`pesar\` acumula peso por (vértice,osso) e o adaptarV3 normaliza top-4 (mesh de 16 floats só no lote skinado; sem esqueleto = 8 floats, o caminho de hoje intocado), osso/vértice órfão GRITA sem corromper e ciclo/pai/teto(33>32) GRITAM; o skin é LBS determinístico (bind pose = identidade -> deforma 0; a raiz FICA ${baseFica.toExponential(1)}, a ponta GIRA ${pontaGira.toFixed(3)}, a junta MISTA cai ENTRE os dois ossos por média exata — combinação convexa, não rígida), as MATRIZES de osso batem página==Node bit-a-bit em ${TS14.length} tempos, e no relógio congelado o tentáculo DEFORMA na tela (T=0 reto vs T=1.5 curvado ${dDeform}px; mesma fase 2x ${dSameEsq}px). A JÓIA render.js ganhou o programa/stride SKINADO num passe SEPARADO (aditivo, precedente do 12b); o gate BYTE-IDÊNTICO do jogo (arvore3d/ilha-chao/arvore-cartoon × 3, relógio congelado, render.js HEAD↔origin/main) é 9/9 @ 0px, provado À PARTE (scratchpad/frz-jewel); passo 14b: RIGGING (a INTERFACE do esqueleto) — num objeto FRESCO (o toco) o loop COMPLETO no espaço Animação: cria b0 (raiz) + b1 (filho, pivô [0,0.3,0]) pelos widgets REAIS, PESA pelo botão (grava ['pesar',{osso,faces:[ordenadas],peso}]) — a junta 50/50 (dois pesares nas MESMAS faces) ACUMULA pra b0 ${pesoB0.toFixed(2)} / b1 ${pesoB1.toFixed(2)} (combinação convexa), o rig completo tem 4 ops pesar; o dropdown de alvo da trilha lista os OSSOS e a trilha girando b1 (rotZ) DOBRA a malha no preview ao vivo (relógio congelado: T=0 vs T=1.5 ${dDeformC}px, mesma pose 2x ${dSameC0}px); Ctrl+Z desfaz o pesar (a canon volta), ciclo e pai-inexistente GRITAM na UI sem quebrar; a serialização IDA-E-VOLTA reabre BIT-A-BIT (PASSOS com as ops pesar + ESQUELETO idênticos, o construir passa {},ANIMACOES,ESQUELETO) e a pose skinada em T=1 (as matrizes de osso + a posição do vértice #8, deslocou ${deslocou.toFixed(3)} do repouso) bate página==Node. O motor do 14a (pesar + resolverEsqueleto + skinning) NÃO foi tocado — o 14b é SÓ a interface (git diff de oficina.js/render.js VAZIO).`);

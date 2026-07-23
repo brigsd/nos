@@ -322,6 +322,38 @@
     <div class="dica">clique numa parte pra selecionar as faces dela</div>
   </section>
 
+  <!-- PASSO 14b: ESQUELETO (rigging) — só no espaço Animação. Cria/nomeia OSSOS (nome + PAI
+       do dropdown + PIVÔ x/y/z ou centroide das faces selecionadas), lista a hierarquia
+       (clicar = osso ATIVO pra pesar/ver peso) e mostra o ERRO de validação do motor
+       (ciclo/pai/teto) SEM quebrar. Edita `esqueletoAtual` (a seção ESQUELETO, MUTÁVEL). -->
+  <section class="bloco" id="blocoEsqueleto" hidden>
+    <div class="rotulo">Esqueleto <span id="rgOssosN" class="badge">0</span></div>
+    <div class="lista" id="rgLista"><span class="vazio-lista">nenhum osso — crie a raiz</span></div>
+    <label class="campo"><input id="rgNome" type="text" placeholder="nome do osso (ex.: b0)" autocomplete="off"></label>
+    <div class="linha2"><label>pai</label><select id="rgPai" aria-label="osso pai"></select></div>
+    <div class="linha2"><label>pivô</label>
+      <input id="rgPivoX" type="number" step="0.01" value="0" aria-label="pivô x" title="x">
+      <input id="rgPivoY" type="number" step="0.01" value="0" aria-label="pivô y" title="y">
+      <input id="rgPivoZ" type="number" step="0.01" value="0" aria-label="pivô z" title="z">
+    </div>
+    <button id="rgCentroide" class="btmini sec" type="button">pivô = centroide das faces selecionadas</button>
+    <button id="rgCriar" class="btmini" type="button">+ criar osso</button>
+    <button id="rgRemover" class="btmini sec" type="button" disabled>− remover osso ativo</button>
+    <div class="aviso" id="rgErro" hidden></div>
+    <div class="dica">clique num osso pra ativá-lo · pai vazio = raiz · pivô = a cabeça da junta</div>
+  </section>
+
+  <!-- PASSO 14b: PESAR — com face(s) selecionada(s) + um OSSO ativo + um PESO (0..1), o botão
+       grava ['pesar',{osso,faces,peso}] no fim de PASSOS (desfazível; reexec deforma ao vivo).
+       Ops `pesar` ACUMULAM (o motor normaliza top-4): junta suave = as MESMAS faces 50% no
+       osso A + 50% no B (dois pesares). As faces pesadas pelo osso ATIVO tingem no overlay. -->
+  <section class="bloco" id="blocoPeso" hidden>
+    <div class="rotulo">Peso <span id="rgOssoAtivo" class="badge vazio">—</span></div>
+    <label class="campo"><span class="rk">peso</span><input id="rgPeso" type="range" min="0" max="1" step="0.05" value="1"><b class="rv" id="rgPesoV">1.00</b></label>
+    <button id="rgPesar" class="btmini" type="button" disabled>Pesar faces selecionadas no osso ativo</button>
+    <div class="dica" id="rgPesoDica">selecione face(s), ative um osso e escolha o peso — junta suave: 0.5 em A e 0.5 em B</div>
+  </section>
+
   <section class="bloco" id="blocoAnims" hidden>
     <div class="rotulo">Animações <span id="anAnimsN" class="badge">0</span></div>
     <div class="lista" id="anLista"><span class="vazio-lista">nenhuma animação</span></div>
@@ -556,6 +588,40 @@ let renderAnim = () => {};
 let atualizarBotaoParte = () => {};
 let atualizarAnimQuadro = () => {};   // chamado por quadro (visor.rodar, no try EXTERNO) — módulo-escopo pra alcançar de lá
 
+/* PASSO 14b — ESQUELETO (rigging): montar o esqueleto (ossos com hierarquia/pivô) + PESAR
+   os vértices (a op `pesar`). O MOTOR (ESQUELETO, `pesar`, resolverEsqueleto, LBS) é o do
+   14a (D-97); aqui é só a INTERFACE, sem tocar em motor/oficina.js nem render.js. Vive no
+   MESMO espaço Animação (esqueleto/peso são setup de animação: a trilha mira um OSSO).
+     esqueletoAtual — a seção ESQUELETO da peça, MUTÁVEL na sessão (espelha mod.ESQUELETO
+                      ou {ossos:[]}); o export a grava (como ANIMACOES) e o reexec a fia no
+                      executar. Forma: {ossos:[{nome,pai?,pivo?}]}. Editar OSSOS NÃO é passo
+                      de PASSOS (como criar animação não é) — só a op `pesar` é desfazível.
+     ossoAtual      — o osso ATIVO (a lista destaca; pesar mira ele; o overlay tinge as
+                      faces pesadas por ele — o heatmap de peso).
+     pesoAtual      — o valor do slider de peso (0..1) que o botão grava na op `pesar`.
+     erroEsqueleto  — a mensagem do último resolverEsqueleto que GRITOU (ciclo/pai/teto), ou
+                      null. A UI mostra e o reexec cai pra esqueleto null (NÃO quebra). */
+let esqueletoAtual = { ossos: [] };
+let ossoAtual = null;
+let pesoAtual = 1;
+let erroEsqueleto = null;
+let rigCtl = null;
+let renderRig = () => {};
+let atualizarBotaoPeso = () => {};
+/* esqueleto atual CRU (sem validar) pra os ganchos de leitura: {} vazio é TRUTHY no motor
+   (marcaria skin com 0 ossos), então peça SEM osso passa `null` — o caminho de 1..13/jogo
+   fica byte-idêntico (compat do 14a). A validação (que GRITA) mora no esqValido do try. */
+function esqOuNull() { return (esqueletoAtual && esqueletoAtual.ossos && esqueletoAtual.ossos.length) ? esqueletoAtual : null; }
+/* peso NORMALIZADO de um osso num vértice (o peso cru do osso ÷ soma dos pesos crus do
+   vértice) — o mesmo que o adaptarV3 faz pra o skinning. Base do heatmap do overlay e da
+   leitura pesoDaFace. 0 se o vértice não tem peso. */
+function pesoNormV(vid, osso) {
+  const m = neutro && neutro.pesos && neutro.pesos.get(vid);
+  if (!m) return 0;
+  let s = 0; for (const w of m.values()) s += w;
+  return s > 0 ? (m.get(osso) || 0) / s : 0;
+}
+
 /* PASSO 5 — DESFAZER / REFAZER das edições DESTA sessão. O objeto É a lista
    (passo 4): toda edição é uma operação no FIM de PASSOS, então desfazer = tirar
    a última e re-executar; refazer = pôr de volta. Estado no escopo do módulo (o
@@ -770,14 +836,19 @@ function jsPasso(p) { const op = jsStr(p[0]); return (p.length > 1 && p[1] !== u
    colisaoDe: colisão é só geometria). Como ANIMACOES vem DEPOIS de MATERIAIS no executar
    (posicional), com animação mas sem material passo `{}` no lugar; peça SEM animação sai
    idêntica ao de antes. As ops `parte` (13a) já estão no PASSOS — só a seção ANIMACOES é
-   nova no arquivo. */
-function serializarPeca(meta, PARAMS, TOPO, PASSOS, MATERIAIS, ANIMACOES) {
+   nova no arquivo. PASSO 14b: idem pra ESQUELETO (a seção do RIGGING, 14a) — grava
+   `export const ESQUELETO` e passa pro `executar` como o 7º arg POSICIONAL, DEPOIS de
+   ANIMACOES (as ops `pesar` já vivem no PASSOS; colisaoDe NÃO recebe — peso não muda a
+   colisão). Sem material/animação mas COM esqueleto, passo `{}` nos lugares deles. Peça
+   SEM esqueleto sai idêntica ao de antes (a compat do 14a, byte-idêntica). */
+function serializarPeca(meta, PARAMS, TOPO, PASSOS, MATERIAIS, ANIMACOES, ESQUELETO) {
   const nome = (meta && meta.nome) || 'peca';
   const tipo = (meta && meta.tipo) || 'objeto';
   const desc = (meta && meta.desc) || '';
   const passosTxt = (PASSOS || []).map((p) => '  ' + jsPasso(p) + ',').join('\n');
   const temMat = MATERIAIS && Object.keys(MATERIAIS).length > 0;
   const temAnim = ANIMACOES && Object.keys(ANIMACOES).length > 0;
+  const temEsq = ESQUELETO && Array.isArray(ESQUELETO.ossos) && ESQUELETO.ossos.length > 0;
   const matBloco = temMat ? `
 /* MATERIAIS (passo 12a/12b): materiais POR NOME — a op \`material\` aponta faces pra um
    nome; mudar o material aqui muda todas as faces dele. cor multiplica a textura,
@@ -792,8 +863,21 @@ export const MATERIAIS = ${jsVal(MATERIAIS)};
    a chaves \`[tempo, valor]\` (interpolação SUAVE). \`montarAnimar\` fia isto em peca.animar. */
 export const ANIMACOES = ${jsVal(ANIMACOES)};
 ` : '';
+  const esqBloco = temEsq ? `
+/* ESQUELETO (passo 14a/14b): os OSSOS (hierarquia + pivô) do RIGGING. \`pai\` = nome do
+   osso-pai (raiz sem pai); \`pivo\` = a cabeça do osso no espaço do modelo (default [0,0,0]).
+   As ops \`pesar\` (nos PASSOS) amarram os vértices aos ossos; uma trilha de ANIMACOES que
+   mira um NOME de osso DEFORMA a malha (linear blend skinning). \`executar\` resolve/valida
+   (ciclo/pai/teto GRITAM). */
+export const ESQUELETO = ${jsVal(ESQUELETO)};
+` : '';
   const argMat = temMat ? ', MATERIAIS' : '';
-  const argConstruir = temAnim ? `, ${temMat ? 'MATERIAIS' : '{}'}, ANIMACOES` : argMat;   // ANIMACOES é posicional (6º) — com anim sem material, {} no lugar de MATERIAIS
+  /* ANIMACOES é o 6º arg do executar, ESQUELETO o 7º (posicionais) — preenche os buracos
+     com {}/{} quando o de trás existe mas o da frente não (ex.: esqueleto sem material/anim). */
+  let argConstruir;
+  if (temEsq) argConstruir = `, ${temMat ? 'MATERIAIS' : '{}'}, ${temAnim ? 'ANIMACOES' : '{}'}, ESQUELETO`;
+  else if (temAnim) argConstruir = `, ${temMat ? 'MATERIAIS' : '{}'}, ANIMACOES`;
+  else argConstruir = argMat;
   return `/* ${nome} — peça-objeto gerada pela OFICINA (exportar, passo 10). Descrita
    100% como lista de PASSOS + PARAMS/TOPO e reconstruída por \`executar\`; a Oficina
    relê este mesmo arquivo pra reabrir a edição (por isso PARAMS/TOPO/PASSOS são
@@ -807,7 +891,7 @@ export const PARAMS = ${jsVal(PARAMS || {})};
 
 /* topológico: mudar RECONSTRÓI e pode deixar os passos seguintes órfãos. */
 export const TOPO = ${jsVal(TOPO || {})};
-${matBloco}${animBloco}
+${matBloco}${animBloco}${esqBloco}
 /* exportado (não \`const\` privado): sem isto a Oficina não relê a lista e o
    arquivo nunca mais reabre pra edição. Os passos citam o NOME do parâmetro. */
 export const PASSOS = [
@@ -1108,8 +1192,21 @@ try {
     materiaisAtual = mod.MATERIAIS ?? {};   // PASSO 12a: os materiais da peça (por nome); a sessão pode acrescentar/aplicar
     animacoesAtual = mod.ANIMACOES ? JSON.parse(JSON.stringify(mod.ANIMACOES)) : {};   // PASSO 13b: a seção ANIMACOES da peça (cópia MUTÁVEL); a sessão cria/edita e o export a grava
     animAtual = Object.keys(animacoesAtual)[0] || null;   // se a peça já traz animações, a 1ª entra em edição
-    const { V, F } = nucleo(PASSOS, PARAMS, TOPO, materiaisAtual);
-    neutro = { V, F };   // módulo-escopo: o hit-test do #c e o overlay leem o MESMO neutro
+    /* PASSO 14b — ESQUELETO: cópia MUTÁVEL da seção ESQUELETO (ou {ossos:[]}); a sessão cria
+       ossos/pesa e o export a grava. `esqValido` valida pelo MOTOR sem tocar nele: roda
+       nucleo([], …, e) — resolverEsqueleto GRITA em ciclo/pai/teto (throw, cedo) e a lista
+       vazia é barata — devolve o esqueleto se OK, senão null + a mensagem em erroEsqueleto
+       (a UI mostra; o reexec cai pra esqueleto null e NÃO quebra). ossoAtual = 1º osso. */
+    esqueletoAtual = mod.ESQUELETO ? JSON.parse(JSON.stringify(mod.ESQUELETO)) : { ossos: [] };
+    ossoAtual = (esqueletoAtual.ossos && esqueletoAtual.ossos[0]) ? esqueletoAtual.ossos[0].nome : null;
+    const esqValido = () => {
+      const e = esqOuNull();
+      if (!e) { erroEsqueleto = null; return null; }
+      try { nucleo([], PARAMS, TOPO, materiaisAtual, e); erroEsqueleto = null; return e; }   // valida só o esqueleto (resolverEsqueleto GRITA em ciclo/pai/teto)
+      catch (err) { erroEsqueleto = err.message; return null; }
+    };
+    const rInit = nucleo(PASSOS, PARAMS, TOPO, materiaisAtual, esqValido());
+    neutro = { V: rInit.V, F: rInit.F, pesos: rInit.pesos, esqueleto: rInit.esqueleto };   // módulo-escopo: o hit-test do #c e o overlay leem o MESMO neutro (+ os PESOS por vértice pro heatmap 14b)
 
     /* ---- PASSO 4: MÁQUINA de seleção + arrasto de vértice (o MILESTONE) --------
        Decide câmera-vs-arrasto no hit-test (feito no pointerdown do #c, contra o
@@ -1126,14 +1223,22 @@ try {
          pose (previewT=segundos), play volta ao relógio (previewT=null → laço). O
          render.js NÃO muda — segue chamando animar(T,lotes) por quadro. Fora do espaço
          Animação, ANIMACOES vai {} → animar undefined → peça estática (byte-idêntica). */
-      const peca = executar(passos, PARAMS, TOPO, ctxMotor, materiaisAtual, animLigado ? animacoesAtual : {});
+      /* PASSO 14b — ESQUELETO no preview (JÓIA-SAFE). Fia o `esqueletoAtual` (se VÁLIDO;
+         senão null + erroEsqueleto p/ a UI — NÃO quebra) no executar (7º arg, DEPOIS de
+         ANIMACOES) e no nucleo (5º) do overlay: as ops `pesar` do PASSOS resolvem, o mesh
+         vira skinado e uma trilha que mira um OSSO deforma a malha. Sem osso (1..13/jogo),
+         esq=null → tudo byte-idêntico. O render.js NÃO muda (o skinning do 14a roda no
+         motor). Fora do espaço Animação, ANIMACOES vai {} → animar undefined → bind pose
+         (a peça rigada renderiza em repouso, estática). */
+      const esq = esqValido();
+      const peca = executar(passos, PARAMS, TOPO, ctxMotor, materiaisAtual, animLigado ? animacoesAtual : {}, esq);
       if (animLigado && typeof peca.animar === 'function') {
         const base = peca.animar;
         peca.animar = (Twall, lotes) => base(previewT != null ? previewT : Twall, lotes);
       }
       visor.carregar(peca);   // PASSO 12a: MATERIAIS -> lotes por material (o render aplica cada param por lote)
-      const r = nucleo(passos, PARAMS, TOPO, materiaisAtual);
-      neutro = { V: r.V, F: r.F };
+      const r = nucleo(passos, PARAMS, TOPO, materiaisAtual, esq);
+      neutro = { V: r.V, F: r.F, pesos: r.pesos, esqueleto: r.esqueleto };   // PASSO 14b: os PESOS por vértice acompanham o neutro (heatmap do osso ativo)
       atlasAtual = adaptarV3(r, ctxMotor).atlas;   // PASSO 11c: o mapa superfície→{u,v} do atlas por face, mantido FRESCO pro raycast do pincel (a geometria mudou → o atlas também). A peça é pequena; o adaptador é o MESMO do render (motor/oficina.js, provado).
     };
     atlasAtual = adaptarV3(neutro, ctxMotor).atlas;   // PASSO 11c: atlas INICIAL (antes de qualquer edição), pro raycast do pincel já valer no 1º gesto
@@ -1180,10 +1285,12 @@ try {
       const modelar = !animLigado;
       const sub = $('propsSub'); if (sub) sub.textContent = modelar ? 'espaço Modelar · vértice e caixa' : 'espaço Animação · partes e linha do tempo';
       for (const bid of ['blocoVertice', 'blocoCaixa', 'blocoColisao']) { const el = $(bid); if (el) el.hidden = !modelar; }
-      for (const bid of ['blocoAnim', 'blocoPartes', 'blocoAnims']) { const el = $(bid); if (el) el.hidden = modelar; }
+      // PASSO 14b: blocoEsqueleto/blocoPeso (rigging) vivem no MESMO espaço Animação (setup de animação)
+      for (const bid of ['blocoAnim', 'blocoPartes', 'blocoEsqueleto', 'blocoPeso', 'blocoAnims']) { const el = $(bid); if (el) el.hidden = modelar; }
       { const bl = $('blocoChave'); if (bl) bl.hidden = modelar || !chaveSel; }
       { const lt = $('linha'); if (lt) lt.hidden = modelar; }
       atualizarBotaoParte();
+      atualizarBotaoPeso();   // PASSO 14b: o botão "pesar" segue a seleção de face + o osso ativo
       const temSel = selecionado != null && neutro && neutro.V.has(selecionado);
       const editavel = temSel && !arrasto;
       badge.classList.toggle('vazio', !temSel);
@@ -1318,7 +1425,7 @@ try {
        TOPO) e POSTa pro servidor de dev; sem servidor, baixa o .js (fallback). */
     { const bt = $('btSalvar'); if (bt) bt.addEventListener('click', async () => {
         bt.disabled = true;
-        try { await salvarPeca(mod.meta.nome, serializarPeca(mod.meta, PARAMS, TOPO, PASSOS, materiaisAtual, animacoesAtual)); }
+        try { await salvarPeca(mod.meta.nome, serializarPeca(mod.meta, PARAMS, TOPO, PASSOS, materiaisAtual, animacoesAtual, esqueletoAtual)); }   // PASSO 14b: + ESQUELETO (round-trip)
         finally { bt.disabled = false; }
       }); }
 
@@ -1934,13 +2041,17 @@ try {
         else for (const p of partes) { const b = document.createElement('button'); b.type = 'button'; b.className = 'parteChip'; b.dataset.parte = p.nome; b.textContent = `${p.nome} · ${p.faces.length}f`; elP.appendChild(b); }
       }
       { const n = $('anPartesN'); if (n) n.textContent = String(partes.length); }
-      // select de PARTE da nova trilha (preserva a escolha se ainda existe)
+      // select de ALVO da nova trilha (preserva a escolha se ainda existe). PASSO 14b: além
+      // das PARTES (13a), lista também os OSSOS (14a) — o montarAnimar resolve osso×parte
+      // (alvo no ESQUELETO vira matriz de osso = skinning). Optgroups separam os dois.
       const selPT = $('anParteTrilha');
       if (selPT) {
         const cur = selPT.value; selPT.innerHTML = '';
-        if (!partes.length) { const o = document.createElement('option'); o.value = ''; o.textContent = '(nomeie uma parte)'; selPT.appendChild(o); }
-        else for (const p of partes) { const o = document.createElement('option'); o.value = p.nome; o.textContent = p.nome; selPT.appendChild(o); }
-        if (partes.some((p) => p.nome === cur)) selPT.value = cur;
+        const ossos = esqueletoAtual.ossos || [];
+        if (!partes.length && !ossos.length) { const o = document.createElement('option'); o.value = ''; o.textContent = '(nomeie uma parte / crie um osso)'; selPT.appendChild(o); }
+        if (partes.length) { const g = document.createElement('optgroup'); g.label = 'partes'; for (const p of partes) { const o = document.createElement('option'); o.value = p.nome; o.textContent = p.nome; g.appendChild(o); } selPT.appendChild(g); }
+        if (ossos.length) { const g = document.createElement('optgroup'); g.label = 'ossos'; for (const b of ossos) { const o = document.createElement('option'); o.value = b.nome; o.textContent = b.nome; g.appendChild(o); } selPT.appendChild(g); }
+        if (cur && (partes.some((p) => p.nome === cur) || ossos.some((b) => b.nome === cur))) selPT.value = cur;
       }
       // lista de ANIMAÇÕES
       const nomes = Object.keys(animacoesAtual);
@@ -2001,7 +2112,7 @@ try {
     setEspacoAnim = (on) => {
       const novo = !!on;
       const cM = $('chipModelar'), cA = $('chipAnim');
-      if (novo === animLigado) { if (cM) cM.classList.toggle('on', !animLigado); if (cA) cA.classList.toggle('on', animLigado); renderAnim(); atualizarPainel(); return; }
+      if (novo === animLigado) { if (cM) cM.classList.toggle('on', !animLigado); if (cA) cA.classList.toggle('on', animLigado); renderAnim(); renderRig(); atualizarPainel(); return; }
       animLigado = novo;
       if (cM) cM.classList.toggle('on', !animLigado);
       if (cA) cA.classList.toggle('on', animLigado);
@@ -2010,11 +2121,13 @@ try {
         definirSel([]);                 // sai do modo vértice (sem gizmo); a FACE selecionada persiste
         tocando = false; previewT = 0; tempoMostrado = 0; chaveSel = null;
         if (!animAtual) animAtual = Object.keys(animacoesAtual)[0] || null;
+        if (!ossoAtual) ossoAtual = (esqueletoAtual.ossos && esqueletoAtual.ossos[0]) ? esqueletoAtual.ossos[0].nome : null;   // PASSO 14b: ativa o 1º osso ao entrar
       } else {
         tocando = false; previewT = 0;  // sair: sem preview de animação
       }
       reexec(PASSOS);                   // (des)liga o `animar` wrapper na peça carregada
       renderAnim();
+      renderRig();                      // PASSO 14b: pinta a hierarquia de ossos + o painel de peso
       atualizarPainel();
       atualizarPlay();
       posicionarPlayhead(tempoMostrado);
@@ -2075,12 +2188,15 @@ try {
         const A = animAtual && animacoesAtual[animAtual]; if (!A) return;
         A.repete = !!b; refrescarPreview(); renderAnim();
       },
-      /* ADICIONAR TRILHA: escolhe uma PARTE (nomeada) + um CANAL (rotX/Y/Z, posX/Y/Z, escala).
-         Canal fora da lista ou parte inexistente → no-op. Devolve {parte,canal} ou null. */
+      /* ADICIONAR TRILHA: escolhe um ALVO (uma PARTE nomeada OU um OSSO — 14b) + um CANAL
+         (rotX/Y/Z, posX/Y/Z, escala). Canal fora da lista ou alvo inexistente → no-op. O
+         campo continua se chamando `parte` (o motor: montarAnimar resolve osso×parte pelo
+         ossoSet). Devolve {parte,canal} ou null. */
       addTrilha(parte, canal) {
         const A = animAtual && animacoesAtual[animAtual]; if (!A) return null;
         if (!CANAIS_ANIM.includes(canal)) return null;
-        if (!partesNomeadas().some((p) => p.nome === parte)) return null;
+        const ehOsso = (esqueletoAtual.ossos || []).some((o) => o.nome === parte);   // PASSO 14b: alvo pode ser OSSO
+        if (!ehOsso && !partesNomeadas().some((p) => p.nome === parte)) return null;
         A.trilhas.push({ parte, canal, chaves: [] });
         chaveSel = null;
         refrescarPreview(); renderAnim(); atualizarPainel();
@@ -2149,6 +2265,157 @@ try {
       estado: () => ({ animLigado, animAtual, previewT, tocando, tempo: tempoMostrado, chaveSel: chaveSel ? { ...chaveSel } : null }),
       animacoes: () => JSON.parse(JSON.stringify(animacoesAtual)),
     };
+
+    /* ==== PASSO 14b: ESQUELETO (rigging) — o editor de OSSOS + o PESAR ==================
+       O MOTOR (ESQUELETO, op `pesar`, resolverEsqueleto, LBS) é o do 14a (D-97): aqui NÃO se
+       toca em motor/oficina.js nem render.js. Os OSSOS vivem em `esqueletoAtual` (a seção
+       ESQUELETO, MUTÁVEL como ANIMACOES — criar/remover osso NÃO é passo de PASSOS); só a op
+       `pesar` entra no PASSOS (desfazível pela pilha do passo 5). O preview sai do `reexec`
+       que fia ESQUELETO no executar (o skinning do 14a deforma). `refrescarPreview` já
+       reconstrói a peça com o esqueleto/pesos atuais. */
+
+    /* o BOTÃO "pesar" (habilitado com face[s] + um OSSO ativo, fora de arrasto) + o badge do
+       osso ativo + a dica. Chamado por atualizarPainel (segue a seleção de face). */
+    atualizarBotaoPeso = () => {
+      const bt = $('rgPesar'); if (!bt) return;
+      const n = selFaces.length;
+      const temOsso = !!ossoAtual && (esqueletoAtual.ossos || []).some((o) => o.nome === ossoAtual);
+      bt.disabled = !(n >= 1 && temOsso && !!neutro && !arrasto);
+      const badge = $('rgOssoAtivo');
+      if (badge) { badge.textContent = ossoAtual || '—'; badge.classList.toggle('vazio', !ossoAtual); }
+      const dica = $('rgPesoDica');
+      if (dica) dica.textContent = !temOsso ? 'crie/ative um osso pra pesar'
+        : n ? `${n} face(s) → peso ${pesoAtual.toFixed(2)} no osso '${ossoAtual}' (junta suave: 0.5 em A e 0.5 em B)`
+        : 'selecione face(s) na cena pra pesar no osso ativo';
+    };
+
+    /* RECONSTRÓI a UI do esqueleto (lista de ossos, dropdown de pai, erro de validação, botão
+       remover, slider de peso). Chamado quando os DADOS mudam (não por quadro) — não
+       sobrescreve um input em foco. */
+    renderRig = () => {
+      if (!$('blocoEsqueleto')) return;
+      const ossos = esqueletoAtual.ossos || [];
+      // LISTA de ossos (clicar = ativa; mostra nome + pai). O ATIVO fica destacado (.on).
+      const elL = $('rgLista');
+      if (elL) {
+        elL.innerHTML = '';
+        if (!ossos.length) elL.innerHTML = '<span class="vazio-lista">nenhum osso — crie a raiz</span>';
+        else for (const o of ossos) { const b = document.createElement('button'); b.type = 'button'; b.className = 'parteChip' + (o.nome === ossoAtual ? ' on' : ''); b.dataset.osso = o.nome; b.textContent = o.pai ? `${o.nome} ← ${o.pai}` : `${o.nome} ⊙`; elL.appendChild(b); }
+      }
+      { const n = $('rgOssosN'); if (n) n.textContent = String(ossos.length); }
+      // dropdown de PAI: "(raiz)" + os ossos existentes (preserva a escolha se ainda existe)
+      const selP = $('rgPai');
+      if (selP && document.activeElement !== selP) {
+        const cur = selP.value; selP.innerHTML = '';
+        const raiz = document.createElement('option'); raiz.value = ''; raiz.textContent = '(raiz)'; selP.appendChild(raiz);
+        for (const o of ossos) { const op = document.createElement('option'); op.value = o.nome; op.textContent = o.nome; selP.appendChild(op); }
+        if ([...selP.options].some((op) => op.value === cur)) selP.value = cur;
+      }
+      // ERRO de validação do motor (ciclo/pai/teto): mostra sem quebrar
+      { const er = $('rgErro'); if (er) { er.hidden = !erroEsqueleto; er.textContent = erroEsqueleto || ''; } }
+      { const rm = $('rgRemover'); if (rm) rm.disabled = !ossoAtual || !ossos.some((o) => o.nome === ossoAtual); }
+      // slider de peso (label + valor, sem brigar com o foco)
+      { const r = $('rgPeso'); if (r && document.activeElement !== r) r.value = String(pesoAtual); const v = $('rgPesoV'); if (v) v.textContent = pesoAtual.toFixed(2); }
+      atualizarBotaoPeso();
+    };
+
+    rigCtl = {
+      /* CRIAR OSSO: acrescenta {nome, pai?, pivo?} em esqueletoAtual.ossos (a seção MUTÁVEL,
+         NÃO um passo de PASSOS — como criar animação no 13b). Pivô default [0,0,0] é OMITIDO
+         (o motor assume). Nome duplicado / vazio = no-op. O reexec valida (esqValido GRITA em
+         ciclo/pai/teto → erroEsqueleto na UI, cai pra null sem quebrar). Devolve o osso ou null. */
+      criarOsso(nome, pai, pivo) {
+        const nm = String(nome || '').trim();
+        if (!nm) return null;
+        if (!esqueletoAtual.ossos) esqueletoAtual.ossos = [];
+        if (esqueletoAtual.ossos.some((o) => o.nome === nm)) return null;   // duplicado: no-op
+        const osso = { nome: nm };
+        const pp = String(pai || '').trim();
+        if (pp) osso.pai = pp;
+        const pv = (pivo || [0, 0, 0]).map((n) => +n || 0);
+        if (pv[0] || pv[1] || pv[2]) osso.pivo = pv;   // omite o default [0,0,0] (byte-igual à declaração à mão)
+        esqueletoAtual.ossos.push(osso);
+        ossoAtual = nm;
+        refrescarPreview(); renderRig(); renderAnim(); atualizarPainel();   // renderAnim: o dropdown de alvo da trilha lista os OSSOS na hora
+        console.log(`oficina passo 14b (osso): ${JSON.stringify(osso)} — ${esqueletoAtual.ossos.length} osso(s)${erroEsqueleto ? ' · ERRO: ' + erroEsqueleto : ''}`);
+        return JSON.parse(JSON.stringify(osso));
+      },
+      /* REMOVER OSSO: tira o osso e RE-ENRAÍZA os filhos (o pai deles vira o pai do removido, ou
+         raiz) pra o esqueleto ficar VÁLIDO. Devolve o nome removido ou null. */
+      removerOsso(nome) {
+        const nm = nome || ossoAtual;
+        const arr = esqueletoAtual.ossos || [];
+        const i = arr.findIndex((o) => o.nome === nm); if (i < 0) return null;
+        const paiDele = arr[i].pai || null;
+        arr.splice(i, 1);
+        for (const o of arr) if (o.pai === nm) { if (paiDele) o.pai = paiDele; else delete o.pai; }   // re-enraíza filhos
+        if (ossoAtual === nm) ossoAtual = arr[0] ? arr[0].nome : null;
+        refrescarPreview(); renderRig(); renderAnim(); atualizarPainel();   // renderAnim: o dropdown de alvo da trilha lista os OSSOS na hora
+        return nm;
+      },
+      /* ATIVA um osso (dirige o pesar + o heatmap do overlay). */
+      selecionarOsso(nome) {
+        if (!(esqueletoAtual.ossos || []).some((o) => o.nome === nome)) return;
+        ossoAtual = nome; renderRig(); atualizarPainel();
+      },
+      setPeso(v) { pesoAtual = Math.max(0, Math.min(1, +v || 0)); renderRig(); },
+      /* CENTROIDE das faces selecionadas em MUNDO — pra o pivô do osso (a cabeça da junta). */
+      centroideFacesSel() {
+        const faces = selFaces.filter((id) => neutro && neutro.F.has(id));
+        if (!faces.length || !neutro) return null;
+        let x = 0, y = 0, z = 0, n = 0;
+        for (const fid of faces) { const f = neutro.F.get(fid); for (const v of f.vs) { const p = neutro.V.get(v); if (p) { x += p[0]; y += p[1]; z += p[2]; n++; } } }
+        return n ? [x / n, y / n, z / n] : null;
+      },
+      /* PESAR: grava ['pesar',{osso,faces:[ORDENADAS],peso}] no fim de PASSOS (a op do 14a —
+         desfazível), reexec (deforma ao vivo), limpa o redo. Ops `pesar` ACUMULAM por
+         (vértice,osso) e o motor normaliza top-4 — junta suave = as MESMAS faces 50% no osso
+         A + 50% no B (dois pesares). GUARDAS: no-op no arrasto, sem osso ativo (não grava
+         lixo), sem face. Devolve o passo (ou null). */
+      pesar() {
+        if (arrasto) return null;
+        if (!ossoAtual || !(esqueletoAtual.ossos || []).some((o) => o.nome === ossoAtual)) return null;   // sem osso válido: não grava
+        const faces = selFaces.filter((id) => neutro && neutro.F.has(id)).sort((a, b) => a - b);
+        if (!faces.length) return null;
+        const passo = ['pesar', { osso: ossoAtual, faces, peso: pesoAtual }];
+        PASSOS.push(passo);
+        redo.length = 0;
+        reexec(PASSOS);
+        atualizarPassos();
+        renderRig();
+        atualizarPainel();
+        console.log(`oficina passo 14b (pesar): ['pesar', {osso:'${ossoAtual}', faces:[${faces.join(', ')}], peso:${pesoAtual}}] — PASSOS agora ${PASSOS.length}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+      /* TEST SEAM (como selecionarVarios/orbitar): injeta uma seção ESQUELETO CRUA e revalida
+         — prova que ciclo/pai-inexistente MOSTRAM o erro na UI sem quebrar. */
+      esqueletoBruto(e) {
+        esqueletoAtual = (e && typeof e === 'object' && Array.isArray(e.ossos)) ? JSON.parse(JSON.stringify(e)) : { ossos: [] };
+        ossoAtual = (esqueletoAtual.ossos && esqueletoAtual.ossos[0]) ? esqueletoAtual.ossos[0].nome : null;
+        refrescarPreview(); renderRig(); renderAnim(); atualizarPainel();   // renderAnim: o dropdown de alvo da trilha lista os OSSOS na hora
+        return erroEsqueleto;
+      },
+      // leituras pra a bancada
+      esqueleto: () => JSON.parse(JSON.stringify(esqueletoAtual)),
+      ossos: () => (esqueletoAtual.ossos || []).map((o) => ({ ...o })),
+      ossoAtivo: () => ossoAtual,
+      erro: () => erroEsqueleto,
+      peso: () => pesoAtual,
+      pesoDaFace: (fid, osso) => { if (!neutro || !neutro.F.has(fid)) return null; const f = neutro.F.get(fid); let s = 0, n = 0; for (const v of f.vs) { s += pesoNormV(v, osso || ossoAtual); n++; } return n ? s / n : 0; },
+    };
+
+    /* ---- fiação da UI do esqueleto (14b): criar/remover osso, centroide, lista, slider, pesar ---- */
+    { const b = $('rgCriar'); if (b) b.addEventListener('click', () => {
+        const nm = $('rgNome'), pai = $('rgPai'), px = $('rgPivoX'), py = $('rgPivoY'), pz = $('rgPivoZ');
+        const ok = rigCtl.criarOsso(nm ? nm.value : '', pai ? pai.value : '', [px ? px.value : 0, py ? py.value : 0, pz ? pz.value : 0]);
+        if (ok && nm) nm.value = '';
+      }); }
+    { const inp = $('rgNome'); if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const pai = $('rgPai'), px = $('rgPivoX'), py = $('rgPivoY'), pz = $('rgPivoZ'); const ok = rigCtl.criarOsso(inp.value, pai ? pai.value : '', [px ? px.value : 0, py ? py.value : 0, pz ? pz.value : 0]); if (ok) inp.value = ''; } }); }
+    { const b = $('rgRemover'); if (b) b.addEventListener('click', () => rigCtl.removerOsso()); }
+    { const b = $('rgCentroide'); if (b) b.addEventListener('click', () => { const c = rigCtl.centroideFacesSel(); if (!c) return; const px = $('rgPivoX'), py = $('rgPivoY'), pz = $('rgPivoZ'); if (px) px.value = c[0].toFixed(3); if (py) py.value = c[1].toFixed(3); if (pz) pz.value = c[2].toFixed(3); }); }
+    { const el = $('rgLista'); if (el) el.addEventListener('click', (e) => { const b = e.target.closest('.parteChip'); if (b) rigCtl.selecionarOsso(b.dataset.osso); }); }
+    { const r = $('rgPeso'); if (r) r.addEventListener('input', () => { pesoAtual = parseFloat(r.value); const v = $('rgPesoV'); if (v) v.textContent = pesoAtual.toFixed(2); atualizarBotaoPeso(); }); }
+    { const b = $('rgPesar'); if (b) b.addEventListener('click', () => rigCtl.pesar()); }
 
     /* ---- fiação da UI da animação (botões/inputs/selects + delegação nas listas) ---- */
     { const b = $('anBtParte'); if (b) b.addEventListener('click', () => { const nm = $('anNomeParte'); const ok = animCtl.nomearParte(nm ? nm.value : ''); if (ok && nm) nm.value = ''; }); }
@@ -2267,6 +2534,7 @@ try {
     const proj = projetarVertices();
     projAtual = proj;   // PASSO 4: o hit-test do #c reusa ESTE estado de projeção (o mesmo que se desenha)
 
+    if (animLigado) desenharPesoOsso(proj);   // PASSO 14b: HEATMAP — tinge as faces pesadas pelo osso ATIVO (sob o destaque da seleção)
     desenharFaceSel(proj);   // PASSO 7/9: preenchimento das faces SELECIONADAS (nos dois espaços — no Animação mostra as faces da parte que se nomeia/seleciona)
 
     /* PASSO 13b — no espaço Animação a MALHA (arestas/vértices/gizmo/handle) some: só o
@@ -2353,6 +2621,29 @@ try {
       octx.fillStyle = cor; octx.fillText(s.k.toUpperCase(), lx, ly);
     }
     octx.textAlign = 'left';   // restaura pro resto do overlay (etiquetas de id)
+  }
+
+  /* PASSO 14b — HEATMAP de peso: no espaço Animação, tinge cada face pelo peso NORMALIZADO
+     do osso ATIVO (média dos cantos), verde-HUD com alpha ∝ peso — o autor VÊ o que já pesou
+     (e a junta 50/50 fica meio-tom nos dois ossos). Rest pose (o overlay projeta o NEUTRO);
+     é um indicador de setup, não a malha animada. Pula a face cujo canto não projeta. */
+  function desenharPesoOsso(proj) {
+    if (!neutro || !ossoAtual || !neutro.pesos || !neutro.pesos.size) return;
+    octx.lineJoin = 'round';
+    for (const f of neutro.F.values()) {
+      let soma = 0, n = 0;
+      for (const v of f.vs) { soma += pesoNormV(v, ossoAtual); n++; }
+      const w = n ? soma / n : 0;
+      if (w <= 0.02) continue;                       // face sem peso do osso ativo: não tinge
+      const pts = []; let bom = true;
+      for (const v of f.vs) { const q = proj.get(v); if (!q) { bom = false; break; } pts.push(q); }
+      if (!bom || pts.length < 3) continue;
+      octx.beginPath(); octx.moveTo(pts[0].x, pts[0].y);
+      for (let k = 1; k < pts.length; k++) octx.lineTo(pts[k].x, pts[k].y);
+      octx.closePath();
+      octx.fillStyle = `rgba(205, 223, 108, ${(0.14 + 0.5 * w).toFixed(3)})`; octx.fill();     // heatmap verde-HUD
+      octx.lineWidth = 1; octx.strokeStyle = `rgba(205, 223, 108, ${(0.4 + 0.45 * w).toFixed(3)})`; octx.stroke();
+    }
   }
 
   /* PASSO 7/9 — preenchimento + contorno das faces SELECIONADAS (destaque). Roxo-
@@ -2485,7 +2776,7 @@ try {
     passos: () => JSON.parse(JSON.stringify(mod.PASSOS)),             // a lista EDITADA (serializável)
     nPassos: () => mod.PASSOS.length,
     ultimoPasso: () => { const u = mod.PASSOS[mod.PASSOS.length - 1]; return u ? JSON.parse(JSON.stringify(u)) : null; },
-    canon: () => neutroCanonico(nucleo(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual)),   // neutro CANÔNICO dos PASSOS atuais (replay determinístico; PASSO 12a: com MATERIAIS pra a op `material` não gritar e o f.material entrar na canon)
+    canon: () => { const e = esqOuNull(); try { return neutroCanonico(nucleo(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual, e)); } catch { return neutroCanonico(nucleo(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual)); } },   // neutro CANÔNICO dos PASSOS atuais (replay determinístico; 12a: MATERIAIS pro f.material; 14b: ESQUELETO pra os PESOS entrarem na canon — cai pra sem-esqueleto se ele estiver inválido, sem quebrar)
     /* ---- PASSO 5: ganchos de desfazer/refazer (a bancada dispara e afirma) --- */
     desfazer: () => desfazer(),      // tira a última edição (se >baseline) e reexec; devolve false = no-op (piso)
     refazer: () => refazer(),        // devolve a última desfeita ao fim da lista; false = redo vazio
@@ -2544,8 +2835,8 @@ try {
     temSolido: () => { const F = neutro && neutro.F; return F ? [...F.values()].some((f) => f.solido) : false; },   // há ALGUMA face sólida?
     colisao: () => { try { return colisaoDe(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual); } catch { return null; } },   // {forma,raio,altura,base} do estado atual (a MESMA função que o arquivo salvo chama no load)
     painelColisao: () => ({ forma: $('pcolForma').textContent, raio: $('pcolR').textContent, altura: $('pcolH').textContent, base: $('pcolB').textContent, aviso: !$('pcolAviso').hidden, btSolido: !$('btSolido').hidden }),   // leitura do bloco Colisão pra a bancada afirmar
-    serializar: () => serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual, animacoesAtual),   // a STRING .js do export (do estado ATUAL, com MATERIAIS + ANIMACOES)
-    salvar: () => salvarPeca(mod.meta.nome, serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual, animacoesAtual)),   // dispara o salvar (POST → fallback download); devolve {via,...}
+    serializar: () => serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual, animacoesAtual, esqueletoAtual),   // a STRING .js do export (do estado ATUAL, com MATERIAIS + ANIMACOES + ESQUELETO)
+    salvar: () => salvarPeca(mod.meta.nome, serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual, animacoesAtual, esqueletoAtual)),   // dispara o salvar (POST → fallback download); devolve {via,...}
     ultimoDownload: () => (ultimoDownload ? { ...ultimoDownload } : null),            // o último download disparado pelo fallback (null = nenhum ainda)
     nomePeca: () => mod.meta.nome,                                                    // o nome do arquivo que o salvar usa
     /* ---- PASSO 11c: pincel macio — pintar arrastando (a bancada mede/afirma) ---- */
@@ -2624,6 +2915,44 @@ try {
         animar(T, L);
         const i = info.indexOf(parte);
         return i >= 0 ? [...L[i].matriz] : null;
+      } catch { return null; }
+    },
+    /* ---- PASSO 14b: ESQUELETO (rigging) — o loop de rigging (a bancada dirige/mede/afirma) ---- */
+    esqueleto: () => (rigCtl ? rigCtl.esqueleto() : { ossos: [] }),                    // a seção ESQUELETO ATUAL (cópia; o que o export grava)
+    ossos: () => (rigCtl ? rigCtl.ossos() : []),                                       // [{nome,pai?,pivo?}] dos ossos (hierarquia)
+    ossoAtivo: () => (rigCtl ? rigCtl.ossoAtivo() : null),                             // o osso ATIVO (pesar/heatmap)
+    criarOsso: (nome, pai, pivo) => (rigCtl ? rigCtl.criarOsso(nome, pai, pivo) : null),   // cria {nome,pai?,pivo?} em esqueletoAtual; devolve o osso ou null
+    removerOsso: (nome) => (rigCtl ? rigCtl.removerOsso(nome) : null),                 // remove um osso (re-enraíza filhos); devolve o nome ou null
+    selecionarOsso: (nome) => { if (rigCtl) rigCtl.selecionarOsso(nome); },            // ativa um osso
+    setPeso: (v) => { if (rigCtl) rigCtl.setPeso(v); return rigCtl ? rigCtl.peso() : null; },   // ajusta o peso do slider (0..1)
+    peso: () => (rigCtl ? rigCtl.peso() : null),                                       // o peso atual do slider
+    pesar: () => (rigCtl ? rigCtl.pesar() : null),                                     // grava ['pesar',{osso,faces,peso}]; devolve o passo (ou null se guarda/no-op)
+    pesoDaFace: (fid, osso) => (rigCtl ? rigCtl.pesoDaFace(fid, osso) : null),         // peso NORMALIZADO médio de um osso numa face (o mesmo do heatmap)
+    esqueletoErro: () => (rigCtl ? rigCtl.erro() : null),                              // a mensagem do resolverEsqueleto que GRITOU (null = válido)
+    esqueletoBruto: (e) => (rigCtl ? rigCtl.esqueletoBruto(e) : null),                 // injeta uma seção ESQUELETO crua (ciclo/pai) → devolve o erro na UI (sem quebrar)
+    centroideFacesSel: () => (rigCtl ? rigCtl.centroideFacesSel() : null),             // centroide das faces selecionadas (pro pivô)
+    alvosTrilha: () => ($('anParteTrilha') ? [...$('anParteTrilha').options].map((o) => o.value).filter((v) => v) : []),   // os alvos do dropdown de trilha (partes + ossos)
+    painelRig: () => ({                                                               // leitura do painel do esqueleto/peso pra a bancada afirmar
+      blocoEsqueleto: $('blocoEsqueleto') ? !$('blocoEsqueleto').hidden : false,
+      blocoPeso: $('blocoPeso') ? !$('blocoPeso').hidden : false,
+      nOssos: $('rgLista') ? $('rgLista').querySelectorAll('.parteChip').length : 0,
+      ossoAtivo: $('rgOssoAtivo') ? $('rgOssoAtivo').textContent : '',
+      btPesar: $('rgPesar') ? !$('rgPesar').disabled : false,
+      erro: $('rgErro') ? (!$('rgErro').hidden ? $('rgErro').textContent : '') : '',
+      paiOpts: $('rgPai') ? [...$('rgPai').options].map((o) => o.value) : [],
+    }),
+    /* as MATRIZES de OSSO (o skinning) em T — monta o preview do rascunho como o reexec
+       (executar fia ESQUELETO) e devolve L.ossos do 1º lote skinado. Prova página==Node +
+       determinismo do skinning; a bancada aplica LBS pra a posição de um vértice skinado. */
+    matrizOssoEmT: (T) => {
+      try {
+        const e = esqOuNull();
+        const o = executar(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, { TS, tex, geo, m4 }, materiaisAtual, animacoesAtual, e);
+        if (typeof o.animar !== 'function') return null;
+        const L = o.lotes.map((l) => ({ matriz: l.matriz, ossos: l.ossos ? new Float32Array(l.ossos) : null }));
+        o.animar(T, L);
+        const i = L.findIndex((l) => l.ossos);
+        return i >= 0 ? Array.from(L[i].ossos) : null;
       } catch { return null; }
     },
   };
