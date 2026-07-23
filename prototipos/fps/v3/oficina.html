@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. Passo 6: GIZMO DE EIXOS + PAINEL. Com um vértice selecionado, 3 setas (X vermelho, Y verde, Z azul) de tamanho constante na tela (comprimento dist/8 em mundo) saem do vértice no overlay 2D; o hit-test do pointerdown testa as setas ANTES do vértice — acertou uma seta (distância ao segmento base→ponta, com zona morta na base) -> arrasto TRAVADO no eixo, senão o vértice (arrasto livre do passo 4), senão câmera. O arrasto travado reusa a MESMA máquina (arrasto/malhaCtl/reexec): avanço = (mouse·dir)/compr unidades no eixo (fórmula do doc), d = eixo·avanço, gravado como um moveV normal — então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem. Seta com compr<12px/un (aponta ~pra câmera) fica apagada e não arrasta. O painel #props deixa de ser placeholder: mostra o vértice selecionado (id + x,y,z) e a caixa do objeto (largura/altura/profundidade), de LEITURA durante o arrasto; digitar um valor exato vira um moveV (d = alvo − atual). Passo 7: EXTRUDAR UMA FACE. Além do vértice, dá pra selecionar uma FACE (clicar no corpo dela — a da FRENTE por profundidade do centroide; point-in-polygon nos cantos PROJETADOS; a seleção é ADIADA pro pointerup pra que orbitar pelo corpo do objeto não deselecione o que estava ativo). A face selecionada destaca no overlay e ganha UM handle na NORMAL saindo do centroide (mesmo estilo/projeção do gizmo do passo 6, TRAVADO quando a normal aponta ~pra câmera). Arrastar o handle EXTRUDA: avanço = (mouse·dir)/compr na normal (a mesma fórmula travada do passo 6), preview AO VIVO re-executando a lista com um ['extruda',{face,dist}] TENTATIVO no fim, e ao soltar (passou do LIMIAR_PX) GRAVA ['extruda',{face,dist}] e limpa o redo — a op do núcleo (motor/oficina.js) já existe e está provada, e o anel novo nasce nos ids do BLOCO do passo. Reusa a MESMA máquina arrasto/soltar/reexec, então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem sem código novo. Seleção é vértice XOR face. Tecla E é o atalho opcional do mesmo extrude. Passo 8: MESCLAR + ÍMÃ. MULTI-seleção de vértice — Shift+clique adiciona/remove um vértice (toggle ADIADO pro pointerup como o clique de face; um Shift+arrasto longo pana), clique normal reseta pra um só; o ATIVO é o último clicado e é ele que dirige o gizmo/painel (`selecionado` == o ativo, então com 1 vértice tudo é idêntico aos passos 6/7; `selVertices` guarda a lista ordenada, fonte única em `definirSel`). Selecionar face limpa a multi-seleção e vice-versa (XOR). Tecla M (ou o botão do painel) com 2+ selecionados grava ['mescla',{de:[não-ativos],para:ATIVO}] no fim de PASSOS, reexec, limpa o redo, e a seleção vira só o `para` (os `de` somem) — a op do NÚCLEO (motor/oficina.js) já existe e está provada, NÃO se toca nela. ÍMÃ: com Ctrl (ou ⌘) segurado DURANTE o arrasto LIVRE de um vértice, se o cursor cai a ≤IMA_RAIO px de OUTRO vértice projetado, o arrastado COLA na posição EXATA (em mundo) do alvo (o moveV gravado tem d = posAlvo − posOriginal); sem Ctrl, arrasto livre normal. Reusa a MESMA máquina arrasto/mover/soltar (um ramo `if (ctrl && alvo) d = alvo−orig` no mover livre), então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem — inclusive um Ctrl+Z no meio de um arrasto-com-ímã (Ctrl embaixo) é ignorado pela guarda `if (arrasto) return` do desfazer. Passo 9: PINTAR FACES. ESPELHA o passo 8, mas pra FACE: MULTI-seleção de face via fonte única `definirSelFace` (mantém `faceSelecionada`=ativo e `selFaces` em sincronia — com 1 id idêntico ao passo 7, não regride), Shift+clique numa face com toggle ADIADO pro pointerup (`cliqueSelFace`, testado DEPOIS do vértice — o alvo-ponto vence a área, D1), clique normal reseta pra uma só; seleção é VÉRTICE xor FACE nos dois sentidos. O painel #props ganha um <input type=color> (+presets) que aparece com face(s) selecionada(s) e mostra a cor EFETIVA da ATIVA (read-back, neutro ou COR_PADRAO); o `change` (confirmar uma cor → 1 passo por cor) e cada preset gravam ['pincel',{modo:'face',faces:[ordenadas],cor}] no fim de PASSOS, reexec (o adaptarV3 já monta o SWATCH — cor por face —, o reexec recarrega a textura), limpam o redo. Desfazível (Ctrl+Z). GUARDA: no-op com `arrasto` em curso (mexer em PASSOS com uma edição em voo tangleria a lista — mesma classe da roda/Ctrl+Z dos passos 4/5) e no-op quando TODAS as faces já são efetivamente a cor escolhida (null conta como COR_PADRAO — nada de passo fantasma sub-visual, D3). NÃO toca em motor/oficina.js (`pincel`/`adaptarV3` já existem/provados). -->
+<!-- oficina.html — a INTERFACE da Oficina (passos 2-4, D-73): esqueleto de painéis (cena no centro, propriedades à direita, modos no topo, status embaixo) + a CÂMERA DO EDITOR (órbita/pan/zoom) de CURSOR LIVRE, dirigindo o MESMO motor do jogo por setCam. Passo 3: a MALHA editável (vértices + arestas das faces) do NEUTRO desenhada por cima da cena num canvas 2D sobreposto (pointer-events:none), projetada quadro a quadro pelo visor.projetar em sincronia com a câmera — o draw do motor é gl.TRIANGLES fixo, não desenha ponto/linha, então ponto/aresta vivem no 2D. Passo 4 (o MILESTONE): clicar num vértice e ARRASTÁ-LO, gravado como um moveV. O overlay segue pointer-events:none (só visual); o input fica no #c. No pointerdown, ANTES de decidir câmera, testa o cursor contra os vértices PROJETADOS (o mesmo estado do overlay): acertou -> arrasto de vértice (mapeado 2D->3D no plano da câmera, na profundidade do próprio vértice), re-executando a lista AO VIVO com um moveV tentativo; errou -> câmera IDÊNTICA ao passo 2. Ao soltar, se passou do limiar, grava PASSOS.push(['moveV',...]) — a lista editada re-executada refaz o objeto com o vértice movido (ciclo fechado, determinístico). Passo 5: DESFAZER e REFAZER em cima disso — como toda edição é uma operação no FIM de PASSOS, desfazer (Ctrl+Z) tira a última e re-executa, refazer (Ctrl+Y / Ctrl+Shift+Z) põe de volta; um baseline trava as operações vindas do ARQUIVO (desfazer nunca desmonta a peça, só a sessão), e uma edição nova limpa a pilha de refazer. Passo 6: GIZMO DE EIXOS + PAINEL. Com um vértice selecionado, 3 setas (X vermelho, Y verde, Z azul) de tamanho constante na tela (comprimento dist/8 em mundo) saem do vértice no overlay 2D; o hit-test do pointerdown testa as setas ANTES do vértice — acertou uma seta (distância ao segmento base→ponta, com zona morta na base) -> arrasto TRAVADO no eixo, senão o vértice (arrasto livre do passo 4), senão câmera. O arrasto travado reusa a MESMA máquina (arrasto/malhaCtl/reexec): avanço = (mouse·dir)/compr unidades no eixo (fórmula do doc), d = eixo·avanço, gravado como um moveV normal — então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem. Seta com compr<12px/un (aponta ~pra câmera) fica apagada e não arrasta. O painel #props deixa de ser placeholder: mostra o vértice selecionado (id + x,y,z) e a caixa do objeto (largura/altura/profundidade), de LEITURA durante o arrasto; digitar um valor exato vira um moveV (d = alvo − atual). Passo 7: EXTRUDAR UMA FACE. Além do vértice, dá pra selecionar uma FACE (clicar no corpo dela — a da FRENTE por profundidade do centroide; point-in-polygon nos cantos PROJETADOS; a seleção é ADIADA pro pointerup pra que orbitar pelo corpo do objeto não deselecione o que estava ativo). A face selecionada destaca no overlay e ganha UM handle na NORMAL saindo do centroide (mesmo estilo/projeção do gizmo do passo 6, TRAVADO quando a normal aponta ~pra câmera). Arrastar o handle EXTRUDA: avanço = (mouse·dir)/compr na normal (a mesma fórmula travada do passo 6), preview AO VIVO re-executando a lista com um ['extruda',{face,dist}] TENTATIVO no fim, e ao soltar (passou do LIMIAR_PX) GRAVA ['extruda',{face,dist}] e limpa o redo — a op do núcleo (motor/oficina.js) já existe e está provada, e o anel novo nasce nos ids do BLOCO do passo. Reusa a MESMA máquina arrasto/soltar/reexec, então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem sem código novo. Seleção é vértice XOR face. Tecla E é o atalho opcional do mesmo extrude. Passo 8: MESCLAR + ÍMÃ. MULTI-seleção de vértice — Shift+clique adiciona/remove um vértice (toggle ADIADO pro pointerup como o clique de face; um Shift+arrasto longo pana), clique normal reseta pra um só; o ATIVO é o último clicado e é ele que dirige o gizmo/painel (`selecionado` == o ativo, então com 1 vértice tudo é idêntico aos passos 6/7; `selVertices` guarda a lista ordenada, fonte única em `definirSel`). Selecionar face limpa a multi-seleção e vice-versa (XOR). Tecla M (ou o botão do painel) com 2+ selecionados grava ['mescla',{de:[não-ativos],para:ATIVO}] no fim de PASSOS, reexec, limpa o redo, e a seleção vira só o `para` (os `de` somem) — a op do NÚCLEO (motor/oficina.js) já existe e está provada, NÃO se toca nela. ÍMÃ: com Ctrl (ou ⌘) segurado DURANTE o arrasto LIVRE de um vértice, se o cursor cai a ≤IMA_RAIO px de OUTRO vértice projetado, o arrastado COLA na posição EXATA (em mundo) do alvo (o moveV gravado tem d = posAlvo − posOriginal); sem Ctrl, arrasto livre normal. Reusa a MESMA máquina arrasto/mover/soltar (um ramo `if (ctrl && alvo) d = alvo−orig` no mover livre), então as guardas de input-no-arrasto (roda do passo 4, Ctrl+Z do passo 5) já cobrem — inclusive um Ctrl+Z no meio de um arrasto-com-ímã (Ctrl embaixo) é ignorado pela guarda `if (arrasto) return` do desfazer. Passo 9: PINTAR FACES. ESPELHA o passo 8, mas pra FACE: MULTI-seleção de face via fonte única `definirSelFace` (mantém `faceSelecionada`=ativo e `selFaces` em sincronia — com 1 id idêntico ao passo 7, não regride), Shift+clique numa face com toggle ADIADO pro pointerup (`cliqueSelFace`, testado DEPOIS do vértice — o alvo-ponto vence a área, D1), clique normal reseta pra uma só; seleção é VÉRTICE xor FACE nos dois sentidos. O painel #props ganha um <input type=color> (+presets) que aparece com face(s) selecionada(s) e mostra a cor EFETIVA da ATIVA (read-back, neutro ou COR_PADRAO); o `change` (confirmar uma cor → 1 passo por cor) e cada preset gravam ['pincel',{modo:'face',faces:[ordenadas],cor}] no fim de PASSOS, reexec (o adaptarV3 já monta o SWATCH — cor por face —, o reexec recarrega a textura), limpam o redo. Desfazível (Ctrl+Z). GUARDA: no-op com `arrasto` em curso (mexer em PASSOS com uma edição em voo tangleria a lista — mesma classe da roda/Ctrl+Z dos passos 4/5) e no-op quando TODAS as faces já são efetivamente a cor escolhida (null conta como COR_PADRAO — nada de passo fantasma sub-visual, D3). NÃO toca em motor/oficina.js (`pincel`/`adaptarV3` já existem/provados). Passo 11c: PINTAR ARRASTANDO (o pincel MACIO). Um MODO PINCEL (chip "Pincel" na barra + tecla B; aceso muda o cursor pra mira e abre o bloco do painel) que, LIGADO, faz um arrasto primário na SUPERFÍCIE PINTAR em vez de orbitar/selecionar; DESLIGADO, tudo segue como antes (vértice/face/gizmo/câmera intactos). Ajustes no painel: cor (reusa o <input type=color>+presets do passo 9) + raio e dureza (sliders) viram os cor/raio/dureza da op. Pintar = RAYCAST do cursor (origem camPos(); direção = base()+FOVY+aspect+LENTE, o inverso EXATO do visor.projetar, senão a tinta cai deslocada) → a face da FRENTE (hitFace do passo 7) → interseção com o PLANO dela → ponto de MUNDO → {f,a,b} FACE-LOCAL pela inversão do atlas (a=(u·W−ilha.x)/ilha.w). Os {f,a,b} ACUMULAM numa pincelada (amostra por DISTÂNCIA, um dab a cada ~6px), com PREVIEW ao vivo (reexec com a op tentativa no fim); ao SOLTAR grava ['pincel',{modo:'livre',cor,raio,dureza,pontos:[{f,a,b}]}] no fim de PASSOS e limpa o redo — a op e o adaptarV3 (atlas) do NÚCLEO já existem/provados (11a/11b), NÃO se toca. O atlas (mapa superfície→texel) sai do adaptarV3 no reexec/carregar. Reusa a MESMA máquina arrasto/soltar/reexec (arrasto.pincel), então as guardas de input-no-arrasto (roda, Ctrl+Z) já cobrem; desfazível (é 1 passo). Guardas: pintura fora do modo pincel não acontece; e no modo pincel um arrasto no VAZIO (sem face) NÃO pinta (orbita, não grava op vazia). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
@@ -94,6 +94,13 @@
   #props .sw { width: 22px; height: 22px; border-radius: 5px; border: 1px solid #0006; padding: 0;
     background: var(--sw); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
   #props .sw:hover { box-shadow: 0 0 0 2px var(--accent); }
+  /* PASSO 11c: sliders de RAIO e DUREZA do pincel macio (bloco #blocoPincel). O
+     seletor de cor + presets reusa as classes do passo 9 (input[type=color]/.sw). */
+  #props input[type=range] { flex: 1; min-width: 0; height: 4px; -webkit-appearance: none; appearance: none;
+    background: var(--line); border-radius: 3px; cursor: pointer; accent-color: var(--accent); }
+  #props input[type=range]:focus { outline: none; }
+  #props .campo .rk { width: 46px; flex: none; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+  #props .campo .rv { width: 32px; flex: none; text-align: right; color: var(--hud); font-size: 11px; font-variant-numeric: tabular-nums; }
   #props .dims { display: flex; gap: 8px; }
   #props .dim { flex: 1; text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 7px 4px;
     background: #0c0f1655; }
@@ -137,6 +144,10 @@
     <span class="chip">Desenho</span><span class="chip on">Objeto</span><span class="chip">Som</span></div>
   <div class="grupo"><span class="rot">espaço</span>
     <span class="chip on">Modelar</span><span class="chip">Material</span><span class="chip">Animação</span></div>
+  <!-- PASSO 11c: PINCEL (pintura) — liga/desliga o pintar-arrastando na superfície.
+       A tecla B faz o mesmo. Aceso = pintando; apagado = tudo como antes. -->
+  <div class="grupo"><span class="rot">ferramenta</span>
+    <span class="chip" id="chipPincel" title="pintar arrastando na superfície (tecla B)">Pincel · B</span></div>
   <!-- PASSO 10: SALVAR — exporta o objeto como .js (serializado do estado atual) e
        POSTa pro servidor de dev (grava em pecas/); sem servidor, baixa o .js. -->
   <div class="dir">
@@ -174,6 +185,24 @@
     <div class="dica" id="pcDica">escolha uma cor — pinta as faces selecionadas</div>
   </section>
 
+  <!-- PASSO 11c: PINCEL MACIO — aparece só com o modo pincel LIGADO. Cor (reusa o
+       <input type=color>+presets do passo 9) + raio e dureza (sliders). Os valores
+       viram os cor/raio/dureza da op ['pincel',{modo:'livre',...}] gravada ao pintar. -->
+  <section class="bloco" id="blocoPincel" hidden>
+    <div class="rotulo">Pincel macio <span class="badge">B</span></div>
+    <label class="campo"><input id="pkCor" type="color" value="#7a9c3f" aria-label="cor do pincel"></label>
+    <div class="presets" id="pkPresets">
+      <button type="button" class="sw" data-cor="#6b4a2f" style="--sw:#6b4a2f" title="casca #6b4a2f"></button>
+      <button type="button" class="sw" data-cor="#c39a5e" style="--sw:#c39a5e" title="madeira clara #c39a5e"></button>
+      <button type="button" class="sw" data-cor="#3a2a1c" style="--sw:#3a2a1c" title="sombra #3a2a1c"></button>
+      <button type="button" class="sw" data-cor="#7a9c3f" style="--sw:#7a9c3f" title="folha #7a9c3f"></button>
+      <button type="button" class="sw" data-cor="#1030ff" style="--sw:#1030ff" title="azul #1030ff"></button>
+    </div>
+    <label class="campo"><span class="rk">raio</span><input id="pkRaio" type="range" min="0.05" max="0.6" step="0.01" value="0.22"><b class="rv" id="pkRaioV">0.22</b></label>
+    <label class="campo"><span class="rk">dureza</span><input id="pkDureza" type="range" min="0" max="1" step="0.01" value="0.5"><b class="rv" id="pkDurezaV">0.50</b></label>
+    <div class="dica">arraste na superfície pra pintar · Ctrl+Z desfaz a pincelada</div>
+  </section>
+
   <section class="bloco">
     <div class="rotulo">Caixa do objeto</div>
     <div class="dims">
@@ -205,6 +234,7 @@
 <div id="ajuda">
   <b>clique num vértice</b> pega e arrasta · <b>setas X/Y/Z</b> travam no eixo · <b>clique numa face</b> seleciona · <b>arraste a seta da normal</b> (ou <b>E</b>) extruda<br>
   <b>Shift+clique</b> soma vértices ou faces · <b>M</b> mescla no ativo · <b>cor</b> no painel pinta as faces · <b>Ctrl</b> ao arrastar cola no vizinho (ímã)<br>
+  <b>B / Pincel</b> liga a pintura: arraste na superfície pra pincelar (raio/dureza/cor no painel)<br>
   <b>arrastar vazio</b> girar · <b>direito / shift no vazio</b> mover · <b>roda</b> zoom · <b>toque:</b> 1 dedo gira · 2 dedos pinça · <b>Ctrl+Z / Ctrl+Y</b> desfaz/refaz
 </div>
 
@@ -227,7 +257,7 @@
    "abrir solta o cursor travado, senão não dá pra clicar em nada") — NENHUM
    requestPointerLock; os passos futuros clicam em vértice/face. */
 import { criarVisor } from './motor/render.js';
-import { nucleo, executar, neutroCanonico, colisaoDe } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números); passo 4: re-executa a lista ao vivo (executar/nucleo) e compara canônico; passo 10: colisaoDe (colisão sugerida no painel + a CHAMADA gravada no export)
+import { nucleo, executar, neutroCanonico, colisaoDe, adaptarV3 } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números); passo 4: re-executa a lista ao vivo (executar/nucleo) e compara canônico; passo 10: colisaoDe (colisão sugerida no painel + a CHAMADA gravada no export); passo 11c: adaptarV3 pro ATLAS (mapa superfície→texel do raycast do pincel)
 import { m4 } from './motor/mat4.js';
 import * as tex from './motor/tex.js';
 import * as geo from './motor/geo.js';
@@ -332,6 +362,26 @@ let cliqueSelFace = null;     // PASSO 9: {fid,x0,y0,pointerId} de um Shift+cliq
 let imaAlvoAtual = null;      // PASSO 8: durante um arrasto LIVRE com Ctrl, o id do vértice-ALVO do ímã sob o cursor (null = sem ímã / sem alvo no raio). Lido pelo overlay (destaque) e pelo gancho imaAlvo().
 let malhaCtl = null;
 
+/* PASSO 11c — MODO PINCEL (pintura). Liga/desliga o pintar-arrastando na
+   superfície (chip "Pincel" + tecla B). Estado no escopo do módulo (o pointerdown,
+   o keydown de B e os ganchos de __oficina precisam alcançar):
+     pincelLigado — o modo está aceso? Com ele LIGADO, um arrasto PRIMÁRIO na
+                    superfície PINTA (reusa a máquina arrasto/soltar/reexec); com
+                    ele apagado, tudo funciona como antes (vértice/face/gizmo/câmera
+                    intactos);
+     pincel       — os ajustes do painel (cor + raio + dureza) que viram os campos
+                    da op ['pincel',{modo:'livre',...}] gravada ao pintar;
+     lenteAtual   — o deslocamento de LENTE atual (espelha o setLente do motor); o
+                    raycast do cursor PRECISA dele pra desfazer a projeção
+                    assimétrica, senão a tinta cai deslocada do cursor;
+     atlasAtual   — o mapa superfície→atlas por face (do adaptarV3, mantido fresco
+                    no reexec); o raycast converte o ponto de mundo em {a,b}. */
+let pincelLigado = false;
+let pincel = { cor: '#7a9c3f', raio: 0.22, dureza: 0.5 };
+let lenteAtual = [0, 0];
+let atlasAtual = null;
+const AMOSTRA_PX = 6;   // amostragem por DISTÂNCIA na tela: só um dab novo a cada ~isto de px arrastado (não gera milhares de pontos num arrasto)
+
 /* PASSO 5 — DESFAZER / REFAZER das edições DESTA sessão. O objeto É a lista
    (passo 4): toda edição é uma operação no FIM de PASSOS, então desfazer = tirar
    a última e re-executar; refazer = pôr de volta. Estado no escopo do módulo (o
@@ -424,6 +474,99 @@ function pontoEmPoligono(x, y, poly) {
     if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) dentro = !dentro;
   }
   return dentro;
+}
+
+/* ---- PASSO 11c: PINCEL MACIO — config do painel + RAYCAST do cursor ----------
+   O motor da op ['pincel',{modo:'livre',...}] e o ATLAS (adaptarV3) já existem e
+   estão provados (11a/11b, motor/oficina.js — NÃO se toca). Aqui é só a INTERFACE:
+   os ajustes do painel e a conversão do GESTO (cursor na tela) em {f,a,b} FACE-LOCAL
+   pra GRAVAR a op certa a partir do arrasto. */
+function pincelCfg() { return { cor: pincel.cor, raio: pincel.raio, dureza: pincel.dureza }; }
+function setPincel(o) {
+  if (!o) return;
+  if (o.cor != null) pincel.cor = String(o.cor).toLowerCase();
+  if (o.raio != null && Number.isFinite(+o.raio)) pincel.raio = Math.max(0.02, Math.min(1, +o.raio));
+  if (o.dureza != null && Number.isFinite(+o.dureza)) pincel.dureza = Math.max(0, Math.min(1, +o.dureza));
+  atualizarPainelPincel();
+}
+/* reflete o estado do pincel nos widgets (sem sobrescrever o que está em foco, como
+   os campos XYZ do passo 6). */
+function atualizarPainelPincel() {
+  const c = $('pkCor'); if (c && document.activeElement !== c) c.value = pincel.cor;
+  const r = $('pkRaio'); if (r && document.activeElement !== r) r.value = String(pincel.raio);
+  const d = $('pkDureza'); if (d && document.activeElement !== d) d.value = String(pincel.dureza);
+  const rv = $('pkRaioV'); if (rv) rv.textContent = pincel.raio.toFixed(2);
+  const dv = $('pkDurezaV'); if (dv) dv.textContent = pincel.dureza.toFixed(2);
+}
+/* LIGA/DESLIGA o modo pincel: mostra o estado (chip aceso + cursor de mira + o bloco
+   do painel). Ligado, o arrasto primário na superfície pinta. */
+function setModoPincel(on) {
+  pincelLigado = !!on;
+  const chip = $('chipPincel'); if (chip) chip.classList.toggle('on', pincelLigado);
+  const bloco = $('blocoPincel'); if (bloco) bloco.hidden = !pincelLigado;
+  canvas.style.cursor = pincelLigado ? 'crosshair' : '';   // sinal visível do modo (a CSS volta pro grab quando apaga)
+  atualizarPainelPincel();
+}
+
+/* aspect EXATO da projeção do motor (IW/IH — a MESMA que o m4.persp usa; NÃO o
+   client, que difere pelo arredondamento do IH). visor.info() = "IW×IH"; fallback
+   pro client se o formato mudar (aí o erro é sub-px). */
+function aspectMotor() {
+  const cw = canvas.clientWidth || 1, ch = canvas.clientHeight || 1;
+  try { const m = String(visor.info()).match(/(\d+)\D+(\d+)/); if (m) return (+m[1]) / (+m[2]); } catch { /* visor ainda não pronto */ }
+  return cw / ch;
+}
+/* RAYCAST do cursor: origem = câmera (camPos()); direção = a projeção do motor
+   INVERTIDA. ndc do cursor → direção em VISTA desfazendo FOVY, aspect e a LENTE
+   assimétrica (o motor faz ndc.x = (t/asp)·xv/d − lente[0]; então xv/d =
+   (ndc.x+lente[0])·asp/t), e daí pra MUNDO pela base da câmera (dir=direita,
+   cima=cima, f=frente). É o inverso EXATO do visor.projetar (a mesma matriz), então
+   o ponto achado projeta de volta EM CIMA do cursor. */
+function raioDoCursor(cx, cy) {
+  const o = camPos(), { f, dir, cima } = base();
+  const cw = canvas.clientWidth || 1, ch = canvas.clientHeight || 1;
+  const ndcx = (cx / cw) * 2 - 1, ndcy = 1 - (cy / ch) * 2;
+  const th = Math.tan(FOVY / 2), asp = aspectMotor();
+  const vx = (ndcx + lenteAtual[0]) * asp * th;   // desfaz a lente em x (pj[8] += lente[0])
+  const vy = (ndcy + lenteAtual[1]) * th;         // e em y (pj[9] += lente[1])
+  const d = [dir[0] * vx + cima[0] * vy + f[0], dir[1] * vx + cima[1] * vy + f[1], dir[2] * vx + cima[2] * vy + f[2]];
+  return { o, d };
+}
+/* intersecta o raio com o PLANO da face (ponto = 1º canto da face; normal = a normal
+   Newell da face, a MESMA do núcleo) → ponto de MUNDO na superfície. null se o raio é
+   paralelo ao plano ou o ponto cai atrás da câmera. */
+function pontoNoPlanoDaFace(fid, cx, cy) {
+  if (!neutro) return null;
+  const face = neutro.F.get(fid); if (!face || !face.vs.length) return null;
+  const P0 = neutro.V.get(face.vs[0]); if (!P0) return null;
+  const N = normalDaFaceMundo(neutro.V, face.vs);
+  const { o, d } = raioDoCursor(cx, cy);
+  const den = d[0] * N[0] + d[1] * N[1] + d[2] * N[2];
+  if (Math.abs(den) < 1e-9) return null;   // raio paralelo à face
+  const t = ((P0[0] - o[0]) * N[0] + (P0[1] - o[1]) * N[1] + (P0[2] - o[2]) * N[2]) / den;
+  if (t <= 0) return null;                 // atrás da câmera
+  return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+}
+/* ponto de MUNDO na face → {f,a,b} FACE-LOCAL, pela inversão do atlas que o 11b
+   documentou: [u,v]=projeta(p); a=(u·W − ilha.x)/ilha.w; b=(v·H − ilha.y)/ilha.h.
+   Devolve o s,t da projeção em [0,1] (o mesmo que o dab do núcleo ancora). null se o
+   atlas ainda não foi montado / face sem ilha. */
+function abNaFace(fid, pMundo) {
+  if (!atlasAtual || !pMundo) return null;
+  const daF = atlasAtual.daFace(fid); if (!daF) return null;
+  const uv = daF.projeta(pMundo), il = daF.ilha;
+  return { f: fid, a: (uv[0] * atlasAtual.W - il.x) / il.w, b: (uv[1] * atlasAtual.H - il.y) / il.h };
+}
+/* raycast COMPLETO do cursor: acha a face da FRENTE (hitFace, o MESMO do passo 7) e
+   o ponto de mundo no plano dela → {f, pMundo, ab}. null se não há face sob o cursor
+   (vazio). Fonte única do 1º dab e dos ganchos de verificação. */
+function pincelNoPonto(cx, cy) {
+  if (!malhaCtl) return null;
+  const fid = malhaCtl.hitFace(cx, cy);
+  if (fid == null) return null;
+  const pMundo = pontoNoPlanoDaFace(fid, cx, cy);
+  const ab = abNaFace(fid, pMundo);
+  return ab ? { f: fid, pMundo, ab } : null;
 }
 
 /* ---- PASSO 10: EXPORTAR o objeto como CÓDIGO (serialização) + SALVAR --------
@@ -558,7 +701,23 @@ canvas.addEventListener('pointerdown', (e) => {
     else { const fSel = malhaCtl.hitFace(e.clientX, e.clientY); if (fSel != null) cliqueSelFace = { fid: fSel, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId }; }
   }
   const primario = (e.pointerType === 'mouse') ? (e.button === 0 && !e.shiftKey) : true;
-  if (!arrasto && pointers.size === 1 && primario && malhaCtl) {
+  /* PASSO 11c — MODO PINCEL (pintura): com o modo LIGADO, um gesto PRIMÁRIO de 1
+     ponteiro na SUPERFÍCIE começa uma PINCELADA (não câmera/seleção). Reusa a MESMA
+     máquina arrasto/soltar/reexec — as guardas de input-no-arrasto (roda do passo 4,
+     Ctrl+Z do passo 5) já cobrem de graça. Sem face sob o cursor (VAZIO), NÃO pinta:
+     cai no setup de câmera embaixo e ORBITA (nunca grava op vazia). O bloco de
+     vértice/gizmo/face abaixo fica TRAVADO no modo pincel (só pinta ou orbita). */
+  if (pincelLigado && !arrasto && pointers.size === 1 && primario && malhaCtl) {
+    const p = malhaCtl.iniciarPincel(e.clientX, e.clientY, e.pointerId);
+    if (p) {
+      arrasto = p;
+      canvas.classList.add('arrastando');
+      e.preventDefault();
+      return;   // pincelada iniciada na superfície: NÃO é câmera
+    }
+    // vazio: sem face sob o cursor — cai pro setup de câmera embaixo (orbita)
+  }
+  if (!arrasto && pointers.size === 1 && primario && malhaCtl && !pincelLigado) {
     /* PASSO 6 — ORDEM do hit-test (D1: o vértice clicado DIRETO vence a seta que
        passa por cima dele). 1) um vértice OUTRO que o selecionado, sob o cursor,
        vence o gizmo → arrasto LIVRE (você mirou o ponto, não o cabo); 2) senão a
@@ -689,6 +848,21 @@ canvas.addEventListener('wheel', (e) => {
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());   // senão o menu do botão direito atrapalha o pan
 
+/* PASSO 11c — LIGA o modo pelo chip da barra e pela tecla B; e os ajustes do painel
+   (cor + presets + raio + dureza) alimentam o pincel. Módulo-escopo: só dependem de
+   setModoPincel/setPincel (não da máquina da malha), então funcionam assim que a
+   página carrega. Pintar em si precisa da malha (guardado no pointerdown). */
+{ const chip = $('chipPincel'); if (chip) chip.addEventListener('click', () => setModoPincel(!pincelLigado)); }
+addEventListener('keydown', (e) => {
+  if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName)) return;   // não alterna com o foco num campo
+  if ((e.key === 'b' || e.key === 'B') && !e.ctrlKey && !e.metaKey && !e.altKey) { if (arrasto) return; setModoPincel(!pincelLigado); }   // guarda: não vira o modo no meio de um arrasto
+});
+{ const c = $('pkCor'); if (c) c.addEventListener('input', () => setPincel({ cor: c.value })); }
+{ const pr = $('pkPresets'); if (pr) pr.addEventListener('click', (e) => { const b = e.target.closest('.sw'); if (!b) return; const cor = b.getAttribute('data-cor'); const c = $('pkCor'); if (c) c.value = cor; setPincel({ cor }); }); }
+{ const r = $('pkRaio'); if (r) r.addEventListener('input', () => setPincel({ raio: parseFloat(r.value) })); }
+{ const d = $('pkDureza'); if (d) d.addEventListener('input', () => setPincel({ dureza: parseFloat(d.value) })); }
+atualizarPainelPincel();   // valores iniciais dos sliders no painel
+
 /* ---- carrega a peça e roda o motor --------------------------------------- */
 let visor;
 try {
@@ -734,7 +908,9 @@ try {
       visor.carregar(executar(passos, PARAMS, TOPO, ctxMotor));
       const r = nucleo(passos, PARAMS, TOPO);
       neutro = { V: r.V, F: r.F };
+      atlasAtual = adaptarV3(r, ctxMotor).atlas;   // PASSO 11c: o mapa superfície→{u,v} do atlas por face, mantido FRESCO pro raycast do pincel (a geometria mudou → o atlas também). A peça é pequena; o adaptador é o MESMO do render (motor/oficina.js, provado).
     };
+    atlasAtual = adaptarV3(neutro, ctxMotor).atlas;   // PASSO 11c: atlas INICIAL (antes de qualquer edição), pro raycast do pincel já valer no 1º gesto
 
     /* ---- PASSO 6: PAINEL LATERAL (#props) — dá função ao placeholder da direita.
        Mostra o VÉRTICE selecionado (id + x,y,z) e a CAIXA do objeto (largura/
@@ -1153,6 +1329,29 @@ try {
         return { pointerId, face: h.face, extruda: true, normal: h.normal.slice(), dir: h.dir.slice(), compr: h.compr, x0: cx, y0: cy, avanco: 0, dist: 0 };
       },
 
+      /* ---- PASSO 11c: PINCEL MACIO (pintar arrastando na superfície) ------------ */
+      /* a op TENTATIVA/gravada a partir dos dabs acumulados na pincelada. Ordem dos
+         `pontos` = ordem de PINTURA (o núcleo compõe o mais novo por cima). Pontos de
+         faces DIFERENTES convivem: o núcleo já separa por face (cada {f,a,b} num dab
+         da SUA face), então um arrasto que atravessa duas faces grava certo. */
+      opPincel(arr) {
+        return ['pincel', { modo: 'livre', cor: arr.cor, raio: arr.raio, dureza: arr.dureza,
+          pontos: arr.pontos.map((p) => ({ f: p.f, a: p.a, b: p.b })) }];
+      },
+      /* começa uma PINCELADA: raycast do cursor → a face da FRENTE + o 1º dab {f,a,b}.
+         Sem face sob o cursor (vazio) → null (NÃO pinta; o down cai na câmera e orbita).
+         Fixa cor/raio/dureza do INSTANTE (os ajustes do painel). Preview do 1º dab já no
+         down. Reusa a MESMA `arrasto`/`soltar` — as guardas de roda/Ctrl+Z já cobrem. */
+      iniciarPincel(cx, cy, pointerId) {
+        const hit = pincelNoPonto(cx, cy);
+        if (!hit) return null;   // vazio: sem pincelada
+        const cfg = pincelCfg();
+        const arr = { pointerId, pincel: true, cor: cfg.cor, raio: cfg.raio, dureza: cfg.dureza, pontos: [hit.ab], sx: cx, sy: cy };
+        reexec([...PASSOS, this.opPincel(arr)]);   // PREVIEW ao vivo (op tentativa; PASSOS intacto)
+        atualizarPainel();
+        return arr;
+      },
+
       /* PASSO 6 — GEOMETRIA do gizmo do vértice SELECIONADO, projetada FRESCA pelo
          motor (a mesma prova não-circular do overlay). Uma seta por eixo:
            o2   = projetar(P)                  base, no vértice;
@@ -1225,7 +1424,22 @@ try {
          Em ambos, re-executa com um moveV TENTATIVO no fim da lista (não grava). */
       mover(cx, cy, ctrl) {
         if (!arrasto) return;
-        imaAlvoAtual = null;   // PASSO 8: recomputado só no ramo LIVRE abaixo; nulo em gizmo/extrude
+        imaAlvoAtual = null;   // PASSO 8: recomputado só no ramo LIVRE abaixo; nulo em gizmo/extrude/pincel
+        if (arrasto.pincel) {
+          /* PASSO 11c — pincelada ao vivo. AMOSTRA por DISTÂNCIA na tela: só um dab
+             novo a cada ~AMOSTRA_PX px (senão o arrasto geraria milhares de pontos).
+             Cada dab é o raycast do cursor → a face da FRENTE + {a,b}; ponto no VAZIO
+             (sem face — passou de fora da malha) NÃO pinta nem reexec, só reancora a
+             amostra. Preview reexec com a op tentativa no fim (PASSOS intacto). */
+          if (Math.hypot(cx - arrasto.sx, cy - arrasto.sy) < AMOSTRA_PX) return;
+          arrasto.sx = cx; arrasto.sy = cy;
+          const hit = pincelNoPonto(cx, cy);
+          if (!hit) return;                       // fora da malha: não adiciona dab
+          arrasto.pontos.push(hit.ab);
+          reexec([...PASSOS, this.opPincel(arrasto)]);
+          atualizarPainel();
+          return;
+        }
         if (arrasto.extruda) {
           /* PASSO 7 — EXTRUDE ao vivo: avanço = (deslocamento do mouse · dir)/compr,
              a MESMA fórmula travada do passo 6 (só a componente AO LONGO da normal
@@ -1270,6 +1484,24 @@ try {
       soltar(cx, cy) {
         if (!arrasto) return { gravou: false };
         imaAlvoAtual = null;   // PASSO 8: o arrasto acabou — sem alvo de ímã (cobre todos os ramos)
+        if (arrasto.pincel) {
+          /* PASSO 11c — solta a PINCELADA: pintou ao menos 1 dab → GRAVA a op no fim
+             de PASSOS e limpa o redo (edição nova); nada pintado (clique seco / arrasto
+             que só passou no vazio) → NO-OP. Reconstrói da lista REAL (some a op
+             tentativa se não gravou). Desfazível como toda edição (é 1 passo). */
+          let gravou = false, passo = null;
+          if (arrasto.pontos.length) {
+            passo = this.opPincel(arrasto);
+            PASSOS.push(passo);
+            redo.length = 0;
+            gravou = true;
+            console.log(`oficina passo 11c (pincel livre): ['pincel',{modo:'livre', cor:'${arrasto.cor}', raio:${arrasto.raio}, dureza:${arrasto.dureza}, pontos:${arrasto.pontos.length}}] — PASSOS agora ${PASSOS.length}`);
+          }
+          reexec(PASSOS);
+          atualizarPassos();
+          atualizarPainel();
+          return { gravou, pontos: arrasto.pontos.length, passo: passo ? JSON.parse(JSON.stringify(passo)) : null };
+        }
         if (arrasto.extruda) {
           /* PASSO 7 — solta o EXTRUDE: passou do limiar (avanço em px ao longo da
              normal ≥ LIMIAR_PX) → GRAVA ['extruda',{face,dist}] no fim de PASSOS e
@@ -1556,7 +1788,8 @@ try {
     const pw = $('props').getBoundingClientRect().width;
     const th = $('modos').getBoundingClientRect().height;
     const sh = $('status').getBoundingClientRect().height;
-    visor.setLente(pw / innerWidth, (th - sh) / innerHeight);
+    lenteAtual = [pw / innerWidth, (th - sh) / innerHeight];   // PASSO 11c: espelha a lente pro raycast do cursor (o inverso da projeção precisa dela)
+    visor.setLente(lenteAtual[0], lenteAtual[1]);
   }
   ajustarLente();
   addEventListener('resize', ajustarLente);
@@ -1615,7 +1848,7 @@ try {
     gizmo: () => (malhaCtl ? malhaCtl.gizmo().map((s) => ({ k: s.k, eixo: s.eixo.slice(), cor: s.cor,
       o2: { ...s.o2 }, ponta: { ...s.ponta }, dir: s.dir.slice(), seg: s.seg, compr: s.compr, travada: s.travada })) : []),
     hitGizmo: (x, y) => { const g = malhaCtl && malhaCtl.hitGizmo(x, y); return g ? g.k : null; },   // eixo acertado ('x'/'y'/'z') ou null
-    emArrasto: () => (arrasto ? { eixo: arrasto.eixo ? arrasto.eixo.slice() : null, id: arrasto.id ?? null, extruda: !!arrasto.extruda, face: arrasto.face ?? null } : null),   // null = nenhum; .eixo!=null = TRAVADO; .extruda = EXTRUDE (passo 7)
+    emArrasto: () => (arrasto ? { eixo: arrasto.eixo ? arrasto.eixo.slice() : null, id: arrasto.id ?? null, extruda: !!arrasto.extruda, face: arrasto.face ?? null, pincel: !!arrasto.pincel, nPontos: arrasto.pontos ? arrasto.pontos.length : 0 } : null),   // null = nenhum; .eixo!=null = TRAVADO; .extruda = EXTRUDE (passo 7); .pincel = PINCELADA (passo 11c)
     selecionar: (id) => { if (malhaCtl) malhaCtl.selecionarVarios(id != null ? [id] : []); },   // seleção direta de UM vértice (limpa a face — XOR + mantém a multi-seleção em sincronia); a bancada prepara o gizmo sem simular clique
     painel: () => ({                                                  // leitura do #props pra a bancada afirmar o conteúdo
       sel: $('pvSel').textContent, x: $('pvx').value, y: $('pvy').value, z: $('pvz').value,
@@ -1662,6 +1895,17 @@ try {
     salvar: () => salvarPeca(mod.meta.nome, serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS)),   // dispara o salvar (POST → fallback download); devolve {via,...}
     ultimoDownload: () => (ultimoDownload ? { ...ultimoDownload } : null),            // o último download disparado pelo fallback (null = nenhum ainda)
     nomePeca: () => mod.meta.nome,                                                    // o nome do arquivo que o salvar usa
+    /* ---- PASSO 11c: pincel macio — pintar arrastando (a bancada mede/afirma) ---- */
+    modoPincel: () => pincelLigado,                                                   // o modo pincel está ligado?
+    ligarPincel: (b) => { setModoPincel(b); return pincelLigado; },                    // liga/desliga o modo (== clicar o chip / tecla B)
+    pincelCfg: () => pincelCfg(),                                                      // {cor,raio,dureza} atuais do painel
+    setPincel: (o) => { setPincel(o || {}); return pincelCfg(); },                     // ajusta cor/raio/dureza (== mexer nos widgets)
+    amostraPx: AMOSTRA_PX,                                                             // px de amostragem por distância (a bancada dimensiona o gesto)
+    abInMundo: (f, p) => abNaFace(f, p),                                              // ponto de MUNDO → {f,a,b} (confere a conversão superfície→face-local)
+    pincelNoPonto: (x, y) => { const h = pincelNoPonto(x, y); return h ? { f: h.f, pMundo: h.pMundo.slice(), ab: { ...h.ab } } : null; },   // raycast completo: cursor → face + ponto de mundo + {a,b}
+    raioCursor: (x, y) => { const r = raioDoCursor(x, y); return { o: r.o.slice(), d: r.d.slice() }; },   // origem+direção do raio (a matemática do raycast)
+    atlasInfo: () => (atlasAtual ? { W: atlasAtual.W, H: atlasAtual.H, cols: atlasAtual.cols, rows: atlasAtual.rows, tile: atlasAtual.tile, gutter: atlasAtual.gutter } : null),   // estrutura do atlas atual
+    painelPincel: () => ({ vis: !$('blocoPincel').hidden, chip: $('chipPincel').classList.contains('on'), cor: $('pkCor').value, raio: $('pkRaio').value, dureza: $('pkDureza').value, raioV: $('pkRaioV').textContent, durezaV: $('pkDurezaV').textContent }),   // leitura do painel/chip pra a bancada afirmar
     /* paleta REAL do render: roda executar (núcleo+adaptarV3) e lê os pixels do
        SWATCH que o motor sobe pra GPU — os hexes DISTINTOS que de fato viram
        textura. Prova que a cor pintada chega ao render (não fica só no dado). */

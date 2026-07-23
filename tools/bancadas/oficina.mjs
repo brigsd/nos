@@ -149,6 +149,7 @@ const OUT8 = resolve(REPO, 'scratchpad/passo8');
 const OUT9 = resolve(REPO, 'scratchpad/passo9');
 const OUT10 = resolve(REPO, 'scratchpad/passo10');
 const OUT11 = resolve(REPO, 'scratchpad/passo11a');
+const OUT11C = resolve(REPO, 'scratchpad/passo11c');
 const VW = 1100, VH = 620;
 const PECA = '_oficina-toco';
 const N_VERT = 19, N_FACE = 14;   // neutro do _oficina-toco (conferido headless por nucleo())
@@ -1956,9 +1957,249 @@ ok('(11b motor) órfão grita; raio maior tinge mais texels; e o dab fica PRESO 
    nOrf11.orfaos.length === 1 && nOrf11.orfaos[0].op === 'pincel' && nOrf11.orfaos[0].ref === 999 && tGde11 > tPeq11 && vizIntacta11,
    `órfão #999 (op pincel, malha do cubo intacta V=${nOrf11.V.size}/F=${nOrf11.F.size}) · texels tingidos raio0.2=${tPeq11} < raio0.4=${tGde11} · face vizinha #1 intacta sob raio gigante`);
 
+/* ==== PASSO 11c: PINCEL MACIO — pintar arrastando na SUPERFÍCIE (a INTERFACE grava
+   a op certa a partir do gesto). Gestos REAIS (page.mouse). O motor da op 'livre' + o
+   ATLAS (adaptarV3) já estão provados (11a/11b); aqui o foco é a interface GRAVAR o
+   ['pincel',{modo:'livre',...}] certo e não regredir o resto. A câmera olha o topo #9
+   (com az=0 a direita da tela = +X do mundo, então um arrasto horizontal → `a` monotônico). */
+mkdirSync(OUT11C, { recursive: true });
+const CAM11C = { az: 0, el: 1.15, dist: 1.7, alvo: [0, 0.28, 0] };
+const F9base = [0xc3, 0x9a, 0x5e];   // cor CHAPADA da face 9 (#c39a5e) — o fundo da ilha sob o dab
+await page.evaluate(() => { window.__oficina.selecionar(null); window.__oficina.selecionarFaces([]); window.__oficina.ligarPincel(false); }); await rAF2();
+await aoBaseline();
+await page.evaluate((f) => window.__oficina.orbitar(f), CAM11C); await rAF2(); await rAF2();
+
+// (11c raycast) o inverso EXATO de projetar (com LENTE): o ponto de superfície do
+// cursor, projetado de volta pelo PRÓPRIO motor, cai EM CIMA do cursor (prova
+// NÃO-circular). Quebra na hora se o raio ignorar a lente/aspect.
+const s9 = await projFace(9);
+const fCentro9 = await page.evaluate(([x, y]) => window.__oficina.hitFace(x, y), [s9.x, s9.y]);
+const probeCur = { x: s9.x + 12, y: s9.y - 7 };
+const hitP = await page.evaluate((p) => window.__oficina.pincelNoPonto(p.x, p.y), probeCur);
+const backP = await page.evaluate((p) => window.__oficina.projetar(p), hitP.pMundo);
+const erroRT = Math.hypot(backP.x - probeCur.x, backP.y - probeCur.y);
+ok('(11c raycast) o ponto de superfície do cursor projeta de VOLTA no cursor (inverso exato de projetar, com lente)',
+   fCentro9 === 9 && hitP.f === 9 && erroRT < 1.0, `hitFace centro #${fCentro9} · face do raio #${hitP.f} · round-trip ${erroRT.toFixed(3)}px`);
+const abChk = await page.evaluate((h) => window.__oficina.abInMundo(h.f, h.pMundo), hitP);
+ok('(11c raycast) abInMundo(face, pontoMundo) == {a,b} do raycast (conversão superfície→face-local consistente)',
+   Math.abs(abChk.a - hitP.ab.a) < 1e-9 && Math.abs(abChk.b - hitP.ab.b) < 1e-9,
+   `raycast {a:${hitP.ab.a.toFixed(4)},b:${hitP.ab.b.toFixed(4)}} vs abInMundo {a:${abChk.a.toFixed(4)},b:${abChk.b.toFixed(4)}}`);
+
+// === PROVA 1: o MODO muda o comportamento do arrasto; DESLIGADO, sem regressão ===
+await page.evaluate(() => { window.__oficina.selecionar(null); window.__oficina.selecionarFaces([]); window.__oficina.ligarPincel(false); }); await rAF2();
+const modoOff = await page.evaluate(() => window.__oficina.modoPincel());
+const estOffA = await page.evaluate(() => window.__oficina.estado());
+const nP_off0 = await nP();
+await page.mouse.move(s9.x - 30, s9.y); await page.mouse.down();
+await page.mouse.move(s9.x + 30, s9.y, { steps: 12 }); await page.mouse.up(); await rAF2();
+const nP_off1 = await nP();
+const estOffB = await page.evaluate(() => window.__oficina.estado());
+const orbitouOff = Math.abs(estOffB.az - estOffA.az) > 1e-4 || Math.abs(estOffB.el - estOffA.el) > 1e-4;
+ok('(11c modo) DESLIGADO: arrasto no corpo da face ORBITA e NÃO pinta (passo 7 intacto)',
+   modoOff === false && nP_off1 === nP_off0 && orbitouOff, `modo ${modoOff} · PASSOS ${nP_off0}->${nP_off1} · orbitou ${orbitouOff}`);
+// LIGADO: o MESMO arrasto na face PINTA (grava) e a câmera NÃO gira
+await page.evaluate((f) => window.__oficina.orbitar(f), CAM11C); await rAF2(); await rAF2();
+await page.evaluate(() => window.__oficina.ligarPincel(true)); await rAF2();
+const modoOn = await page.evaluate(() => window.__oficina.modoPincel());
+const s9on = await projFace(9);
+const selAntesOn = await page.evaluate(() => window.__oficina.selecionado());
+const estOnA = await page.evaluate(() => window.__oficina.estado());
+const nP_on0 = await nP();
+await page.mouse.move(s9on.x - 30, s9on.y); await page.mouse.down();
+await page.mouse.move(s9on.x + 30, s9on.y, { steps: 12 }); await page.mouse.up(); await rAF2();
+const nP_on1 = await nP();
+const ultimoOn = await page.evaluate(() => window.__oficina.ultimoPasso());
+const estOnB = await page.evaluate(() => window.__oficina.estado());
+const selDepoisOn = await page.evaluate(() => window.__oficina.selecionado());
+const naoOrbitouOn = Math.abs(estOnB.az - estOnA.az) < 1e-6 && Math.abs(estOnB.el - estOnA.el) < 1e-6;
+ok('(11c modo) LIGADO: o MESMO arrasto PINTA (grava pincel livre), a câmera NÃO gira e NENHUM vértice é selecionado/movido',
+   modoOn === true && nP_on1 === nP_on0 + 1 && ultimoOn[0] === 'pincel' && ultimoOn[1].modo === 'livre' && naoOrbitouOn && selAntesOn === null && selDepoisOn === null,
+   `modo ${modoOn} · PASSOS ${nP_on0}->${nP_on1} · op ${ultimoOn[0]}/${ultimoOn[1].modo} · câmera parada ${naoOrbitouOn} · sel ${selAntesOn}->${selDepoisOn}`);
+// sem regressão: DESLIGADO um arrasto de vértice ainda grava moveV (passo 4 intacto)
+await aoBaseline();
+await page.evaluate(() => window.__oficina.ligarPincel(false)); await rAF2();
+await page.evaluate((f) => window.__oficina.orbitar(f), F4); await rAF2();
+const nP_reg0 = await nP();
+await arrastarVertice(0, -26);
+const nP_reg1 = await nP();
+const ultReg = await page.evaluate(() => window.__oficina.ultimoPasso());
+ok('(11c modo) sem regressão: DESLIGADO um arrasto de vértice ainda grava moveV (passo 4 intacto)',
+   nP_reg1 === nP_reg0 + 1 && ultReg[0] === 'moveV', `PASSOS ${nP_reg0}->${nP_reg1} · op ${ultReg[0]}`);
+
+// === PROVA 2: PINTA GRAVA CERTO — face certa + {a,b} batendo a posição arrastada ===
+await aoBaseline();
+await page.evaluate((f) => window.__oficina.orbitar(f), CAM11C); await rAF2(); await rAF2();
+await page.evaluate(() => window.__oficina.setPincel({ cor: '#1030ff', raio: 0.22, dureza: 0.6 })); await rAF2();
+await page.evaluate(() => window.__oficina.ligarPincel(true)); await rAF2();
+const canonBase11c = await canon();   // baseline pré-pincelada (pro undo/redo)
+const s9p = await projFace(9);
+const nP_p0 = await nP();
+await page.mouse.move(s9p.x - 58, s9p.y); await page.mouse.down();
+await page.mouse.move(s9p.x + 58, s9p.y, { steps: 24 }); await page.mouse.up(); await rAF2();
+const opPaint = await page.evaluate(() => window.__oficina.ultimoPasso());
+const nP_p1 = await nP();
+const canonComPincel11c = await canon();   // com a pincelada (pro redo)
+const pts11c = opPaint[1].pontos;
+const todasFace9 = pts11c.every((pt) => pt.f === 9);
+const abRange = pts11c.every((pt) => pt.a >= -0.02 && pt.a <= 1.02 && pt.b >= -0.02 && pt.b <= 1.02);
+const asArr = pts11c.map((pt) => pt.a), bsArr = pts11c.map((pt) => pt.b);
+const aSobe = asArr.every((v, i) => i === 0 || v >= asArr[i - 1] - 1e-6);
+const aDesce = asArr.every((v, i) => i === 0 || v <= asArr[i - 1] + 1e-6);
+const aSpread = Math.max(...asArr) - Math.min(...asArr), bSpread = Math.max(...bsArr) - Math.min(...bsArr);
+ok('(11c grava) arrasto na superfície grava [pincel,{modo:livre,cor,raio,dureza,pontos:[{f,a,b}]}] no fim de PASSOS',
+   nP_p1 === nP_p0 + 1 && opPaint[0] === 'pincel' && opPaint[1].modo === 'livre' && opPaint[1].cor === '#1030ff' && opPaint[1].raio === 0.22 && opPaint[1].dureza === 0.6 && Array.isArray(pts11c) && pts11c.length >= 4,
+   `PASSOS ${nP_p0}->${nP_p1} · ${pts11c.length} pontos · cor ${opPaint[1].cor} raio ${opPaint[1].raio} dureza ${opPaint[1].dureza}`);
+ok('(11c grava) os pontos caem na FACE certa (#9, sob o cursor) e {a,b}∈[0,1] ACOMPANHAM o arrasto (a monotônico e espalhado, b ~constante)',
+   todasFace9 && abRange && (aSobe || aDesce) && aSpread > 0.3 && bSpread < 0.15,
+   `todas #9 ${todasFace9} · a∈[0,1] ${abRange} · a ${aSobe ? 'sobe' : aDesce ? 'desce' : 'NÃO-monot'} spread ${aSpread.toFixed(3)} · b spread ${bSpread.toFixed(3)}`);
+
+// === PROVA 4: REPLAY — a lista editada re-executada bit-a-bit igual PÁGINA == NODE ===
+const passos11c = await page.evaluate(() => window.__oficina.passos());
+const canonPage11c = await canon();
+const canonNode11c = JSON.stringify(neutroCanonico(nucleo(passos11c, toco.PARAMS, toco.TOPO)));
+ok('(11c replay) a lista editada refaz o objeto igual (página == Node, bit-a-bit — a tinta livre entra na canon)',
+   canonPage11c === canonNode11c, `canônico ${canonPage11c.length} chars, ${canonPage11c === canonNode11c ? 'idêntico' : 'DIVERGE'}`);
+
+// === PROVA 3: APARECE NO RENDER — probe de pixel da pincelada (madeira→azul), região não pintada intacta ===
+await ctrlZ(); await rAF2(); await rAF2();   // tira a pincelada → topo volta madeira
+const rgbAntes11c = await probeRGB(s9p.x, s9p.y);
+await ctrlY(); await rAF2(); await rAF2();   // devolve a pincelada → topo azul
+const rgbDepois11c = await probeRGB(s9p.x, s9p.y);
+ok('(11c render) a pincelada APARECE: o centro vira AZUL (b>r) DEPOIS; madeira (r>b) ANTES (via undo/redo, mesma orientação)',
+   rgbAntes11c.r > rgbAntes11c.b + 8 && rgbDepois11c.b > rgbDepois11c.r + 12 && rgbDepois11c.b > rgbDepois11c.g + 10,
+   `antes rgb(${rgbAntes11c.r | 0},${rgbAntes11c.g | 0},${rgbAntes11c.b | 0}) → depois rgb(${rgbDepois11c.r | 0},${rgbDepois11c.g | 0},${rgbDepois11c.b | 0})`);
+const rimY = s9p.y - 62;   // acima da pincelada horizontal, ainda na face 9 mas fora do dab (raio ~48px na tela)
+const hitRim = await page.evaluate(([x, y]) => window.__oficina.pincelNoPonto(x, y), [s9p.x, rimY]);
+const rgbRim = await probeRGB(s9p.x, rimY);
+ok('(11c render) uma região NÃO pintada da MESMA face não muda (segue madeira, r>b)',
+   rgbRim.r > rgbRim.b + 8 && hitRim && hitRim.f === 9, `borda rgb(${rgbRim.r | 0},${rgbRim.g | 0},${rgbRim.b | 0}) · face #${hitRim ? hitRim.f : 'fora'}`);
+
+// === PROVA 5: UNDO/REDO — Ctrl+Z tira a pincelada (superfície volta), Ctrl+Y devolve ===
+await page.evaluate((f) => window.__oficina.orbitar(f), CAM11C); await rAF2();
+const nP_prevUndo = await nP();
+await ctrlZ();
+const nP_undo11c = await nP();
+const canonUndo11c = await canon();
+ok('(11c undo) Ctrl+Z tira a pincelada e a superfície volta bit-a-bit ao baseline',
+   nP_undo11c === nP_prevUndo - 1 && canonUndo11c === canonBase11c, `PASSOS ${nP_prevUndo}->${nP_undo11c} · neutro ${canonUndo11c === canonBase11c ? 'idêntico ao baseline' : 'DIVERGE'}`);
+await ctrlY();
+const canonRedo11c = await canon();
+ok('(11c redo) Ctrl+Y devolve a pincelada (neutro bate bit-a-bit com o de depois)',
+   canonRedo11c === canonComPincel11c, `neutro ${canonRedo11c === canonComPincel11c ? 'idêntico' : 'DIVERGE'}`);
+
+// === PROVA 6: RAIO/DUREZA da UI — os sliders mudam raio/dureza da op e o tamanho da mancha ===
+await aoBaseline();
+await page.evaluate((f) => window.__oficina.orbitar(f), CAM11C); await rAF2(); await rAF2();
+await page.evaluate(() => window.__oficina.ligarPincel(true)); await rAF2();
+const s9r = await projFace(9);
+const carimbar = async () => { await page.mouse.move(s9r.x, s9r.y); await page.mouse.down(); await page.mouse.move(s9r.x + 2, s9r.y, { steps: 2 }); await page.mouse.up(); await rAF2(); };
+await page.evaluate(() => window.__oficina.setPincel({ cor: '#1030ff', raio: 0.08, dureza: 0.3 })); await rAF2();
+const cfgPeq = await page.evaluate(() => window.__oficina.pincelCfg());
+await carimbar();
+const opPeq = await page.evaluate(() => window.__oficina.ultimoPasso());
+await aoBaseline();
+await page.evaluate(() => window.__oficina.setPincel({ raio: 0.5, dureza: 0.9 })); await rAF2();
+const cfgGde = await page.evaluate(() => window.__oficina.pincelCfg());
+const painelGde = await page.evaluate(() => window.__oficina.painelPincel());
+await carimbar();
+const opGde = await page.evaluate(() => window.__oficina.ultimoPasso());
+ok('(11c raio/dureza) o raio/dureza da op REFLETEM os sliders da UI (pequeno 0.08/0.3, grande 0.5/0.9) e o painel mostra os valores',
+   opPeq[1].raio === 0.08 && opPeq[1].dureza === 0.3 && opPeq[1].raio === cfgPeq.raio && opGde[1].raio === 0.5 && opGde[1].dureza === 0.9 && painelGde.raioV === '0.50' && painelGde.durezaV === '0.90',
+   `op peq ${opPeq[1].raio}/${opPeq[1].dureza} · op gde ${opGde[1].raio}/${opGde[1].dureza} · painel ${painelGde.raioV}/${painelGde.durezaV}`);
+// e a MANCHA gravada é maior: conta texels tingidos na ilha da face 9 (headless, das ops REAIS)
+const tintadosFace9 = (op) => {
+  const R = adaptarV3(nucleo([...toco.PASSOS, op], toco.PARAMS, toco.TOPO), ctxAtlas11);
+  const il = R.atlas.daFace(9).ilha; let n = 0;
+  for (let y = il.y; y < il.y + il.h; y++) for (let x = il.x; x < il.x + il.w; x++) { const c = R.tex.fn(x, y); if (!(c[0] === F9base[0] && c[1] === F9base[1] && c[2] === F9base[2])) n++; }
+  return n;
+};
+const nTexPeq = tintadosFace9(opPeq), nTexGde = tintadosFace9(opGde);
+ok('(11c raio/dureza) a MANCHA gravada é maior com raio maior (texels tingidos na ilha da face 9)',
+   nTexGde > nTexPeq, `raio 0.08 → ${nTexPeq} texels < raio 0.5 → ${nTexGde} texels`);
+
+// === PROVA 7: GUARDAS — roda/Ctrl+Z DURANTE a pincelada ignorados; arrasto no vazio não grava ===
+await aoBaseline();
+await page.evaluate((f) => window.__oficina.orbitar(f), CAM11C); await rAF2(); await rAF2();
+await page.evaluate(() => window.__oficina.setPincel({ cor: '#1030ff', raio: 0.2, dureza: 0.6 })); await rAF2();
+await page.evaluate(() => window.__oficina.ligarPincel(true)); await rAF2();
+const s9g = await projFace(9);
+// pincelada 1 COMMITADA — pra um Ctrl+Z (se a guarda falhasse) ter o que desfazer
+await page.mouse.move(s9g.x - 30, s9g.y + 18); await page.mouse.down();
+await page.mouse.move(s9g.x + 30, s9g.y + 18, { steps: 14 }); await page.mouse.up(); await rAF2();
+const nP_comm = await nP();   // baseline + 1 (pincelada 1)
+const distAntesG = await page.evaluate(() => window.__oficina.estado().dist);
+// pincelada 2 — no MEIO dela, dispara roda + Ctrl+Z (as guardas do passo 4/5 seguram)
+await page.mouse.move(s9g.x - 32, s9g.y); await page.mouse.down();
+await page.mouse.move(s9g.x - 8, s9g.y, { steps: 6 });
+const emArrDur = await page.evaluate(() => window.__oficina.emArrasto());
+await page.mouse.wheel(0, 140);
+const distDurG = await page.evaluate(() => window.__oficina.estado().dist);
+await page.keyboard.down('Control'); await page.keyboard.press('KeyZ'); await page.keyboard.up('Control');
+const nP_gDur = await nP();   // guarda: segue nP_comm (a pincelada 1 NÃO foi desfeita no meio da 2ª)
+const emArrDur2 = await page.evaluate(() => window.__oficina.emArrasto());
+await page.mouse.move(s9g.x + 32, s9g.y, { steps: 6 }); await page.mouse.up(); await rAF2();
+const nP_g1 = await nP();
+ok('(11c guarda) roda e Ctrl+Z DURANTE a pincelada são IGNORADOS (reusa a máquina do passo 4/5) — dist e a pincelada anterior intactos no meio',
+   emArrDur && emArrDur.pincel === true && Math.abs(distDurG - distAntesG) < 1e-9 && nP_gDur === nP_comm && emArrDur2 && emArrDur2.pincel === true,
+   `emArrasto.pincel ${emArrDur && emArrDur.pincel} · dist ${distAntesG.toFixed(3)}==${distDurG.toFixed(3)} · Ctrl+Z no meio NÃO desfez (PASSOS ${nP_gDur}==${nP_comm})`);
+ok('(11c guarda) a 2ª pincelada completa grava (o Ctrl+Z no meio não a atrapalhou)',
+   nP_g1 === nP_comm + 1, `PASSOS ${nP_comm}->${nP_g1}`);
+// arrasto no VAZIO no modo pincel: NÃO grava op (orbita)
+await aoBaseline();
+await page.evaluate((f) => window.__oficina.orbitar(f), CAM11C); await rAF2(); await rAF2();
+const vazioPt = { x: 40, y: Math.round(s9g.y) };   // longe à esquerda do objeto (painel é à direita)
+const hitVazio = await page.evaluate((p) => window.__oficina.pincelNoPonto(p.x, p.y), vazioPt);
+const nP_v0 = await nP();
+const estV0 = await page.evaluate(() => window.__oficina.estado());
+await page.mouse.move(vazioPt.x, vazioPt.y); await page.mouse.down();
+await page.mouse.move(vazioPt.x + 45, vazioPt.y + 22, { steps: 10 }); await page.mouse.up(); await rAF2();
+const nP_v1 = await nP();
+const estV1 = await page.evaluate(() => window.__oficina.estado());
+const orbitouVazio = Math.abs(estV1.az - estV0.az) > 1e-4 || Math.abs(estV1.el - estV0.el) > 1e-4;
+ok('(11c guarda) no modo pincel, um arrasto no VAZIO (sem face) NÃO grava op vazia (orbita)',
+   hitVazio === null && nP_v1 === nP_v0 && orbitouVazio, `vazio hit ${hitVazio} · PASSOS ${nP_v0}->${nP_v1} · orbitou ${orbitouVazio}`);
+
+// === CROSSING: o raycast pega a face SOB o cursor → um arrasto atravessando grava pontos em faces DIFERENTES (a op já separa por face) ===
+await aoBaseline();
+await page.evaluate(() => window.__oficina.orbitar({ az: 0.5, el: 0.5, dist: 2.0, alvo: [0, 0.28, 0] })); await rAF2(); await rAF2();
+const topPt = await projFace(9);
+const fTop = await page.evaluate(([x, y]) => window.__oficina.hitFace(x, y), [topPt.x, topPt.y]);
+let fSideId = null, sidePt = null;
+for (const k of [1, 2, 3, 4, 5, 6, 7]) {
+  const p = await projFace(k); if (!p) continue;
+  const fh = await page.evaluate(([x, y]) => window.__oficina.hitFace(x, y), [p.x, p.y]);
+  if (fh === k) { fSideId = k; sidePt = p; break; }
+}
+ok('(11c faces) o raycast pega a face SOB o cursor (topo #9 vs um lado) — a base do arrasto atravessar faces',
+   fTop === 9 && fSideId != null && fSideId !== 9, `topo→#${fTop} · lado→#${fSideId}`);
+await page.evaluate(() => window.__oficina.setPincel({ raio: 0.14, dureza: 0.6 })); await rAF2();
+await page.evaluate(() => window.__oficina.ligarPincel(true)); await rAF2();
+await page.mouse.move(topPt.x, topPt.y); await page.mouse.down();
+await page.mouse.move(sidePt.x, sidePt.y, { steps: 26 }); await page.mouse.up(); await rAF2();
+const opCross = await page.evaluate(() => window.__oficina.ultimoPasso());
+const facesCross = (opCross && opCross[0] === 'pincel') ? [...new Set(opCross[1].pontos.map((p) => p.f))].sort((a, b) => a - b) : [];
+ok('(11c faces) um arrasto REAL do topo pra um lado grava pontos em ≥2 faces num ÚNICO passo pincel (a op aguenta, separa por face)',
+   facesCross.length >= 2 && facesCross.includes(9), `faces na pincelada: ${JSON.stringify(facesCross)}`);
+
+// screenshot: o toco com uma pincelada macia por cima (pra o olho) + a UI (chip aceso + sliders)
+await aoBaseline();
+await page.evaluate(() => { window.__oficina.selecionar(null); window.__oficina.selecionarFaces([]); }); await rAF2();   // limpa vértice/gizmo pro shot ficar limpo
+await page.evaluate(() => window.__oficina.orbitar({ az: 0.35, el: 0.85, dist: 1.85, alvo: [0, 0.28, 0] })); await rAF2(); await rAF2();
+await page.evaluate(() => window.__oficina.setPincel({ cor: '#1030ff', raio: 0.3, dureza: 0.55 })); await rAF2();
+await page.evaluate(() => window.__oficina.ligarPincel(true)); await rAF2();
+const sShot = await projFace(9);
+await page.mouse.move(sShot.x - 42, sShot.y + 12); await page.mouse.down();
+await page.mouse.move(sShot.x - 10, sShot.y - 22, { steps: 10 });
+await page.mouse.move(sShot.x + 26, sShot.y - 4, { steps: 10 });
+await page.mouse.move(sShot.x + 48, sShot.y + 20, { steps: 10 });
+await page.mouse.up(); await rAF2(); await rAF2();
+await page.screenshot({ path: join(OUT11C, 'oficina-pincel-macio.png') });
+await page.evaluate(() => window.__oficina.ligarPincel(false)); await rAF2();
+await aoBaseline();
+
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}\n               ${join(OUT10, 'oficina-sem-solido-aviso.png')}\n               ${join(OUT10, 'oficina-colisao-painel.png')}\n               ${join(OUT11, 'oficina-atlas-toco.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}\n               ${join(OUT10, 'oficina-sem-solido-aviso.png')}\n               ${join(OUT10, 'oficina-colisao-painel.png')}\n               ${join(OUT11, 'oficina-atlas-toco.png')}\n               ${join(OUT11C, 'oficina-pincel-macio.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
-console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex); passo 10: EXPORTAR + COLISÃO — o painel reflete colisaoDe (raio/altura/base) e o botão REAL grava ['solido',{faces:[ordenadas]}] (neutro.F.solido vira true, desfazível, no-op se já-sólido, ignorado no arrasto); a serialização IDA-E-VOLTA depois de editar (arrasto+extruda+pincel+solido) reabre BIT-A-BIT idêntica (página == Node, com a CHAMADA colisaoDe(PASSOS, PARAMS, TOPO) gravada, não o valor); o servir.mjs REAL grava pecas/<nome>.js num dir TEMP (arquivo === conteúdo, re-import replica), rejeita ../.., /etc, a/b, .., espaço e símbolo sem escrever fora, e serve com Cache-Control: no-store; uma peça sem solido mostra o AVISO e a colisão vira o objeto INTEIRO (marcar o topo a muda: altura 1→0); e sem a rota o Salvar cai no download sem quebrar; passo 11a: ATLAS POR FACE (fundação da textura pintável) — o adaptarV3 troca o SWATCH por um atlas de ${N_FACE} ILHAS DISJUNTAS (grade ${R11.atlas.cols}×${R11.atlas.rows}, ilha ${R11.atlas.tile}px, gutter ${R11.atlas.gutter}px, textura ${R11.atlas.W}×${R11.atlas.H}), o FURO da caixa GLOBAL (fundo #8 e topo #9 quase no mesmo XZ, IoU ${iouGlobal.toFixed(2)}) some com ilhas separadas, e o toco renderiza cada face na SUA cor IGUAL ao swatch (topo #9 madeira clara rgb ${rgbTopo11.r.toFixed(0)},${rgbTopo11.g.toFixed(0)},${rgbTopo11.b.toFixed(0)}; cmp byte-a-byte swatch↔atlas = 0 pixels no relatório). O mapa por face (ilha + projeta) fica anexado em atlas pro pincel macio do 11b; passo 11b (MOTOR): PINCEL MACIO no núcleo — a op 'livre' grava a tinta ANCORADA à face ({a,b} face-local, o mesmo s,t da projeção — não um texel cru) e o adaptarV3 rasteriza um DAB radial macio na ilha (centro=cor rgb ${centroL11}, +8px=base rgb ${bordaL11}, meio esmaece rgb ${meioL11}); determinístico (canon 2x + round-trip JSON estáveis, a tinta ENTRA na canon), a tinta ACOMPANHA a face num moveV (o centro segue cor mesmo com o UV do canto deslizando), órfão grita (#999, malha intacta), raio maior tinge mais texels (0.2→${tPeq11} < 0.4→${tGde11}) e dureza controla a borda, e o dab fica PRESO na célula (não vaza pra vizinha) — o modo 'face' segue BYTE-idêntico (o toco canoniza igual, linha F de 6). A interface (pintar arrastando) é o 11c.`);
+console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex); passo 10: EXPORTAR + COLISÃO — o painel reflete colisaoDe (raio/altura/base) e o botão REAL grava ['solido',{faces:[ordenadas]}] (neutro.F.solido vira true, desfazível, no-op se já-sólido, ignorado no arrasto); a serialização IDA-E-VOLTA depois de editar (arrasto+extruda+pincel+solido) reabre BIT-A-BIT idêntica (página == Node, com a CHAMADA colisaoDe(PASSOS, PARAMS, TOPO) gravada, não o valor); o servir.mjs REAL grava pecas/<nome>.js num dir TEMP (arquivo === conteúdo, re-import replica), rejeita ../.., /etc, a/b, .., espaço e símbolo sem escrever fora, e serve com Cache-Control: no-store; uma peça sem solido mostra o AVISO e a colisão vira o objeto INTEIRO (marcar o topo a muda: altura 1→0); e sem a rota o Salvar cai no download sem quebrar; passo 11a: ATLAS POR FACE (fundação da textura pintável) — o adaptarV3 troca o SWATCH por um atlas de ${N_FACE} ILHAS DISJUNTAS (grade ${R11.atlas.cols}×${R11.atlas.rows}, ilha ${R11.atlas.tile}px, gutter ${R11.atlas.gutter}px, textura ${R11.atlas.W}×${R11.atlas.H}), o FURO da caixa GLOBAL (fundo #8 e topo #9 quase no mesmo XZ, IoU ${iouGlobal.toFixed(2)}) some com ilhas separadas, e o toco renderiza cada face na SUA cor IGUAL ao swatch (topo #9 madeira clara rgb ${rgbTopo11.r.toFixed(0)},${rgbTopo11.g.toFixed(0)},${rgbTopo11.b.toFixed(0)}; cmp byte-a-byte swatch↔atlas = 0 pixels no relatório). O mapa por face (ilha + projeta) fica anexado em atlas pro pincel macio do 11b; passo 11b (MOTOR): PINCEL MACIO no núcleo — a op 'livre' grava a tinta ANCORADA à face ({a,b} face-local, o mesmo s,t da projeção — não um texel cru) e o adaptarV3 rasteriza um DAB radial macio na ilha (centro=cor rgb ${centroL11}, +8px=base rgb ${bordaL11}, meio esmaece rgb ${meioL11}); determinístico (canon 2x + round-trip JSON estáveis, a tinta ENTRA na canon), a tinta ACOMPANHA a face num moveV (o centro segue cor mesmo com o UV do canto deslizando), órfão grita (#999, malha intacta), raio maior tinge mais texels (0.2→${tPeq11} < 0.4→${tGde11}) e dureza controla a borda, e o dab fica PRESO na célula (não vaza pra vizinha) — o modo 'face' segue BYTE-idêntico (o toco canoniza igual, linha F de 6); passo 11c: PINCEL MACIO na INTERFACE (pintar arrastando) — o modo pincel (chip "Pincel" + tecla B) LIGADO faz o arrasto na superfície PINTAR em vez de orbitar/selecionar (grava ['pincel',{modo:'livre',cor,raio,dureza,pontos:[{f,a,b}]}], câmera parada, nenhum vértice mexido), DESLIGADO tudo segue como antes (arrasto de vértice ainda grava moveV); o RAYCAST do cursor é o inverso EXATO de projetar (com lente) — o ponto de superfície projeta de volta a ${erroRT.toFixed(2)}px do cursor —, acha a face da FRENTE (hitFace) e intersecta o plano dela → {f,a,b} FACE-LOCAL (abInMundo bate o raycast); os pontos caem na face certa (#9) e ACOMPANHAM o arrasto (a monotônico, spread ${aSpread.toFixed(2)}); a pincelada APARECE no render (o centro vira azul rgb ${rgbDepois11c.r | 0},${rgbDepois11c.g | 0},${rgbDepois11c.b | 0}; a borda não pintada segue madeira), replay página==Node bit-a-bit (a tinta livre entra na canon), undo/redo voltam a superfície ao baseline/depois, os sliders de raio/dureza refletem na op e no tamanho da mancha (raio 0.08→${nTexPeq} texels < 0.5→${nTexGde}), a roda e o Ctrl+Z DURANTE a pincelada são ignorados (reusa a máquina arrasto/soltar), um arrasto no VAZIO no modo pincel não grava op vazia (orbita), e um arrasto atravessando o topo e um lado grava pontos em faces diferentes num só passo (${JSON.stringify(facesCross)}). NÃO se tocou em motor/oficina.js nem render.js.`);
