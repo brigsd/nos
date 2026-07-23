@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 224,
-    "worldTime": 13440
+    "tickCount": 225,
+    "worldTime": 13500
   },
   "width": 64,
   "height": 64,
@@ -6635,6 +6635,25 @@
       "type": "core_pulse",
       "tick": 224,
       "worldTime": 13440
+    },
+    {
+      "type": "native_spoke",
+      "tick": 225,
+      "worldTime": 13500,
+      "nativeId": "brasa",
+      "message": "Histórias quentes são o melhor tempero. O pão tá quentinho, venham aquecer o coração."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 225,
+      "worldTime": 13500,
+      "nativeId": "quilha",
+      "message": "O pão quentinho nos espera! Venham, viajantes, compartilhar histórias e aquecer o coração!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 225,
+      "worldTime": 13500
     }
   ],
   "natives": {
@@ -6643,7 +6662,7 @@
       "name": "Gota",
       "position": {
         "x": 1,
-        "y": 2
+        "y": 3
       },
       "behaviorTree": "wanderer",
       "behaviorState": "{}",
