@@ -6,10 +6,13 @@
    `/oficina/salvar` com `{nome, conteudo}` grava a peça exportada direto em
    `pecas/<nome>.js`, então "Salvar" na Oficina escreve no repo sem passar pela
    pasta de downloads (docs/oficina.md "Salvar: o navegador não escreve arquivo").
+   A rota-IRMÃ `/som/salvar` (S5a) faz o MESMO pra a ABA SOM, gravando em
+   `pecas-som/<nome>.js` (o "Exportar" da aba) — mesmo handler, mesmo `nomeSeguro`,
+   só o dir de destino muda; o /oficina/salvar segue INTOCADO (passo 10 intacto).
    SEGURANÇA: o nome é sanitizado (só [A-Za-z0-9_-], extensão .js forçada) E o
-   caminho é resolvido e confirmado DENTRO de pecas/ — `../`, caminho absoluto,
+   caminho é resolvido e confirmado DENTRO do dir de peças — `../`, caminho absoluto,
    subdir e nome com símbolo são rejeitados SEM gravar nada. `criarServidor({raiz,
-   pecas})` é injetável (a bancada aponta pecas/ pra um dir temporário, nunca o
+   pecas, pecasSom})` é injetável (a bancada aponta o dir pra um temporário, nunca o
    rastreado). Uso: `npm run servir` · abra http://localhost:8080/oficina.html */
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -68,16 +71,19 @@ async function salvar(req, res, PECAS) {
   return fim(res, 200, { ok: true, arquivo, caminho: destino });
 }
 
-/* cria (sem escutar) o servidor. `raiz` = dir servido estático; `pecas` = onde a
-   rota de salvar grava (default `<raiz>/pecas`). Ambos injetáveis pra a bancada
-   apontar pecas/ pra um dir TEMPORÁRIO. */
-export function criarServidor({ raiz, pecas } = {}) {
+/* cria (sem escutar) o servidor. `raiz` = dir servido estático; `pecas` = onde
+   /oficina/salvar grava (default `<raiz>/pecas`); `pecasSom` = onde /som/salvar grava
+   (default `<raiz>/pecas-som`, a ABA SOM — S5a). Todos injetáveis pra a bancada apontar
+   o dir de destino pra um TEMPORÁRIO, nunca o rastreado. */
+export function criarServidor({ raiz, pecas, pecasSom } = {}) {
   const RAIZ = raiz ? resolve(raiz) : RAIZ_PADRAO;
   const PECAS = pecas ? resolve(pecas) : join(RAIZ, 'pecas');
+  const PECAS_SOM = pecasSom ? resolve(pecasSom) : join(RAIZ, 'pecas-som');
   return createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
       if (req.method === 'POST' && pathname === '/oficina/salvar') { await salvar(req, res, PECAS); return; }
+      if (req.method === 'POST' && pathname === '/som/salvar') { await salvar(req, res, PECAS_SOM); return; }   // S5a: a aba Som grava em pecas-som/ (mesmo handler/nomeSeguro)
       if (req.method !== 'GET' && req.method !== 'HEAD') { fim(res, 405, { erro: 'método não suportado' }); return; }
       /* estático com no-store. `/pecas/*` vem do dir PECAS — o MESMO que a rota de
          salvar grava —, então salvar e reabrir usam a mesma pasta (e a bancada pode
@@ -108,5 +114,6 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.log(`Oficina — servidor de dev em http://localhost:${porta}/oficina.html`);
     console.log(`  · estático de prototipos/fps/v3/ com Cache-Control: no-store`);
     console.log(`  · POST /oficina/salvar {nome, conteudo} grava em pecas/<nome>.js`);
+    console.log(`  · POST /som/salvar     {nome, conteudo} grava em pecas-som/<nome>.js (aba Som — som.html)`);
   });
 }

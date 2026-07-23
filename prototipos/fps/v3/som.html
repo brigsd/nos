@@ -36,6 +36,15 @@
   #modos select { font: inherit; font-size: 11px; color: var(--ink); background: #0c0f16;
     border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
   #modos select:focus { outline: none; border-color: var(--accent); }
+  /* EXPORTAR (S5a): o paralelo do "Salvar peça" da Oficina — grava a peça-som em
+     pecas-som/ (ou baixa, sem servidor). Mesma pegada visual do .btsalvar do 3D. */
+  .btexportar { font-size: 11px; font-weight: 700; letter-spacing: .02em; color: #10131c; flex: none;
+    background: var(--hud); border: 1px solid var(--hud); border-radius: 6px; padding: 5px 14px; cursor: pointer; }
+  .btexportar:hover { filter: brightness(1.08); }
+  .btexportar:active { transform: translateY(1px); }
+  .btexportar:disabled { opacity: .6; cursor: default; }
+  .exportar-msg { font-size: 10px; color: var(--dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .exportar-msg.erro { color: var(--amber); }
 
   /* PALCO central: as CENAS do som — a FORMA DE ONDA em cima e o ESPECTROGRAMA embaixo
      (o "ouvido" do S3.5: tempo × frequência × energia), com a tira de DESCRITORES
@@ -180,6 +189,10 @@
   <div class="dir">
     <span class="rot">evento</span>
     <select id="seletor" title="evento de pecas-som/ a carregar"></select>
+    <!-- S5a EXPORTAR: serializa o som editado como .js e POSTa pro servidor de dev
+         (grava em pecas-som/); sem servidor, baixa o .js (fallback). -->
+    <span id="exportarMsg" class="exportar-msg"></span>
+    <button id="btExportar" class="btexportar" type="button" title="exporta o som como código e grava em pecas-som/ (ou baixa, sem servidor)">Exportar</button>
   </div>
 </header>
 
@@ -239,6 +252,9 @@ import { renderarOffline, tocarEvento } from './motor/somweb.js';
 import { somNucleo, somCanonico } from './motor/somnucleo.js';
 /* S3.5 — o "ouvido": a análise pura (espectrograma + descritores) do render atual. */
 import { analisar, desenharEspectrograma, frasesDescritores } from './motor/somanalise.js';
+/* S5a — o EXPORTADOR: serializa o evento atual ({meta,PARAMS,PASSOS,semente}) numa
+   STRING .js com a anatomia das peças de pecas-som/ (o análogo do passo 10 do 3D). */
+import { serializarEvento } from './motor/somexport.js';
 
 const SR = 44100;                       // taxa fixa do render (determinismo, igual à bancada sintetizar)
 /* CATÁLOGO curado de PRESETS (S4): nome amigável → arquivo em pecas-som/. Presets são
@@ -660,8 +676,50 @@ function tickCursor() {
   if (tocando) { rafPend = true; requestAnimationFrame(tickCursor); }
 }
 
+/* ---- EXPORTAR (S5a): serializa o evento ATUAL e SALVA — o paralelo EXATO do
+   "Salvar peça" da Oficina (passo 10). `serializarEvento` emite a STRING .js com a
+   anatomia das peças de pecas-som/; `exportarSom` POSTa pro servidor de dev (grava em
+   pecas-som/ via a rota /som/salvar, que sanitiza o nome com o MESMO `nomeSeguro` do
+   /oficina/salvar) e, se ele não responder (fora do ar, ou servido por um estático sem
+   a rota), FALLBACK pro download do .js (blob + <a download>). O nome sai do evento.
+   `ultimoDownload` deixa a bancada afirmar o fallback sem quebrar. */
+function nomeDoEvento() { return (eventoAtual && (eventoAtual.meta?.nome || eventoAtual._nome)) || 'som'; }
+function serializarAtual() { return serializarEvento({ meta: eventoAtual.meta, PARAMS: eventoAtual.PARAMS ?? {}, PASSOS: eventoAtual.PASSOS, semente: eventoAtual.semente ?? 0 }); }
+let ultimoDownload = null;
+function baixar(nomeArq, conteudo) {
+  const blob = new Blob([conteudo], { type: 'text/javascript' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `${nomeArq}.js`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  ultimoDownload = { nome: `${nomeArq}.js`, tamanho: conteudo.length, ts: Date.now() };
+  return ultimoDownload;
+}
+function msgExportar(txt, erro) { const el = $('exportarMsg'); if (!el) return; el.textContent = txt; el.classList.toggle('erro', !!erro); }
+async function exportarSom() {
+  const nomeArq = nomeDoEvento();
+  const conteudo = serializarAtual();
+  try {
+    const r = await fetch(new URL('som/salvar', location.href), {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nome: nomeArq, conteudo }),
+    });
+    if (r.ok) { const j = await r.json().catch(() => ({})); if (j && j.ok) { msgExportar(`salvo em pecas-som/${nomeArq}.js`, false); return { via: 'servidor', ...j }; } }
+  } catch (e) { /* servidor fora do ar → cai pro download */ }
+  const d = baixar(nomeArq, conteudo);
+  msgExportar(`baixado ${nomeArq}.js (servidor fora — mova pra pecas-som/)`, true);
+  return { via: 'download', ...d };
+}
+
 /* ---- fiação da UI -------------------------------------------------------- */
 $('btPlay').addEventListener('click', () => { if (tocando && !loopLigado) parar(); else tocar(); });
+/* S5a: o botão Exportar serializa o estado ATUAL e POSTa pro servidor (grava em
+   pecas-som/); sem servidor, baixa o .js (fallback). Desabilita durante o salvar. */
+{ const bt = $('btExportar'); if (bt) bt.addEventListener('click', async () => {
+    bt.disabled = true;
+    try { await exportarSom(); } catch (e) { msgExportar('falhou: ' + e.message, true); }
+    finally { bt.disabled = false; }
+  }); }
 $('btLoop').addEventListener('click', () => { loopLigado = !loopLigado; $('btLoop').classList.toggle('on', loopLigado); });
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && !/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) {
@@ -764,6 +822,11 @@ window.__som = {
   setEnum: (id, k, v) => { const i = idx(id); if (i < 0) return null; eventoAtual.PASSOS[i][1][k] = v; return reexec(); },
   ligar: (id, de) => { const i = idx(id); if (i < 0) return null; eventoAtual.PASSOS[i][1].de = de; montarPainel(); return reexec(); },
   ligarAlvo: (id, no, param) => { const i = idx(id); if (i < 0) return null; eventoAtual.PASSOS[i][1].alvo = no ? { no, param } : null; montarPainel(); return reexec(); },
+  // S5a — exportar: a STRING .js do evento atual, o disparo do salvar (POST → fallback download), e o último download
+  serializar: () => serializarAtual(),                                                // a STRING .js do export (do estado ATUAL do editor)
+  exportar: () => exportarSom(),                                                       // dispara o salvar (POST /som/salvar → fallback download); devolve {via,...}
+  ultimoDownload: () => (ultimoDownload ? { ...ultimoDownload } : null),               // o último download disparado pelo fallback (null = nenhum ainda)
+  nomeEvento: () => nomeDoEvento(),                                                     // o nome do arquivo que o exportar usa
 };
 
 /* ---- boot --------------------------------------------------------------- */
