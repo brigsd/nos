@@ -127,7 +127,7 @@ describe('núcleo -> adaptador (fronteira) e colisão', () => {
   it('cor por face chega por TEXTURA + UV (não como atributo do vértice): amostrar a ilha da face dá a cor dela', () => {
     const { ctx, amostra } = ctxAmostra();
     const r: any = adaptarV3(nucleo([['cubo', { id: 0, lado: 1 }], ['pincel', { modo: 'face', faces: [0], cor: '#ff0000' }]], {}, {}), ctx);
-    expect(r.mesh.v.length % 8).toBe(0);   // 8 floats/vértice: pos3 uv2 nrm3 — a cor NÃO é atributo do vértice
+    expect(r.lotes[0].mesh.v.length % 8).toBe(0);   // 8 floats/vértice: pos3 uv2 nrm3 — a cor NÃO é atributo do vértice (12a: um lote só, sem material)
     // a face 0 (pintada) amostra VERMELHO no centro da SUA ilha; uma face sem pincel amostra a madeira neutra
     const c0 = centro(r.atlas.daFace(0).ilha), c1 = centro(r.atlas.daFace(1).ilha);
     expect(amostra(c0[0] / r.atlas.W, c0[1] / r.atlas.H)).toEqual([255, 0, 0]);
@@ -339,5 +339,84 @@ describe('passo 11b — pincel macio (motor: op livre + rasterização)', () => 
     const [c1x, c1y] = centroIlha(r.atlas.daFace(1).ilha);
     expect(texel(c1x, c1y)).toEqual(BASE);   // a face VIZINHA (ilha própria) segue na base — o vermelho não vazou
     expect(texel(0, 0)).toEqual([255, 0, 0]);   // ...mas a célula da face 0 (incl. o gutter) encheu de vermelho: o dab dilatou até a borda da célula
+  });
+});
+
+/* PASSO 12a — MATERIAIS OPACOS (núcleo + adaptador; o render é provado por byte-cmp
+   à parte). Prova por MEDIÇÃO: a op `material` seta f.material (validando contra
+   MATERIAIS), o material ENTRA na canon (determinismo/replay/round-trip), `usa`/face
+   inexistente GRITAM sem corromper, e o adaptarV3 AGRUPA faces por material em lotes
+   carregando os params certos (cor->corMul, emissivo, aspereza, semLuz, contorno->rim).
+   Compat: peça SEM material -> UM lote só, byte-idêntico ao 11a. */
+describe('passo 12a — materiais opacos', () => {
+  const cubo: any[] = ['cubo', { id: 0, lado: 1 }];
+  const MAT = { casca: { cor: '#6b4a2f', aspereza: 0.9 }, brasa: { cor: '#ff7326', emissivo: 1.4, semLuz: true } };
+  const fakeCtx = { tex: { texCanvas: (w: number, h: number) => ({ width: w, height: h }) }, m4: { ident: () => new Float32Array(16) } };
+
+  it('1) op material seta f.material; a canon inclui o material; determinismo/replay/round-trip JSON batem', () => {
+    const passos = [cubo, ['material', { faces: [0, 1], usa: 'casca' }], ['material', { faces: [2], usa: 'brasa' }]];
+    const n = nucleo(passos, {}, {}, MAT);
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.F.get(0).material).toBe('casca');
+    expect(n.F.get(1).material).toBe('casca');
+    expect(n.F.get(2).material).toBe('brasa');
+    expect(n.F.get(3).material).toBe(null);                         // face SEM material intacta (compat)
+    // material entra na forma canônica (índice 3 da linha F) — sem isso o replay o perderia
+    const canon = neutroCanonico(n);
+    expect((canon.F.find((r: any[]) => r[0] === 0) as any[])[3]).toBe('casca');
+    expect((canon.F.find((r: any[]) => r[0] === 3) as any[])[3]).toBe(null);
+    // 2 execuções + round-trip JSON da LISTA (o formato salvo) idênticos bit-a-bit
+    const a = JSON.stringify(neutroCanonico(nucleo(passos, {}, {}, MAT)));
+    const b = JSON.stringify(neutroCanonico(nucleo(JSON.parse(JSON.stringify(passos)), {}, {}, MAT)));
+    expect(a).toBe(b);
+    // sem os passos de material a canon DIFERE (o material É gravado — falha sob neutralização)
+    expect(a).not.toBe(JSON.stringify(neutroCanonico(nucleo([cubo], {}, {}, MAT))));
+  });
+
+  it('2) op material GRITA se `usa` não existe em MATERIAIS ou a face não existe — nunca corrompe', () => {
+    const n1 = nucleo([cubo, ['material', { faces: [0], usa: 'fantasma' }]], {}, {}, MAT);
+    expect(n1.orfaos.some((o: any) => o.op === 'material' && o.ref === 'fantasma')).toBe(true);
+    expect(n1.F.get(0).material).toBe(null);                         // `usa` inválido: NÃO seta nada
+    const n2 = nucleo([cubo, ['material', { faces: [0, 999], usa: 'casca' }]], {}, {}, MAT);
+    expect(n2.orfaos.some((o: any) => o.op === 'material' && o.ref === 999)).toBe(true);
+    expect(n2.F.get(0).material).toBe('casca');                      // a face válida recebeu; a inválida gritou
+    expect(n2.V.size).toBe(8); expect(n2.F.size).toBe(6);            // malha do cubo INTACTA
+    const n3 = nucleo([cubo, ['material', { faces: [0], usa: 'casca' }]], {}, {}, {});   // MATERIAIS vazio (ex.: colisaoDe sem materiais)
+    expect(n3.orfaos).toHaveLength(1);
+    expect(n3.F.size).toBe(6);
+  });
+
+  it('3) adaptarV3 AGRUPA por material: 2 materiais -> 3 lotes (2 + o padrão), faces certas em cada, params carregados', () => {
+    const passos = [cubo, ['material', { faces: [0, 1], usa: 'casca' }], ['material', { faces: [2], usa: 'brasa' }]];
+    const r: any = adaptarV3(nucleo(passos, {}, {}, MAT), fakeCtx, MAT);
+    expect(r.lotes).toHaveLength(3);
+    const brasa = r.lotes.find((L: any) => L.emissivo);
+    const casca = r.lotes.find((L: any) => L.aspereza);
+    const padrao = r.lotes.find((L: any) => !L.emissivo && !L.aspereza && !L.corMul && !L.semLuz);
+    expect(brasa && casca && padrao).toBeTruthy();
+    // params do material carregados no lote (os nomes CASAM os uniforms do render)
+    expect(brasa.emissivo).toBeCloseTo(1.4, 6);
+    expect(brasa.semLuz).toBe(1);
+    expect(brasa.corMul.map((c: number) => Math.round(c * 255))).toEqual([0xff, 0x73, 0x26]);   // #ff7326 -> corMul
+    expect(casca.aspereza).toBeCloseTo(0.9, 6);
+    expect(casca.emissivo).toBeUndefined();                          // casca não tem emissivo -> ausente (no-op)
+    expect(casca.corMul.map((c: number) => Math.round(c * 255))).toEqual([0x6b, 0x4a, 0x2f]);
+    // subconjunto de triângulos por lote (quad -> 2 tris -> 6 v -> 48 floats): casca 2 faces, brasa 1, padrão 3
+    expect(casca.mesh.v.length).toBe(96);
+    expect(brasa.mesh.v.length).toBe(48);
+    expect(padrao.mesh.v.length).toBe(144);
+    expect(casca.mesh.v.length + brasa.mesh.v.length + padrao.mesh.v.length).toBe(288);   // o cubo inteiro, repartido
+  });
+
+  it('4) compat: peça SEM material -> UM lote só, params no-op (byte-idêntico ao 11a)', () => {
+    const semMat: any = executar([cubo, ['pincel', { modo: 'face', faces: [0], cor: '#123456' }]], {}, {}, fakeCtx);
+    expect(semMat.lotes).toHaveLength(1);
+    const L = semMat.lotes[0];
+    expect(L.emissivo).toBeUndefined(); expect(L.aspereza).toBeUndefined();
+    expect(L.semLuz).toBeUndefined(); expect(L.corMul).toBeUndefined();   // nenhum param de material -> render no-op
+    expect(L.mesh.v.length).toBe(288);                                    // o cubo inteiro num lote só
+    // executar COM material devolve mais de um lote (a face 0 vira o seu próprio lote)
+    const comMat: any = executar([cubo, ['material', { faces: [0], usa: 'casca' }]], {}, {}, fakeCtx, MAT);
+    expect(comMat.lotes.length).toBe(2);
   });
 });

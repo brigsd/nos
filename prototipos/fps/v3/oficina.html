@@ -185,6 +185,21 @@
     <div class="dica" id="pcDica">escolha uma cor — pinta as faces selecionadas</div>
   </section>
 
+  <!-- PASSO 12a: MATERIAL OPACO — só aparece com face(s) selecionada(s). Define os
+       params (cor multiplica a textura, emissivo brilha, aspereza espalha o especular,
+       sem luz chapa) e o botão APLICA às faces (['material',{faces,usa}]) com preview
+       ao vivo. O material é declarado POR NOME (auto mat1/mat2…, reusando um idêntico)
+       em MATERIAIS — mudar o material muda todas as faces dele de uma vez. -->
+  <section class="bloco" id="blocoMaterial" hidden>
+    <div class="rotulo">Material <span id="pmFaces" class="badge vazio">—</span></div>
+    <label class="campo"><input id="pmCor" type="color" value="#ffffff" aria-label="cor do material (multiplica a textura; branco = sem tinta)"></label>
+    <label class="campo"><span class="rk">emiss.</span><input id="pmEmissivo" type="range" min="0" max="2" step="0.05" value="0"><b class="rv" id="pmEmissivoV">0.00</b></label>
+    <label class="campo"><span class="rk">asper.</span><input id="pmAspereza" type="range" min="0" max="1" step="0.05" value="0"><b class="rv" id="pmAsperezaV">0.00</b></label>
+    <label class="campo" style="justify-content:flex-start"><input id="pmSemLuz" type="checkbox" style="flex:none;width:auto;margin:0"> <span class="rk" style="width:auto">sem luz (chapado)</span></label>
+    <button id="btMaterial" class="btmescla" type="button">Aplicar material às faces</button>
+    <div class="dica">cor multiplica · emissivo brilha (ignora luz) · aspereza espalha o especular · sem luz chapa</div>
+  </section>
+
   <!-- PASSO 11c: PINCEL MACIO — aparece só com o modo pincel LIGADO. Cor (reusa o
        <input type=color>+presets do passo 9) + raio e dureza (sliders). Os valores
        viram os cor/raio/dureza da op ['pincel',{modo:'livre',...}] gravada ao pintar. -->
@@ -381,6 +396,11 @@ let pincel = { cor: '#7a9c3f', raio: 0.22, dureza: 0.5 };
 let lenteAtual = [0, 0];
 let atlasAtual = null;
 const AMOSTRA_PX = 6;   // amostragem por DISTÂNCIA na tela: só um dab novo a cada ~isto de px arrastado (não gera milhares de pontos num arrasto)
+/* PASSO 12a — MATERIAIS da peça (por nome), MUTÁVEL na sessão: espelha mod.MATERIAIS
+   (ou {} se a peça não declara), o reexec passa pro executar (agrupa por material em
+   lotes) e o export grava. Aplicar um material registra um nome aqui e grava
+   ['material',{faces,usa}]. */
+let materiaisAtual = {};
 
 /* PASSO 5 — DESFAZER / REFAZER das edições DESTA sessão. O objeto É a lista
    (passo 4): toda edição é uma operação no FIM de PASSOS, então desfazer = tirar
@@ -588,12 +608,23 @@ function jsVal(v) {
   return 'null';
 }
 function jsPasso(p) { const op = jsStr(p[0]); return (p.length > 1 && p[1] !== undefined) ? `[${op}, ${jsVal(p[1])}]` : `[${op}]`; }
-/* a STRING .js completa. `PASSOS` uma op por linha (2 espaços), como o toco. */
-function serializarPeca(meta, PARAMS, TOPO, PASSOS) {
+/* a STRING .js completa. `PASSOS` uma op por linha (2 espaços), como o toco. PASSO
+   12a: se a peça tem MATERIAIS (não-vazio), grava o `export const MATERIAIS` e passa ele
+   pra executar/colisaoDe; peça SEM material sai IDÊNTICA ao de antes (sem a linha, sem o
+   arg) — a compat do formato salvo. */
+function serializarPeca(meta, PARAMS, TOPO, PASSOS, MATERIAIS) {
   const nome = (meta && meta.nome) || 'peca';
   const tipo = (meta && meta.tipo) || 'objeto';
   const desc = (meta && meta.desc) || '';
   const passosTxt = (PASSOS || []).map((p) => '  ' + jsPasso(p) + ',').join('\n');
+  const temMat = MATERIAIS && Object.keys(MATERIAIS).length > 0;
+  const matBloco = temMat ? `
+/* MATERIAIS (passo 12a): materiais POR NOME — a op \`material\` aponta faces pra um
+   nome; mudar o material aqui muda todas as faces dele. cor multiplica a textura,
+   emissivo brilha, aspereza espalha o especular, semLuz chapa. Só opaco no 12a. */
+export const MATERIAIS = ${jsVal(MATERIAIS)};
+` : '';
+  const argMat = temMat ? ', MATERIAIS' : '';
   return `/* ${nome} — peça-objeto gerada pela OFICINA (exportar, passo 10). Descrita
    100% como lista de PASSOS + PARAMS/TOPO e reconstruída por \`executar\`; a Oficina
    relê este mesmo arquivo pra reabrir a edição (por isso PARAMS/TOPO/PASSOS são
@@ -607,7 +638,7 @@ export const PARAMS = ${jsVal(PARAMS || {})};
 
 /* topológico: mudar RECONSTRÓI e pode deixar os passos seguintes órfãos. */
 export const TOPO = ${jsVal(TOPO || {})};
-
+${matBloco}
 /* exportado (não \`const\` privado): sem isto a Oficina não relê a lista e o
    arquivo nunca mais reabre pra edição. Os passos citam o NOME do parâmetro. */
 export const PASSOS = [
@@ -620,10 +651,10 @@ export const meta = {
   desc: ${jsStr(desc)},
   /* CALCULADA, não guardada: o jogo lê isto no carregamento do módulo, antes de
      construir(). colisaoDe roda só a geometria e encaixa a colisão na malha FINAL. */
-  colisao: colisaoDe(PASSOS, PARAMS, TOPO),
+  colisao: colisaoDe(PASSOS, PARAMS, TOPO${argMat}),
 };
 
-export function construir(ctx) { return executar(PASSOS, PARAMS, TOPO, ctx); }
+export function construir(ctx) { return executar(PASSOS, PARAMS, TOPO, ctx${argMat}); }
 `;
 }
 
@@ -893,7 +924,8 @@ try {
     const { PASSOS } = mod;
     if (!Array.isArray(PASSOS)) throw new Error('a peça não exporta PASSOS — o envelope pede PARAMS/TOPO/PASSOS exportados');
     const PARAMS = mod.PARAMS ?? {}, TOPO = mod.TOPO ?? {};
-    const { V, F } = nucleo(PASSOS, PARAMS, TOPO);
+    materiaisAtual = mod.MATERIAIS ?? {};   // PASSO 12a: os materiais da peça (por nome); a sessão pode acrescentar/aplicar
+    const { V, F } = nucleo(PASSOS, PARAMS, TOPO, materiaisAtual);
     neutro = { V, F };   // módulo-escopo: o hit-test do #c e o overlay leem o MESMO neutro
 
     /* ---- PASSO 4: MÁQUINA de seleção + arrasto de vértice (o MILESTONE) --------
@@ -905,8 +937,8 @@ try {
        objeto com o vértice movido — o ciclo fechado do doc. */
     const ctxMotor = { TS, tex, geo, m4 };
     const reexec = (passos) => {                       // lista -> render (executar) + overlay (nucleo)
-      visor.carregar(executar(passos, PARAMS, TOPO, ctxMotor));
-      const r = nucleo(passos, PARAMS, TOPO);
+      visor.carregar(executar(passos, PARAMS, TOPO, ctxMotor, materiaisAtual));   // PASSO 12a: MATERIAIS -> lotes por material (o render aplica cada param por lote)
+      const r = nucleo(passos, PARAMS, TOPO, materiaisAtual);
       neutro = { V: r.V, F: r.F };
       atlasAtual = adaptarV3(r, ctxMotor).atlas;   // PASSO 11c: o mapa superfície→{u,v} do atlas por face, mantido FRESCO pro raycast do pincel (a geometria mudou → o atlas também). A peça é pequena; o adaptador é o MESMO do render (motor/oficina.js, provado).
     };
@@ -933,7 +965,7 @@ try {
     function atualizarColisao() {
       if (!$('pcolForma')) return;   // markup ausente: no-op (robustez)
       let col = null;
-      try { col = colisaoDe(PASSOS, PARAMS, TOPO); } catch { col = null; }
+      try { col = colisaoDe(PASSOS, PARAMS, TOPO, materiaisAtual); } catch { col = null; }   // PASSO 12a: MATERIAIS pra a op `material` não gritar (a colisão é só geometria — material não a muda)
       $('pcolR').textContent = col ? col.raio.toFixed(3) : '—';
       $('pcolH').textContent = col ? col.altura.toFixed(3) : '—';
       $('pcolB').textContent = col ? col.base.toFixed(3) : '—';
@@ -991,6 +1023,20 @@ try {
           if (pcCor && document.activeElement !== pcCor) pcCor.value = neutro.F.get(faceSelecionada).cor ?? COR_PADRAO;
         }
       }
+      // PASSO 12a: bloco de MATERIAL — aparece com face(s) selecionada(s); o badge mostra
+      // o material EFETIVO da ATIVA (read-back: neutro.F.material, ou "sem" + nº de faces).
+      const blocoMaterial = $('blocoMaterial');
+      if (blocoMaterial) {
+        blocoMaterial.hidden = !temFace;
+        if (temFace) {
+          const pmFaces = $('pmFaces');
+          if (pmFaces) {
+            const mat = neutro.F.get(faceSelecionada).material;
+            pmFaces.textContent = (mat ? `${mat} · ` : 'sem · ') + `${selFaces.length} face${selFaces.length > 1 ? 's' : ''}`;
+            pmFaces.classList.toggle('vazio', !mat);
+          }
+        }
+      }
       const dims = bboxNeutro();
       $('pdx').textContent = dims ? dims[0].toFixed(3) : '—';
       $('pdy').textContent = dims ? dims[1].toFixed(3) : '—';
@@ -1041,6 +1087,20 @@ try {
         malhaCtl.pintar(cor);
       }); }
 
+    /* PASSO 12a — MATERIAL. Os sliders mostram o valor ao vivo; o botão aplica o
+       material às faces selecionadas (malhaCtl.aplicarMaterial), lendo cor/emissivo/
+       aspereza/semLuz do bloco. malhaCtl já está montado quando o bloco fica visível. */
+    {
+      const em = $('pmEmissivo'), emV = $('pmEmissivoV'), as = $('pmAspereza'), asV = $('pmAsperezaV');
+      if (em && emV) em.addEventListener('input', () => { emV.textContent = (+em.value).toFixed(2); });
+      if (as && asV) as.addEventListener('input', () => { asV.textContent = (+as.value).toFixed(2); });
+      const bt = $('btMaterial');
+      if (bt) bt.addEventListener('click', () => {
+        if (!malhaCtl) return;
+        malhaCtl.aplicarMaterial({ cor: $('pmCor').value, emissivo: +$('pmEmissivo').value, aspereza: +$('pmAspereza').value, semLuz: $('pmSemLuz').checked });
+      });
+    }
+
     /* PASSO 10 — o botão "marcar sólido" grava pela MESMA via de malhaCtl.marcarSolido
        (a guarda de arrasto + o no-op de já-sólido cobrem). malhaCtl já está montado
        quando o botão fica visível (só aparece com face selecionada). Sem tecla
@@ -1052,7 +1112,7 @@ try {
        TOPO) e POSTa pro servidor de dev; sem servidor, baixa o .js (fallback). */
     { const bt = $('btSalvar'); if (bt) bt.addEventListener('click', async () => {
         bt.disabled = true;
-        try { await salvarPeca(mod.meta.nome, serializarPeca(mod.meta, PARAMS, TOPO, PASSOS)); }
+        try { await salvarPeca(mod.meta.nome, serializarPeca(mod.meta, PARAMS, TOPO, PASSOS, materiaisAtual)); }
         finally { bt.disabled = false; }
       }); }
 
@@ -1305,6 +1365,40 @@ try {
         atualizarPassos();
         atualizarPainel();
         console.log(`oficina passo 10 (solido): ['solido', {faces:[${faces.join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+
+      /* ---- PASSO 12a: APLICAR UM MATERIAL ÀS FACES SELECIONADAS -------------- */
+      /* Registra um material POR NOME em materiaisAtual (auto mat1/mat2…, REUSANDO um
+         de params idênticos) com os params que FAZEM algo (cor≠branco / emissivo>0 /
+         aspereza>0 / semLuz — o resto ausente = no-op no render), e grava
+         ['material',{faces:[ORDENADAS],usa}] no fim de PASSOS + reexec (o adaptarV3
+         agrupa por material em LOTES; o render aplica cor/emissivo/aspereza/semLuz POR
+         LOTE, padrão do uRim). Limpa o redo. Desfazível. Espelha as guardas do
+         pintar/marcarSolido: no-op no arrasto, no-op sem face, no-op se TODAS as faces
+         já estão nesse material (sem passo fantasma). Devolve o passo (ou null). */
+      aplicarMaterial(params) {
+        if (arrasto) return null;                        // guarda: não aplica com edição em voo
+        if (!selFaces.length || !neutro) return null;    // precisa de face(s) selecionada(s)
+        const faces = selFaces.filter((id) => neutro.F.has(id)).sort((a, b) => a - b);
+        if (!faces.length) return null;
+        const def = {};                                  // só os params NÃO-default (default = ausente = no-op)
+        const cor = String(params.cor || '').toLowerCase();
+        if (cor && cor !== '#ffffff') def.cor = cor;     // branco = multiplicar por 1 = sem tinta
+        if (params.emissivo > 0) def.emissivo = +params.emissivo;
+        if (params.aspereza > 0) def.aspereza = +params.aspereza;
+        if (params.semLuz) def.semLuz = true;
+        const sig = (d) => JSON.stringify(Object.entries(d).sort());   // assinatura estável (ordem de chave)
+        let usa = Object.keys(materiaisAtual).find((n) => sig(materiaisAtual[n]) === sig(def));   // reusa um material idêntico
+        if (!usa) { let i = 1; while (materiaisAtual['mat' + i]) i++; usa = 'mat' + i; materiaisAtual[usa] = def; }   // senão o 1º matN livre
+        if (faces.every((id) => neutro.F.get(id).material === usa)) return null;   // já todas nesse material: sem passo fantasma
+        const passo = ['material', { faces, usa }];
+        PASSOS.push(passo);
+        redo.length = 0;                                 // edição nova invalida o refazer (semântica do passo 5)
+        reexec(PASSOS);                                  // recarrega: lotes por material + params por lote
+        atualizarPassos();
+        atualizarPainel();
+        console.log(`oficina passo 12a (material): ['material', {faces:[${faces.join(', ')}], usa:'${usa}'}] = ${JSON.stringify(def)} — PASSOS agora ${PASSOS.length}`);
         return JSON.parse(JSON.stringify(passo));
       },
 
@@ -1837,7 +1931,7 @@ try {
     passos: () => JSON.parse(JSON.stringify(mod.PASSOS)),             // a lista EDITADA (serializável)
     nPassos: () => mod.PASSOS.length,
     ultimoPasso: () => { const u = mod.PASSOS[mod.PASSOS.length - 1]; return u ? JSON.parse(JSON.stringify(u)) : null; },
-    canon: () => neutroCanonico(nucleo(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {})),   // neutro CANÔNICO dos PASSOS atuais (replay determinístico)
+    canon: () => neutroCanonico(nucleo(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual)),   // neutro CANÔNICO dos PASSOS atuais (replay determinístico; PASSO 12a: com MATERIAIS pra a op `material` não gritar e o f.material entrar na canon)
     /* ---- PASSO 5: ganchos de desfazer/refazer (a bancada dispara e afirma) --- */
     desfazer: () => desfazer(),      // tira a última edição (se >baseline) e reexec; devolve false = no-op (piso)
     refazer: () => refazer(),        // devolve a última desfeita ao fim da lista; false = redo vazio
@@ -1885,14 +1979,19 @@ try {
     corEfetiva: (id) => { const f = neutro && neutro.F.get(id); return f ? (f.cor ?? COR_PADRAO) : null; }, // cor que a face MOSTRA (null vira COR_PADRAO) — bate o read-back do input
     corPadrao: COR_PADRAO,                                                             // a madeira neutra do adaptador, espelhada aqui (a bancada prova que a paleta concorda)
     painelCor: () => ({ vis: !$('blocoCor').hidden, cor: $('pcCor').value, faces: $('pcFaces').textContent }),   // leitura do bloco de cor pra a bancada afirmar
+    /* ---- PASSO 12a: material opaco (a bancada mede/afirma) ------------------- */
+    aplicarMaterial: (params) => (malhaCtl ? malhaCtl.aplicarMaterial(params || {}) : null),   // aplica o material às faces selecionadas; devolve o passo (ou null se no-op/guarda)
+    materialDaFace: (id) => { const f = neutro && neutro.F.get(id); return f ? (f.material ?? null) : null; },   // nome do material da face no neutro (null = sem)
+    materiais: () => JSON.parse(JSON.stringify(materiaisAtual)),                        // o dicionário MATERIAIS atual (por nome)
+    painelMaterial: () => ({ vis: !$('blocoMaterial').hidden, badge: $('pmFaces').textContent }),   // leitura do bloco de material pra a bancada afirmar
     /* ---- PASSO 10: sólido + colisão + serialização + salvar (a bancada mede) --- */
     marcarSolido: () => (malhaCtl ? malhaCtl.marcarSolido() : null),                  // marca as faces selecionadas como sólidas; devolve o passo (ou null se no-op/guarda)
     solidoDe: (id) => { const f = neutro && neutro.F.get(id); return f ? !!f.solido : false; },   // a face id é sólida no neutro?
     temSolido: () => { const F = neutro && neutro.F; return F ? [...F.values()].some((f) => f.solido) : false; },   // há ALGUMA face sólida?
-    colisao: () => { try { return colisaoDe(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}); } catch { return null; } },   // {forma,raio,altura,base} do estado atual (a MESMA função que o arquivo salvo chama no load)
+    colisao: () => { try { return colisaoDe(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual); } catch { return null; } },   // {forma,raio,altura,base} do estado atual (a MESMA função que o arquivo salvo chama no load)
     painelColisao: () => ({ forma: $('pcolForma').textContent, raio: $('pcolR').textContent, altura: $('pcolH').textContent, base: $('pcolB').textContent, aviso: !$('pcolAviso').hidden, btSolido: !$('btSolido').hidden }),   // leitura do bloco Colisão pra a bancada afirmar
-    serializar: () => serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS),   // a STRING .js do export (do estado ATUAL)
-    salvar: () => salvarPeca(mod.meta.nome, serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS)),   // dispara o salvar (POST → fallback download); devolve {via,...}
+    serializar: () => serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual),   // a STRING .js do export (do estado ATUAL, com MATERIAIS)
+    salvar: () => salvarPeca(mod.meta.nome, serializarPeca(mod.meta, mod.PARAMS ?? {}, mod.TOPO ?? {}, mod.PASSOS, materiaisAtual)),   // dispara o salvar (POST → fallback download); devolve {via,...}
     ultimoDownload: () => (ultimoDownload ? { ...ultimoDownload } : null),            // o último download disparado pelo fallback (null = nenhum ainda)
     nomePeca: () => mod.meta.nome,                                                    // o nome do arquivo que o salvar usa
     /* ---- PASSO 11c: pincel macio — pintar arrastando (a bancada mede/afirma) ---- */

@@ -197,6 +197,20 @@ const OPS = {
   },
   solido(st, a, i) { for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'solido', fid, 'face inexistente'); continue; } f.solido = true; } },
   liso(st, a, i) { for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'liso', fid, 'face inexistente'); continue; } f.liso = true; } },
+
+  /* material (passo 12a): seta f.material = NOME de um material DECLARADO em
+     MATERIAIS (a peça-nível, como PARAMS/TOPO). Só o NOME entra na face — mudar o
+     material muda TODAS as faces dele de uma vez (um dono só, a regra do doc); os
+     params (cor/emissivo/aspereza/semLuz/contorno) o adaptarV3 resolve em MATERIAIS
+     e o render aplica POR LOTE (padrão do uRim). Grita se `usa` não é um material
+     declarado, ou se a face não existe — nunca corrompe (lei do envelope). Face SEM
+     material segue idêntica (o lote PADRÃO no-op). `hasOwn` (não `in`) pra um nome
+     como 'toString' não passar pela cadeia de protótipos. */
+  material(st, a, i) {
+    const usa = a.usa;
+    if (!Object.hasOwn(st.materiais, usa)) return grita(st, i, 'material', usa, `material '${usa}' não existe em MATERIAIS`);
+    for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'material', fid, 'face inexistente'); continue; } f.material = usa; }
+  },
 };
 
 /* ----------------------------------------------------------------------------
@@ -204,7 +218,7 @@ const OPS = {
    `dict` funde PARAMS e TOPO — os passos citam o NOME (raio: 'troncoR'), então
    trocar o valor reconstrói sem tocar em número nenhum da lista.
 ---------------------------------------------------------------------------- */
-export function nucleo(PASSOS, PARAMS = {}, TOPO = {}) {
+export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}) {
   const dict = { ...PARAMS, ...TOPO };
   const num = (v) => {
     if (typeof v === 'number') return v;
@@ -212,7 +226,10 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}) {
     throw new Error(`oficina: valor numérico inválido: ${JSON.stringify(v)}`);
   };
   const vec = (a) => a.map(num);
-  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], num, vec };
+  /* materiais: o dicionário POR NOME (a peça declara em MATERIAIS) que a op
+     `material` valida contra e o adaptarV3 lê pra montar os params por lote. Como
+     PARAMS/TOPO, é dado da peça — o padrão {} deixa toda peça sem material intacta. */
+  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], num, vec, materiais: MATERIAIS };
 
   PASSOS.forEach((passo, i) => {
     const [op, args = {}] = passo;
@@ -295,7 +312,7 @@ function eixoDominante(n) {
 }
 const OUTROS_EIXOS = [[1, 2], [0, 2], [0, 1]];   // eixos de projeção por eixo dominante
 
-export function adaptarV3(neutro, ctx) {
+export function adaptarV3(neutro, ctx, MATERIAIS = {}) {
   const { V, F } = neutro;
   const faces = [...F.values()].sort((a, b) => a.id - b.id);
 
@@ -386,11 +403,18 @@ export function adaptarV3(neutro, ctx) {
     return [Math.round(r), Math.round(g), Math.round(b)];
   });
 
-  /* triângulos soltos: leque por face; o UV do vértice sai da projeção da PRÓPRIA
-     ilha (a mesma `projeta` do atlas). Normal chapada, ou suave em face `liso`. */
-  const mesh = { v: [] };
+  /* PASSO 12a — LOTES POR MATERIAL. Triângulos soltos (leque por face; UV da PRÓPRIA
+     ilha, normal chapada ou suave em `liso`) AGRUPADOS por f.material: faces do MESMO
+     material (o nome que a op `material` pôs) caem num só lote; faces SEM material vão
+     pro lote PADRÃO (params no-op). Todos DIVIDEM a MESMA textura-atlas — cada lote é
+     só o subconjunto de triângulos do seu grupo. Peça sem NENHUM material => um único
+     grupo (null), na ORDEM de id => mesh BYTE-idêntico ao 11a (compat inegociável). */
+  const grupos = new Map();   // chave (f.material || '') -> { mat:nome|null, mesh:{v} }
   for (const f of faces) {
     if (f.vs.some((v) => !V.has(v))) continue;   // defensivo: nunca desenha canto pendurado
+    const ch = f.material || '';
+    let g = grupos.get(ch);
+    if (!g) { g = { mat: f.material || null, mesh: { v: [] } }; grupos.set(ch, g); }
     const projeta = atlasFace.get(f.id).projeta;
     const nf = nFace.get(f.id);
     const c0 = f.vs[0];
@@ -399,9 +423,27 @@ export function adaptarV3(neutro, ctx) {
         const p = V.get(v);
         const uv = projeta(p);
         const n = f.liso && nSuave.has(v) ? nSuave.get(v) : nf;
-        mesh.v.push(p[0], p[1], p[2], uv[0], uv[1], n[0], n[1], n[2]);
+        g.mesh.v.push(p[0], p[1], p[2], uv[0], uv[1], n[0], n[1], n[2]);
       }
     }
+  }
+
+  /* cada grupo -> um lote com a mesh do subconjunto + os PARAMS do material (ausentes
+     no grupo padrão -> render no-op). `cor` do material MULTIPLICA a textura (corMul em
+     0..1 -> uCorMul); `contorno` é o uRim POR MATERIAL; emissivo/aspereza/semLuz seguem
+     o padrão do uRim no render.js (default = efeito nenhum). Os nomes CASAM os uniforms. */
+  const lotes = [];
+  for (const g of grupos.values()) {
+    const L = { mesh: g.mesh };
+    const m = g.mat ? (MATERIAIS[g.mat] || {}) : null;
+    if (m) {
+      if (m.cor) L.corMul = hexRGB(m.cor).map((c) => c / 255);
+      if (m.emissivo) L.emissivo = +m.emissivo;
+      if (m.aspereza) L.aspereza = +m.aspereza;
+      if (m.semLuz) L.semLuz = 1;
+      if (m.contorno) L.rim = +m.contorno;
+    }
+    lotes.push(L);
   }
 
   /* atlas: o mapa por face pro passo 11b (superfície -> texel). `daFace(id)` dá a
@@ -411,29 +453,32 @@ export function adaptarV3(neutro, ctx) {
      pincelada nunca escapa pra vizinha). Anexado ao retorno; `executar`/a peça
      consomem {mesh,tex} e ignoram este campo. */
   const atlas = { W, H, cols, rows, tile: ATLAS_TILE, gutter: ATLAS_GUTTER, daFace: (id) => atlasFace.get(id) };
-  return { mesh, tex, atlas };
+  return { lotes, tex, atlas };
 }
 
 /* ----------------------------------------------------------------------------
    API pública que a PEÇA usa.
 ---------------------------------------------------------------------------- */
 /* executar: roda a lista e devolve o objeto pronto pro visor
-   ({lotes:[{mesh:{v}, tex, matriz}], ...}). É núcleo + adaptador. */
-export function executar(PASSOS, PARAMS, TOPO, ctx) {
-  const neutro = nucleo(PASSOS, PARAMS, TOPO);
+   ({lotes:[{mesh:{v}, tex, matriz, ...params-de-material}], ...}). É núcleo +
+   adaptador. MATERIAIS (passo 12a) é dado da peça, como PARAMS/TOPO — vem por ÚLTIMO
+   e o padrão {} deixa toda peça sem material com UM lote só, byte-idêntico ao 11a.
+   Os lotes DIVIDEM a mesma tex/matriz; cada um carrega os params do seu material. */
+export function executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}) {
+  const neutro = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS);
   if (!ctx || !ctx.tex || !ctx.tex.texCanvas) throw new Error('oficina.executar precisa de ctx {tex,...} do motor v3');
   if (neutro.orfaos.length && typeof console !== 'undefined') console.warn(`oficina: ${neutro.orfaos.length} órfão(s) —`, neutro.orfaos);
-  const { mesh, tex } = adaptarV3(neutro, ctx);
+  const { lotes, tex } = adaptarV3(neutro, ctx, MATERIAIS);
   const matriz = ctx.m4 ? ctx.m4.ident() : undefined;
-  return { lotes: [{ mesh, tex, matriz }], camera: { e: 1.05, r: 2.9 } };
+  return { lotes: lotes.map((L) => ({ ...L, tex, matriz })), camera: { e: 1.05, r: 2.9 } };
 }
 
 /* colisaoDe: SÓ a geometria (sem adaptador/textura/pincel) -> descritor de
    colisão encaixado na malha FINAL (depois das extrusões). Roda no CARREGAMENTO
    do módulo, então é barato e tem um dono só (nada de número medido e guardado).
    Encaixa nas faces `solido` se houver; senão, na malha toda. */
-export function colisaoDe(PASSOS, PARAMS, TOPO) {
-  const { V, F } = nucleo(PASSOS, PARAMS, TOPO);
+export function colisaoDe(PASSOS, PARAMS, TOPO, MATERIAIS = {}) {
+  const { V, F } = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS);
   let ids = new Set();
   for (const f of F.values()) if (f.solido) for (const v of f.vs) ids.add(v);
   if (!ids.size) ids = new Set(V.keys());

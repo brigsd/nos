@@ -13,6 +13,9 @@ const SUN_COL = [1.05, 0.98, 0.84], SKY_TOP = [0.55, 0.72, 0.95], SKY_HZ = [0.86
    luz 0=só ambiente/1=sol+sombra(atual)/2=+rebote falso; partículas = contagem direta */
 const SOMBRA_SM = { 0: 64, 1: 1024, 2: 2048 };
 const LUZ_TIER = { 0: { diff: 0, bounce: 0 }, 1: { diff: 1, bounce: 0 }, 2: { diff: 1, bounce: 0.12 } };
+/* MATERIAL (12a): cor-multiplicador NEUTRO. Um lote sem material multiplica a textura
+   por 1 (no-op) — o padrão do uRim aplicado a uma cor: default = efeito nenhum. */
+const CORMUL_UM = [1, 1, 1];
 
 const PACK = `
   vec4 packDepth(float d){ vec4 e = fract(d * vec4(1.0,255.0,65025.0,16581375.0)); e -= e.yzww * (1.0/255.0); return e; }
@@ -98,6 +101,11 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     uniform sampler2D uTex, uShadow;
     uniform vec3 uSun, uSunCol, uSkyTop, uSkyHz, uGround; uniform vec2 uFog; uniform vec3 uCam; uniform float uRim; out vec4 outColor; ${PACK}
     uniform float uShadowTexel, uDiffOn, uBounce, uToon, uDebug;
+    // MATERIAL POR LOTE (12a) — o padrão do uRim: cada um default = efeito NENHUM, então
+    // com material desligado o pixel sai BYTE-idêntico ao de antes. uCorMul=(1,1,1)
+    // multiplica a textura (neutro); uEmissivo=0 sem brilho próprio; uAspereza=0 sem
+    // especular; uSemLuz=0 sombreamento normal.
+    uniform float uEmissivo, uAspereza, uSemLuz; uniform vec3 uCorMul;
     float shadow(){
       vec3 lc = vLP.xyz / vLP.w * 0.5 + 0.5;
       if (lc.x < 0.0 || lc.x > 1.0 || lc.y < 0.0 || lc.y > 1.0 || lc.z > 1.0) return 1.0;
@@ -109,18 +117,29 @@ export function criarVisor({ canvas, res = 640, camOrbita = true, cam = {}, somb
     }
     void main(){
       vec4 tx = texture(uTex, vUV); if (tx.a < 0.5) discard;
+      tx.rgb *= uCorMul;   // MATERIAL cor: multiplica a textura. ×(1,1,1)=no-op — mult por 1.0 é EXATO em IEEE, então byte-idêntico com material desligado
       vec3 N = normalize(vN);
       float diff = max(0.0, dot(N, uSun)) * uDiffOn;
       vec3 amb = mix(uGround, mix(uSkyHz, uSkyTop, clamp(N.y,0.0,1.0)), N.y*0.5+0.5) * 0.5;
       amb += uGround * uBounce * max(0.0, -N.y);   // rebote falso embaixo de copas/beirais (tier Alto)
-      float sunL = diff * shadow();
+      float sh = shadow(); float sunL = diff * sh;   // sh nomeado pro especular reusar (== diff*shadow() de antes, byte-idêntico)
       // CEL (toon, D-63): quantiza a luz do sol em 3 DEGRAUS duros — a faixa clara
       // é o "brilho" e SEGUE o sol (some de noite/contraluz), sem baked na textura.
       if (uToon > 0.5) sunL = sunL > 0.6 ? 1.15 : sunL > 0.24 ? 0.55 : 0.0;
       vec3 lit = tx.rgb * (amb + uSunCol * sunL);
+      if (uAspereza > 0.0) {   // MATERIAL aspereza: brilho ESPECULAR (Blinn-Phong). aspereza = ESPALHAMENTO -> expoente MENOR = mancha maior/mais espalhada. 0 = sem especular (no-op)
+        vec3 H = normalize(uSun + normalize(uCam - vW));
+        float esp = pow(max(0.0, dot(N, H)), mix(48.0, 6.0, clamp(uAspereza, 0.0, 1.0)));
+        lit += uSunCol * esp * diff * sh;   // segue o sol: lambert (diff, já com uDiffOn) × sombra (sh) — some no contraluz, na sombra e no tier só-ambiente
+      }
       if (uRim > 0.0) {   // contorno de tinta FINO (fresnel): só a borda mais rasante à vista
         float r = 1.0 - abs(dot(N, normalize(uCam - vW)));
         lit = mix(lit, vec3(0.11, 0.09, 0.12), uRim * smoothstep(0.78, 0.97, r));
+      }
+      if (uSemLuz > 0.5) lit = tx.rgb;   // MATERIAL semLuz: CHAPADO — ignora lambert/sombra/especular/rim (céu, símbolo, interface no mundo). 0 = sombreado normal (no-op)
+      if (uEmissivo > 0.0) {   // MATERIAL emissivo: BRILHA a própria cor ignorando luz/sombra. =1 -> cor cheia; >1 -> estoura (brasa, portal, janela acesa). 0 = no-op
+        lit = mix(lit, tx.rgb, min(uEmissivo, 1.0));
+        lit += tx.rgb * max(uEmissivo - 1.0, 0.0);
       }
       vec3 sky = uSkyHz; /* derrete pro tom do HORIZONTE do fundo (sem degrau) */
       float fog = clamp(1.0 - (vD - uFog.x)/uFog.y, 0.0, 1.0);
@@ -338,7 +357,7 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
       const meshCache = new Map(), texCache = new Map();
       const getMesh = (m) => { let g = meshCache.get(m); if (!g) { g = glMesh(m); meshCache.set(m, g); } return g; };
       const getTex = (t) => { let g = texCache.get(t); if (!g) { g = glTex(t); texCache.set(t, g); } return g; };
-      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0, wind: L.wind || 0, windF: L.windF || 1.3 }));
+      lotes = peca.lotes.map(L => ({ mesh: getMesh(L.mesh), tex: getTex(L.tex), matriz: L.matriz || m4.ident(), rim: L.rim || 0, outline: L.outline || 0, outlineInk: L.outlineInk || null, toon: L.toon || 0, wind: L.wind || 0, windF: L.windF || 1.3, emissivo: L.emissivo || 0, aspereza: L.aspereza || 0, semLuz: L.semLuz || 0, corMul: L.corMul || null }));
       animar = peca.animar || null;
       semPalco = peca.palco === false;
       semParts = peca.particulas === false;
@@ -442,6 +461,10 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
         const uTo = gl.getUniformLocation(prg, 'uToon');
         const uWnd = gl.getUniformLocation(prg, 'uWind');   // VENTO: existe nos DOIS passes (cena+depth)
         const uWF = gl.getUniformLocation(prg, 'uWindF');   // VENTO: ritmo por lote
+        const uEm = gl.getUniformLocation(prg, 'uEmissivo');   // MATERIAL (12a): só no passe de CENA; null no depth (guardado como o uRim)
+        const uAs = gl.getUniformLocation(prg, 'uAspereza');
+        const uSL = gl.getUniformLocation(prg, 'uSemLuz');
+        const uCM = gl.getUniformLocation(prg, 'uCorMul');
         const base = semPalco ? lotes : [stage, ...lotes];
         /* extras só no passe de cor: colisor de depuração projetando sombra no
            chão confundiria mais do que ajuda */
@@ -452,6 +475,10 @@ precision mediump float; uniform vec3 uInk; out vec4 outColor; void main(){ outC
           if (uTo) gl.uniform1f(uTo, L.toon || 0);       // cel-shading por lote
           if (uWnd) gl.uniform1f(uWnd, L.wind || 0);     // VENTO: amplitude por lote (chão/prédio = 0)
           if (uWF) gl.uniform1f(uWF, L.windF || 1.3);    // VENTO: ritmo por lote (árvore 0.9, grama 2.6)
+          if (uEm) gl.uniform1f(uEm, L.emissivo || 0);   // MATERIAL: brilho próprio por lote (0 = no-op)
+          if (uAs) gl.uniform1f(uAs, L.aspereza || 0);   // MATERIAL: espalhamento do especular (0 = sem especular)
+          if (uSL) gl.uniform1f(uSL, L.semLuz || 0);     // MATERIAL: chapado sem luz (0 = sombreado)
+          if (uCM) { const c = L.corMul || CORMUL_UM; gl.uniform3f(uCM, c[0], c[1], c[2]); }   // MATERIAL: cor multiplicadora ((1,1,1) = no-op)
           gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L.tex);   // ambos os passes: alfa p/ recorte
           gl.bindBuffer(gl.ARRAY_BUFFER, L.mesh.buf);
           gl.enableVertexAttribArray(aL.pos); gl.vertexAttribPointer(aL.pos, 3, gl.FLOAT, false, 32, 0);

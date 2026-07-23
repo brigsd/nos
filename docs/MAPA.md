@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-195 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+196 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -172,6 +172,7 @@
 - `_elenco.js` — scratch: ELENCO completo do carimbo — uma de cada espécie em fila, pro ideador ver tudo.
 - `_frondosa.js` — scratch: prova de 'seca'/'raiz' (malhas separadas, afiadas) + 'frondosa' (copa fundida). Fila: seca | raiz | 4× frondosa.
 - `_modelo.js` — _modelo — o "olá mundo" da OFICINA (D-55): copie este arquivo pra criar uma peça nova. Mostra o contrato inteiro: textura procedural, geometria e ANIMAÇÃO (m…
+- `_oficina-materiais.js` — PEÇA-EXEMPLO da OFICINA (passo 12a): MATERIAIS OPACOS. Um toco com BRASA — um cilindro de casca (cor + aspereza) e o topo como brasa que BRILHA (emissivo + s…
 - `_oficina-toco.js` — PEÇA-EXEMPLO da OFICINA (passo 1): um toco de árvore descrito 100% como lista de PASSOS e reconstruído por `executar` — prova a cadeia inteira núcleo -> adap…
 - `_pinheiros.js` — scratch: variações do PINHEIRO (não versionar/publicar). Mesmo padrão que o ideador aprovou no _arvformas — saias empilhadas (escada) + agulha verde escuro "…
 - `_raiz1.js` — scratch: close da RAIZ — tronco ranhurado + pé de raízes liso com sombra (malhas separadas).
