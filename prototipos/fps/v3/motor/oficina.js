@@ -59,7 +59,7 @@ function distintos(vs) { return new Set(vs).size; }
    suficiente pra provar o modelo e as partes difíceis; as ~20 da tabela do doc
    entram depois, cada uma como mais uma entrada aqui.
 ---------------------------------------------------------------------------- */
-function Face(id, vs) { return { id, vs, cor: null, material: null, liso: false, solido: false }; }
+function Face(id, vs) { return { id, vs, cor: null, material: null, liso: false, solido: false, tinta: [] }; }
 
 function addV(st, id, pos) {
   if (st.V.has(id)) throw new Error(`oficina: colisão de id de vértice ${id} (bloco pequeno? passo mal-formado?)`);
@@ -170,8 +170,30 @@ const OPS = {
 
   /* ---- atributos por face ---- */
   pincel(st, a, i) {
-    if (a.modo && a.modo !== 'face') return grita(st, i, 'pincel', a.modo, `modo '${a.modo}' fora do passo 1 (só 'face')`);
-    for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'pincel', fid, 'face inexistente'); continue; } f.cor = a.cor ?? null; }
+    const modo = a.modo ?? 'face';
+    if (modo === 'face') {   // passo 9: preenche faces INTEIRAS de uma cor chapada (f.cor). Compat pra trás: intocado.
+      for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'pincel', fid, 'face inexistente'); continue; } f.cor = a.cor ?? null; }
+      return;
+    }
+    if (modo === 'livre') {
+      /* passo 11b — PINCEL MACIO: cada ponto é um DAB (pincelada radial) numa FACE,
+         ancorado à posição FACE-LOCAL {a,b} — as coords s,t da projeção do atlas em
+         [0,1] (`s=(p[pa]-aMin)/aSpan`), NÃO um texel cru. É isso que faz a tinta
+         ACOMPANHAR a face: mover um vértice depois muda a projeção/o UV, mas o dab
+         segue no mesmo {a,b} (não desliza pra outro texel). `raio`/`dureza` são do
+         pincel (a mesma pincelada) — gravados POR dab pra a face ficar auto-contida e
+         o replay ser determinístico. Ordem de `pontos`/dos pushes = ordem de PINTURA
+         (o rasterizador compõe mais nova por cima). Ponto com face inexistente GRITA
+         (órfão), nunca corrompe (lei do envelope). */
+      const cor = a.cor ?? null, raio = st.num(a.raio ?? 0), dureza = st.num(a.dureza ?? 0);
+      for (const pt of a.pontos ?? []) {
+        const f = st.F.get(pt.f);
+        if (!f) { grita(st, i, 'pincel', pt.f, 'face inexistente'); continue; }
+        f.tinta.push({ a: st.num(pt.a ?? 0), b: st.num(pt.b ?? 0), cor, raio, dureza });
+      }
+      return;
+    }
+    return grita(st, i, 'pincel', modo, `modo '${modo}' desconhecido (só 'face' e 'livre')`);
   },
   solido(st, a, i) { for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'solido', fid, 'face inexistente'); continue; } f.solido = true; } },
   liso(st, a, i) { for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'liso', fid, 'face inexistente'); continue; } f.liso = true; } },
@@ -209,7 +231,15 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}) {
 export function neutroCanonico(neutro) {
   return {
     V: [...neutro.V.entries()].sort((a, b) => a[0] - b[0]).map(([id, p]) => [id, p[0], p[1], p[2]]),
-    F: [...neutro.F.values()].sort((a, b) => a.id - b.id).map((f) => [f.id, f.vs.slice(), f.cor ?? null, f.material ?? null, !!f.liso, !!f.solido]),
+    F: [...neutro.F.values()].sort((a, b) => a.id - b.id).map((f) => {
+      const row = [f.id, f.vs.slice(), f.cor ?? null, f.material ?? null, !!f.liso, !!f.solido];
+      /* tinta (pincel macio, 11b): só entra quando a face TEM dab. Assim toda peça
+         sem pincel livre (o passo 1..11a inteiro, incl. o toco) canoniza BYTE-idêntico
+         ao de antes — a compat pra trás é inegociável. Forma fixa [a,b,cor,raio,dureza]
+         por dab, na ordem de pintura, pra o JSON ir-e-voltar igual (determinismo). */
+      if (f.tinta && f.tinta.length) row.push(f.tinta.map((t) => [t.a, t.b, t.cor ?? null, t.raio, t.dureza]));
+      return row;
+    }),
     orfaos: neutro.orfaos.map((o) => ({ passo: o.passo, op: o.op, ref: o.ref ?? null, motivo: o.motivo })),
     merges: neutro.merges.map((m) => ({ de: m.de.slice(), para: m.para })),
   };
@@ -312,16 +342,48 @@ export function adaptarV3(neutro, ctx) {
     atlasFace.set(f.id, { ilha: { x: ix, y: iy, w: iw, h: ih }, dom, projeta });
   });
 
-  /* TEXTURA do atlas: cada texel pertence à célula (col,row) que o contém e leva
-     a cor da FACE daquela ilha (`f.cor ?? COR_PADRAO`), célula INTEIRA (miolo +
-     gutter) chapada — então a face renderiza a cor cheia, IGUAL ao swatch, e a
-     moldura já vem preenchida pro 11b. Célula sem face (sobra da última linha)
-     fica na madeira neutra. */
+  /* TEXTURA do atlas: base = cor CHAPADA da célula (`f.cor ?? COR_PADRAO`, o 11a),
+     célula INTEIRA (miolo + gutter) preenchida; POR CIMA, os DABS do pincel macio
+     daquela face. Célula sem face (sobra da última linha) fica na madeira neutra. */
   const corIlha = faces.map((f) => hexRGB(f.cor ?? COR_PADRAO));
   const corVazia = hexRGB(COR_PADRAO);
+
+  /* PINCEL MACIO (11b): pré-computa por ilha (índice = ordem da face) os dabs que a
+     face vai rasterizar — o {a,b} FACE-LOCAL vira centro em TEXELS dentro do retângulo
+     interno (a MESMA conta que o UV do mesh: texel = ix + a·iw), o `raio` face-local
+     vira raio em TEXELS (× a largura da ilha; a ilha é quadrada, iw==ih), e a `dureza`
+     vira a fração do raio 100% opaca (o "núcleo duro"). Ordem preservada = ordem de
+     pintura. raio 0/inválido -> dab no-op (defensivo, não corrompe). */
+  const dabsIlha = faces.map((f) => {
+    const il = atlasFace.get(f.id).ilha;
+    return (f.tinta || []).map((t) => ({
+      cx: il.x + t.a * il.w, cy: il.y + t.b * il.h,        // {a,b}∈[0,1] -> centro no retângulo interno da ilha
+      rT: t.raio * il.w,                                    // raio face-local -> texels (ilha quadrada)
+      nucleo: Math.min(1, Math.max(0, t.dureza)),           // dureza = fração do raio de opacidade cheia
+      rgb: hexRGB(t.cor ?? COR_PADRAO),
+    })).filter((d) => d.rT > 0);
+  });
+
   const tex = ctx.tex.texCanvas(W, H, (x, y) => {
     const col = (x / ATLAS_TILE) | 0, row = (y / ATLAS_TILE) | 0, i = row * cols + col;
-    return i < corIlha.length ? corIlha[i] : corVazia;
+    if (i >= corIlha.length) return corVazia;               // célula sem face
+    const dabs = dabsIlha[i];
+    if (!dabs.length) return corIlha[i];                    // face chapada -> IDÊNTICO ao 11a (compat byte-a-byte)
+    /* compõe os dabs SÓ desta face (o texel é de UMA célula): o dab fica PRESO na
+       célula, nunca vaza pra ilha vizinha — o gutter é a folga pra ele dilatar sem
+       clipar. Falloff: q=dist/raio em [0..1]; dentro do núcleo (q<=dureza) opacidade
+       cheia, e do núcleo à borda um ombro macio (smoothstep) até 0. Dureza alta =
+       núcleo grande + borda curta; baixa = degradê largo. Alpha OVER, mais nova por cima. */
+    let r = corIlha[i][0], g = corIlha[i][1], b = corIlha[i][2];
+    for (const d of dabs) {
+      const q = Math.hypot(x + 0.5 - d.cx, y + 0.5 - d.cy) / d.rT;
+      if (q >= 1) continue;                                 // fora do dab
+      let a;
+      if (q <= d.nucleo) a = 1;                             // núcleo duro
+      else { const tt = (1 - q) / (1 - d.nucleo); a = tt * tt * (3 - 2 * tt); }   // ombro macio até 0 na borda
+      r += (d.rgb[0] - r) * a; g += (d.rgb[1] - g) * a; b += (d.rgb[2] - b) * a;
+    }
+    return [Math.round(r), Math.round(g), Math.round(b)];
   });
 
   /* triângulos soltos: leque por face; o UV do vértice sai da projeção da PRÓPRIA

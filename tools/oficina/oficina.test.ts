@@ -219,3 +219,125 @@ describe('regressões do revisor adversarial (D1/D2/D3)', () => {
     expect(() => nucleo([['cilindro', { id: 0, raio: 'r', altura: 'h', lados: 'l' }]], { r: 1, h: 1 }, { l: 600 })).toThrow(/estoura o bloco/);
   });
 });
+
+/* PASSO 11b — PINCEL MACIO no NÚCLEO (só o MOTOR: a op + a rasterização, sem
+   interface). Prova por MEDIÇÃO: a op 'livre' grava a tinta ANCORADA à face ({a,b}
+   face-local) e o adaptarV3 rasteriza um DAB radial macio na ilha da face; o replay
+   é determinístico (a tinta entra na canon); a tinta ACOMPANHA a face num moveV;
+   órfão grita; e o modo 'face' (todo o passo 1..11a) segue BYTE-idêntico. */
+describe('passo 11b — pincel macio (motor: op livre + rasterização)', () => {
+  const hx = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const BASE = hx('#9a8f80');   // COR_PADRAO: a madeira neutra sob um dab numa face sem cor chapada
+  /* ctx headless que CAPTURA a fn do texCanvas e amostra o texel CRU (x,y inteiros) —
+     é assim que o rasterizador do atlas se mede sem motor/tela. */
+  function ctxTex() {
+    let T: any = null;
+    const ctx = { tex: { texCanvas: (w: number, h: number, fn: any) => (T = { width: w, height: h, fn }) }, m4: { ident: () => new Float32Array(16) } };
+    return { ctx, texel: (x: number, y: number): number[] => T.fn(x, y) };
+  }
+  const cubo: any[] = ['cubo', { id: 0, lado: 1 }];
+  const centroIlha = (il: any): [number, number] => [Math.round(il.x + 0.5 * il.w), Math.round(il.y + 0.5 * il.h)];
+
+  it('1) modo livre GRAVA a tinta na face e RASTERIZA um dab (centro≈cor, degradê por número até a base)', () => {
+    const { ctx, texel } = ctxTex();
+    const neutro = nucleo([cubo, ['pincel', { modo: 'livre', cor: '#ff0000', raio: 0.3, dureza: 0.5, pontos: [{ f: 0, a: 0.5, b: 0.5 }] }]], {}, {});
+    // a face ganhou a tinta: {a,b} face-local + raio/dureza POR dab (auto-contida, determinística)
+    expect(neutro.F.get(0).tinta).toEqual([{ a: 0.5, b: 0.5, cor: '#ff0000', raio: 0.3, dureza: 0.5 }]);
+    expect(neutro.orfaos).toHaveLength(0);
+    const r: any = adaptarV3(neutro, ctx);
+    const il = r.atlas.daFace(0).ilha;
+    const [cx, cy] = centroIlha(il);
+    const at = (dx: number) => texel(cx + dx, cy);
+    expect(at(0)).toEqual([255, 0, 0]);   // CENTRO {0.5,0.5}: a cor cheia da pincelada
+    expect(at(8)).toEqual(BASE);          // FORA do raio (rT=0.3·28=8.4 texels): a base intacta
+    const meio = at(6);                    // no OMBRO: estritamente ENTRE cor e base (o degradê, por número)
+    expect(meio[0]).toBeGreaterThan(BASE[0]); expect(meio[0]).toBeLessThan(255);   // r sobe rumo ao vermelho
+    expect(meio[1]).toBeGreaterThan(0); expect(meio[1]).toBeLessThan(BASE[1]);     // g cai rumo a 0
+  });
+
+  it('2) determinismo/replay: a canon com pincel macio bate em 2 execuções, sobrevive a round-trip JSON, e a TINTA está na canon', () => {
+    const passos = [cubo, ['pincel', { modo: 'livre', cor: '#ff0000', raio: 0.25, dureza: 0.7, pontos: [{ f: 0, a: 0.3, b: 0.4 }, { f: 0, a: 0.6, b: 0.5 }, { f: 3, a: 0.5, b: 0.5 }] }]];
+    const a = JSON.stringify(neutroCanonico(nucleo(passos, {}, {})));
+    const b = JSON.stringify(neutroCanonico(nucleo(passos, {}, {})));
+    expect(a).toBe(b);                                                          // 2 execuções idênticas
+    const passosRT = JSON.parse(JSON.stringify(passos));                        // a LISTA (o formato salvo) ida-e-volta JSON
+    expect(JSON.stringify(neutroCanonico(nucleo(passosRT, {}, {})))).toBe(a);   // replay do salvo idêntico bit-a-bit
+    // a tinta ESTÁ na forma canônica — sem ela, o replay perderia o pincel: a canon COM dab difere da SEM
+    expect(a).not.toBe(JSON.stringify(neutroCanonico(nucleo([cubo], {}, {}))));
+  });
+
+  it('3) paint-follows-face: um moveV DEPOIS num vértice da face mantém o dab no MESMO {a,b} da ilha (a tinta acompanha a face)', () => {
+    const dab: any[] = ['pincel', { modo: 'livre', cor: '#ff0000', raio: 0.3, dureza: 0.6, pontos: [{ f: 0, a: 0.5, b: 0.5 }] }];
+    const parado = nucleo([cubo, dab], {}, {});
+    const movido = nucleo([cubo, dab, ['moveV', { v: 2, d: [0.4, 0, 0.3] }]], {}, {});   // move um canto da face 0
+    const rP: any = adaptarV3(parado, ctxTex().ctx);
+    const t = ctxTex(); const rM: any = adaptarV3(movido, t.ctx);
+    // a GEOMETRIA de fato mudou: mover v2 alarga a bbox da face 0, então o UV de OUTRO
+    // canto (v1, parado) desliza — o próprio mapeamento UV mexeu sob o dab
+    const uvP = rP.atlas.daFace(0).projeta(parado.V.get(1));
+    const uvM = rM.atlas.daFace(0).projeta(movido.V.get(1));
+    expect(JSON.stringify(uvP)).not.toBe(JSON.stringify(uvM));
+    // ...mas o dab segue no centro {0.5,0.5} da ilha: o texel central continua a cor da pincelada
+    const [cx, cy] = centroIlha(rM.atlas.daFace(0).ilha);
+    expect(t.texel(cx, cy)).toEqual([255, 0, 0]);
+  });
+
+  it('3b) órfão: ponto com face inexistente GRITA e não corrompe (V/F e a tinta das outras faces intactos)', () => {
+    const neutro = nucleo([cubo, ['pincel', { modo: 'livre', cor: '#ff0000', raio: 0.3, dureza: 0.5, pontos: [{ f: 0, a: 0.5, b: 0.5 }, { f: 999, a: 0.5, b: 0.5 }] }]], {}, {});
+    expect(neutro.orfaos).toHaveLength(1);
+    expect(neutro.orfaos[0]).toMatchObject({ op: 'pincel', ref: 999 });
+    expect(neutro.F.get(0).tinta).toHaveLength(1);              // a face válida recebeu o dab
+    expect(neutro.V.size).toBe(8); expect(neutro.F.size).toBe(6);   // malha do cubo intacta
+    for (const f of neutro.F.values()) if (f.id !== 0) expect(f.tinta).toHaveLength(0);   // ninguém mais pintado
+  });
+
+  it("4) compat 'face': o toco (só-'face') canoniza SEM tinta (linha F de 6) e a textura é BYTE-idêntica ao 11a", async () => {
+    const toco: any = await import(fileURLToPath(new URL('../../prototipos/fps/v3/pecas/_oficina-toco.js', import.meta.url)));
+    const neutro = nucleo(toco.PASSOS, toco.PARAMS, toco.TOPO);
+    for (const row of neutroCanonico(neutro).F) expect((row as any[]).length).toBe(6);   // nenhuma face ganha 7º elemento -> byte-igual ao de antes
+    // a textura INTEIRA reproduz a fórmula do 11a (base chapada por célula) — sem dab, zero diferença
+    const { ctx, texel } = ctxTex();
+    const r: any = adaptarV3(neutro, ctx);
+    const faces = [...neutro.F.values()].sort((a: any, b: any) => a.id - b.id);
+    const corIlha = faces.map((f: any) => hx(f.cor ?? '#9a8f80'));
+    const { cols, tile, W, H } = r.atlas;
+    let dif = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = ((y / tile) | 0) * cols + ((x / tile) | 0);
+      const esp = i < corIlha.length ? corIlha[i] : BASE;   // exatamente o que o 11a produzia
+      const got = texel(x, y);
+      if (got[0] !== esp[0] || got[1] !== esp[1] || got[2] !== esp[2]) dif++;
+    }
+    expect(dif).toBe(0);
+  });
+
+  it('5) raio e dureza têm efeito MEDÍVEL: raio maior tinge mais texels; dureza maior encurta a transição', () => {
+    const dab = (raio: number, dureza: number) => nucleo([cubo, ['pincel', { modo: 'livre', cor: '#ff0000', raio, dureza, pontos: [{ f: 0, a: 0.5, b: 0.5 }] }]], {}, {});
+    const naBase = (c: number[]) => c[0] === BASE[0] && c[1] === BASE[1] && c[2] === BASE[2];
+    // texels TINGIDOS (fora da base) na ilha da face 0
+    const tingidos = (neutro: any) => {
+      const { ctx, texel } = ctxTex(); const r: any = adaptarV3(neutro, ctx); const il = r.atlas.daFace(0).ilha;
+      let n = 0; for (let y = il.y; y < il.y + il.h; y++) for (let x = il.x; x < il.x + il.w; x++) if (!naBase(texel(x, y))) n++;
+      return n;
+    };
+    const nPeq = tingidos(dab(0.2, 0.5)), nGde = tingidos(dab(0.4, 0.5));
+    expect(nGde).toBeGreaterThan(nPeq);   // raio maior => mais texels tingidos
+    // LARGURA da transição: na linha central, texels de opacidade PARCIAL (nem cor pura nem base)
+    const banda = (neutro: any) => {
+      const { ctx, texel } = ctxTex(); const r: any = adaptarV3(neutro, ctx); const il = r.atlas.daFace(0).ilha;
+      const cy = Math.round(il.y + 0.5 * il.h); let n = 0;
+      for (let x = il.x; x < il.x + il.w; x++) { const c = texel(x, cy); const cor = c[0] === 255 && c[1] === 0 && c[2] === 0; if (!cor && !naBase(c)) n++; }
+      return n;
+    };
+    const bDura = banda(dab(0.45, 0.95)), bMacia = banda(dab(0.45, 0.05));
+    expect(bMacia).toBeGreaterThan(bDura);   // dureza baixa => transição LARGA (degradê); alta => borda abrupta
+  });
+
+  it('6) o dab fica PRESO na célula: raio gigante numa face NÃO vaza pra ilha vizinha', () => {
+    const { ctx, texel } = ctxTex();
+    const r: any = adaptarV3(nucleo([cubo, ['pincel', { modo: 'livre', cor: '#ff0000', raio: 3, dureza: 1, pontos: [{ f: 0, a: 0.5, b: 0.5 }] }]], {}, {}), ctx);
+    const [c1x, c1y] = centroIlha(r.atlas.daFace(1).ilha);
+    expect(texel(c1x, c1y)).toEqual(BASE);   // a face VIZINHA (ilha própria) segue na base — o vermelho não vazou
+    expect(texel(0, 0)).toEqual([255, 0, 0]);   // ...mas a célula da face 0 (incl. o gutter) encheu de vermelho: o dab dilatou até a borda da célula
+  });
+});
