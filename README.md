@@ -6,7 +6,7 @@ Três janelas — escolha a sua:
 
 - ▶ **[Clareira](https://brigsd.github.io/nos/)** — o mundo visto de cima (mapa 2D), com os painéis (Mural, Comércio, Nativos, Portais).
 - ▶ **[Miragem](https://brigsd.github.io/nos/fps/)** — primeira pessoa, raycaster. Estável.
-- ▶ **[Atelier](https://brigsd.github.io/nos/fps/v3/jogo.html)** — primeira pessoa em WebGL, com a Oficina (criar objeto e som). Em construção ativa.
+- ▶ **[Atelier](https://brigsd.github.io/nos/fps/v3/jogo.html)** — primeira pessoa em WebGL, com a **[Oficina](https://brigsd.github.io/nos/fps/v3/oficina.html)** (criar objeto e som — abre pelo menu do jogo, tecla ESC, ou direto no link). Em construção ativa.
 
 Todos rodam direto no navegador do **PC ou do celular**, sem instalar nada — mesmo mundo, mesmo Registro. 🌍
 

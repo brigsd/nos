@@ -104,6 +104,7 @@
   <div class="painel">
     <h2>N Ó S</h2>
     <button id="btnContinuar">continuar ▶</button>
+    <button id="btnOficina">Oficina ✎</button>
     <button id="btnAbrirConfig">configurações ⚙</button>
   </div>
 </div>
@@ -235,10 +236,10 @@ addEventListener('unhandledrejection', (ev) => mostrarErro(ev.reason));
    Passar da largura da janela é desperdício: o quadro é reduzido na cópia final
    e o detalhe extra vai pro lixo — a não ser com a suavização 2×, que é
    supersampling e existe justamente pra aproveitar isso. */
-/* mapaCanto: 0 nenhum · 1 ↖ · 2 ↗ · 3 ↙ · 4 ↘. Nasce em 3 (canto de baixo à
-   esquerda): o minimapa passou a ser parte fixa do HUD, não algo a descobrir. */
+/* mapaCanto: 0 nenhum · 1 ↖ · 2 ↗ · 3 ↙ · 4 ↘. Nasce em 2 (canto de cima à
+   direita): o minimapa passou a ser parte fixa do HUD, não algo a descobrir. */
 const CFG_PADRAO = { ts: 4, luz: 1, sombra: 1, particulas: 1, res: 640, aa: 0, recon: 0, auto: 0,
-  mapaCanto: 3, hudTexto: 1 };
+  mapaCanto: 2, hudTexto: 1 };
 const larguraInterna = (r) => Math.max(160, r | 0);
 const Q = new URLSearchParams(location.search);
 function lerCfg() {
@@ -287,6 +288,7 @@ function abrirPausa() { paused = true; document.exitPointerLock?.(); telaConfig.
 function fecharTudo() { paused = false; telaPausa.classList.remove('show'); telaConfig.classList.remove('show'); }
 document.getElementById('pauseBtn').addEventListener('click', () => (paused ? fecharTudo() : abrirPausa()));
 document.getElementById('btnContinuar').addEventListener('click', fecharTudo);
+document.getElementById('btnOficina').addEventListener('click', () => { location.href = 'oficina.html'; });   // abre a Oficina (criar objeto e som)
 document.getElementById('btnAbrirConfig').addEventListener('click', () => { telaPausa.classList.remove('show'); telaConfig.classList.add('show'); });
 document.getElementById('btnVoltar').addEventListener('click', () => { telaConfig.classList.remove('show'); telaPausa.classList.add('show'); });
 document.getElementById('btnFecharX').addEventListener('click', fecharTudo);   // X fecha E resume direto

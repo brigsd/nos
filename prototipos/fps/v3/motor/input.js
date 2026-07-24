@@ -22,7 +22,7 @@ export function criarInput({ stageEl, onPause }) {
   /* sobra do quadro anterior, do amortecimento em `mouseLookDelta` */
   let restoX = 0, restoY = 0;
   const isLocked = () => document.pointerLockElement === stageEl;
-  stageEl.addEventListener('click', () => { if (!isTouch) stageEl.requestPointerLock?.(); });
+  stageEl.addEventListener('click', () => { if (!isTouch) Promise.resolve(stageEl.requestPointerLock?.()).catch(() => { /* o browser recusa a trava por ~1,25s depois de um Esc; engole a recusa (o próximo clique tenta) em vez de vazar "Uncaught SecurityError" na tela */ }); });
   addEventListener('mousemove', (e) => { if (isLocked()) { mdx += e.movementX; mdy += e.movementY; } });
 
   /* joysticks touch — porta fiel do D-47/48/49 */
