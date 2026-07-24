@@ -76,6 +76,7 @@ aposentados — vivem no histórico do git.
 
 - **`CLAUDE.md`** — o acordo de trabalho + as regras (jóias, determinismo, pt-BR).
 - **`docs/oficina.md`** — o roteiro da Oficina (Ordem de construção + specs). `docs/oficina-referencia.md` — o manual de como cada elemento funciona.
+- **`docs/playground.md`** — o ÉPICO ativo (D-113): fechar o vocabulário + forma-como-número + a camada IA de laço único. O que construir em seguida mora aqui.
 - **`docs/DECISIONS.md`** — TODAS as decisões (índice + detalhe; histórico em `DECISIONS-ARCHIVE.md`).
 - **`docs/MAPA.md`** — a árvore do repo com resumo por arquivo (gerada, sempre fresca).
 - **`docs/LORE.md`** / **`docs/VISION.md`** — narrativa / o que o NÓS é e não é.

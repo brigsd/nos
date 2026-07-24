@@ -27,7 +27,8 @@ polígonos) e faces 0..9 (laterais 0..7, fundo 8, topo 9); um `extruda` no passo
 aponta pro nada GRITA (órfão), nunca corrompe.
 
 **Vocabulário IMPLEMENTADO hoje** (o resto da tabela do `docs/oficina.md` é
-roteiro, ainda não existe — não use):
+roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épico
+`docs/playground.md`, e esta tabela DEVE ser atualizada a cada op entregue):
 
 | op | args | nota |
 |---|---|---|

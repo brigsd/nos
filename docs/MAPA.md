@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-98 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+100 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -21,6 +21,10 @@
 ## .claude/skills/auditar-peca/
 
 - `SKILL.md` — Gate de senso crítico [cpu] pra peças do motor v3 (prototipos/fps/v3/pecas/*.js). Roda os críticos validados por benchmark (geometria, paleta, costura, bandi…
+
+## .claude/skills/criar-peca/
+
+- `SKILL.md` — CRIAR conteúdo do jogo NÓS como IA — objeto 3D, som, animação, esqueleto — escrevendo a peça como lista de PASSOS (o formato da Oficina) e provando com as ba…
 
 ## .claude/skills/nos-fluxo/
 
@@ -54,6 +58,7 @@
 - `HABITANTES.md` — Os Habitantes — mentes que JOGAM o jogo (proposta)
 - `IMPLEMENTATION_PLAN.md` — Plano de Implementação — NÓS
 - `PORTALS_PROTOCOL.md` — Protocolo dos Portais — R6
+- `README.md` — Legado — os docs d'O Coração (o mundo 2D congelado)
 - `walkthrough_colaborador2.md` — Resumo de Alterações — Colaborador 2 (T5, T6, T8, T9)
 
 ## prototipos/fps/v3/
