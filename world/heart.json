@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 243,
-    "worldTime": 14580
+    "tickCount": 244,
+    "worldTime": 14640
   },
   "width": 64,
   "height": 64,
@@ -6870,6 +6870,11 @@
       "type": "core_pulse",
       "tick": 243,
       "worldTime": 14580
+    },
+    {
+      "type": "core_pulse",
+      "tick": 244,
+      "worldTime": 14640
     }
   ],
   "natives": {
@@ -6877,7 +6882,7 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 1,
+        "x": 0,
         "y": 5
       },
       "behaviorTree": "wanderer",
