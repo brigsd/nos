@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 241,
-    "worldTime": 14460
+    "tickCount": 243,
+    "worldTime": 14580
   },
   "width": 64,
   "height": 64,
@@ -6846,6 +6846,30 @@
       "type": "core_pulse",
       "tick": 241,
       "worldTime": 14460
+    },
+    {
+      "type": "native_spoke",
+      "tick": 242,
+      "worldTime": 14520,
+      "nativeId": "brasa",
+      "message": "Pão quentinho, histórias quentes. Venham se aquecer. Sem pressa."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 242,
+      "worldTime": 14520,
+      "nativeId": "quilha",
+      "message": "O pão quentinho espera. Histórias são barcos que nos levam longe. Venham, viajantes!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 242,
+      "worldTime": 14520
+    },
+    {
+      "type": "core_pulse",
+      "tick": 243,
+      "worldTime": 14580
     }
   ],
   "natives": {
