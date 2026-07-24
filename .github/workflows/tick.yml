@@ -1,11 +1,10 @@
 name: World Tick
 
+# O Coração foi CONGELADO (D-110): as demos migraram pro brigsd/nos-mentes e o mundo 2D
+# não avança mais. O tick automático (schedule + issues) foi DESLIGADO; sobra só o disparo
+# manual, caso um dia se queira reviver o mundo.
 on:
-  schedule:
-    - cron: '0 * * * *' # Hourly beat (D-11, GDD)
-  issues:
-    types: [opened] # Trigger immediately on new player command (D-11)
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch: # disparo manual apenas — o tick automático (schedule/issues) foi desligado (D-110)
 
 concurrency:
   group: world-tick

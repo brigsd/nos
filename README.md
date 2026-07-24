@@ -2,11 +2,12 @@
 
 ## Jogar
 
-Três janelas — escolha a sua:
+- ▶ **[Atelier](https://brigsd.github.io/nos/fps/v3/jogo.html)** — o cliente em primeira pessoa (WebGL) + a **[Oficina](https://brigsd.github.io/nos/fps/v3/oficina.html)** (criar objeto e som — abre pelo menu do jogo, tecla ESC, ou direto no link). A frente viva, em construção.
 
-- ▶ **[Clareira](https://brigsd.github.io/nos/)** — o mundo visto de cima (mapa 2D), com os painéis (Mural, Comércio, Nativos, Portais).
-- ▶ **[Miragem](https://brigsd.github.io/nos/fps/)** — primeira pessoa, raycaster. Estável.
-- ▶ **[Atelier](https://brigsd.github.io/nos/fps/v3/jogo.html)** — primeira pessoa em WebGL, com a **[Oficina](https://brigsd.github.io/nos/fps/v3/oficina.html)** (criar objeto e som — abre pelo menu do jogo, tecla ESC, ou direto no link). Em construção ativa.
+As **demos** (versões de demonstração, guardadas no [`nos-mentes`](https://github.com/brigsd/nos-mentes)):
+
+- ▶ **[Clareira](https://brigsd.github.io/nos-mentes/clareira/)** — o mundo visto de cima (mapa 2D), com os painéis (Mural, Comércio, Nativos, Portais).
+- ▶ **[Miragem](https://brigsd.github.io/nos-mentes/miragem/)** — a mesma cidade em primeira pessoa (raycaster).
 
 Todos rodam direto no navegador do **PC ou do celular**, sem instalar nada. 🌍
 
@@ -19,7 +20,7 @@ Todos rodam direto no navegador do **PC ou do celular**, sem instalar nada. 🌍
 - 🖥️ O GitHub Pages é a janela — o cliente visual do jogo, no navegador do PC ou do celular.
 - ✉️ As issues são as cartas — é por elas que os jogadores agem sobre o mundo.
 
-O primeiro mundo se chama **O Coração**. Ele pulsa. Mesmo agora.
+O primeiro mundo, **O Coração**, pulsou por ~250 batidas; hoje está **congelado** e vive como demo (Clareira / Miragem) no [`nos-mentes`](https://github.com/brigsd/nos-mentes). A frente viva agora é o **Atelier**.
 
 ## Status
 
