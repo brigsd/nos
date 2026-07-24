@@ -5,22 +5,13 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-216 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+210 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
 - `CLAUDE.md` — NÓS — Harness do Projeto
 - `README.md` — NÓS
 - `vitest.config.ts` — Config do Vitest: cobre engine/** e tools/** — o gate npm test.
-
-## .claude/agents/
-
-- `art-reviewer.md` — Revisa arte renderizada com olhar crítico e veto real. Use após qualquer criação/alteração visual, antes do merge.
-- `code-reviewer.md` — Revisa diffs antes do merge, com foco em corretude, determinismo e nos invariantes do NÓS. Use em todo PR.
-- `engine-dev.md` — Implementa o motor do mundo (TypeScript): tick, schema, comandos, geração procedural, regras de jogo. Use para features de engine/backend.
-- `lore-writer.md` — Roteirista do universo — escreve quests, diálogos, nomes, descrições e eventos, sempre coerentes com a bíblia do lore. Use para qualquer texto de jogo.
-- `pixel-artist.md` — Cria e edita sprites/tiles em pixel art como código (matrizes de pixels → PNG). Use para qualquer arte nova ou retoque visual.
-- `qa-tester.md` — Joga a build de verdade num navegador headless, tira screenshots e reporta bugs com passos de reprodução. Use antes de todo merge com efeito visível.
 
 ## .claude/skills/auditar-peca/
 

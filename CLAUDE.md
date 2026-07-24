@@ -1,6 +1,8 @@
 # NÓS — Harness do Projeto
 
-Você está trabalhando no **NÓS**: um metaverso 2D pixel art, coletivo, que roda 100% dentro do GitHub (repo = banco de dados, Actions = servidor, Pages = cliente, issues = comandos dos jogadores).
+Você está trabalhando no **NÓS**: um metaverso coletivo que roda 100% dentro do GitHub (repo = banco de dados, Actions = servidor, Pages = cliente, issues = comandos dos jogadores).
+
+> **Duas frentes.** (1) O **mundo 2D** (o metaverso pixel art de cima) — `site/` + `engine/` + o tick, o jogo no ar. (2) O **cliente v3** — o FPS GPU + a **Oficina** (criação de objeto e som), em `prototipos/fps/v3/`, autocontido (não importa `engine/`/`site/`). **Trabalho no v3 segue as skills `.claude/skills/nos-fluxo` + `oficina` e os agents `game-builder`/`revisor-adversarial` — NÃO o fluxo 2D abaixo.** As regras 2D (tick, schema, pixel art 16×16) valem pra frente (1). [O reroute completo deste doc é a próxima etapa da reorganização.]
 
 ## Acordo de trabalho
 
@@ -13,7 +15,7 @@ Tiago (`brigsd`) é o **ideador**: dono da visão, do rumo e do escopo. Você (C
 3. Decisões já tomadas estão em `docs/DECISIONS.md` (índice de todas + ativas em detalhe; detalhe histórico em `docs/DECISIONS-ARCHIVE.md`) — não as re-discuta sem fato novo.
 4. Textos de jogo seguem `docs/LORE.md` — consistência narrativa é inegociável.
 5. Trabalho visual/no cliente oficial? `docs/CODER.md` é a sua bancada: `npm run olhar` (auditoria por screenshot, `?cam=`/`?tod=`), navegação no arquivo grande e os limites reais do ambiente com as mitigações que funcionam.
-6. Não sabe qual ferramenta/script/agente usar? `docs/RECURSOS.md` é o índice único de tudo (npm scripts, art-mcp, bancadas, MCP, os 6 agentes) com *como invocar*.
+6. Não sabe qual ferramenta/script/agente usar? `docs/RECURSOS.md` é o índice único de tudo (npm scripts, art-mcp, bancadas, MCP, os agentes) com *como invocar* — **desatualizado quanto aos agentes (cita os 6 antigos); vale a lista em `.claude/agents/`**.
 
 ## Regras invioláveis
 
@@ -26,11 +28,12 @@ Tiago (`brigsd`) é o **ideador**: dono da visão, do rumo e do escopo. Você (C
 
 ## Fluxo padrão de feature
 
-construir → `code-reviewer` (+ `art-reviewer` se houver arte) → `qa-tester` joga e tira screenshot → merge → atualizar `docs/CONTINUITY.md` e checkboxes do plano.
+**v3 (frente ativa):** brief → `game-builder` numa branch `wip/...` → o orquestrador **verifica por MEDIÇÃO** (+ `revisor-adversarial` por risco) → `ff-merge` na main → registra a decisão em `docs/DECISIONS.md`. Detalhe na skill `nos-fluxo`.
+**2D:** construir → revisão → QA → merge por PR → atualizar `docs/CONTINUITY.md` e checkboxes do plano.
 
 ## Agentes
 
-Definições em `.claude/agents/` — **codadores (engine-dev/pixel-artist/lore-writer) em sonnet, revisores (code-reviewer/art-reviewer/qa-tester) em opus** (D-24). Tabela com "quando despachar cada um" em `docs/RECURSOS.md`. Despache-os em paralelo para arte, código, lore e QA; o orquestrador integra e decide. Divergências entre agentes: quem decide é o orquestrador, registrando em `docs/DECISIONS.md`.
+Definições em `.claude/agents/` — **`game-builder`** (constrói o v3, em sonnet) e **`revisor-adversarial`** (quebra a mudança por risco antes do merge, em opus). Mantém o D-24 (coder sonnet, revisor opus); **D-106** reduziu de 6 pra 2 e moveu o DOMÍNIO (som, animação, geometria, pintura) pras **skills** que o builder carrega — não a um enxame de agents por assunto, porque uma peça é modelada+pintada+animada+com som ao mesmo tempo. O orquestrador integra e decide, registrando em `docs/DECISIONS.md`. (Os 6 agents do modelo 2D — engine-dev/pixel-artist/lore-writer/code-reviewer/art-reviewer/qa-tester — foram aposentados; vivem no histórico do git se a frente 2D voltar a ser desenvolvida.)
 
 ## Ao encerrar qualquer sessão
 
