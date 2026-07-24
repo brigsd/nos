@@ -240,6 +240,125 @@ const OPS = {
     for (let iz = 0; iz < S; iz++) for (let ix = 0; ix < S; ix++) addF(st, b + iz * S + ix, [v(ix, iz), v(ix, iz + 1), v(ix + 1, iz + 1), v(ix + 1, iz)]);
   },
 
+  /* lathe — P2 do playground: um perfil 2D `[[raio,y],...]` GIRADO em torno do
+     eixo Y (superfície de revolução). GENERALIZA o esquema da esfera acima —
+     formalmente, a esfera É um lathe de uma meia-circunferência (polo->anéis->
+     polo); aqui o perfil é ARBITRÁRIO, não só um arco. `raio`/`y` de CADA ponto
+     passam por st.num() (podem citar PARAM, como o raio da esfera); `lados`
+     (mín 3, mesmo Math.max das outras primitivas) é TOPO pra TODO o perfil —
+     muda a CONTAGEM de todo anel de uma vez.
+
+     O PONTO DE PERFIL — RESERVA DE CURVA (formato salvo, IRREVERSÍVEL, ver
+     docs/oficina.md "Aba Desenho"): um ponto é `[raio,y]`, SEMPRE 2 elementos =
+     SEMPRE um canto RETO (produz exatamente 1 anel/polo — nunca muda, nem
+     quando a curva chegar). Um 3º elemento é a alça de curva reservada pra uma
+     rodada futura. HOJE não existe suporte: o ponto ainda constrói RETO (como
+     se o 3º elemento não estivesse lá) — mas GRITA (órfão), nunca ignora em
+     silêncio, senão a peça salva hoje renderizaria reta e mudaria de figura
+     sozinha no dia em que a curva for implementada.
+
+     POLO vs ANEL (a topologia, formato salvo): o teste é `raio RESOLVIDO ===
+     0` -> POLO (1 vértice EM CIMA do eixo, y do ponto — como o polo da
+     esfera); `raio > 0` -> ANEL de `lados` vértices (mesmo ângulo/sentido do
+     cilindro/esfera: j=0 em +x, crescendo pra +z). Logo um PARAM usado como
+     raio de perfil que cruze 0<->não-zero muda a TOPOLOGIA e renumera (mesma
+     classe que mudar `lados`); polos típicos são `0` LITERAL. `raio < 0` não
+     dá pra classificar polo/anel — GRITA e a op inteira não constrói NADA
+     neste passo (0 vértices/faces), o mesmo tratamento de "perfil com menos de
+     2 pontos": mais seguro que adivinhar quantos ids um ponto inválido
+     ocuparia (o que quebraria a fórmula de numeração abaixo pros pontos
+     seguintes). Nunca corrompe — só não constrói.
+
+     NUMERAÇÃO DE VÉRTICE (formato salvo, travada por teste): anda o perfil com
+     um CURSOR que começa em 0. Ponto i POLO consome 1 id (b+cursor); ponto i
+     ANEL consome `lados` ids (b+cursor+j, j=0..lados-1). O cursor SOMA o que
+     acabou de consumir a cada ponto. Só depende de QUAIS pontos são polo (a
+     ESTRUTURA do perfil) + `lados` — nunca do VALOR de raio/y (PARAM não
+     renumera, só muda posição).
+
+     FACES entre pontos consecutivos (i,i+1) — cursor de face ANÁLOGO (começa
+     em 0, cada segmento soma só o que ele de fato produziu, em ORDEM):
+       anel<->anel : `lados` QUADS, winding EXATAMENTE a faixa da esfera —
+                     [baixo[j], cima[j], cima[j+1], baixo[j+1]];
+       polo->anel  : `lados` triângulos, EXATAMENTE o leque SUL da esfera —
+                     [polo, anel[j], anel[j+1]] (o polo é o ponto DE BAIXO);
+       anel->polo  : `lados` triângulos, EXATAMENTE o leque NORTE da esfera —
+                     [polo, anel[j+1], anel[j]] (ordem invertida — o polo é o
+                     ponto DE CIMA, o mesmo giro que inverte a tampa de cima);
+       polo<->polo : GRITA ("perfil degenerado") e ZERO faces neste segmento —
+                     o cursor de face não avança aqui, mas os pontos e
+                     segmentos seguintes seguem normais (não corrompe o resto).
+     Winding sempre pra FORA — reusa EXATAMENTE o esquema da esfera (perfil
+     ORDENADO de baixo pra cima, raio>=0 -> normais pra fora); é essa ordem que
+     faz o leque polo->anel e o leque anel->polo precisarem de sentido oposto,
+     idêntico a por que a tampa de baixo e a de cima do cilindro giram opostas.
+
+     SEM tampas automáticas — superfície de revolução PURA. Fechar uma ponta é
+     terminar o perfil no eixo (raio 0 = polo): o leque do polo VIRA a tampa,
+     de graça (ex.: uma coluna com tampas chatas é só `[[0,0],[R,0],[R,h],
+     [0,h]]` — polo embaixo -> anel -> anel -> polo em cima). Nenhum conceito
+     de "cap" à parte.
+
+     Perfil é só ABERTO (polilinha): não fecha loop mesmo se o último ponto ==
+     o primeiro (pneu/torus fica FORA do escopo do P2 — um perfil assim só
+     produz dois pontos normais, sem segmento extra ligando o fim ao começo).
+
+     Guarda de overflow (D3, por-passo): soma EXATA de vértices e de faces
+     (segmento polo<->polo não conta face nenhuma) calculada ANTES de inserir
+     qualquer vértice — throw como a esfera/cone/plano. */
+  lathe(st, a, i) {
+    const b = confereId(st, i, 'lathe', a);
+    const perfil = a.perfil ?? [];
+    if (perfil.length < 2) return grita(st, i, 'lathe', perfil.length, `perfil precisa de ao menos 2 pontos (tem ${perfil.length})`);
+    const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // TOPO (pra TODO o perfil): muda a CONTAGEM
+
+    /* resolve + valida CADA ponto ANTES de criar qualquer vértice (raio/y podem
+       citar PARAM, como os outros pontos dimensionais da Oficina). */
+    let raioInvalido = false;
+    const pontos = perfil.map((pt, j) => {
+      if (pt.length > 2) grita(st, i, 'lathe', j, 'alça de curva reservada — P2 é só reta');   // reserva (formato salvo): NUNCA ignora em silêncio
+      const raio = st.num(pt[0]), y = st.num(pt[1]);
+      if (raio < 0) { grita(st, i, 'lathe', j, `raio negativo (${raio}) no ponto ${j} do perfil — não dá pra classificar polo/anel`); raioInvalido = true; }
+      return { raio, y, polo: raio === 0 };
+    });
+    if (raioInvalido) return;   // algum ponto não classifica (polo/anel) -> nada construído neste passo (grita já registrado por ponto)
+
+    // guarda de overflow (D3): soma EXATA — segmento polo<->polo não soma face — ANTES de inserir
+    let nV = 0; for (const p of pontos) nV += p.polo ? 1 : L;
+    let nF = 0; for (let idx = 0; idx < pontos.length - 1; idx++) if (!(pontos[idx].polo && pontos[idx + 1].polo)) nF += L;
+    if (nV > BLOCO || nF > BLOCO) throw new Error(`oficina: lathe com ${perfil.length} pontos × lados=${L} estoura o bloco de ids (${BLOCO}): ${nV} vértices / ${nF} faces`);
+
+    // VÉRTICES — anda o cursor (a fórmula documentada acima)
+    let cursor = 0;
+    const info = pontos.map((p) => {
+      if (p.polo) {
+        const id = b + cursor;
+        addV(st, id, [0, p.y, 0]);
+        cursor += 1;
+        return { polo: true, id };
+      }
+      const ids = [];
+      for (let j = 0; j < L; j++) { const t = (j / L) * Math.PI * 2; const id = b + cursor + j; addV(st, id, [Math.cos(t) * p.raio, p.y, Math.sin(t) * p.raio]); ids.push(id); }
+      cursor += L;
+      return { polo: false, ids };
+    });
+
+    // FACES — cursor de face análogo, por segmento consecutivo (i,i+1)
+    let fCursor = 0;
+    for (let idx = 0; idx < info.length - 1; idx++) {
+      const A = info[idx], B = info[idx + 1];
+      if (A.polo && B.polo) { grita(st, i, 'lathe', idx, 'polo↔polo adjacente — perfil degenerado, sem face neste segmento'); continue; }   // 0 faces, cursor não avança
+      if (!A.polo && !B.polo) {
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [A.ids[j], B.ids[j], B.ids[n], A.ids[n]]); }   // anel<->anel: quads (a faixa da esfera)
+      } else if (A.polo) {
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [A.id, B.ids[j], B.ids[n]]); }   // polo embaixo -> anel em cima: leque SUL
+      } else {
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [B.id, A.ids[n], A.ids[j]]); }   // anel embaixo -> polo em cima: leque NORTE (invertido)
+      }
+      fCursor += L;
+    }
+  },
+
   /* ---- edição por id estável ---- */
   moveV(st, a, i) {
     const v = a.v;

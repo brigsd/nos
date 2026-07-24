@@ -1030,3 +1030,205 @@ describe('P1 — primitivas esfera/cone/plano', () => {
     expect(obj.lotes[0].mesh.v.length % 8).toBe(0);
   });
 });
+
+/* P2 do playground — `lathe` (perfil `[[raio,y],...]` girado em torno do eixo Y).
+   Prova por MEDIÇÃO: numeração EXATA de vértice/face (formato salvo, travada aqui)
+   num perfil MISTO (polo+anel+anel+polo, a "coluna" do doc) e num perfil só-anéis;
+   determinismo/replay; a reserva do 3º elemento GRITA sem corromper (2 elementos =
+   reto, PRA SEMPRE); raio<0 e perfil<2 pontos GRITAM e não constroem nada nesse
+   passo; polo↔polo adjacente GRITA e só aquele segmento fica sem face; guarda de
+   overflow no limite EXATO (vértice e face, independentes, como a esfera);
+   params por NOME; e um teste de MANIFOLD no `_torno` (fechado nas duas pontas)
+   — toda aresta dirigida a→b pareada com b→a exatamente 1×, prova watertight +
+   winding consistente, como o revisor fez no P1 (D-114). */
+describe('P2 — lathe (perfil de revolução)', () => {
+  const J = (x: any) => JSON.stringify(x);
+  const fakeCtx = { tex: { texCanvas: (w: number, h: number, fn: any) => ({ width: w, height: h, fn }) }, m4: { ident: () => new Float32Array(16) } };
+  // Newell inline (a do núcleo não é exportada) — o MESMO teste do D1/P1
+  const newell = (V: any, vs: number[]) => {
+    let nx = 0, ny = 0, nz = 0;
+    for (let k = 0; k < vs.length; k++) {
+      const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]);
+      nx += (c[1] - n[1]) * (c[2] + n[2]); ny += (c[2] - n[2]) * (c[0] + n[0]); nz += (c[0] - n[0]) * (c[1] + n[1]);
+    }
+    return [nx, ny, nz];
+  };
+
+  it('numeração EXATA num perfil MISTO (polo→anel→anel→polo, a "coluna" do doc): ids de vértice e de face travados', () => {
+    // [[0,0],[1,0],[1,2],[0,2]] com lados=4: polo, anel, anel, polo — as tampas nascem dos leques de polo, de graça
+    const { V, F, orfaos } = nucleo([['lathe', { id: 0, perfil: [[0, 0], [1, 0], [1, 2], [0, 2]], lados: 4 }]], {}, {});
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(10);   // polo(1) + anel(4) + anel(4) + polo(1)
+    expect(F.size).toBe(12);   // 3 segmentos não-degenerados × 4 lados
+    // VÉRTICES: polo0=b+0; anel1 j=0..3 -> b+1..b+4; anel2 j=0..3 -> b+5..b+8; polo1=b+9
+    expect(V.get(0)).toEqual([0, 0, 0]);
+    expect(V.get(1)).toEqual([1, 0, 0]);                       // anel1 j=0 em +x
+    expect(V.get(5)).toEqual([1, 2, 0]);                       // anel2 j=0 em +x (mesmo ângulo)
+    expect(V.get(9)).toEqual([0, 2, 0]);
+    // FACES: seg0 (polo→anel) leque SUL da esfera: [polo, anel[j], anel[j+1]]
+    expect(F.get(0).vs).toEqual([0, 1, 2]);
+    expect(F.get(3).vs).toEqual([0, 4, 1]);                    // fecha o ciclo (j=3, n=0)
+    // seg1 (anel→anel) quad, a faixa da esfera: [baixo[j], cima[j], cima[j+1], baixo[j+1]]
+    expect(F.get(4).vs).toEqual([1, 5, 6, 2]);
+    expect(F.get(7).vs).toEqual([4, 8, 5, 1]);                 // fecha o ciclo
+    // seg2 (anel→polo) leque NORTE da esfera (invertido): [polo, anel[j+1], anel[j]]
+    expect(F.get(8).vs).toEqual([9, 6, 5]);
+    expect(F.get(11).vs).toEqual([9, 5, 8]);                   // fecha o ciclo
+  });
+
+  it('numeração EXATA num perfil SÓ-ANÉIS (sem polo nenhum): vira uma faixa cilíndrica só de quads', () => {
+    const { V, F, orfaos } = nucleo([['lathe', { id: 0, perfil: [[1, 0], [2, 1]], lados: 4 }]], {}, {});
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(8);    // 2 anéis × 4 lados, nenhum polo
+    expect(F.size).toBe(4);    // 1 segmento × 4 lados
+    expect(V.get(0)).toEqual([1, 0, 0]);
+    expect(V.get(4)).toEqual([2, 1, 0]);
+    expect(F.get(0).vs).toEqual([0, 4, 5, 1]);
+    expect(F.get(3).vs).toEqual([3, 7, 4, 0]);
+  });
+
+  it('winding pra FORA em TODA face dos dois perfis acima (Newell·raio-XZ > 0 nas paredes; a tampa achatada usa Y — como o D1)', () => {
+    // perfil misto: as duas faces do MEIO (quads, seg1) são radiais puras — teste direto, igual ao cone/esfera
+    const { V, F } = nucleo([['lathe', { id: 0, perfil: [[0, 0], [1, 0], [1, 2], [0, 2]], lados: 8 }]], {}, {});
+    for (let j = 0; j < 8; j++) {
+      const f = F.get(8 + j);   // seg1 (anel->anel) começa em 8 com lados=8 (leque sul 0..7, quads 8..15, leque norte 16..23)
+      const c = [0, 0, 0]; for (const v of f.vs) { const p = V.get(v); c[0] += p[0]; c[2] += p[2]; }
+      const n = newell(V, f.vs);
+      expect(n[0] * c[0] + n[2] * c[2]).toBeGreaterThan(0);   // radial pra fora, sem ambiguidade (parede vertical)
+    }
+  });
+
+  it('determinismo (2×) + replay round-trip JSON da lista (o formato salvo)', () => {
+    const passos = [['lathe', { id: 0, perfil: [[0, 0], [1, 0], [1, 1], [0, 1]], lados: 5 }]];
+    const a = J(neutroCanonico(nucleo(passos, {}, {})));
+    const b = J(neutroCanonico(nucleo(passos, {}, {})));
+    expect(a).toBe(b);
+    expect(J(neutroCanonico(nucleo(JSON.parse(J(passos)), {}, {})))).toBe(a);
+  });
+
+  it('3º elemento do ponto GRITA (a reserva da alça de curva) e NÃO corrompe: constrói RETO, idêntico a um ponto de 2 elementos', () => {
+    const comAlca = nucleo([['lathe', { id: 0, perfil: [[0, 0], [1, 0, { tipo: 'curva' }], [1, 1], [0, 1]], lados: 4 }]], {}, {});
+    expect(comAlca.orfaos).toHaveLength(1);
+    expect(comAlca.orfaos[0]).toMatchObject({ op: 'lathe', ref: 1 });
+    expect(comAlca.orfaos[0].motivo).toMatch(/reserva/i);
+    // a malha É a mesma de sem o 3º elemento — a reserva GRITA mas constrói reto (nunca ignora em silêncio, nunca corrompe)
+    const semAlca = nucleo([['lathe', { id: 0, perfil: [[0, 0], [1, 0], [1, 1], [0, 1]], lados: 4 }]], {}, {});
+    expect(J(neutroCanonico(comAlca))).not.toBe(J(neutroCanonico(semAlca)));   // difere só pelo orfaos registrado...
+    expect(comAlca.V.size).toBe(semAlca.V.size);
+    expect(comAlca.F.size).toBe(semAlca.F.size);
+    expect([...comAlca.V.values()]).toEqual([...semAlca.V.values()]);         // ...a GEOMETRIA é idêntica (2 elementos == reto, pra sempre)
+    // um ponto NORMAL de 2 elementos nunca dispara a reserva (sem falso-positivo)
+    expect(semAlca.orfaos).toHaveLength(0);
+  });
+
+  it('raio<0 GRITA e a op inteira não constrói NADA neste passo (não dá pra classificar polo/anel — nunca corrompe)', () => {
+    const n = nucleo([['lathe', { id: 0, perfil: [[0, 0], [-1, 0], [1, 1], [0, 2]], lados: 4 }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0]).toMatchObject({ op: 'lathe', ref: 1 });
+    expect(n.orfaos[0].motivo).toMatch(/raio negativo/i);
+    expect(n.V.size).toBe(0);
+    expect(n.F.size).toBe(0);
+  });
+
+  it('perfil com menos de 2 pontos GRITA (0 e 1 ponto) e não constrói nada', () => {
+    const vazio = nucleo([['lathe', { id: 0, perfil: [], lados: 4 }]], {}, {});
+    expect(vazio.orfaos).toHaveLength(1);
+    expect(vazio.orfaos[0]).toMatchObject({ op: 'lathe', motivo: expect.stringMatching(/ao menos 2 pontos/i) });
+    expect(vazio.V.size).toBe(0);
+    const um = nucleo([['lathe', { id: 0, perfil: [[1, 0]], lados: 4 }]], {}, {});
+    expect(um.orfaos).toHaveLength(1);
+    expect(um.V.size).toBe(0);
+  });
+
+  it('polo↔polo adjacente GRITA (perfil degenerado): só AQUELE segmento fica sem face — o resto do perfil segue normal', () => {
+    // dois polos seguidos (y diferentes) + 1 anel: só o segmento polo-polo não gera face
+    const n = nucleo([['lathe', { id: 0, perfil: [[0, 0], [0, 1], [1, 2]], lados: 4 }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0]).toMatchObject({ op: 'lathe', ref: 0 });
+    expect(n.orfaos[0].motivo).toMatch(/polo.*polo|degenerado/i);
+    expect(n.V.size).toBe(6);     // os 2 polos + o anel de 4 ainda existem (só a FACE entre os polos que falta)
+    expect(n.F.size).toBe(4);     // só o segmento polo->anel contribuiu (o leque de 4)
+    expect([...n.F.keys()].sort((a, b) => a - b)).toEqual([0, 1, 2, 3]);   // cursor de face não pulou id nenhum
+  });
+
+  it('guarda de overflow (D3) no limite EXATO — vértice (perfil só-anéis) e face (perfil alternando polo/anel) de forma independente', () => {
+    // limite de VÉRTICE: 2 anéis × lados=500 -> 1000 vértices exatos (passa); 501 -> 1002 (estoura)
+    expect(() => nucleo([['lathe', { id: 0, perfil: [[1, 0], [1, 1]], lados: 500 }]], {}, {})).not.toThrow();
+    expect(() => nucleo([['lathe', { id: 0, perfil: [[1, 0], [1, 1]], lados: 501 }]], {}, {})).toThrow(/estoura o bloco/);
+    // limite de FACE, independente do de vértice: perfil ALTERNANDO anel/polo (barato em vértice, caro em face —
+    // todo segmento é anel<->polo, nunca degenerado) com lados=8. N=126 pontos (63 anéis+63 polos) -> 567 V / 1000 F exatos (passa);
+    // N=127 -> 575 V / 1008 F (a guarda de FACE estoura primeiro, o vértice nem chegou perto do bloco)
+    const alternado = (nPontos: number) => Array.from({ length: nPontos }, (_, k) => (k % 2 === 0 ? [1, k] : [0, k]));
+    expect(() => nucleo([['lathe', { id: 0, perfil: alternado(126), lados: 8 }]], {}, {})).not.toThrow();
+    expect(() => nucleo([['lathe', { id: 0, perfil: alternado(127), lados: 8 }]], {}, {})).toThrow(/estoura o bloco/);
+  });
+
+  it('params por NOME (raio e y) resolvem como nas outras ops; mudar o VALOR do PARAM não renumera', () => {
+    const n = nucleo([['lathe', { id: 0, perfil: [[0, 'baseY'], ['r1', 'y1'], [0, 'topoY']], lados: 6 }]], { baseY: 0, r1: 0.5, y1: 1, topoY: 2 }, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.V.get(0)).toEqual([0, 0, 0]);
+    expect(n.V.get(7)).toEqual([0, 2, 0]);                     // polo do topo em y=topoY
+    // nome que não existe em PARAMS/TOPO grita ALTO (o contrato do st.num, igual às outras ops)
+    expect(() => nucleo([['lathe', { id: 0, perfil: [[0, 0], ['fantasma', 1]] }]], {}, {})).toThrow(/fantasma/);
+    // mudar o VALOR do PARAM não renumera: mesmos ids, mesma topologia, só a posição muda
+    const passos = [['lathe', { id: 0, perfil: [[0, 0], ['r', 1], [0, 2]], lados: 6 }]];
+    const pequeno = neutroCanonico(nucleo(passos, { r: 0.3 }, {}));
+    const grande = neutroCanonico(nucleo(passos, { r: 0.9 }, {}));
+    expect(grande.V.map((row: any[]) => row[0])).toEqual(pequeno.V.map((row: any[]) => row[0]));
+    expect(grande.F).toEqual(pequeno.F);
+    expect(J(grande.V)).not.toBe(J(pequeno.V));
+  });
+
+  it('adaptarV3 come o mix quad/triângulo do lathe (leque por face) — contagem de floats EXATA, sem tocar em adaptarV3', () => {
+    // perfil misto lados=6: 2 leques (6 tris) + 1 faixa de quads (6 quads -> 12 tris) = 24 triângulos
+    const passos = [['lathe', { id: 0, perfil: [[0, 0], [1, 0], [1, 1], [0, 1]], lados: 6 }]];
+    const r: any = adaptarV3(nucleo(passos, {}, {}), fakeCtx);
+    expect(r.lotes).toHaveLength(1);
+    expect(r.lotes[0].mesh.v.length).toBe(24 * 3 * 8);   // 24 triângulos × 3 vértices × 8 floats
+  });
+
+  it('peça-exemplo _torno (peão de xadrez): sem órfãos, V/F exatos, watertight+winding por MANIFOLD (toda aresta a→b pareada com b→a 1×)', async () => {
+    const pUrl = new URL('../../prototipos/fps/v3/pecas/_torno.js', import.meta.url);
+    const peca: any = await import(fileURLToPath(pUrl));
+    const { V, F, orfaos } = nucleo(peca.PASSOS, peca.PARAMS, peca.TOPO);
+    expect(orfaos).toHaveLength(0);
+    // 10 pontos (2 polos + 8 anéis) × lados=12: V=2+8·12=98; 9 segmentos não-degenerados: F=9·12=108
+    expect(V.size).toBe(2 + 8 * peca.TOPO.lados);
+    expect(F.size).toBe(9 * peca.TOPO.lados);
+    expect(V.size).toBe(98);
+    expect(F.size).toBe(108);
+
+    // MANIFOLD: toda aresta DIRIGIDA a->b (cada canto de cada face) tem exatamente 1 par reverso b->a.
+    // Prova watertight (nenhuma aresta desemparelhada = nenhum buraco) E winding CONSISTENTE (nenhuma
+    // aresta duplicada no MESMO sentido = nenhuma face virada ao contrário da vizinha) — o mesmo método
+    // que o revisor adversarial usou no P1 (D-114) pra esfera/cone.
+    const dirigidas = new Map<string, number>();
+    let cantos = 0;
+    for (const f of F.values()) {
+      const vs = f.vs; cantos += vs.length;
+      for (let k = 0; k < vs.length; k++) {
+        const key = `${vs[k]}>${vs[(k + 1) % vs.length]}`;
+        dirigidas.set(key, (dirigidas.get(key) || 0) + 1);
+      }
+    }
+    expect(dirigidas.size).toBe(cantos);          // nenhuma aresta dirigida duplicada (não-manifold local)
+    let semPar = 0;
+    for (const key of dirigidas.keys()) {
+      const [a, b] = key.split('>');
+      if (!dirigidas.has(`${b}>${a}`)) semPar++;
+    }
+    expect(semPar).toBe(0);                        // nenhuma aresta sem par reverso -> ESTANQUE (watertight)
+
+    // semente de ORIENTAÇÃO: o leque da base (F0, achatado em y=0) aponta pra -y — como a tampa de
+    // baixo do cilindro (D1). Manifold consistente + esta semente pra fora => TODA face aponta pra fora.
+    expect(newell(V, F.get(0)!.vs)[1]).toBeLessThan(0);
+
+    // colisão sã (encaixa o peão inteiro via `solido`) e executar/adaptarV3 saem limpos
+    expect(peca.meta.colisao.forma).toBe('cilindro');
+    expect(peca.meta.colisao.raio).toBeCloseTo(peca.PARAMS.pesR, 6);
+    expect(peca.meta.colisao.altura).toBeCloseTo(peca.PARAMS.topoY, 6);
+    const obj: any = executar(peca.PASSOS, peca.PARAMS, peca.TOPO, fakeCtx);
+    expect(obj.lotes).toHaveLength(1);
+    expect(obj.lotes[0].mesh.v.length % 8).toBe(0);
+  });
+});

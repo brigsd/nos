@@ -32,10 +32,11 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 
 | op | args | nota |
 |---|---|---|
-| `cubo` / `cilindro` | `id`, medidas, `lados` (cilindro) | geradores originais — lathe/loft ainda não existem |
+| `cubo` / `cilindro` | `id`, medidas, `lados` (cilindro) | geradores originais — loft/inflate ainda não existem |
 | `esfera` | `raio` (PARAM, 0.5), `aneis` (TOPO, 6, mín 2), `lados` (TOPO, 8, mín 3) | UV-sphere apoiada no chão (polo sul y=0, norte y=2·raio); numeração no comentário da op |
 | `cone` | `raio` (PARAM, 0.5), `altura` (PARAM, 1), `lados` (TOPO, 8, mín 3) | anel da base b+0..b+lados−1 (y=0), ápice b+lados; tampa −y como o fundo do cilindro |
 | `plano` | `largura` (PARAM, 1), `profundidade` (PARAM, 1), `seg` (TOPO, 1, mín 1) | grade XZ centrada na origem, y=0, linha a linha; seg² quads +y — o chão |
+| `lathe` | `perfil:[[raio,y],...]` (≥2 pontos, PARAM), `lados` (TOPO, mín 3) | perfil 2D girado no eixo Y — generaliza a esfera (polo↔anel↔polo). Ponto de 2 elementos = canto reto PRA SEMPRE; 3º elemento (alça de curva) ainda não suportado — GRITA, não ignora. `raio` resolvido `===0` vira polo (1 vértice), `>0` vira anel (`lados` vértices), `<0` GRITA. Sem tampas automáticas: fechar uma ponta é terminar no eixo (raio 0) |
 | `moveV` | `v`, `d:[x,y,z]` | ADITIVO (`p+d`), nunca posição absoluta |
 | `extruda` | `face`, `dist` | só face única; anel novo nasce no bloco do passo |
 | `mescla` | `de:[ids]`, `para:id` | solda; face de área zero some quieta |
@@ -54,9 +55,10 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 `executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = {}, ESQUELETO = null)`. Exemplos:
 `_oficina-anim.js` (partes), `_oficina-esqueleto.js` (rig completo).
 
-**Alcance honesto:** caixa+cilindro+esfera+cone+plano+extruda+move cobrem
-arquitetura, móveis, props angulados, troncos, bolas e chão. Perfil rotacionado
-(vaso, coluna — lathe) e forma orgânica composta (loft/inflate) ainda não têm
+**Alcance honesto:** caixa+cilindro+esfera+cone+plano+lathe+extruda+move cobrem
+arquitetura, móveis, props angulados, troncos, bolas, chão e perfil rotacionado
+(vaso, coluna, peão — lathe, só reto por enquanto). Forma orgânica composta ao
+longo de um caminho (loft) e a partir de contornos 2D (inflate) ainda não têm
 gerador — não finja com mil moveV; reporte o limite (ou use o caminho JS-puro
 abaixo). Exemplo das primitivas novas: `_primitivas.js`.
 

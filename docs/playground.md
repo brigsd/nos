@@ -34,10 +34,15 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
       Winding/tampas consistentes com cubo/cilindro (normal pra fora); guarda de
       overflow do bloco; numeração documentada+testada. Peça-exemplo
       `pecas/_primitivas.js`; specs na tabela do `docs/oficina.md`.
-- [ ] **P2 · `lathe`** (perfil `[[raio,y],...]` rotacionado → vaso, coluna,
-      roda). O FORMATO do perfil nasce aqui — com alça de curva RESERVADA desde
-      já (senão adicionar curva depois muda o formato de todo perfil; ver
-      "Aba Desenho" no oficina.md).
+- [x] **P2 · `lathe`** (perfil `[[raio,y],...]` rotacionado → vaso, coluna,
+      roda) no núcleo. O FORMATO do perfil nasceu aqui — com alça de curva
+      RESERVADA desde já (um ponto de 2 elementos é reto pra sempre; um 3º
+      elemento GRITA em vez de mudar de figura sozinho quando a curva chegar —
+      "Aba Desenho" no oficina.md). Generaliza o esquema da esfera (que É um
+      lathe de meia-circunferência); winding/numeração travados por teste;
+      guarda de overflow do bloco. Peça-exemplo `pecas/_torno.js` (peão de
+      xadrez, fechado nas duas pontas por polo — watertight, provado por
+      manifold).
 - [ ] **P3 · `espelha` + `rotaciona`** — simetria bilateral (metade → inteiro)
       e rotação de seleção. Destrava qualquer objeto simétrico (veículo, corpo).
 - [ ] **P4 · `loft`** (seções ao longo de um caminho → casco, corpo, galho).
