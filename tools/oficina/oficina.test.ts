@@ -841,3 +841,192 @@ describe('passo 14a — esqueleto com deformação suave', () => {
     expect(rodar(1.5)).toBe(rodar(1.5));                               // determinístico
   });
 });
+
+/* P1 do PLAYGROUND — PRIMITIVAS esfera/cone/plano (só o NÚCLEO; interface é onda
+   separada). NUMERAÇÃO É FORMATO SALVO (playground regra 4): os ids de vértice e
+   de face documentados no comentário de cada op ficam TRAVADOS aqui — mudar
+   qualquer um quebra estes testes de propósito. Prova por MEDIÇÃO: contagens,
+   ids-chave EXATOS (polos, ápice, cantos), winding pra FORA por Newell (a lição
+   D1), determinismo/replay round-trip, órfão grita, guarda de overflow (D3) e
+   params por NOME. */
+describe('P1 — primitivas esfera/cone/plano', () => {
+  const J = (x: any) => JSON.stringify(x);
+  const fakeCtx = { tex: { texCanvas: (w: number, h: number, fn: any) => ({ width: w, height: h, fn }) }, m4: { ident: () => new Float32Array(16) } };
+  // Newell inline (a do núcleo não é exportada) — o MESMO teste de direção do D1
+  const newell = (V: any, vs: number[]) => {
+    let nx = 0, ny = 0, nz = 0;
+    for (let k = 0; k < vs.length; k++) {
+      const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]);
+      nx += (c[1] - n[1]) * (c[2] + n[2]); ny += (c[2] - n[2]) * (c[0] + n[0]); nz += (c[0] - n[0]) * (c[1] + n[1]);
+    }
+    return [nx, ny, nz];
+  };
+  const centroide = (V: any, vs: number[]) => {
+    const c = [0, 0, 0];
+    for (const v of vs) { const p = V.get(v); c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; }
+    return c.map((x) => x / vs.length);
+  };
+
+  it('esfera: contagem V/F e numeração EXATA travada (polos, anéis, as três faixas de face)', () => {
+    const { V, F, orfaos } = nucleo([['esfera', { id: 0, raio: 'r', aneis: 'a', lados: 'l' }]], { r: 0.5 }, { a: 6, l: 8 });
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(42);                            // 2 polos + (6-1)·8
+    expect(F.size).toBe(48);                            // 6·8 (leque + 4 faixas + leque)
+    // polos (formato salvo): sul = b+0 em y=0; norte = b+1+(aneis-1)·lados = 41 em y=2·raio
+    expect(V.get(0)).toEqual([0, 0, 0]);
+    expect(V.get(41)).toEqual([0, 1, 0]);
+    // anel k=1 (φ=π/6), j=0: id 1 = b+1+(k-1)·lados+j — em +x (mesmo ângulo do cilindro)
+    const v1 = V.get(1);
+    expect(v1[0]).toBeCloseTo(0.5 * Math.sin(Math.PI / 6), 12);
+    expect(v1[1]).toBeCloseTo(0.5 * (1 - Math.cos(Math.PI / 6)), 12);
+    expect(v1[2]).toBeCloseTo(0, 12);
+    // equador (k=3, φ=π/2): id 17 (j=0) em [+raio, raio, 0]; id 19 (j=2, θ=π/2) em [0, raio, +raio]
+    const v17 = V.get(17), v19 = V.get(19);
+    expect(v17[0]).toBeCloseTo(0.5, 12); expect(v17[1]).toBeCloseTo(0.5, 12); expect(v17[2]).toBeCloseTo(0, 12);
+    expect(v19[0]).toBeCloseTo(0, 12); expect(v19[1]).toBeCloseTo(0.5, 12); expect(v19[2]).toBeCloseTo(0.5, 12);
+    // FACES por faixa (b + k·lados + j), cantos EXATOS — o formato salvo travado:
+    expect(F.get(0).vs).toEqual([0, 1, 2]);             // leque sul j=0: [polo, anel1[0], anel1[1]]
+    expect(F.get(7).vs).toEqual([0, 8, 1]);             // leque sul j=7 fecha o ciclo
+    expect(F.get(8).vs).toEqual([1, 9, 10, 2]);         // faixa k=1 j=0: [anel1[0], anel2[0], anel2[1], anel1[1]]
+    expect(F.get(40).vs).toEqual([41, 34, 33]);         // leque norte j=0: [polo, anel5[1], anel5[0]] (invertido, como a tampa de cima)
+    expect(F.get(47).vs).toEqual([41, 33, 40]);         // leque norte j=7 fecha o ciclo
+  });
+
+  it('esfera: winding pra FORA em TODA face (Newell·(centroide−centro) > 0 — a lição D1, agora na esfera inteira)', () => {
+    const { V, F } = nucleo([['esfera', { id: 0, raio: 0.5, aneis: 6, lados: 8 }]], {}, {});
+    for (const f of F.values()) {
+      const n = newell(V, f.vs), c = centroide(V, f.vs);
+      const d = [c[0], c[1] - 0.5, c[2]];               // centro da esfera em (0, raio, 0)
+      expect(n[0] * d[0] + n[1] * d[1] + n[2] * d[2]).toBeGreaterThan(0);
+    }
+  });
+
+  it('cone: contagem V/F, numeração EXATA (anel, ápice), laterais pra fora e tampa -y (MESMO winding do fundo do cilindro)', () => {
+    const { V, F, orfaos } = nucleo([['cone', { id: 0, raio: 'r', altura: 'h', lados: 'l' }]], { r: 0.4, h: 1.2 }, { l: 8 });
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(9);                             // lados + ápice
+    expect(F.size).toBe(9);                             // lados laterais + tampa
+    expect(V.get(0)).toEqual([0.4, 0, 0]);              // anel j=0 em +x, y=0
+    expect(V.get(8)).toEqual([0, 1.2, 0]);              // ápice = b+lados, y=altura
+    expect(F.get(0).vs).toEqual([0, 8, 1]);             // lateral j=0: [base[0], ápice, base[1]]
+    expect(F.get(7).vs).toEqual([7, 8, 0]);             // lateral j=7 fecha o ciclo
+    expect(F.get(8).vs).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);   // tampa da base: ângulo crescente
+    // tampa -y (fundo do cilindro) e laterais radiais pra fora
+    expect(newell(V, F.get(8).vs)[1]).toBeLessThan(0);
+    for (let j = 0; j < 8; j++) {
+      const n = newell(V, F.get(j).vs), c = centroide(V, F.get(j).vs);
+      expect(n[0] * c[0] + n[2] * c[2]).toBeGreaterThan(0);   // componente radial no XZ aponta pra fora
+    }
+  });
+
+  it('plano: contagem V/F, grade linha-a-linha EXATA (cantos), quads todos +y (o ciclo da tampa de cima do cubo)', () => {
+    const { V, F, orfaos } = nucleo([['plano', { id: 0, largura: 'w', profundidade: 'p', seg: 's' }]], { w: 2, p: 4 }, { s: 2 });
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(9);                             // (seg+1)²
+    expect(F.size).toBe(4);                             // seg²
+    // linha a linha (b + iz·(seg+1) + ix), centrado na origem, y=0:
+    expect(V.get(0)).toEqual([-1, 0, -2]);              // (ix=0, iz=0)
+    expect(V.get(2)).toEqual([1, 0, -2]);               // (ix=2, iz=0)
+    expect(V.get(4)).toEqual([0, 0, 0]);                // o centro da grade
+    expect(V.get(6)).toEqual([-1, 0, 2]);               // (ix=0, iz=2)
+    expect(V.get(8)).toEqual([1, 0, 2]);                // (ix=2, iz=2)
+    // faces (b + iz·seg + ix), cantos EXATOS:
+    expect(F.get(0).vs).toEqual([0, 3, 4, 1]);          // célula (0,0)
+    expect(F.get(3).vs).toEqual([4, 7, 8, 5]);          // célula (1,1)
+    for (const f of F.values()) expect(newell(V, f.vs)[1]).toBeGreaterThan(0);   // TODO quad com normal +y
+  });
+
+  it('determinismo e replay: 2 execuções idênticas bit-a-bit + round-trip JSON da LISTA (as 3 ops juntas)', () => {
+    const passos = [
+      ['plano', { id: 0, largura: 2, profundidade: 2, seg: 3 }],
+      ['esfera', { id: 1000, raio: 0.4, aneis: 5, lados: 7 }],
+      ['cone', { id: 2000, raio: 0.3, altura: 0.9, lados: 6 }],
+      ['moveV', { v: 2006, d: [0.8, 0, 0] }],           // o ápice do cone (b+lados) — id da numeração documentada
+    ];
+    const a = J(neutroCanonico(nucleo(passos, {}, {})));
+    const b = J(neutroCanonico(nucleo(passos, {}, {})));
+    expect(a).toBe(b);                                                            // 2 execuções idênticas
+    expect(J(neutroCanonico(nucleo(JSON.parse(J(passos)), {}, {})))).toBe(a);     // replay do salvo (round-trip JSON) bit-a-bit
+  });
+
+  it('params por NOME (PARAMS/TOPO) resolvem como nas outras ops; mudar PARAM NÃO renumera', () => {
+    // raio:'meuRaio' resolve de PARAMS — o polo norte sobe pra 2·meuRaio
+    const n = nucleo([['esfera', { id: 0, raio: 'meuRaio', aneis: 'an', lados: 'la' }]], { meuRaio: 0.7 }, { an: 4, la: 6 });
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.V.get(1 + 3 * 6)[1]).toBeCloseTo(1.4, 12);                           // norte = b+1+(aneis-1)·lados
+    const c = nucleo([['cone', { id: 0, raio: 'cr', altura: 'ch', lados: 'cl' }]], { cr: 0.2, ch: 2.5 }, { cl: 5 });
+    expect(c.V.get(5)).toEqual([0, 2.5, 0]);                                      // ápice em y=altura
+    const p = nucleo([['plano', { id: 0, largura: 'w', profundidade: 'pr', seg: 'sg' }]], { w: 6, pr: 3 }, { sg: 2 });
+    expect(p.V.get(8)).toEqual([3, 0, 1.5]);                                      // canto (+x,+z) = [largura/2, 0, profundidade/2]
+    // nome que NÃO existe em PARAMS/TOPO grita ALTO (o contrato do st.num)
+    expect(() => nucleo([['esfera', { id: 0, raio: 'fantasma' }]], {}, {})).toThrow(/fantasma/);
+    // PARAM não renumera: mesmos ids, posições diferentes (a lei que separa PARAMS de TOPO)
+    const e1 = neutroCanonico(nucleo([['esfera', { id: 0, raio: 'r' }]], { r: 0.5 }, {}));
+    const e2 = neutroCanonico(nucleo([['esfera', { id: 0, raio: 'r' }]], { r: 0.9 }, {}));
+    expect(e2.V.map((row: any[]) => row[0])).toEqual(e1.V.map((row: any[]) => row[0]));
+    expect(e2.F).toEqual(e1.F);
+    expect(J(e2.V)).not.toBe(J(e1.V));
+  });
+
+  it('órfão grita, nunca corrompe: moveV num id que a numeração das 3 ops NÃO criou', () => {
+    // esfera 6×8: maior vértice = 41 (o norte) -> 42 não existe
+    const e = nucleo([['esfera', { id: 0, raio: 0.5, aneis: 6, lados: 8 }], ['moveV', { v: 42, d: [0, 1, 0] }]], {}, {});
+    expect(e.orfaos).toHaveLength(1);
+    expect(e.orfaos[0]).toMatchObject({ passo: 1, op: 'moveV', ref: 42 });
+    expect(e.V.size).toBe(42);                          // malha intacta
+    // cone 8 lados: maior vértice = 8 (ápice) -> 9 não existe
+    const c = nucleo([['cone', { id: 0, lados: 8 }], ['moveV', { v: 9, d: [1, 0, 0] }]], {}, {});
+    expect(c.orfaos.some((o: any) => o.op === 'moveV' && o.ref === 9)).toBe(true);
+    expect(c.V.size).toBe(9);
+    // plano seg 2: maior vértice = 8 -> 9 não existe
+    const p = nucleo([['plano', { id: 0, seg: 2 }], ['moveV', { v: 9, d: [0, 1, 0] }]], {}, {});
+    expect(p.orfaos.some((o: any) => o.op === 'moveV' && o.ref === 9)).toBe(true);
+    expect(p.V.size).toBe(9);
+  });
+
+  it('guarda de overflow (D3): aneis/lados/seg gigantes estouram o bloco com throw; o limite exato ainda passa', () => {
+    expect(() => nucleo([['esfera', { id: 0, aneis: 200, lados: 10 }]], {}, {})).toThrow(/estoura o bloco/);   // 2000 faces
+    expect(() => nucleo([['esfera', { id: 0, aneis: 2, lados: 501 }]], {}, {})).toThrow(/estoura o bloco/);    // 503 vértices MAS 1002 faces — a guarda de FACE pega
+    expect(() => nucleo([['esfera', { id: 0, aneis: 125, lados: 8 }]], {}, {})).not.toThrow();                 // 994 V / 1000 F: no limite, passa
+    expect(() => nucleo([['cone', { id: 0, lados: 1000 }]], {}, {})).toThrow(/estoura o bloco/);               // 1001 vértices/faces
+    expect(() => nucleo([['cone', { id: 0, lados: 999 }]], {}, {})).not.toThrow();                             // 1000: no limite, passa
+    expect(() => nucleo([['plano', { id: 0, seg: 31 }]], {}, {})).toThrow(/estoura o bloco/);                  // 32² = 1024 vértices
+    expect(() => nucleo([['plano', { id: 0, seg: 30 }]], {}, {})).not.toThrow();                               // 31² = 961: passa
+  });
+
+  it('TOPO muda a CONTAGEM (renumera) e o id de primitiva incompatível com a posição grita — as leis valem pras ops novas', () => {
+    expect(nucleo([['esfera', { id: 0, aneis: 6, lados: 8 }]], {}, {}).V.size).toBe(42);
+    expect(nucleo([['esfera', { id: 0, aneis: 6, lados: 10 }]], {}, {}).V.size).toBe(52);
+    const n = nucleo([['plano', { id: 0 }], ['esfera', { id: 999 }]], {}, {});    // id escrito ≠ base da posição (1000)
+    expect(n.orfaos.some((o: any) => o.op === 'esfera' && o.motivo.includes('posição'))).toBe(true);
+  });
+
+  it('adaptarV3 come o mix triângulo/quad/n-gon das 3 ops (leque por face) — contagem de floats EXATA', () => {
+    const passos = [
+      ['plano', { id: 0, largura: 3, profundidade: 2, seg: 4 }],      // 16 quads -> 32 tris
+      ['esfera', { id: 1000, raio: 0.5, aneis: 6, lados: 10 }],       // 10 + 40·2 + 10 = 100 tris
+      ['cone', { id: 2000, raio: 0.35, altura: 0.85, lados: 8 }],     // 8 laterais + 8-gon (6 tris) = 14 tris
+    ];
+    const r: any = adaptarV3(nucleo(passos, {}, {}), fakeCtx);
+    expect(r.lotes).toHaveLength(1);                                  // sem parte/material -> um lote só
+    expect(r.lotes[0].mesh.v.length).toBe(146 * 3 * 8);               // 3504 floats (8/vértice, sem esqueleto)
+  });
+
+  it('peça-exemplo _primitivas: sem órfãos, contagens certas, colisão = o chão (raio meia-diagonal, altura 0)', async () => {
+    const pUrl = new URL('../../prototipos/fps/v3/pecas/_primitivas.js', import.meta.url);
+    const peca: any = await import(fileURLToPath(pUrl));
+    const n = nucleo(peca.PASSOS, peca.PARAMS, peca.TOPO);
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.V.size).toBe(25 + 52 + 9);                 // plano seg4 + esfera 6×10 + cone 8
+    expect(n.F.size).toBe(16 + 60 + 9);
+    // o cone foi DESLOCADO por moveV usando a numeração documentada: ápice em x=1.0
+    expect(n.V.get(2008)).toEqual([1, peca.PARAMS.coneAlt, 0]);
+    // colisão calculada nas faces solido (o chão): meia-diagonal do plano, altura 0
+    expect(peca.meta.colisao.forma).toBe('cilindro');
+    expect(peca.meta.colisao.raio).toBeCloseTo(Math.hypot(peca.PARAMS.chaoL / 2, peca.PARAMS.chaoP / 2), 6);
+    expect(peca.meta.colisao.altura).toBeCloseTo(0, 9);
+    const obj: any = executar(peca.PASSOS, peca.PARAMS, peca.TOPO, fakeCtx);
+    expect(obj.lotes).toHaveLength(1);
+    expect(obj.lotes[0].mesh.v.length % 8).toBe(0);
+  });
+});

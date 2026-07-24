@@ -323,7 +323,10 @@ Sem o servidor no ar, cai pro download comum — funciona, mas você move o arqu
 
 | Operação | Argumentos | Observação |
 |---|---|---|
-| `cubo`, `cilindro`, `esfera`, `plano`, `cone` | `id`, medidas, `lados` | Ponto de partida. Cria vértices numerados a partir de `id`. |
+| `cubo`, `cilindro` | `id`, medidas, `lados` | Ponto de partida. Cria vértices numerados a partir de `id`. |
+| `esfera` | `id`, `raio`, `aneis` (mín 2), `lados` (mín 3) | FEITO (P1 do playground, só núcleo). UV-sphere apoiada no chão (polo sul em y=0, norte em y=2·raio). `raio` é PARAM; `aneis`/`lados` são TOPO. Numeração travada por teste: polo sul = b+0; anel k, vértice j = b+1+(k−1)·lados+j; polo norte = b+1+(aneis−1)·lados; faces contíguas por faixa (b+k·lados+j): leque sul, quads, leque norte — detalhe no comentário da op. |
+| `cone` | `id`, `raio`, `altura`, `lados` (mín 3) | FEITO (P1, só núcleo). Anel da base em y=0 (b+0..b+lados−1), ápice em y=altura (b+lados). Faces: laterais b+j (triângulos pra fora) + tampa da base b+lados (mesmo winding do fundo do cilindro, normal −y). |
+| `plano` | `id`, `largura`, `profundidade`, `seg` (mín 1) | FEITO (P1, só núcleo). Grade (seg+1)² no plano XZ centrada na origem (y=0), linha a linha: b+iz·(seg+1)+ix. Faces: seg² quads b+iz·seg+ix, normal +y (o ciclo da tampa de cima do cubo). |
 | `loft` | `id`, `perfis: [{pos, raio ou secao}]`, `lados` | Conecta uma sequência de anéis/seções ao longo de um caminho — o que hoje `galhoSeca` faz à mão em `arvore-cartoon.js`. Uma árvore inteira vira um passo só. Argumentos a confirmar contra o `nos-Craft` quando for portado (fora do alcance desta sessão) — a forma aqui é a leitura de "O que transfere de lá", não o código-fonte de lá. |
 | `inflate` | `id`, `contornoLado`, `contornoTopo` | Dois contornos 2D (lado e topo, ver Aba Desenho) viram volume 3D. Mesma ressalva de origem do `loft`. |
 | `lathe` | `id`, `perfil: [[raio, y]]`, `lados` | Perfil rotacionado em torno de um eixo — vaso, coluna. |

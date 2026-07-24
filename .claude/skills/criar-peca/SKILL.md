@@ -32,7 +32,10 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 
 | op | args | nota |
 |---|---|---|
-| `cubo` / `cilindro` | `id`, medidas, `lados` (cilindro) | os DOIS únicos geradores hoje — esfera/cone/lathe/loft ainda não existem |
+| `cubo` / `cilindro` | `id`, medidas, `lados` (cilindro) | geradores originais — lathe/loft ainda não existem |
+| `esfera` | `raio` (PARAM, 0.5), `aneis` (TOPO, 6, mín 2), `lados` (TOPO, 8, mín 3) | UV-sphere apoiada no chão (polo sul y=0, norte y=2·raio); numeração no comentário da op |
+| `cone` | `raio` (PARAM, 0.5), `altura` (PARAM, 1), `lados` (TOPO, 8, mín 3) | anel da base b+0..b+lados−1 (y=0), ápice b+lados; tampa −y como o fundo do cilindro |
+| `plano` | `largura` (PARAM, 1), `profundidade` (PARAM, 1), `seg` (TOPO, 1, mín 1) | grade XZ centrada na origem, y=0, linha a linha; seg² quads +y — o chão |
 | `moveV` | `v`, `d:[x,y,z]` | ADITIVO (`p+d`), nunca posição absoluta |
 | `extruda` | `face`, `dist` | só face única; anel novo nasce no bloco do passo |
 | `mescla` | `de:[ids]`, `para:id` | solda; face de área zero some quieta |
@@ -51,10 +54,11 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 `executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = {}, ESQUELETO = null)`. Exemplos:
 `_oficina-anim.js` (partes), `_oficina-esqueleto.js` (rig completo).
 
-**Alcance honesto:** caixa+cilindro+extruda+move cobrem arquitetura, móveis,
-props angulados, troncos. Forma REDONDA/orgânica lisa (esfera, vaso, copa
-suave) ainda não tem gerador — não finja com mil moveV; reporte o limite (ou
-use o caminho JS-puro abaixo).
+**Alcance honesto:** caixa+cilindro+esfera+cone+plano+extruda+move cobrem
+arquitetura, móveis, props angulados, troncos, bolas e chão. Perfil rotacionado
+(vaso, coluna — lathe) e forma orgânica composta (loft/inflate) ainda não têm
+gerador — não finja com mil moveV; reporte o limite (ou use o caminho JS-puro
+abaixo). Exemplo das primitivas novas: `_primitivas.js`.
 
 ## O laço de VER (você tem olhos — use-os)
 

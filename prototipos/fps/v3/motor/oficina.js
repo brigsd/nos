@@ -151,6 +151,95 @@ const OPS = {
     const topo = []; for (let k = L - 1; k >= 0; k--) topo.push(b + L + k); addF(st, b + L + 1, topo); // +y
   },
 
+  /* ---- P1 do playground: esfera / cone / plano — geradores novos, mesmas leis ----
+     NUMERAÇÃO É FORMATO SALVO (docs/playground.md, regra 4): a numeração de vértice
+     e de face de cada op abaixo está documentada AQUI e travada por teste — depois
+     de shipada, NUNCA muda (peça salva depende dela). Winding sempre com a normal
+     pra FORA (a convenção do cubo/cilindro — a lição D1 das tampas). Guarda de
+     overflow por-passo como no cilindro (D3): estourar o bloco GRITA ALTO (throw). */
+
+  /* esfera — UV-sphere APOIADA no chão como as outras primitivas: polo sul em y=0,
+     centro em y=raio, polo norte em y=2·raio. `raio` é PARAM (mudar não renumera);
+     `aneis` (mín 2) e `lados` (mín 3) são TOPO — mudam a CONTAGEM.
+     VÉRTICES (formato salvo, travado por teste): polo sul = b+0; anel k
+     (k=1..aneis-1, do sul pro norte, ângulo polar k·π/aneis), vértice j
+     (j=0..lados-1, mesmo ângulo do cilindro: j=0 em +x, crescendo pra +z) =
+     b + 1 + (k-1)·lados + j; polo norte = b + 1 + (aneis-1)·lados.
+     Total: 2 + (aneis-1)·lados.
+     FACES (formato salvo, travado por teste) — contíguas por FAIXA, do sul pro
+     norte; a faixa k (k=0..aneis-1) tem `lados` faces e a face j dela é
+     b + k·lados + j:
+       faixa 0         = leque do polo sul, triângulo [polo, anel1[j], anel1[j+1]]
+                         (ângulo crescente, como a tampa de fundo do cilindro — normal pra baixo/fora);
+       faixa 1..aneis-2 = quad [anelK[j], anelK+1[j], anelK+1[j+1], anelK[j+1]]
+                         (o MESMO winding da lateral do cilindro — normal radial pra fora);
+       faixa aneis-1   = leque do polo norte, triângulo [polo, anelÚlt[j+1], anelÚlt[j]]
+                         (ângulo decrescente, como a tampa de cima — normal pra cima/fora).
+     Total: aneis·lados. */
+  esfera(st, a, i) {
+    const b = confereId(st, i, 'esfera', a);
+    const r = st.num(a.raio ?? 0.5);
+    const A = Math.max(2, st.num(a.aneis ?? 6) | 0);   // TOPO: muda a CONTAGEM
+    const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // TOPO: muda a CONTAGEM
+    const nV = 2 + (A - 1) * L, nF = A * L;
+    if (nV > BLOCO || nF > BLOCO) throw new Error(`oficina: esfera com aneis=${A}, lados=${L} estoura o bloco de ids (${BLOCO}): ${nV} vértices / ${nF} faces`);   // guarda de overflow (D3)
+    const anel = (k, j) => b + 1 + (k - 1) * L + j;    // id do vértice j do anel k (1..aneis-1)
+    addV(st, b, [0, 0, 0]);                            // polo sul (b+0)
+    for (let k = 1; k < A; k++) {
+      const f = (k / A) * Math.PI;                     // ângulo polar a partir do sul
+      const rk = Math.sin(f) * r, y = (1 - Math.cos(f)) * r;
+      for (let j = 0; j < L; j++) { const t = (j / L) * Math.PI * 2; addV(st, anel(k, j), [Math.cos(t) * rk, y, Math.sin(t) * rk]); }
+    }
+    const norte = b + 1 + (A - 1) * L;
+    addV(st, norte, [0, 2 * r, 0]);                    // polo norte
+    for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + j, [b, anel(1, j), anel(1, n)]); }   // leque do sul
+    for (let k = 1; k < A - 1; k++) for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + k * L + j, [anel(k, j), anel(k + 1, j), anel(k + 1, n), anel(k, n)]); }   // faixas de quads
+    for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + (A - 1) * L + j, [norte, anel(A - 1, n), anel(A - 1, j)]); }   // leque do norte
+  },
+
+  /* cone — base no chão como o cilindro: anel em y=0, ápice em y=altura. `raio` e
+     `altura` são PARAMS; `lados` (mín 3) é TOPO.
+     VÉRTICES (formato salvo, travado por teste): anel da base = b+0..b+lados-1
+     (mesmo ângulo do cilindro: j=0 em +x, crescendo pra +z), ápice = b+lados.
+     Total: lados+1.
+     FACES (formato salvo, travado por teste): laterais = b+j, triângulo
+     [b+j, ápice, b+j+1] — a lateral do cilindro com o anel de cima colapsado no
+     ápice (normal pra fora); tampa da base = b+lados, polígono [b+0..b+lados-1]
+     no MESMO winding da tampa de fundo do cilindro (ângulo crescente — normal -y).
+     Total: lados+1. */
+  cone(st, a, i) {
+    const b = confereId(st, i, 'cone', a);
+    const r = st.num(a.raio ?? 0.5);
+    const h = st.num(a.altura ?? 1);
+    const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // TOPO: muda a CONTAGEM
+    if (L + 1 > BLOCO) throw new Error(`oficina: cone com ${L} lados estoura o bloco de ids (${BLOCO}); máx ${BLOCO - 1}`);   // guarda de overflow (D3): lados+1 vértices E lados+1 faces
+    for (let k = 0; k < L; k++) { const t = (k / L) * Math.PI * 2; addV(st, b + k, [Math.cos(t) * r, 0, Math.sin(t) * r]); }
+    addV(st, b + L, [0, h, 0]);                                                                       // ápice
+    for (let k = 0; k < L; k++) { const n = (k + 1) % L; addF(st, b + k, [b + k, b + L, b + n]); }    // laterais (normal pra fora)
+    const fundo = []; for (let k = 0; k < L; k++) fundo.push(b + k); addF(st, b + L, fundo);          // tampa da base (-y, o winding do fundo do cilindro)
+  },
+
+  /* plano — grade no plano XZ, y=0, CENTRADA na origem (o chão). `largura` (eixo x)
+     e `profundidade` (eixo z) são PARAMS; `seg` (mín 1) é TOPO: (seg+1)² vértices,
+     seg² quads.
+     VÉRTICES (formato salvo, travado por teste), LINHA A LINHA: linha iz
+     (iz=0..seg, de -z pra +z), coluna ix (ix=0..seg, de -x pra +x) ->
+     b + iz·(seg+1) + ix. Total: (seg+1)².
+     FACES (formato salvo, travado por teste): o quad da célula (ix, iz)
+     (ix,iz=0..seg-1) = b + iz·seg + ix, cantos
+     [v(ix,iz), v(ix,iz+1), v(ix+1,iz+1), v(ix+1,iz)] — normal +y (o MESMO ciclo
+     da tampa de cima do cubo). Total: seg². */
+  plano(st, a, i) {
+    const b = confereId(st, i, 'plano', a);
+    const lx = st.num(a.largura ?? 1), lz = st.num(a.profundidade ?? 1);
+    const S = Math.max(1, st.num(a.seg ?? 1) | 0);     // TOPO: muda a CONTAGEM
+    const nV = (S + 1) * (S + 1);
+    if (nV > BLOCO) throw new Error(`oficina: plano com seg=${S} estoura o bloco de ids (${BLOCO}): ${nV} vértices; máx seg=30`);   // guarda de overflow (D3); faces = seg² < (seg+1)², coberto
+    const v = (ix, iz) => b + iz * (S + 1) + ix;
+    for (let iz = 0; iz <= S; iz++) for (let ix = 0; ix <= S; ix++) addV(st, v(ix, iz), [(ix / S - 0.5) * lx, 0, (iz / S - 0.5) * lz]);
+    for (let iz = 0; iz < S; iz++) for (let ix = 0; ix < S; ix++) addF(st, b + iz * S + ix, [v(ix, iz), v(ix, iz + 1), v(ix + 1, iz + 1), v(ix + 1, iz)]);
+  },
+
   /* ---- edição por id estável ---- */
   moveV(st, a, i) {
     const v = a.v;

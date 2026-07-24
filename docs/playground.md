@@ -30,9 +30,10 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
 ## Ordem de construção
 
 - [x] **P0 · Este roteiro** (D-113).
-- [ ] **P1 · Primitivas que faltam** — `esfera`, `cone`, `plano` no núcleo.
+- [x] **P1 · Primitivas que faltam** — `esfera`, `cone`, `plano` no núcleo.
       Winding/tampas consistentes com cubo/cilindro (normal pra fora); guarda de
-      overflow do bloco; numeração documentada+testada.
+      overflow do bloco; numeração documentada+testada. Peça-exemplo
+      `pecas/_primitivas.js`; specs na tabela do `docs/oficina.md`.
 - [ ] **P2 · `lathe`** (perfil `[[raio,y],...]` rotacionado → vaso, coluna,
       roda). O FORMATO do perfil nasce aqui — com alça de curva RESERVADA desde
       já (senão adicionar curva depois muda o formato de todo perfil; ver

@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-100 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+102 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -45,6 +45,7 @@
 - `VISION.md` — Visão — NÓS
 - `oficina-referencia.md` — Oficina — referência de como cada coisa funciona
 - `oficina.md` — A Oficina — editor de objetos dentro do jogo
+- `playground.md` — O Playground — o épico da criação por IA
 - `walkthrough_colaborador4.md` — Resumo de Alterações — Colaborador 4 (branch `colaborador4`)
 
 ## docs/legado/
@@ -99,6 +100,7 @@
 - `_oficina-toco.js` — PEÇA-EXEMPLO da OFICINA (passo 1): um toco de árvore descrito 100% como lista de PASSOS e reconstruído por `executar` — prova a cadeia inteira núcleo -> adap…
 - `_oficina-transp.js` — PEÇA-EXEMPLO da OFICINA (passo 12b): MATERIAL TRANSPARENTE. Um relicário — um NÚCLEO opaco que BRILHA (brasa: emissivo + semLuz) dentro de uma CASCA de VIDRO…
 - `_pinheiros.js` — scratch: variações do PINHEIRO (não versionar/publicar). Mesmo padrão que o ideador aprovou no _arvformas — saias empilhadas (escada) + agulha verde escuro "…
+- `_primitivas.js` — PEÇA-EXEMPLO do P1 do playground: as TRÊS primitivas novas lado a lado — `plano` como chão, `esfera` apoiada no centro e `cone` deslocado pra +x por moveV (p…
 - `_raiz1.js` — scratch: close da RAIZ — tronco ranhurado + pé de raízes liso com sombra (malhas separadas).
 - `arco.js` — PEÇA: arco — o ARCO DE ENTRADA reconstruído com GEOMETRIA DE VERDADE (D-62→). No v2 ele era um billboard chapado com PROFUNDIDADE FALSA (b.depth: até 40 fati…
 - `arvore-cartoon.js` — PEÇA: arvore-cartoon — a PROVA do carimbo plantável (D-63). Usa o construtor motor/arvore-cartoon.js pra montar um POOL pequeno de variantes (espécie×seed) e…
