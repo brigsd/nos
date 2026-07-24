@@ -11,7 +11,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "res-bench": "node tools/bancadas/res-bench.mjs",
     "peca": "node tools/bancadas/olhar-peca.mjs",
     "oficina": "node tools/bancadas/oficina.mjs",
     "servir": "node tools/servir.mjs",

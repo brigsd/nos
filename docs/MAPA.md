@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-105 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+99 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -56,14 +56,6 @@
 - `oficina.md` — A Oficina — editor de objetos dentro do jogo
 - `walkthrough_colaborador2.md` — Resumo de Alterações — Colaborador 2 (T5, T6, T8, T9)
 - `walkthrough_colaborador4.md` — Resumo de Alterações — Colaborador 4 (branch `colaborador4`)
-
-## prototipos/fps/
-
-- `README.md` — O Coração em primeira pessoa — o cliente OFICIAL
-- `build-data.mjs` — Gera data.js: mundo compacto + sprites base64 para a demo raycaster.
-- `data.js` — data.js — snapshot do mundo pro dev local do v2: abre nos-fps.html direto do disco sem build (no Pages, o build-fps inline os dados no lugar da tag).
-- `tree-core.js` — NÓS — gerador de árvores (L-system / ramificação recursiva + copa por campo de densidade). Determinístico por seed. Saída: buffer de índices da paleta Resurr…
-- `tree3d-core.js` — NÓS — árvores 3D (v2). A árvore cresce UMA vez como esqueleto 3D de verdade (ramificação recursiva com frames ortonormais) + copa em lobos 3D + nuvem de FOLH…
 
 ## prototipos/fps/v3/
 
@@ -133,7 +125,6 @@
 - `oficina.mjs` — oficina.mjs — a bancada da CÂMERA DO EDITOR + OVERLAY DA MALHA + ARRASTO DE VÉRTICE (Oficina, passos 2-4).
 - `olhar-peca.mjs` — olhar-peca.mjs — o olho da OFICINA (D-55).
 - `porteiro.mjs` — porteiro.mjs — o GATE de render da OFICINA (D-60). Renderiza peça(s) do v3 e FALHA (exit≠0) se: houve pageerror, window.__ready ≠ true, ou o frame é DEGENERA…
-- `res-bench.mjs` — res-bench.mjs — experimento B do D-44: o custo real de subir a resolução INTERNA do render (a alavanca ?res=). Para cada degrau, mede o FPS de verdade (conta…
 - `sintetizar.mjs` — sintetizar.mjs — a bancada do REPLAY da ABA SOM (passo 1), o "cmp de pixel do som". O par do `executar.mjs` (que prova o replay da Oficina em Node), mas aqui…
 - `somab.mjs` — somab.mjs — o A/B do SOM (S5b, o FECHO do ouvido da Aba Som): compara o passo REAL do jogo (a síntese granular do motor/som.js) com o preset `_passo` (pecas-…
 - `somexportar.mjs` — somexportar.mjs — a bancada do EXPORTAR da ABA SOM (S5a), o análogo sonoro do passo 10 do 3D. Sobe o `som.html` num Chromium headless (Playwright, gestos REA…
