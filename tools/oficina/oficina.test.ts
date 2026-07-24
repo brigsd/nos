@@ -1240,3 +1240,241 @@ describe('P2 — lathe (perfil de revolução)', () => {
     expect(obj.lotes[0].mesh.v.length % 8).toBe(0);
   });
 });
+
+/* P3 do playground — `rotaciona` (gira uma seleção, SIMPLES: NUNCA cria id) +
+   `espelha` (duplica uma seleção refletida, ids NOVOS — formato salvo). Prova
+   por MEDIÇÃO: rotaciona — posições EXATAS (90°/180°, cada eixo), pivô
+   default=CENTROIDE vs explícito (resultado diferente), seleção por v e por
+   f, NUNCA cria vértice/face, `graus` por NOME de PARAM, id/eixo inválido
+   grita. espelha — contagem V/F nova exata, a numeração orig->espelho
+   id-a-id (o WELD comprovado: vértice EXATAMENTE no plano compartilha id,
+   fora do plano duplica), winding REVERTIDO medido por Newell (comparado
+   contra a face real equivalente do cubo — a lição D1), herança de
+   atributo, determinismo/replay, face/eixo inválido grita, guarda de
+   overflow (D3) no limite EXATO isolando cada dimensão (face sozinha via
+   base 100% soldada — zero vértice novo; vértice sozinho via plano de seg
+   ÍMPAR, que não tem coluna central coincidindo com o plano), e o teste de
+   MANIFOLD na peça-exemplo `_espelhado` (a costura soldada fecha o par de
+   chifres — o mesmo método que o revisor usou no P1/P2 pra esfera/torno). */
+describe('P3 — espelha + rotaciona (seleção transformada)', () => {
+  const J = (x: any) => JSON.stringify(x);
+  const fakeCtx = { tex: { texCanvas: (w: number, h: number, fn: any) => ({ width: w, height: h, fn }) }, m4: { ident: () => new Float32Array(16) } };
+  // Newell inline (a do núcleo não é exportada) — o MESMO teste de direção do D1/P1/P2
+  const newell = (V: any, vs: number[]) => {
+    let nx = 0, ny = 0, nz = 0;
+    for (let k = 0; k < vs.length; k++) {
+      const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]);
+      nx += (c[1] - n[1]) * (c[2] + n[2]); ny += (c[2] - n[2]) * (c[0] + n[0]); nz += (c[0] - n[0]) * (c[1] + n[1]);
+    }
+    return [nx, ny, nz];
+  };
+
+  describe('rotaciona', () => {
+    it('90°/180° em torno de cada eixo dá as posições EXATAS (pivô explícito na origem)', () => {
+      // cubo lado=2: v1 = (1,0,-1) (canto conhecido) — gira a malha INTEIRA (sel ausente)
+      const rot = (eixo: string, graus: number) => nucleo([['cubo', { id: 0, lado: 2 }], ['rotaciona', { eixo, graus, pivo: [0, 0, 0] }]], {}, {}).V.get(1)!;
+      const x90 = rot('x', 90); expect(x90[0]).toBeCloseTo(1, 12); expect(x90[1]).toBeCloseTo(1, 12); expect(x90[2]).toBeCloseTo(0, 12);
+      const y90 = rot('y', 90); expect(y90[0]).toBeCloseTo(-1, 12); expect(y90[1]).toBeCloseTo(0, 12); expect(y90[2]).toBeCloseTo(-1, 12);
+      const z90 = rot('z', 90); expect(z90[0]).toBeCloseTo(0, 12); expect(z90[1]).toBeCloseTo(1, 12); expect(z90[2]).toBeCloseTo(-1, 12);
+      const y180 = rot('y', 180); expect(y180[0]).toBeCloseTo(-1, 12); expect(y180[1]).toBeCloseTo(0, 12); expect(y180[2]).toBeCloseTo(1, 12);
+    });
+
+    it('pivô default = CENTROIDE da seleção (medido ANTES de girar); pivô explícito dá resultado DIFERENTE', () => {
+      // v1=(1,0,-1), v2=(1,0,1) -> centroide (1,0,0): girar 90° em Y ao redor do centroide leva os dois
+      // pontos pra posições fáceis de conferir (x=0 e x=2, z~0) — não-trivial, prova a MÉDIA de verdade
+      const { V } = nucleo([['cubo', { id: 0, lado: 2 }], ['rotaciona', { eixo: 'y', graus: 90, sel: { v: [1, 2] } }]], {}, {});
+      expect(V.get(1)![0]).toBeCloseTo(0, 12); expect(V.get(1)![1]).toBeCloseTo(0, 12); expect(V.get(1)![2]).toBeCloseTo(0, 12);
+      expect(V.get(2)![0]).toBeCloseTo(2, 12); expect(V.get(2)![1]).toBeCloseTo(0, 12); expect(V.get(2)![2]).toBeCloseTo(0, 12);
+      // MESMA seleção, pivô EXPLÍCITO na origem -> resultado DIFERENTE (prova que o default é a média, não coincidência)
+      const { V: V2 } = nucleo([['cubo', { id: 0, lado: 2 }], ['rotaciona', { eixo: 'y', graus: 90, pivo: [0, 0, 0], sel: { v: [1, 2] } }]], {}, {});
+      expect(Math.abs(V2.get(1)![0] - V.get(1)![0])).toBeGreaterThan(0.5);
+    });
+
+    it('seleção por v e por f (face contribui os ids dos seus PRÓPRIOS cantos); fora da seleção fica INTOCADO', () => {
+      const base = nucleo([['cubo', { id: 0, lado: 2 }]], {}, {});
+      // sel por v: só v1 gira
+      const porV = nucleo([['cubo', { id: 0, lado: 2 }], ['rotaciona', { eixo: 'y', graus: 90, pivo: [0, 0, 0], sel: { v: [1] } }]], {}, {});
+      expect(porV.V.get(0)).toEqual(base.V.get(0));             // intocado
+      expect(porV.V.get(1)![0]).toBeCloseTo(-1, 12);            // girado
+
+      // sel por f: face 3 (+x, cantos [2,1,5,6]) gira os 4 cantos DELA; o resto do cubo fica intacto
+      const porF = nucleo([['cubo', { id: 0, lado: 2 }], ['rotaciona', { eixo: 'y', graus: 90, pivo: [0, 0, 0], sel: { f: [3] } }]], {}, {});
+      expect(porF.V.get(0)).toEqual(base.V.get(0));             // fora da seleção, intocado
+      for (const v of [1, 2, 5, 6]) expect(porF.V.get(v)).not.toEqual(base.V.get(v));   // os 4 cantos da face giraram
+    });
+
+    it('NUNCA cria vértice/face — mesma contagem e mesmos ids antes/depois', () => {
+      const antes = nucleo([['cubo', { id: 0, lado: 2 }]], {}, {});
+      const depois = nucleo([['cubo', { id: 0, lado: 2 }], ['rotaciona', { eixo: 'y', graus: 37 }]], {}, {});
+      expect(depois.V.size).toBe(antes.V.size);
+      expect(depois.F.size).toBe(antes.F.size);
+      expect([...depois.V.keys()].sort((a, b) => a - b)).toEqual([...antes.V.keys()].sort((a, b) => a - b));
+      expect([...depois.F.keys()].sort((a, b) => a - b)).toEqual([...antes.F.keys()].sort((a, b) => a - b));
+    });
+
+    it('`graus` por NOME de PARAM (como as outras ops dimensionais); nome inexistente grita ALTO', () => {
+      const { V } = nucleo([['cubo', { id: 0, lado: 2 }], ['rotaciona', { eixo: 'x', graus: 'meuAngulo', pivo: [0, 0, 0] }]], { meuAngulo: 90 }, {});
+      expect(V.get(1)![1]).toBeCloseTo(1, 12);
+      expect(() => nucleo([['cubo', { id: 0, lado: 1 }], ['rotaciona', { eixo: 'x', graus: 'fantasma' }]], {}, {})).toThrow(/fantasma/);
+    });
+
+    it('id/face inexistente na seleção e eixo desconhecido GRITAM (órfão) — nunca corrompem', () => {
+      const { orfaos, V } = nucleo([['cubo', { id: 0, lado: 2 }], ['rotaciona', { eixo: 'y', graus: 90, pivo: [0, 0, 0], sel: { v: [1, 999] } }]], {}, {});
+      expect(orfaos).toHaveLength(1);
+      expect(orfaos[0]).toMatchObject({ passo: 1, op: 'rotaciona', ref: 999 });
+      expect(V.size).toBe(8);                    // malha intacta
+      expect(V.get(1)![0]).toBeCloseTo(-1, 12);   // o id válido da seleção girou normalmente
+
+      const f = nucleo([['cubo', { id: 0, lado: 1 }], ['rotaciona', { eixo: 'y', graus: 10, sel: { f: [999] } }]], {}, {});
+      expect(f.orfaos.some((o: any) => o.op === 'rotaciona' && o.ref === 999)).toBe(true);
+
+      const e = nucleo([['cubo', { id: 0, lado: 1 }], ['rotaciona', { eixo: 'w', graus: 10 }]], {}, {});
+      expect(e.orfaos[0]).toMatchObject({ op: 'rotaciona', ref: 'w' });
+      expect(e.orfaos[0].motivo).toMatch(/desconhecido/);
+      expect(e.V.size).toBe(8);
+    });
+  });
+
+  describe('espelha', () => {
+    it('contagem V/F nova EXATA (sem weld: plano do espelho longe de tudo)', () => {
+      const { V, F, orfaos } = nucleo([['plano', { id: 0, largura: 2, profundidade: 2, seg: 1 }], ['espelha', { eixo: 'x', pos: 5 }]], {}, {});
+      expect(orfaos).toHaveLength(0);
+      expect(V.size).toBe(8);    // 4 originais + 4 novos (nenhum solda, pos=5 longe de x=±1)
+      expect(F.size).toBe(2);    // 1 original + 1 nova
+      // reflexão EXATA: coord' = 2·pos − coord, só o eixo x muda
+      expect(V.get(1000)).toEqual([2 * 5 - -1, 0, -1]);   // era v(0,0)=(-1,0,-1)
+      expect(V.get(1003)).toEqual([2 * 5 - 1, 0, 1]);     // era v(1,1)=(1,0,1)
+    });
+
+    it('numeração orig->espelho id-a-id (formato salvo): weld dos cantos EXATOS no plano + id novo pros de fora', () => {
+      // cubo lado=2; move 2 cantos da face +x pro plano x=0 EXATO (soldam); os outros 2 ficam em x=1 (duplicam)
+      const passos = [
+        ['cubo', { id: 0, lado: 2 }],
+        ['moveV', { v: 1, d: [-1, 0, 0] }],   // v1 (1,0,-1) -> (0,0,-1) EXATO
+        ['moveV', { v: 2, d: [-1, 0, 0] }],   // v2 (1,0,1)  -> (0,0,1)  EXATO
+        ['espelha', { eixo: 'x', pos: 0, sel: { f: [3] } }],   // face +x, cantos [2,1,5,6] (2,1 no plano; 5,6 fora)
+      ];
+      const { V, F, orfaos } = nucleo(passos, {}, {});
+      expect(orfaos).toHaveLength(0);
+      // mapa (ordem CRESCENTE de id original 1,2,5,6): 1->1 (solda) 2->2 (solda) 5->3000 (1º livre) 6->3001 (2º livre)
+      expect(V.size).toBe(10);                                 // 8 originais + só 2 novos (1,2 soldaram)
+      expect(V.get(3000)).toEqual([-1, 2, -1]);                // espelho de v5=(1,2,-1) em x=0 -> (-1,2,-1)
+      expect(V.get(3001)).toEqual([-1, 2, 1]);                 // espelho de v6=(1,2,1)
+      // face nova (b=baseDoPasso(3)=3000): cantos = mapa([2,1,5,6]) = [2,1,3000,3001], REVERTIDO = [3001,3000,1,2]
+      expect(F.get(3000)!.vs).toEqual([3001, 3000, 1, 2]);
+    });
+
+    it('WELD: vértice EXATAMENTE no plano é COMPARTILHADO (a contagem prova); vértice fora duplica', () => {
+      const semWeld = nucleo([['plano', { id: 0, largura: 2, profundidade: 2, seg: 1 }], ['espelha', { eixo: 'y', pos: 5 }]], {}, {});   // plano é y=0 sempre; pos=5 -> NADA solda
+      expect(semWeld.V.size).toBe(8);
+      const comWeld = nucleo([['plano', { id: 0, largura: 2, profundidade: 2, seg: 1 }], ['espelha', { eixo: 'y', pos: 0 }]], {}, {});   // pos=0 == y do plano -> TUDO solda
+      expect(comWeld.V.size).toBe(4);                          // nenhum vértice novo — os 4 originais reusados
+      expect(comWeld.F.size).toBe(2);
+      expect(comWeld.F.get(1000)!.vs.every((v: number) => v < 4)).toBe(true);   // a face nova só usa ids ORIGINAIS (soldados)
+    });
+
+    it('winding REVERTIDO: a normal Newell da face espelhada aponta pra FORA (medida contra a face real equivalente)', () => {
+      // face +x do cubo espelhada em x=0 deve dar a MESMA orientação (Newell·x < 0) da face -x REAL do
+      // cubo na mesma posição — prova por comparação direta, não por suposição
+      const cuboReal = nucleo([['cubo', { id: 0, lado: 2 }]], {}, {});
+      const nRealMenosX = newell(cuboReal.V, cuboReal.F.get(5)!.vs);   // face -x de verdade
+      expect(nRealMenosX[0]).toBeLessThan(0);                          // confere a premissa (D1)
+
+      const espelhado = nucleo([['cubo', { id: 0, lado: 2 }], ['espelha', { eixo: 'x', pos: 0, sel: { f: [3] } }]], {}, {});   // espelha a face +x (passo 1 -> base 1000)
+      const nEspelhado = newell(espelhado.V, espelhado.F.get(1000)!.vs);
+      expect(nEspelhado[0]).toBeLessThan(0);                           // MESMO sinal da -x real -> winding correto pra fora
+    });
+
+    it('herança de atributo (cor/liso/parte/solido) — a face espelhada copia do original, só `vs` muda', () => {
+      const passos = [
+        ['plano', { id: 0, largura: 2, profundidade: 2, seg: 1 }],
+        ['pincel', { modo: 'face', faces: [0], cor: '#4d9be6' }],
+        ['liso', { faces: [0] }],
+        ['parte', { nome: 'asa', faces: [0] }],
+        ['solido', { faces: [0] }],
+        ['espelha', { eixo: 'z', pos: 0 }],
+      ];
+      const { F } = nucleo(passos, {}, {});
+      const orig = F.get(0)!, esp = F.get(5000)!;   // espelha é o passo 5 -> base 5000
+      expect(esp.cor).toBe(orig.cor);
+      expect(esp.liso).toBe(orig.liso);
+      expect(esp.parte).toBe(orig.parte);
+      expect(esp.solido).toBe(orig.solido);
+      expect(esp.vs).not.toEqual(orig.vs);   // só os cantos mudam
+    });
+
+    it('determinismo (2×) + replay round-trip JSON da lista (o formato salvo)', () => {
+      const passos = [['plano', { id: 0, largura: 2, profundidade: 2, seg: 1 }], ['espelha', { eixo: 'x', pos: 0 }]];
+      const a = J(neutroCanonico(nucleo(passos, {}, {})));
+      const b = J(neutroCanonico(nucleo(passos, {}, {})));
+      expect(a).toBe(b);
+      expect(J(neutroCanonico(nucleo(JSON.parse(J(passos)), {}, {})))).toBe(a);
+    });
+
+    it('face inexistente na seleção GRITA (órfão); as demais faces válidas seguem processadas; eixo desconhecido grita', () => {
+      const { orfaos, F } = nucleo([['cubo', { id: 0, lado: 1 }], ['espelha', { eixo: 'x', pos: 0, sel: { f: [3, 999] } }]], {}, {});
+      expect(orfaos).toHaveLength(1);
+      expect(orfaos[0]).toMatchObject({ passo: 1, op: 'espelha', ref: 999 });
+      expect(F.has(1000)).toBe(true);   // a face 3 (válida) foi espelhada normalmente apesar do 999 ruim
+
+      const e = nucleo([['cubo', { id: 0, lado: 1 }], ['espelha', { eixo: 'w' }]], {}, {});
+      expect(e.orfaos[0]).toMatchObject({ op: 'espelha', ref: 'w' });
+      expect(e.V.size).toBe(8);
+    });
+
+    it('guarda de overflow (D3) no limite EXATO — FACE isolada (zero vértice novo) e VÉRTICE isolado (face longe do limite)', () => {
+      // FACE isolada: N planos-semente de 1 face cada, TODOS em y=0 -> espelhar em eixo=y,pos=0 solda 100%
+      // (0 vértice novo); só a contagem de FACE estoura. 1000 planos = 1000 faces (no limite, passa); 1001 estoura.
+      const muitosPlanos = (n: number) => { const p: any[] = []; for (let k = 0; k < n; k++) p.push(['plano', { id: k * 1000, largura: 1, profundidade: 1, seg: 1 }]); p.push(['espelha', { eixo: 'y', pos: 0 }]); return p; };
+      const noLimite = nucleo(muitosPlanos(1000), {}, {});
+      expect(noLimite.orfaos).toHaveLength(0);
+      expect([...noLimite.V.keys()].filter((id) => id >= 1000 * 1000)).toHaveLength(0);   // confere: 0 vértice novo (100% soldado)
+      expect([...noLimite.F.keys()].filter((id) => id >= 1000 * 1000)).toHaveLength(1000); // exatamente 1000 faces novas
+      expect(() => nucleo(muitosPlanos(1001), {}, {})).toThrow(/estoura o bloco/);
+
+      // VÉRTICE isolado: 1 plano grande, eixo=x pos=0 (nada solda: seg ÍMPAR não tem coluna central em x=0).
+      // seg=30 (900 faces, <1000 vértices novos) passa; seg=31 (961 faces, 1024 vértices novos) estoura SÓ por vértice.
+      expect(() => nucleo([['plano', { id: 0, largura: 10, profundidade: 10, seg: 30 }], ['espelha', { eixo: 'x', pos: 0 }]], {}, {})).not.toThrow();
+      expect(() => nucleo([['plano', { id: 0, largura: 10, profundidade: 10, seg: 31 }], ['espelha', { eixo: 'x', pos: 0 }]], {}, {})).toThrow(/estoura o bloco/);
+    });
+
+    it('peça-exemplo _espelhado (cabeça + par de chifres): sem órfãos, V/F exatos, MANIFOLD (costura soldada -> watertight)', async () => {
+      const pUrl = new URL('../../prototipos/fps/v3/pecas/_espelhado.js', import.meta.url);
+      const peca: any = await import(fileURLToPath(pUrl));
+      const { V, F, orfaos } = nucleo(peca.PASSOS, peca.PARAMS, peca.TOPO);
+      expect(orfaos).toHaveLength(0);
+      // esfera (6 aneis×10 lados: 52V/60F) + chifre original (5V: 4 base+1 ponta / 4F) + espelho (1V nova: só a ponta / 4F)
+      expect(V.size).toBe(52 + 5 + 1);
+      expect(F.size).toBe(60 + 4 + 4);
+      expect(V.size).toBe(58);
+      expect(F.size).toBe(68);
+
+      // a base do chifre soldou: os 4 cantos (1000..1003) são COMPARTILHADOS pelas 8 faces-triângulo
+      // dos dois lados (nenhum id novo pra base — só a ponta duplicou)
+      const usamBase = [...F.values()].filter((f: any) => f.vs.some((v: number) => v >= 1000 && v < 1004));
+      expect(usamBase.length).toBe(8);
+
+      // MANIFOLD: toda aresta dirigida a->b pareada com b->a exatamente 1× (mesmo método do P1/P2)
+      const dirigidas = new Map<string, number>();
+      let cantos = 0;
+      for (const f of F.values()) {
+        const vs = f.vs; cantos += vs.length;
+        for (let k = 0; k < vs.length; k++) {
+          const key = `${vs[k]}>${vs[(k + 1) % vs.length]}`;
+          dirigidas.set(key, (dirigidas.get(key) || 0) + 1);
+        }
+      }
+      expect(dirigidas.size).toBe(cantos);          // nenhuma aresta dirigida duplicada
+      let semPar = 0;
+      for (const key of dirigidas.keys()) { const [a, b] = key.split('>'); if (!dirigidas.has(`${b}>${a}`)) semPar++; }
+      expect(semPar).toBe(0);                        // watertight — a costura soldou de verdade, sem furo
+
+      // colisão sã e executar/adaptarV3 saem limpos
+      expect(peca.meta.colisao.forma).toBe('cilindro');
+      expect(peca.meta.colisao.raio).toBeCloseTo(peca.PARAMS.cabecaRaio, 6);
+      const obj: any = executar(peca.PASSOS, peca.PARAMS, peca.TOPO, fakeCtx);
+      expect(obj.lotes.length).toBeGreaterThan(0);
+      expect(obj.lotes[0].mesh.v.length % 8).toBe(0);
+    });
+  });
+});

@@ -417,6 +417,178 @@ const OPS = {
     st.merges.push({ de: [...rem].sort((x, y) => x - y), para });
   },
 
+  /* ---- P3 do playground: espelha + rotaciona — as duas transformam uma SELEÇÃO,
+     mas de jeitos opostos (docs/playground.md): `rotaciona` é SIMPLES (só move
+     posição, nunca cria id); `espelha` é MEATY (duplica a seleção refletida,
+     ids NOVOS — formato salvo). Juntas destravam objeto bilateral (metade
+     modelada + espelho vira o todo; uma parte pode nascer torta/rodada). ---- */
+
+  /* rotaciona — gira uma SELEÇÃO em torno de um EIXO (x/y/z) por `graus`, ao
+     redor de um PIVÔ. SIMPLES: só desloca as posições dos vértices AFETADOS
+     (`st.V.set` in-place) — NUNCA cria vértice/face nem renumera, o oposto do
+     `espelha` abaixo. Determinístico (seno/cosseno de sempre, sem aleatório).
+
+     SELEÇÃO (`sel`, opcional): AUSENTE = a malha INTEIRA (todos os vértices
+     atuais de `st.V`). Presente = `{v:[ids]}` e/ou `{f:[ids]}` — uma face
+     contribui os ids dos seus PRÓPRIOS cantos; a união dos dois (`v` e `f`) é
+     DEDUPLICADA num Set. Um id de vértice ou de face que não existe GRITA
+     (órfão) e é ignorado — nunca corrompe (lei do envelope).
+
+     PIVÔ (`pivo`, opcional `[x,y,z]`, via `st.vec` — pode citar PARAM):
+     AUSENTE = o CENTROIDE dos vértices AFETADOS (a média das posições, medida
+     ANTES de girar — o mesmo default que a op `parte` usa pro pivô de
+     animação). Seleção vazia (nenhum vértice afetado) é no-op determinístico
+     (nada pra girar).
+
+     ROTAÇÃO (formato salvo, travada por teste): pra cada vértice afetado,
+     `p' = pivo + R_eixo(graus)·(p − pivo)`, com R_eixo a rotação padrão
+     right-handed em torno do eixo — a MESMA convenção das matrizes de
+     animação `mRotX/mRotY/mRotZ` já existentes neste arquivo (graus
+     convertidos pra radiano), aplicada direto (sem montar matriz 4x4, x/y/z
+     abaixo já são o vetor RELATIVO ao pivô, p−pivo):
+       eixo 'x': y' = y·cosθ − z·senθ ;  z' = y·senθ + z·cosθ
+       eixo 'y': x' = x·cosθ + z·senθ ;  z' = −x·senθ + z·cosθ
+       eixo 'z': x' = x·cosθ − y·senθ ;  y' = x·senθ + y·cosθ
+     `graus`/`pivo` passam por `st.num`/`st.vec` (aceitam nome de PARAM, como
+     as outras ops dimensionais). Eixo desconhecido GRITA (não é erro
+     estrutural de bloco — é valor de argumento, como o `modo` do pincel). */
+  rotaciona(st, a, i) {
+    const eixo = a.eixo;
+    if (eixo !== 'x' && eixo !== 'y' && eixo !== 'z') return grita(st, i, 'rotaciona', eixo, `eixo '${eixo}' desconhecido (só 'x'/'y'/'z')`);
+    const graus = st.num(a.graus ?? 0);
+
+    // seleção -> conjunto de ids de vértice afetados (AUSENTE = malha inteira)
+    let alvos;
+    if (a.sel == null) {
+      alvos = new Set(st.V.keys());
+    } else {
+      alvos = new Set();
+      for (const v of a.sel.v ?? []) { if (!st.V.has(v)) { grita(st, i, 'rotaciona', v, 'vértice inexistente na seleção'); continue; } alvos.add(v); }
+      for (const fid of a.sel.f ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'rotaciona', fid, 'face inexistente na seleção'); continue; } for (const v of f.vs) alvos.add(v); }
+    }
+    if (!alvos.size) return;   // nada pra girar (seleção vazia, ou só ids órfãos) — no-op determinístico
+
+    // pivô: explícito (st.vec — pode citar PARAM) OU o centroide dos afetados, medido ANTES de girar
+    let pivo;
+    if (a.pivo != null) pivo = st.vec(a.pivo);
+    else {
+      let cx = 0, cy = 0, cz = 0, n = 0;
+      for (const v of alvos) { const p = st.V.get(v); if (!p) continue; cx += p[0]; cy += p[1]; cz += p[2]; n++; }
+      pivo = n ? [cx / n, cy / n, cz / n] : [0, 0, 0];
+    }
+
+    const rad = (graus * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
+    for (const v of alvos) {
+      const p = st.V.get(v);
+      if (!p) continue;   // defensivo (nunca deveria faltar — veio de st.V.keys() ou de um canto de face já validado)
+      const dx = p[0] - pivo[0], dy = p[1] - pivo[1], dz = p[2] - pivo[2];
+      let rx = dx, ry = dy, rz = dz;
+      if (eixo === 'x') { ry = dy * c - dz * s; rz = dy * s + dz * c; }
+      else if (eixo === 'y') { rx = dx * c + dz * s; rz = -dx * s + dz * c; }
+      else { rx = dx * c - dy * s; ry = dx * s + dy * c; }
+      st.V.set(v, [pivo[0] + rx, pivo[1] + ry, pivo[2] + rz]);   // in-place — NUNCA cria vértice novo
+    }
+  },
+
+  /* espelha — DUPLICA uma seleção de FACES espelhada num plano perpendicular a
+     `eixo` (a coordenada NEGADA) na posição `pos` — o jeito de modelar só
+     METADE de um objeto bilateral e completar o resto. MEATY: ao contrário do
+     `rotaciona` acima, CRIA vértices/faces NOVOS (ids do BLOCO do passo) — é
+     FORMATO SALVO, travado por teste.
+
+     SELEÇÃO (`sel`, opcional): AUSENTE = TODAS as faces atuais (`st.F`).
+     Presente = `{f:[ids]}` — as faces a espelhar (os cantos delas vêm
+     junto); SEM `sel.v` (diferente do `rotaciona`) — espelhar uma face exige
+     o CICLO de cantos pra reverter o winding, então a unidade de seleção é
+     sempre a FACE. Face inexistente GRITA (órfão) e é ignorada — nunca
+     corrompe. Sem nenhuma face válida selecionada, no-op.
+
+     REFLEXÃO: só a coordenada do EIXO muda — `coord' = 2·pos − coord` (as
+     outras duas ficam intactas). `pos` (default 0) passa por `st.num` (pode
+     citar PARAM, como as outras ops dimensionais).
+
+     WELD — decisão fixa, IRREVERSÍVEL (formato salvo): um vértice cuja
+     coordenada no eixo é EXATAMENTE `pos` (a reflexão dele == ele mesmo) é
+     COMPARTILHADO — a face espelhada reusa o id ORIGINAL, sem copiar. Solda
+     a costura sozinho pra quem modela a metade com a borda encostada no
+     plano (o MESMO truque do polo `raio===0` do `lathe`: teste de igualdade
+     EXATA, não uma tolerância). Vértice fora do plano ganha uma CÓPIA com id
+     NOVO. Um vértice QUASE-no-plano (ruído de ponto-flutuante) NÃO solda —
+     vira um par coincidente-mas-distinto; pra soldar de propósito, ponha a
+     borda em `pos` LITERAL na malha original, ou solde depois com `mescla`.
+
+     NUMERAÇÃO DE VÉRTICE (formato salvo, travada por teste): reúne os
+     vértices AFETADOS (os cantos de TODAS as faces da seleção, cada id
+     DEDUPLICADO uma vez) e ordena por id ORIGINAL crescente; anda um cursor
+     de vértice que começa em 0: vértice NO plano -> mapeia pra SI MESMO
+     (soldado, não consome id novo); vértice FORA -> mapeia pra `b+cursor`
+     (b = baseDoPasso(i)) e o cursor avança 1.
+
+     NUMERAÇÃO DE FACE (formato salvo, travada por teste): as faces da
+     seleção, em ORDEM CRESCENTE de id ORIGINAL, cada uma vira UMA face nova
+     — um cursor de face PRÓPRIO que começa em 0 (`b+cursor`, cursor avança 1
+     por face) — com os CANTOS = mapa(cantos originais) em ordem REVERTIDA.
+     Reverter desfaz a troca de mão que a reflexão introduz (um espelho troca
+     o sentido de giro visto de fora), mantendo a normal pra FORA — o mesmo
+     raciocínio da tampa de cima invertida do cilindro (D1; provado por
+     Newell no teste). Atributos (cor/liso/material/parte/solido) são
+     HERDADOS do original — só `vs` muda. (A tinta do pincel macio, se
+     houver, NÃO é copiada — fica de fora da herança por ora, documentado
+     aqui pra não virar surpresa silenciosa se um dia importar.)
+
+     Guarda de overflow (D3, por-passo, calculada ANTES de inserir qualquer
+     vértice/face): vértices NOVOS (só os NÃO-soldados contam) ≤ BLOCO e
+     faces NOVAS ≤ BLOCO. Eixo desconhecido GRITA (valor de argumento, como o
+     `modo` do pincel — não é erro estrutural de bloco). */
+  espelha(st, a, i) {
+    const eixo = a.eixo;
+    const ax = eixo === 'x' ? 0 : eixo === 'y' ? 1 : eixo === 'z' ? 2 : -1;
+    if (ax < 0) return grita(st, i, 'espelha', eixo, `eixo '${eixo}' desconhecido (só 'x'/'y'/'z')`);
+    const pos = st.num(a.pos ?? 0);
+    const b = baseDoPasso(i);
+
+    // seleção de faces (AUSENTE = todas); dedup + ordena por id ORIGINAL crescente
+    const idsSel = new Set();
+    if (a.sel == null) { for (const fid of st.F.keys()) idsSel.add(fid); }
+    else { for (const fid of a.sel.f ?? []) { if (!st.F.has(fid)) { grita(st, i, 'espelha', fid, 'face inexistente na seleção'); continue; } idsSel.add(fid); } }
+    const faceIds = [...idsSel].sort((x, y) => x - y);
+    if (!faceIds.length) return;
+
+    // vértices afetados (cantos das faces selecionadas), deduplicados, ordem de id ORIGINAL crescente
+    const afetados = new Set();
+    for (const fid of faceIds) for (const v of st.F.get(fid).vs) afetados.add(v);
+    const vertsOrdenados = [...afetados].sort((x, y) => x - y);
+
+    // guarda de overflow (D3): conta ANTES de inserir — só vértice NÃO-soldado consome id novo
+    let nVNovos = 0;
+    for (const v of vertsOrdenados) { const p = st.V.get(v); if (p && p[ax] !== pos) nVNovos++; }
+    if (nVNovos > BLOCO || faceIds.length > BLOCO) throw new Error(`oficina: espelha estoura o bloco de ids (${BLOCO}): ${nVNovos} vértice(s) novo(s) / ${faceIds.length} face(s) nova(s)`);
+
+    // mapa orig -> espelho (soldado = mapeia pra si mesmo; fora = novo id do bloco, em ordem)
+    const mapa = new Map();
+    let cursorV = 0;
+    for (const v of vertsOrdenados) {
+      const p = st.V.get(v);
+      if (!p) { mapa.set(v, v); continue; }              // defensivo (canto sem posição — nunca corrompe)
+      if (p[ax] === pos) { mapa.set(v, v); continue; }   // NO plano: soldado, sem id novo
+      const q = p.slice(); q[ax] = 2 * pos - p[ax];
+      const novo = b + cursorV; cursorV++;
+      addV(st, novo, q);
+      mapa.set(v, novo);
+    }
+
+    // faces novas: cursor de face PRÓPRIO, cantos revertidos (desfaz a troca de mão do espelho)
+    let cursorF = 0;
+    for (const fid of faceIds) {
+      const f = st.F.get(fid);
+      const vs = f.vs.map((v) => mapa.get(v)).reverse();
+      const novo = b + cursorF; cursorF++;
+      addF(st, novo, vs);
+      const nf = st.F.get(novo);
+      nf.cor = f.cor; nf.material = f.material; nf.parte = f.parte; nf.liso = f.liso; nf.solido = f.solido;
+    }
+  },
+
   /* ---- atributos por face ---- */
   pincel(st, a, i) {
     const modo = a.modo ?? 'face';

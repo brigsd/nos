@@ -40,7 +40,8 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 | `moveV` | `v`, `d:[x,y,z]` | ADITIVO (`p+d`), nunca posição absoluta |
 | `extruda` | `face`, `dist` | só face única; anel novo nasce no bloco do passo |
 | `mescla` | `de:[ids]`, `para:id` | solda; face de área zero some quieta |
-| `escala` | seleção, `fator`, `eixo?` | |
+| `rotaciona` | `eixo` (`'x'\|'y'\|'z'`), `graus` (PARAM), `sel?` (`{v:[ids]}` e/ou `{f:[ids]}`, default = malha inteira), `pivo?` (`[x,y,z]`, default = centroide da seleção) | SIMPLES: só move posição (`p' = pivo + R_eixo(graus)·(p−pivo)`); NUNCA cria vértice/face nem renumera |
+| `espelha` | `eixo` (`'x'\|'y'\|'z'` — a coord. negada), `pos?` (PARAM, default 0), `sel?` (`{f:[ids]}`, default = todas as faces) | MEATY: DUPLICA a seleção refletida (`coord'=2·pos−coord`), ids novos do bloco do passo. **Weld:** vértice com a coord. do eixo EXATAMENTE `pos` é COMPARTILHADO (sem cópia — solda a costura sozinho); fora do plano duplica. Cantos da face nova saem em ordem REVERTIDA (mantém a normal pra fora); atributos (cor/material/parte/liso/solido) são herdados. Peça-exemplo `_espelhado.js` |
 | `pincel` | `modo:'face'` (`faces`, `cor`) ou `modo:'livre'` (`cor`,`raio`,`dureza`,`pontos:[{f,a,b}]`) | livre = dab face-local, acompanha a face |
 | `liso` | `faces:[ids]` | sombreado macio (padrão: chapado) |
 | `material` | `faces`, `usa` | + `MATERIAIS = {mat1:{cor,emissivo,aspereza,semLuz,mistura:'transparente'}}` exportado |
@@ -57,7 +58,10 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 
 **Alcance honesto:** caixa+cilindro+esfera+cone+plano+lathe+extruda+move cobrem
 arquitetura, móveis, props angulados, troncos, bolas, chão e perfil rotacionado
-(vaso, coluna, peão — lathe, só reto por enquanto). Forma orgânica composta ao
+(vaso, coluna, peão — lathe, só reto por enquanto). `espelha`+`rotaciona`
+destravam objeto BILATERAL — modele só metade (com a borda EXATA no plano do
+espelho pra soldar) e complete com `espelha`; incline uma parte com
+`rotaciona`. Forma orgânica composta ao
 longo de um caminho (loft) e a partir de contornos 2D (inflate) ainda não têm
 gerador — não finja com mil moveV; reporte o limite (ou use o caminho JS-puro
 abaixo). Exemplo das primitivas novas: `_primitivas.js`.

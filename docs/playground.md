@@ -43,8 +43,16 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
       guarda de overflow do bloco. Peça-exemplo `pecas/_torno.js` (peão de
       xadrez, fechado nas duas pontas por polo — watertight, provado por
       manifold).
-- [ ] **P3 · `espelha` + `rotaciona`** — simetria bilateral (metade → inteiro)
+- [x] **P3 · `espelha` + `rotaciona`** — simetria bilateral (metade → inteiro)
       e rotação de seleção. Destrava qualquer objeto simétrico (veículo, corpo).
+      `espelha` DUPLICA a seleção refletida (ids novos do bloco, formato salvo)
+      com WELD automático (vértice exatamente no plano é compartilhado — o
+      mesmo teste de igualdade exata do polo do lathe) e winding revertido
+      (mantém a normal pra fora); `rotaciona` só desloca posição (nunca cria
+      id). Guarda de overflow (D3) independente pra vértice-novo/face-nova.
+      Peça-exemplo `pecas/_espelhado.js` (cabeça com par de chifres, watertight
+      — costura soldada provada por manifold). Specs na tabela do
+      `docs/oficina.md` e no vocabulário da skill `criar-peca`.
 - [ ] **P4 · `loft`** (seções ao longo de um caminho → casco, corpo, galho).
 - [ ] **P5 · Contorno como DADO + gabarito IoU** — o formato do contorno
       fechado (pontos, alça reservada) + a bancada que mede silhueta renderizada

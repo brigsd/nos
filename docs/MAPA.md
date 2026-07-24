@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-103 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+104 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -92,6 +92,7 @@
 - `_arvformas-mosqueado.js` — scratch: variações de FORMATO de árvore (não versionar/publicar). Builder paramétrico: tronco + copa (oval / cone / multi-blob), rampa de cor por espécie. 6 …
 - `_arvformas.js` — scratch: variações de FORMATO de árvore (não versionar/publicar). Builder paramétrico: tronco + copa (oval / cone / multi-blob), rampa de cor por espécie. 6 …
 - `_elenco.js` — scratch: ELENCO completo do carimbo — uma de cada espécie em fila, pro ideador ver tudo.
+- `_espelhado.js` — PEÇA-EXEMPLO do P3 do playground: uma CABEÇA com um PAR DE CHIFRES — o objeto BILATERAL modelado só de UM chifre e completado pela op `espelha` NOVA, waterti…
 - `_frondosa.js` — scratch: prova de 'seca'/'raiz' (malhas separadas, afiadas) + 'frondosa' (copa fundida). Fila: seca | raiz | 4× frondosa.
 - `_modelo.js` — _modelo — o "olá mundo" da OFICINA (D-55): copie este arquivo pra criar uma peça nova. Mostra o contrato inteiro: textura procedural, geometria e ANIMAÇÃO (m…
 - `_oficina-anim.js` — PEÇA-EXEMPLO da OFICINA (passo 13a): ANIMAÇÃO RÍGIDA POR PARTE (em laço). Prova o motor novo com movimento ÓBVIO no visor: uma ENGRENAGEM (`roda`) gira em to…
