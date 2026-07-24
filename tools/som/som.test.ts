@@ -130,7 +130,7 @@ describe('canônico: a base do replay', () => {
 
 describe('determinismo do rng e do ruído', () => {
   it('rng(semente) é determinístico e a semente discrimina', () => {
-    const seqA = Array.from({ length: 5 }, rng(7));
+    const seqA = Array.from({ length: 5 }, rng(7)) as number[];   // rng vem do motor .js (sem tipos) -> anota o resultado
     const seqB = Array.from({ length: 5 }, rng(7));
     const seqC = Array.from({ length: 5 }, rng(8));
     expect(seqA).toEqual(seqB);

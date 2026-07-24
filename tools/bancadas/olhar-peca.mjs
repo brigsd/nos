@@ -48,7 +48,7 @@ const server = createServer((req, res2) => {
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const base = `http://127.0.0.1:${server.address().port}/prototipos/fps/v3/visor.html`;
 
-const PW = join(REPO, 'site/node_modules/playwright/index.js');
+const PW = join(REPO, 'node_modules/playwright/index.js');
 if (!existsSync(PW)) { console.error('Playwright não encontrado. Rode: cd site && npm ci'); process.exit(1); }
 const pw = (await import(pathToFileURL(PW).href)).default;
 const browser = await pw.chromium.launch({ args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });

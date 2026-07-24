@@ -45,7 +45,7 @@ const server = createServer((req, res) => {
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const base = `http://127.0.0.1:${server.address().port}/prototipos/fps/v3`;
 
-const PW = join(REPO, 'site/node_modules/playwright/index.js');
+const PW = join(REPO, 'node_modules/playwright/index.js');
 if (!existsSync(PW)) { console.error('somtela: Playwright não encontrado. Rode uma vez: cd site && npm ci'); process.exit(1); }
 const pw = (await import(pathToFileURL(PW).href)).default;
 /* política de autoplay PADRÃO de propósito (SEM --autoplay-policy): só assim a prova

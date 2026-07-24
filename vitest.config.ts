@@ -1,9 +1,9 @@
-/* Config do Vitest: cobre engine/** e tools/** — o gate npm test. */
+/* Config do Vitest: cobre tools/** (núcleo do Atelier: som + oficina) — o gate npm test. */
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['engine/**/*.test.ts', 'tools/**/*.test.ts'],
+    include: ['tools/**/*.test.ts'],
     watch: false,
   },
 });

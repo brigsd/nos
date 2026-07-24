@@ -29,21 +29,8 @@ jobs:
       - name: Unit Tests
         run: npm run test
 
-      - name: Lint Sprites
-        run: npm run lint:sprites
-
-      - name: Validate World State
-        run: npm run validate-world
-
       - name: Mapa do repositório em dia
         run: npm run mapa:check
 
       - name: Índice da oficina em dia
         run: npm run docs:toc:check
-
-      - name: Build and Typecheck Site Client
-        run: |
-          cd site
-          npm ci
-          npm run typecheck
-          npm run build

@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "nos-art-toolkit": {
-      "command": "node",
-      "args": ["tools/art-mcp/server.cjs"]
-    }
-  }
-}
