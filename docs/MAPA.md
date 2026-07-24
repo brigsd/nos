@@ -5,13 +5,18 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-210 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+212 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
 - `CLAUDE.md` — NÓS — Harness do Projeto
 - `README.md` — NÓS
 - `vitest.config.ts` — Config do Vitest: cobre engine/** e tools/** — o gate npm test.
+
+## .claude/agents/
+
+- `game-builder.md` — Constrói features do cliente v3 (o motor GPU, a Oficina, o som, a animação, a interface do jogo). Recebe um brief fechado do orquestrador e entrega numa bran…
+- `revisor-adversarial.md` — Revisor adversarial POR RISCO do v3 — tenta QUEBRAR a mudança sob estresse antes do merge, com foco em fundação, formato salvo (irreversível) e conta de julg…
 
 ## .claude/skills/auditar-peca/
 
