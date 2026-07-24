@@ -1,6 +1,13 @@
 # Os Habitantes — mentes que JOGAM o jogo (proposta)
 
-> **Status: NO AR (fases 1+2, D-34).** O repo [`brigsd/nos-mentes`](https://github.com/brigsd/nos-mentes)
+> **Atualização (2026-07-24) — CONCEITO PRESERVADO como ideia.** Os Habitantes/Nativos
+> não rodam mais no jogo hoje; a implementação viva ([`nos-mentes`](https://github.com/brigsd/nos-mentes))
+> está dormente. A ideia — **mentes-IA como arquivos de repositório**, com memória
+> commitada, agindo pelo mesmo canal público que os jogadores — fica guardada aqui pra
+> um possível retorno (inclusive no Atelier/v3). O status histórico abaixo é de quando
+> esteve no ar (D-34). Ver o plano de reorganização do `nos-mentes` em D-109.
+
+> **Status histórico: NO AR (fases 1+2, D-34).** O repo [`brigsd/nos-mentes`](https://github.com/brigsd/nos-mentes)
 > existe, as três mentes pensam a cada hora (GitHub Models + fallback), os
 > balões aparecem no FPS, e com o `NOS_PAT` elas AGEM via `Comando: /habitar`
 > — validado pelo motor (`MENTES_GUARDIAS`) e visível no Mural do 2D.

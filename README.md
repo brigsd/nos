@@ -8,11 +8,11 @@ Três janelas — escolha a sua:
 - ▶ **[Miragem](https://brigsd.github.io/nos/fps/)** — primeira pessoa, raycaster. Estável.
 - ▶ **[Atelier](https://brigsd.github.io/nos/fps/v3/jogo.html)** — primeira pessoa em WebGL, com a **[Oficina](https://brigsd.github.io/nos/fps/v3/oficina.html)** (criar objeto e som — abre pelo menu do jogo, tecla ESC, ou direto no link). Em construção ativa.
 
-Todos rodam direto no navegador do **PC ou do celular**, sem instalar nada — mesmo mundo, mesmo Registro. 🌍
+Todos rodam direto no navegador do **PC ou do celular**, sem instalar nada. 🌍
 
 ---
 
-**NÓS** é um metaverso 2D em pixel art que vive **inteiramente dentro do GitHub**:
+**NÓS** é um metaverso que vive **inteiramente dentro do GitHub** — hoje com o mundo-origem, **O Coração** (o mapa 2D acima):
 
 - 🗄️ O repositório é o banco de dados — o mundo é feito de commits.
 - ❤️ O GitHub Actions é o coração — a cada batida (tick), o tempo passa, com ou sem jogadores online.

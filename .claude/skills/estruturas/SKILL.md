@@ -1,9 +1,11 @@
 ---
 name: estruturas
-description: Fluxo de criação e auditoria de estruturas no cliente FPS do NÓS — blueprint de topo (prancheta), colisão, paredes/arcos com profundidade, verificação multi-ângulo. Use ao criar, mover ou aprimorar qualquer estrutura (prédio, arco, monumento, praça).
+description: LEGADO (frente Miragem — o FPS v2 raycaster de `prototipos/fps/nos-fps.html`, em manutenção). Fluxo de criar/auditar estruturas ALI: prancheta de topo, colisão, paredes/arcos, verificação multi-ângulo. Só vale se mexer no `nos-fps.html`; o Atelier (v3) modela na Oficina in-game — use `oficina`/`nos-fluxo`, não esta.
 ---
 
 # Estruturas — criar e auditar com visão total
+
+> **LEGADO — frente Miragem (v2 raycaster).** Esta skill é do FPS raycaster (`prototipos/fps/nos-fps.html`, `npm run prancheta`/`olhar`), hoje em manutenção. A frente ATIVA é o **Atelier (v3)**, que modela na **Oficina** in-game — use as skills `oficina` + `nos-fluxo`, não esta.
 
 O ciclo: **prancheta (topo) → construir → prancheta de novo → olhar (3 ângulos) → testes**.
 Nunca construa às cegas: a prancheta é a planta baixa VIVA do mundo.

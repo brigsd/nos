@@ -90,22 +90,21 @@ adicionar `- 'prototipos/fps/**'` aos paths do `pages.yml`.
 |---|---|---|---|
 | `nos-art-toolkit` | `.mcp.json` (raiz) | as tools do art-mcp (gen/audit/view/preview/…) | automático no início da sessão; no meio dela use o CLI `npm run art` |
 
-## Agentes — `.claude/agents/` (D-10, D-24)
+## Agentes — `.claude/agents/` (D-24, D-106)
 
-Despache em paralelo; o orquestrador integra e decide, registrando divergências
-em `docs/DECISIONS.md`. **Modelos (D-24): codadores em Sonnet, revisores em Opus.**
+Só na frente **Atelier (v3)**; o orquestrador briefa e integra, registrando em
+`docs/DECISIONS.md`. **Modelos (D-24): builder em Sonnet, revisor em Opus.**
 
 | Agente | Papel | Quando despachar | Modelo |
 |---|---|---|---|
-| `engine-dev` | Motor (TS): tick, schema, comandos, geração | features de engine/backend | sonnet |
-| `pixel-artist` | Sprites como código (matriz → PNG) | arte nova ou retoque | sonnet |
-| `lore-writer` | Quests, diálogos, nomes, descrições | qualquer texto de jogo | sonnet |
-| `code-reviewer` | Revisa diffs (corretude, determinismo, invariantes) | todo PR, antes do merge | **opus** |
-| `art-reviewer` | Revisa arte renderizada, com veto | após qualquer mudança visual | **opus** |
-| `qa-tester` | Joga a build headless, screenshot, reporta bug | antes de todo merge com efeito visível | **opus** |
+| `game-builder` | Constrói o v3 (motor GPU, Oficina, som, animação, interface); jóias aditivas, três camadas, prova por medição, branch wip sem push | qualquer feature do v3 | sonnet |
+| `revisor-adversarial` | Tenta QUEBRAR por risco: fundação / formato salvo / jóia / conta de julgamento | quando é fundação, mexe no formato salvo, toca uma jóia, ou tem julgamento (dispensa se já provado byte-idêntico) | **opus** |
 
-**Fluxo padrão de feature** (`CLAUDE.md`): construir → `code-reviewer` (+ `art-reviewer`
-se houver arte) → `qa-tester` → merge → atualizar `docs/CONTINUITY.md` + checkboxes do plano.
+O DOMÍNIO (som/animação/geometria/pintura) mora nas **skills** que o builder
+carrega, não num agent por assunto (D-106). Os 6 agents do modelo 2D
+(engine-dev/pixel-artist/lore-writer/code-reviewer/art-reviewer/qa-tester) foram
+**aposentados** — vivem no histórico do git se a frente 2D voltar. Fluxo do v3:
+a skill `nos-fluxo`.
 
 ## Docs de orientação
 

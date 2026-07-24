@@ -24,7 +24,7 @@
 
 ## .claude/skills/estruturas/
 
-- `SKILL.md` — Fluxo de criação e auditoria de estruturas no cliente FPS do NÓS — blueprint de topo (prancheta), colisão, paredes/arcos com profundidade, verificação multi-…
+- `SKILL.md` — LEGADO (frente Miragem — o FPS v2 raycaster de `prototipos/fps/nos-fps.html`, em manutenção). Fluxo de criar/auditar estruturas ALI: prancheta de topo, colis…
 
 ## .claude/skills/nos-fluxo/
 
