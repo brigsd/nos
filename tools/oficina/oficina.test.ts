@@ -1497,3 +1497,298 @@ describe('P3 — espelha + rotaciona (seleção transformada)', () => {
     });
   });
 });
+
+/* P4 do playground — `loft`: conecta uma sequência de SEÇÕES (círculo de raio
+   variável, ou POLO quando raio=0) ao longo de um CAMINHO 3D — tubo/casco/
+   galho/membro. O `lathe` é o TEMPLATE (mesmo cursor/polo/anel/leque/guarda);
+   a peça NOVA é o FRAME por TRANSPORTE PARALELO (reimplementado local,
+   byte-equivalente ao `quadro`/`transporta` de motor/arvore-cartoon.js) que
+   acompanha a tangente do caminho sem torcer o tubo numa curva. Prova por
+   MEDIÇÃO: numeração EXATA (caminho misto anel→anel→polo e só-anéis),
+   winding pra fora, ANTI-TORÇÃO (todo quad anel↔anel não-borboleta, medido
+   pelo pior produto escalar entre os dois triângulos do quad — comparado com
+   um caminho reto, onde o resultado é analiticamente conhecido: anéis
+   alinhados), reserva `secao`/seção malformada/raio<0/<2 seções/segmento de
+   comprimento zero GRITAM e ABORTAM o passo (fail-closed, a mesma lei do
+   lathe), polo↔polo adjacente grita e só aquele segmento fica sem face,
+   determinismo/replay, `pos`/`raio` por NOME de PARAM, guarda de overflow
+   (D3) no limite EXATO, e MANIFOLD + volume assinado na peça-exemplo
+   `_galho` (fechada nas duas pontas, caminho curvando em mais de um eixo). */
+describe('P4 — loft (seções ao longo de um caminho 3D)', () => {
+  const J = (x: any) => JSON.stringify(x);
+  const fakeCtx = { tex: { texCanvas: (w: number, h: number, fn: any) => ({ width: w, height: h, fn }) }, m4: { ident: () => new Float32Array(16) } };
+  // Newell inline (a do núcleo não é exportada) — o MESMO teste de direção do D1/P1/P2/P3
+  const newell = (V: any, vs: number[]) => {
+    let nx = 0, ny = 0, nz = 0;
+    for (let k = 0; k < vs.length; k++) {
+      const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]);
+      nx += (c[1] - n[1]) * (c[2] + n[2]); ny += (c[2] - n[2]) * (c[0] + n[0]); nz += (c[0] - n[0]) * (c[1] + n[1]);
+    }
+    return [nx, ny, nz];
+  };
+
+  it('numeração EXATA num caminho MISTO (anel→anel→polo): ids de vértice e de face travados', () => {
+    const { V, F, orfaos } = nucleo([['loft', { id: 0, lados: 4, secoes: [
+      { pos: [0, 0, 0], raio: 1 },
+      { pos: [0, 2, 0], raio: 1 },
+      { pos: [0, 4, 0], raio: 0 },
+    ] }]], {}, {});
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(9);   // anel(4) + anel(4) + polo(1)
+    expect(F.size).toBe(8);   // segmento anel<->anel (4 quads) + anel->polo (4 triângulos)
+    // vértices j=0 de cada anel (sem resíduo de ponto-flutuante: cos(0)=1, sin(0)=0 exatos) + o polo
+    expect(V.get(0)).toEqual([0, 0, 1]);
+    expect(V.get(4)).toEqual([0, 2, 1]);
+    expect(V.get(8)).toEqual([0, 4, 0]);
+    // seg0 (anel<->anel) quad — a MESMA faixa do lathe/esfera: [baixo[j], cima[j], cima[j+1], baixo[j+1]]
+    expect(F.get(0)!.vs).toEqual([0, 4, 5, 1]);
+    expect(F.get(3)!.vs).toEqual([3, 7, 4, 0]);          // fecha o ciclo (j=3, n=0)
+    // seg1 (anel->polo) leque NORTE do lathe (invertido): [polo, anel[j+1], anel[j]]
+    expect(F.get(4)!.vs).toEqual([8, 5, 4]);
+    expect(F.get(7)!.vs).toEqual([8, 4, 7]);             // fecha o ciclo
+  });
+
+  it('numeração EXATA num caminho SÓ-ANÉIS (sem polo nenhum): vira uma faixa cilíndrica só de quads', () => {
+    const { V, F, orfaos } = nucleo([['loft', { id: 0, lados: 4, secoes: [
+      { pos: [0, 0, 0], raio: 1 },
+      { pos: [0, 2, 0], raio: 0.5 },
+    ] }]], {}, {});
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(8);   // 2 anéis × 4 lados, nenhum polo
+    expect(F.size).toBe(4);   // 1 segmento × 4 lados
+    expect(V.get(0)).toEqual([0, 0, 1]);
+    expect(V.get(4)).toEqual([0, 2, 0.5]);
+    expect(F.get(0)!.vs).toEqual([0, 4, 5, 1]);
+    expect(F.get(3)!.vs).toEqual([3, 7, 4, 0]);
+  });
+
+  it('winding pra FORA no caminho reto (Newell·raio-XZ > 0 — a lição D1, generalizada pro loft)', () => {
+    const { V, F } = nucleo([['loft', { id: 0, lados: 8, secoes: [{ pos: [0, 0, 0], raio: 1 }, { pos: [0, 2, 0], raio: 0.6 }] }]], {}, {});
+    for (let j = 0; j < 8; j++) {
+      const f = F.get(j)!;
+      const c = [0, 0, 0]; for (const v of f.vs) { const p = V.get(v)!; c[0] += p[0]; c[2] += p[2]; }
+      const n = newell(V, f.vs);
+      expect(n[0] * c[0] + n[2] * c[2]).toBeGreaterThan(0);   // radial pra fora, sem ambiguidade (parede vertical)
+    }
+  });
+
+  it('ANTI-TORÇÃO: caminho RETO (analítico — anéis alinhados) dá quads planares (pior dot ≈ 1); caminho FORTEMENTE curvo (3 eixos) continua NÃO-borboleta (pior dot > 0) — a prova do transporte paralelo', () => {
+    const piorDotDosQuads = (secoes: any[], lados = 8) => {
+      const { V, F } = nucleo([['loft', { id: 0, lados, secoes }]], {}, {});
+      const normalTri = (p: number[], q: number[], r: number[]) => {
+        const ux = q[0] - p[0], uy = q[1] - p[1], uz = q[2] - p[2], vx = r[0] - p[0], vy = r[1] - p[1], vz = r[2] - p[2];
+        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz) || 1;
+        return [nx / l, ny / l, nz / l];
+      };
+      let pior = Infinity;
+      for (const f of F.values()) {
+        if (f.vs.length !== 4) continue;   // só quads anel<->anel (não os leques polo↔anel)
+        const [a, b, c, d] = f.vs;
+        const n1 = normalTri(V.get(a)!, V.get(b)!, V.get(c)!);
+        const n2 = normalTri(V.get(a)!, V.get(c)!, V.get(d)!);
+        const dot = n1[0] * n2[0] + n1[1] * n2[1] + n1[2] * n2[2];
+        if (dot < pior) pior = dot;
+      }
+      return pior;
+    };
+
+    // caminho RETO (eixo Y, raio constante): TODO anel no MESMO frame (transportaLoft não gira nada
+    // quando a tangente não muda) -> quads PLANARES, dot = 1 até resíduo de ponto-flutuante
+    const reto: any[] = []; for (let k = 0; k < 8; k++) reto.push({ pos: [0, k * 0.3, 0], raio: 0.3 });
+    expect(piorDotDosQuads(reto)).toBeCloseTo(1, 6);
+
+    // ziguezague FORTE em 3 eixos (ângulo grande entre segmentos vizinhos, inclusive uma virada de
+    // quase 180° no plano XY entre os 2 primeiros segmentos) — o caso que TORCERIA sem transporte
+    // paralelo (medido à parte, fora do commit: sem ele o pior dot cai pra ≈ −0.99, um quad
+    // literalmente invertido — com o transporte, fica positivo)
+    const curvo = [
+      { pos: [0, 0, 0], raio: 0.25 },
+      { pos: [0.5, 0.15, 0], raio: 0.25 },
+      { pos: [0.5, 0.65, 0.05], raio: 0.22 },
+      { pos: [0.1, 0.85, 0.55], raio: 0.20 },
+      { pos: [-0.4, 0.70, 0.85], raio: 0.16 },
+      { pos: [-0.55, 0.20, 0.60], raio: 0.12 },
+      { pos: [-0.30, -0.05, 0.10], raio: 0.08 },
+    ];
+    const piorCurvo = piorDotDosQuads(curvo);
+    expect(piorCurvo).toBeGreaterThan(0);    // NÃO-borboleta apesar da curva forte — o transporte segura
+    expect(piorCurvo).toBeLessThan(0.99);    // e de fato ESTRESSOU (não é um caminho quase-reto disfarçado)
+  });
+
+  it('reserva `secao` (contorno 2D) GRITA e ABORTA o passo inteiro (0 V/0 F) — fail-closed, o formato do contorno ainda não existe (P5)', () => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [
+      { pos: [0, 0, 0], raio: 0 },
+      { pos: [0, 1, 0], secao: [[0, 0], [1, 0], [1, 1]] },
+      { pos: [0, 2, 0], raio: 0 },
+    ] }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0]).toMatchObject({ op: 'loft', ref: 1 });
+    expect(n.orfaos[0].motivo).toMatch(/reservad/i);
+    expect(n.V.size).toBe(0);
+    expect(n.F.size).toBe(0);
+    // uma seção NORMAL ({pos,raio}) nunca dispara a reserva (sem falso-positivo) e constrói de verdade
+    const semReserva = nucleo([['loft', { id: 0, lados: 4, secoes: [{ pos: [0, 0, 0], raio: 0 }, { pos: [0, 1, 0], raio: 1 }, { pos: [0, 2, 0], raio: 0 }] }]], {}, {});
+    expect(semReserva.orfaos).toHaveLength(0);
+    expect(semReserva.V.size).toBeGreaterThan(0);
+  });
+
+  it('seção malformada — não-objeto, sem `pos`, sem `raio` — GRITA e ABORTA o passo inteiro (0 V/0 F)', () => {
+    const naoObjeto = nucleo([['loft', { id: 0, lados: 4, secoes: [[0, 0, 0], { pos: [0, 1, 0], raio: 1 }] }]], {}, {});
+    expect(naoObjeto.orfaos).toHaveLength(1);
+    expect(naoObjeto.orfaos[0]).toMatchObject({ op: 'loft', ref: 0 });
+    expect(naoObjeto.V.size).toBe(0);
+    expect(naoObjeto.F.size).toBe(0);
+
+    const semPos = nucleo([['loft', { id: 0, lados: 4, secoes: [{ raio: 1 }, { pos: [0, 1, 0], raio: 1 }] }]], {}, {});
+    expect(semPos.orfaos).toHaveLength(1);
+    expect(semPos.orfaos[0].motivo).toMatch(/sem 'pos'/);
+    expect(semPos.V.size).toBe(0);
+
+    const semRaio = nucleo([['loft', { id: 0, lados: 4, secoes: [{ pos: [0, 0, 0] }, { pos: [0, 1, 0], raio: 1 }] }]], {}, {});
+    expect(semRaio.orfaos).toHaveLength(1);
+    expect(semRaio.orfaos[0].motivo).toMatch(/sem 'raio'/);
+    expect(semRaio.V.size).toBe(0);
+  });
+
+  it('raio<0 GRITA e a op inteira não constrói NADA neste passo (não dá pra classificar polo/anel — nunca corrompe)', () => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [{ pos: [0, 0, 0], raio: -1 }, { pos: [0, 1, 0], raio: 1 }] }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0]).toMatchObject({ op: 'loft', ref: 0 });
+    expect(n.orfaos[0].motivo).toMatch(/raio negativo/i);
+    expect(n.V.size).toBe(0);
+    expect(n.F.size).toBe(0);
+  });
+
+  it('secoes com menos de 2 seções GRITA (0 e 1) e não constrói nada', () => {
+    const vazio = nucleo([['loft', { id: 0, lados: 4, secoes: [] }]], {}, {});
+    expect(vazio.orfaos).toHaveLength(1);
+    expect(vazio.orfaos[0]).toMatchObject({ op: 'loft', motivo: expect.stringMatching(/ao menos 2/i) });
+    expect(vazio.V.size).toBe(0);
+    const uma = nucleo([['loft', { id: 0, lados: 4, secoes: [{ pos: [0, 0, 0], raio: 1 }] }]], {}, {});
+    expect(uma.orfaos).toHaveLength(1);
+    expect(uma.V.size).toBe(0);
+  });
+
+  it('segmento de comprimento zero (duas seções na mesma posição) GRITA e ABORTA o passo inteiro — tangente indefinida, fail-closed', () => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [
+      { pos: [0, 0, 0], raio: 1 },
+      { pos: [0, 0, 0], raio: 1 },
+      { pos: [0, 2, 0], raio: 0.5 },
+    ] }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0]).toMatchObject({ op: 'loft', ref: 0 });
+    expect(n.orfaos[0].motivo).toMatch(/comprimento zero/i);
+    expect(n.V.size).toBe(0);
+    expect(n.F.size).toBe(0);
+  });
+
+  it('polo↔polo adjacente GRITA (seção degenerada): só AQUELE segmento fica sem face — o resto do caminho segue normal', () => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [
+      { pos: [0, 0, 0], raio: 1 },
+      { pos: [0, 1, 0], raio: 0 },
+      { pos: [0, 2, 0], raio: 0 },
+      { pos: [0, 3, 0], raio: 1 },
+    ] }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0]).toMatchObject({ op: 'loft', ref: 1 });
+    expect(n.orfaos[0].motivo).toMatch(/polo.*polo|degenerad/i);
+    expect(n.V.size).toBe(10);   // anel(4) + polo(1) + polo(1) + anel(4)
+    expect(n.F.size).toBe(8);    // só os dois segmentos anel<->polo contribuíram (4+4); o polo<->polo não
+    expect([...n.F.keys()].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);   // cursor de face contíguo, sem buraco
+  });
+
+  it('determinismo (2×) + replay round-trip JSON da lista (o formato salvo)', () => {
+    const passos = [['loft', { id: 0, lados: 6, secoes: [
+      { pos: [0, 0, 0], raio: 0 },
+      { pos: [0.2, 0.4, 0.1], raio: 0.3 },
+      { pos: [0.35, 0.8, 0.5], raio: 0.15 },
+      { pos: [0.2, 1.1, 0.9], raio: 0 },
+    ] }]];
+    const a = J(neutroCanonico(nucleo(passos, {}, {})));
+    const b = J(neutroCanonico(nucleo(passos, {}, {})));
+    expect(a).toBe(b);
+    expect(J(neutroCanonico(nucleo(JSON.parse(J(passos)), {}, {})))).toBe(a);
+  });
+
+  it('`pos`/`raio` por NOME de PARAM resolvem como nas outras ops; nome inexistente grita ALTO; mudar o VALOR do PARAM não renumera', () => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [
+      { pos: ['x0', 'y0', 'z0'], raio: 'r0' },
+      { pos: ['x1', 'y1', 'z1'], raio: 'r1' },
+    ] }]], { x0: 0, y0: 0, z0: 0, r0: 1, x1: 0, y1: 2, z1: 0, r1: 0.5 });
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.V.get(0)).toEqual([0, 0, 1]);
+    expect(n.V.get(4)).toEqual([0, 2, 0.5]);
+    // nome que não existe em PARAMS/TOPO grita ALTO (o contrato do st.num, igual às outras ops)
+    expect(() => nucleo([['loft', { id: 0, secoes: [{ pos: [0, 0, 0], raio: 'fantasma' }, { pos: [0, 1, 0], raio: 1 }] }]], {}, {})).toThrow(/fantasma/);
+    // mudar o VALOR do PARAM não renumera: mesmos ids, mesma topologia, só a posição muda
+    const passos = [['loft', { id: 0, lados: 6, secoes: [{ pos: [0, 0, 0], raio: 'r' }, { pos: [0, 1, 0], raio: 'r' }] }]];
+    const pequeno = neutroCanonico(nucleo(passos, { r: 0.3 }, {}));
+    const grande = neutroCanonico(nucleo(passos, { r: 0.9 }, {}));
+    expect(grande.V.map((row: any[]) => row[0])).toEqual(pequeno.V.map((row: any[]) => row[0]));
+    expect(grande.F).toEqual(pequeno.F);
+    expect(J(grande.V)).not.toBe(J(pequeno.V));
+  });
+
+  it('guarda de overflow (D3) no limite EXATO — vértice (2 anéis, lados grande) e face (caminho alternando anel/polo) de forma independente', () => {
+    // limite de VÉRTICE: 2 anéis × lados=500 -> 1000 vértices exatos (passa); 501 -> 1002 (estoura)
+    expect(() => nucleo([['loft', { id: 0, lados: 500, secoes: [{ pos: [0, 0, 0], raio: 1 }, { pos: [0, 1, 0], raio: 1 }] }]], {}, {})).not.toThrow();
+    expect(() => nucleo([['loft', { id: 0, lados: 501, secoes: [{ pos: [0, 0, 0], raio: 1 }, { pos: [0, 1, 0], raio: 1 }] }]], {}, {})).toThrow(/estoura o bloco/);
+    // limite de FACE, independente do de vértice: caminho ALTERNANDO anel/polo (barato em vértice, caro
+    // em face — todo segmento é anel<->polo, nunca degenerado), lados=8. N=126 seções (63 anéis+63
+    // polos) -> 567 V / 1000 F exatos (passa); N=127 -> 575 V / 1008 F (a guarda de FACE estoura
+    // primeiro, o vértice nem chegou perto do bloco) — os MESMOS números do lathe (o custo por
+    // seção/segmento é idêntico; só a forma do ponto mudou de [raio,y] pra {pos,raio}).
+    const alternado = (nPontos: number) => Array.from({ length: nPontos }, (_, k) => ({ pos: [0, k, 0], raio: k % 2 === 0 ? 1 : 0 }));
+    expect(() => nucleo([['loft', { id: 0, lados: 8, secoes: alternado(126) }]], {}, {})).not.toThrow();
+    expect(() => nucleo([['loft', { id: 0, lados: 8, secoes: alternado(127) }]], {}, {})).toThrow(/estoura o bloco/);
+  });
+
+  it('peça-exemplo _galho (galho curvo, afinando, fechado nas duas pontas): sem órfãos, V/F exatos, MANIFOLD (watertight+winding consistente) e volume assinado > 0', async () => {
+    const pUrl = new URL('../../prototipos/fps/v3/pecas/_galho.js', import.meta.url);
+    const peca: any = await import(fileURLToPath(pUrl));
+    const { V, F, orfaos } = nucleo(peca.PASSOS, peca.PARAMS, peca.TOPO);
+    expect(orfaos).toHaveLength(0);
+    // 7 seções (2 polos + 5 anéis) × lados=10: V=2+5·10=52; 6 segmentos não-degenerados: F=6·10=60
+    expect(V.size).toBe(2 + 5 * peca.TOPO.lados);
+    expect(F.size).toBe(6 * peca.TOPO.lados);
+    expect(V.size).toBe(52);
+    expect(F.size).toBe(60);
+
+    // MANIFOLD: toda aresta DIRIGIDA a->b (cada canto de cada face) tem exatamente 1 par reverso b->a.
+    // Prova watertight (nenhuma aresta desemparelhada = nenhum buraco — as duas pontas fecharam de
+    // verdade) E winding CONSISTENTE (nenhuma aresta duplicada no MESMO sentido) — o mesmo método do
+    // revisor adversarial no P1/P2/P3.
+    const dirigidas = new Map<string, number>();
+    let cantos = 0;
+    for (const f of F.values()) {
+      const vs = f.vs; cantos += vs.length;
+      for (let k = 0; k < vs.length; k++) {
+        const key = `${vs[k]}>${vs[(k + 1) % vs.length]}`;
+        dirigidas.set(key, (dirigidas.get(key) || 0) + 1);
+      }
+    }
+    expect(dirigidas.size).toBe(cantos);          // nenhuma aresta dirigida duplicada (não-manifold local)
+    let semPar = 0;
+    for (const key of dirigidas.keys()) { const [a, b] = key.split('>'); if (!dirigidas.has(`${b}>${a}`)) semPar++; }
+    expect(semPar).toBe(0);                        // nenhuma aresta sem par reverso -> ESTANQUE (watertight)
+
+    // volume assinado > 0 (soma de tetraedros a partir da origem, leque de cada face): nenhuma face invertida
+    let vol = 0;
+    for (const f of F.values()) {
+      const vs = f.vs, p0 = V.get(vs[0])!;
+      for (let k = 1; k < vs.length - 1; k++) {
+        const p1 = V.get(vs[k])!, p2 = V.get(vs[k + 1])!;
+        vol += (p0[0] * (p1[1] * p2[2] - p1[2] * p2[1]) - p0[1] * (p1[0] * p2[2] - p1[2] * p2[0]) + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0])) / 6;
+      }
+    }
+    expect(vol).toBeGreaterThan(0);
+
+    // colisão sã (encaixa o galho inteiro via `solido`) e executar/adaptarV3 saem limpos
+    expect(peca.meta.colisao.forma).toBe('cilindro');
+    expect(peca.meta.colisao.raio).toBeGreaterThan(0);
+    expect(peca.meta.colisao.altura).toBeCloseTo(peca.PARAMS.pontaY, 6);   // base(y=0) -> ponta(y=pontaY), medido: o caminho é monótono em Y
+    const obj: any = executar(peca.PASSOS, peca.PARAMS, peca.TOPO, fakeCtx);
+    expect(obj.lotes).toHaveLength(1);
+    expect(obj.lotes[0].mesh.v.length % 8).toBe(0);
+  });
+});

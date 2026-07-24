@@ -32,11 +32,12 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 
 | op | args | nota |
 |---|---|---|
-| `cubo` / `cilindro` | `id`, medidas, `lados` (cilindro) | geradores originais — loft/inflate ainda não existem |
+| `cubo` / `cilindro` | `id`, medidas, `lados` (cilindro) | geradores originais — inflate ainda não existe |
 | `esfera` | `raio` (PARAM, 0.5), `aneis` (TOPO, 6, mín 2), `lados` (TOPO, 8, mín 3) | UV-sphere apoiada no chão (polo sul y=0, norte y=2·raio); numeração no comentário da op |
 | `cone` | `raio` (PARAM, 0.5), `altura` (PARAM, 1), `lados` (TOPO, 8, mín 3) | anel da base b+0..b+lados−1 (y=0), ápice b+lados; tampa −y como o fundo do cilindro |
 | `plano` | `largura` (PARAM, 1), `profundidade` (PARAM, 1), `seg` (TOPO, 1, mín 1) | grade XZ centrada na origem, y=0, linha a linha; seg² quads +y — o chão |
 | `lathe` | `perfil:[[raio,y],...]` (≥2 pontos, PARAM), `lados` (TOPO, mín 3) | perfil 2D girado no eixo Y — generaliza a esfera (polo↔anel↔polo). Ponto de 2 elementos = canto reto PRA SEMPRE; ponto ≠ 2 elementos (a alça de curva reservada num 3º elemento, ou malformado) GRITA e ABORTA o passo (fail-closed). `raio` resolvido `===0` vira polo (1 vértice), `>0` vira anel (`lados` vértices), `<0` GRITA e aborta. Sem tampas automáticas: fechar uma ponta é terminar no eixo (raio 0) |
+| `loft` | `secoes:[{pos:[x,y,z],raio},...]` (≥2 seções, PARAM), `lados` (TOPO, mín 3) | seções ao longo de um CAMINHO 3D arbitrário — generaliza o lathe (que é o caso degenerado de caminho reto no eixo Y). Cada anel é orientado por TRANSPORTE PARALELO (não torce numa curva — o mesmo `quadro`/`transporta` do `galhoSeca` de `arvore-cartoon.js`, reimplementado local ao núcleo). `raio` resolvido `===0` vira polo, `>0` vira anel, `<0` GRITA e aborta — igual ao lathe. A chave `secao` (contorno 2D) é RESERVADA: GRITA e ABORTA o passo (fail-closed, o formato do contorno ainda não existe). Seção malformada ou segmento de comprimento zero (duas seções na mesma posição — tangente indefinida) GRITAM e ABORTAM igual. Sem tampas automáticas: fechar uma ponta é terminar a seção com raio 0 |
 | `moveV` | `v`, `d:[x,y,z]` | ADITIVO (`p+d`), nunca posição absoluta |
 | `extruda` | `face`, `dist` | só face única; anel novo nasce no bloco do passo |
 | `mescla` | `de:[ids]`, `para:id` | solda; face de área zero some quieta |
@@ -56,15 +57,17 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 `executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = {}, ESQUELETO = null)`. Exemplos:
 `_oficina-anim.js` (partes), `_oficina-esqueleto.js` (rig completo).
 
-**Alcance honesto:** caixa+cilindro+esfera+cone+plano+lathe+extruda+move cobrem
-arquitetura, móveis, props angulados, troncos, bolas, chão e perfil rotacionado
-(vaso, coluna, peão — lathe, só reto por enquanto). `espelha`+`rotaciona`
-destravam objeto BILATERAL — modele só metade (com a borda EXATA no plano do
-espelho pra soldar) e complete com `espelha`; incline uma parte com
-`rotaciona`. Forma orgânica composta ao
-longo de um caminho (loft) e a partir de contornos 2D (inflate) ainda não têm
-gerador — não finja com mil moveV; reporte o limite (ou use o caminho JS-puro
-abaixo). Exemplo das primitivas novas: `_primitivas.js`.
+**Alcance honesto:** caixa+cilindro+esfera+cone+plano+lathe+loft+extruda+move
+cobrem arquitetura, móveis, props angulados, troncos, bolas, chão, perfil
+rotacionado (vaso, coluna, peão — lathe, só reto por enquanto) e forma
+orgânica composta ao longo de um caminho (tubo/casco/galho/membro — loft,
+seções `{pos,raio}` com frame por transporte paralelo, sem torcer numa
+curva). `espelha`+`rotaciona` destravam objeto BILATERAL — modele só metade
+(com a borda EXATA no plano do espelho pra soldar) e complete com `espelha`;
+incline uma parte com `rotaciona`. Contorno 2D fechado (inflate) ainda não
+tem gerador — não finja com mil moveV; reporte o limite (ou use o caminho
+JS-puro abaixo). Exemplo das primitivas novas: `_primitivas.js`; do loft:
+`_galho.js`.
 
 ## O laço de VER (você tem olhos — use-os)
 

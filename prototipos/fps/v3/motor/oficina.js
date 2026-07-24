@@ -29,6 +29,10 @@ function baseDoPasso(i) { return i * BLOCO; }
 ---------------------------------------------------------------------------- */
 function norm3(x, y, z) { const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; }
 
+/* produto vetorial a×b — puro, usado só pela op `loft` (frame de transporte
+   paralelo, mais abaixo). */
+function cross3(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+
 /* Normal de um polígono (n-gon) por Newell — robusto pra face de 3+ cantos e
    independente da triangulação. */
 function normalDaFace(V, vs) {
@@ -114,6 +118,31 @@ function confereId(st, i, op, args) {
   const b = baseDoPasso(i);
   if (typeof args.id === 'number' && args.id !== b) grita(st, i, op, args.id, `id ${args.id} ≠ base da posição ${b} — a posição manda`);
   return b;
+}
+
+/* ----------------------------------------------------------------------------
+   Frame de TRANSPORTE PARALELO — usado só pela op `loft` abaixo. Reimplementado
+   AQUI, byte-equivalente ao `quadro`/`transporta` de motor/arvore-cartoon.js (a
+   convenção já provada no `galhoSeca` daquele arquivo): MESMA matemática, MESMA
+   ordem de operações — mas LOCAL, porque o núcleo não importa do motor de
+   árvores (fica autocontido). `quadroLoft(t)` monta a semente do frame a partir
+   de uma tangente `t` (um eixo de referência quase-perpendicular evita produto
+   vetorial quase-nulo); `transportaLoft(uPrev, t)` propaga o `u` anterior pra
+   uma tangente NOVA projetando fora a componente ao longo dela (`u = uPrev −
+   t·(uPrev·t)`) e renormalizando — e, se isso degenerar (tangente ~oposta à
+   anterior), refaz do zero com `quadroLoft(t)`. É isto que faz o `loft` não
+   TORCER numa curva: o `u` acompanha a tangente pelo caminho mais curto. */
+function quadroLoft(t) {
+  const ref = Math.abs(t[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+  const c = cross3(ref, t);
+  const u = norm3(c[0], c[1], c[2]);
+  return [u, cross3(u, t)];
+}
+function transportaLoft(uPrev, t) {
+  const dot = uPrev[0] * t[0] + uPrev[1] * t[1] + uPrev[2] * t[2];
+  let u = [uPrev[0] - t[0] * dot, uPrev[1] - t[1] * dot, uPrev[2] - t[2] * dot];
+  if (Math.hypot(u[0], u[1], u[2]) < 1e-4) u = quadroLoft(t)[0];
+  return norm3(u[0], u[1], u[2]);
 }
 
 const OPS = {
@@ -359,6 +388,182 @@ const OPS = {
         for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [A.id, B.ids[j], B.ids[n]]); }   // polo embaixo -> anel em cima: leque SUL
       } else {
         for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [B.id, A.ids[n], A.ids[j]]); }   // anel embaixo -> polo em cima: leque NORTE (invertido)
+      }
+      fCursor += L;
+    }
+  },
+
+  /* loft — P4 do playground: uma sequência de SEÇÕES (círculo de raio variável)
+     encadeada ao longo de um CAMINHO 3D arbitrário — tubo/casco/galho/membro.
+     O `lathe` acima é o TEMPLATE: reusa EXATAMENTE o esquema cursor/polo/
+     anel/leque/guarda dele; a única peça NOVA é o FRAME que orienta cada anel,
+     porque não existe mais um eixo fixo (o Y do lathe) pra jogar cos/sin em
+     cima — o frame tem que ACOMPANHAR o caminho sem torcer.
+
+     ARGS: `secoes: [{pos:[x,y,z], raio}, ...]` (≥2, senão GRITA e ABORTA, como
+     o perfil curto do lathe) + `lados` (TOPO, mín 3, pra TODA seção de uma vez
+     — como o lathe). `pos` passa por `st.vec`, `raio` por `st.num` (podem
+     citar PARAM). Nome `secoes` (não `perfis`, que a linha especulativa do
+     doc citava): `perfil` já é do `lathe` com outra FORMA (`[raio,y]` 2D);
+     reusar o nome confundiria os dois.
+
+     RESERVA `secao` (contorno 2D explícito) — FAIL-CLOSED, formato salvo: se
+     QUALQUER seção tiver a chave `secao`, GRITA e ABORTA O PASSO INTEIRO (0
+     V/0 F) — o mesmo tratamento da alça de curva do `lathe` (D-115). O
+     formato do contorno fechado nasce no P5 (docs/playground.md); aceitar
+     "quase" hoje (ex.: ignorar `secao` e cair pro círculo) criaria peça que
+     RENDERIZA diferente no dia em que o contorno for implementado — reserva
+     de formato salvo é fail-closed, nunca fail-open (a mesma lei do lathe).
+     Seção malformada — não-objeto, sem `pos`, ou sem `raio` — GRITA e ABORTA
+     igual (não dá pra numerar uma seção que não sabe se é polo ou anel).
+
+     POLO vs ANEL (idêntico ao lathe): `raio` RESOLVIDO `=== 0` vira POLO (1
+     vértice, bem em cima de `pos` — a ponta); `> 0` vira ANEL de `lados`
+     vértices; `< 0` não dá pra classificar -> GRITA e ABORTA o passo inteiro
+     (0 V/0 F), o mesmo tratamento do `raio<0` do lathe. SEM tampas
+     automáticas: fechar uma ponta é terminar a seção com `raio:0`.
+
+     SEGMENTO DE COMPRIMENTO ZERO (formato salvo, fail-closed): duas seções
+     CONSECUTIVAS na MESMA `pos` resolvida (comparação EXATA por eixo) fazem a
+     tangente do trecho ficar indefinida — sem uma direção, o frame (abaixo)
+     não tem o que transportar. GRITA e ABORTA O PASSO INTEIRO (0 V/0 F),
+     verificado ANTES de montar qualquer frame — nunca deixa passar um vetor
+     degenerado que corromperia (ou colapsaria) a malha em silêncio.
+
+     FRAME POR TRANSPORTE PARALELO (a peça NOVA vs. o lathe; formato salvo,
+     travada por teste) — reimplementado ACIMA (`quadroLoft`/`transportaLoft`),
+     byte-equivalente ao `quadro`/`transporta` de `arvore-cartoon.js` (a
+     convenção já provada no `galhoSeca`), mas LOCAL ao núcleo:
+       tangente da seção i = a direção do ÚNICO segmento que toca a ponta
+       (i=0 -> direção do segmento 0->1; i=última -> direção do último
+       segmento) OU, no INTERIOR do caminho, a MÉDIA normalizada das direções
+       dos DOIS segmentos vizinhos (i-1->i e i->i+1) — suaviza o frame numa
+       quina, em vez de saltar pra direção de só um lado.
+       semente do frame: `t0 = tangente(0)`; `u0 = quadroLoft(t0)[0]`
+       (internamente: `ref = |t0[1]|>0.9 ? [1,0,0] : [0,1,0]`, evita cross
+       quase-nulo quando o caminho é quase vertical; `u0 = norm(cross(ref,t0))`).
+       propagação (seção i>0): `u_i = transportaLoft(u_{i-1}, t_i)` — projeta
+       `u_{i-1}` PRA FORA da tangente nova e renormaliza; se degenerar refaz
+       com `quadroLoft(t_i)[0]`. `w_i = cross(u_i,t_i)`. É ISSO que impede o
+       tubo de TORCER numa curva: o frame acompanha a tangente pelo caminho
+       mais curto (sem componente rotacional em torno do próprio eixo), ao
+       contrário de recalcular `quadroLoft(t_i)` do zero em toda seção (que
+       reintroduziria uma torção arbitrária toda vez que o `ref` trocar de
+       [1,0,0] pra [0,1,0] ou vice-versa).
+       ANEL: vértice j (j=0..lados-1) = `pos + u·cos(a)·raio + w·sin(a)·raio`,
+       `a = j/lados·2π` — a MESMA fórmula do lathe/esfera/cone
+       (`[cos(t)·raio, y, sin(t)·raio]`), só que `u`/`w` (o frame local, girado
+       pelo transporte paralelo) substituem os eixos fixos X/Z. Um caminho RETO
+       no eixo Y (t=[0,1,0] sempre) dá o MESMO tubo do lathe — um círculo com a
+       normal radial pra fora, mesmo sentido de giro —, só que `quadroLoft`
+       escolhe `u0=[0,0,1]`/`w0=[-1,0,0]` (não `[1,0,0]`/`[0,0,1]` do lathe): a
+       ponta j=0 sai numa FASE 90° diferente (não é byte-idêntico ponto-a-
+       ponto), mas a FORMA/ORIENTAÇÃO é a mesma — o lathe é o caso degenerado
+       de caminho reto; o loft generaliza pro caminho curvo.
+
+     NUMERAÇÃO DE VÉRTICE (formato salvo, travada por teste) — cursor IDÊNTICO
+     ao lathe: seção POLO consome 1 id (`b+cursor`), seção ANEL consome
+     `lados` ids (`b+cursor+j`); o cursor soma o que acabou de consumir a cada
+     seção, na ORDEM das seções.
+
+     FACES entre seções consecutivas (i,i+1) — cursor de face PRÓPRIO,
+     ANÁLOGO ao lathe (começa em 0, cada segmento soma só o que produziu):
+       anel<->anel : `lados` QUADS — [A[j], B[j], B[n], A[n]] (a MESMA faixa
+                     do lathe/esfera, n=(j+1)%lados);
+       polo->anel  : `lados` triângulos — leque SUL do lathe, [polo, B[j],
+                     B[n]] (o polo é a seção DE TRÁS no caminho);
+       anel->polo  : `lados` triângulos — leque NORTE do lathe (invertido),
+                     [polo, A[n], A[j]] (o polo é a seção DA FRENTE);
+       polo<->polo : GRITA ("seção degenerada") e ZERO faces neste segmento —
+                     o cursor de face NÃO avança aqui, mas os segmentos
+                     vizinhos seguem normais (não corrompe o resto), o MESMO
+                     tratamento do lathe.
+     Winding pra FORA: reusa a lei do lathe (seções em ORDEM ao longo do
+     caminho, raio>=0) — a mesma faixa/leque, só orientada pelo frame local em
+     vez do eixo Y fixo.
+
+     Guarda de overflow (D3, por-passo): soma EXATA de vértices e de faces
+     (segmento polo<->polo não conta face) calculada ANTES de montar frame ou
+     inserir qualquer vértice — throw como o lathe. */
+  loft(st, a, i) {
+    const b = confereId(st, i, 'loft', a);
+    const secoesArg = a.secoes ?? [];
+    if (secoesArg.length < 2) return grita(st, i, 'loft', secoesArg.length, `secoes precisa de ao menos 2 (tem ${secoesArg.length})`);
+    const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // TOPO (pra TODA seção): muda a CONTAGEM
+
+    /* resolve + valida CADA seção ANTES de criar qualquer vértice — a chave
+       `secao` (contorno reservado) e a forma (objeto com pos+raio) primeiro;
+       FAIL-CLOSED (a mesma lei da alça de curva do lathe, D-115): qualquer
+       problema ABORTA O PASSO INTEIRO (0 V/0 F), nunca constrói "quase". */
+    let invalido = false;
+    const secoes = secoesArg.map((s, j) => {
+      if (typeof s !== 'object' || s === null || Array.isArray(s)) { grita(st, i, 'loft', j, `seção ${j} precisa ser um objeto {pos,raio} (recebido ${Array.isArray(s) ? 'array' : typeof s})`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
+      if (Object.hasOwn(s, 'secao')) { grita(st, i, 'loft', j, `seção ${j} usa a chave 'secao' (contorno 2D) — RESERVADA pro P5, ainda não implementada; hoje só 'raio' (círculo)`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
+      if (s.pos == null) { grita(st, i, 'loft', j, `seção ${j} sem 'pos'`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
+      if (s.raio == null) { grita(st, i, 'loft', j, `seção ${j} sem 'raio'`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
+      const pos = st.vec(s.pos);
+      const raio = st.num(s.raio);
+      if (raio < 0) { grita(st, i, 'loft', j, `raio negativo (${raio}) na seção ${j} — não dá pra classificar polo/anel`); invalido = true; }
+      return { pos, raio, polo: raio === 0 };
+    });
+    if (invalido) return;   // alguma seção inválida -> nada construído neste passo (grita já registrado por seção)
+
+    // segmento de comprimento zero: tangente indefinida -> GRITA e ABORTA (fail-closed), ANTES de montar frame
+    let comprimentoZero = false;
+    for (let idx = 0; idx < secoes.length - 1; idx++) {
+      const A = secoes[idx].pos, B = secoes[idx + 1].pos;
+      if (A[0] === B[0] && A[1] === B[1] && A[2] === B[2]) { grita(st, i, 'loft', idx, `segmento ${idx}->${idx + 1} tem comprimento zero (seções na mesma posição) — tangente indefinida`); comprimentoZero = true; }
+    }
+    if (comprimentoZero) return;
+
+    // guarda de overflow (D3): soma EXATA — segmento polo<->polo não soma face — ANTES de montar frame/inserir
+    let nV = 0; for (const s of secoes) nV += s.polo ? 1 : L;
+    let nF = 0; for (let idx = 0; idx < secoes.length - 1; idx++) if (!(secoes[idx].polo && secoes[idx + 1].polo)) nF += L;
+    if (nV > BLOCO || nF > BLOCO) throw new Error(`oficina: loft com ${secoes.length} seções × lados=${L} estoura o bloco de ids (${BLOCO}): ${nV} vértices / ${nF} faces`);
+
+    // TANGENTES por seção: ponta = direção do único segmento; interior = média normalizada dos dois vizinhos
+    const ultimo = secoes.length - 1;
+    const dirSeg = [];
+    for (let idx = 0; idx < ultimo; idx++) { const A = secoes[idx].pos, B = secoes[idx + 1].pos; dirSeg.push(norm3(B[0] - A[0], B[1] - A[1], B[2] - A[2])); }
+    const tangente = (idx) => (idx === 0 ? dirSeg[0] : idx === ultimo ? dirSeg[ultimo - 1] : norm3(dirSeg[idx - 1][0] + dirSeg[idx][0], dirSeg[idx - 1][1] + dirSeg[idx][1], dirSeg[idx - 1][2] + dirSeg[idx][2]));
+
+    // FRAME por TRANSPORTE PARALELO: semente em quadroLoft(tangente(0)), propaga com transportaLoft (a fórmula documentada acima)
+    let u = quadroLoft(tangente(0))[0];
+    const frames = [];
+    for (let idx = 0; idx <= ultimo; idx++) { const t = tangente(idx); u = idx === 0 ? u : transportaLoft(u, t); frames.push({ u, w: cross3(u, t) }); }
+
+    // VÉRTICES — anda o cursor (a fórmula documentada acima)
+    let cursor = 0;
+    const info = secoes.map((s, idx) => {
+      if (s.polo) {
+        const id = b + cursor;
+        addV(st, id, s.pos);
+        cursor += 1;
+        return { polo: true, id };
+      }
+      const fr = frames[idx];
+      const ids = [];
+      for (let j = 0; j < L; j++) {
+        const ang = (j / L) * Math.PI * 2, ca = Math.cos(ang) * s.raio, sa = Math.sin(ang) * s.raio;
+        const id = b + cursor + j;
+        addV(st, id, [s.pos[0] + fr.u[0] * ca + fr.w[0] * sa, s.pos[1] + fr.u[1] * ca + fr.w[1] * sa, s.pos[2] + fr.u[2] * ca + fr.w[2] * sa]);
+        ids.push(id);
+      }
+      cursor += L;
+      return { polo: false, ids };
+    });
+
+    // FACES — cursor de face análogo, por segmento consecutivo (i,i+1) — idêntico ao lathe
+    let fCursor = 0;
+    for (let idx = 0; idx < info.length - 1; idx++) {
+      const A = info[idx], B = info[idx + 1];
+      if (A.polo && B.polo) { grita(st, i, 'loft', idx, 'polo↔polo adjacente — seção degenerada, sem face neste segmento'); continue; }   // 0 faces, cursor não avança
+      if (!A.polo && !B.polo) {
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [A.ids[j], B.ids[j], B.ids[n], A.ids[n]]); }   // anel<->anel: quads (a faixa da esfera)
+      } else if (A.polo) {
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [A.id, B.ids[j], B.ids[n]]); }   // polo atrás -> anel na frente: leque SUL
+      } else {
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [B.id, A.ids[n], A.ids[j]]); }   // anel atrás -> polo na frente: leque NORTE (invertido)
       }
       fCursor += L;
     }

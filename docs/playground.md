@@ -53,7 +53,19 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
       Peça-exemplo `pecas/_espelhado.js` (cabeça com par de chifres, watertight
       — costura soldada provada por manifold). Specs na tabela do
       `docs/oficina.md` e no vocabulário da skill `criar-peca`.
-- [ ] **P4 · `loft`** (seções ao longo de um caminho → casco, corpo, galho).
+- [x] **P4 · `loft`** (seções ao longo de um caminho → casco, corpo, galho). O
+      `lathe` é o TEMPLATE (mesmo cursor/polo/anel/leque/guarda); a peça nova é
+      o FRAME por TRANSPORTE PARALELO — reimplementado local ao núcleo,
+      byte-equivalente ao `quadro`/`transporta` de `arvore-cartoon.js` (a
+      convenção já provada no `galhoSeca` do jogo) — que orienta cada anel sem
+      torcer o tubo numa curva (provado por teste: todo quad anel↔anel
+      não-borboleta, mesmo num caminho fortemente curvo). Args `secoes:
+      [{pos,raio}]` (≥2) + `lados`; a chave `secao` (contorno 2D) é RESERVADA
+      e fail-closed (a mesma lei da alça de curva do lathe, D-115) — o formato
+      do contorno nasce no P5. Winding/numeração travados por teste; guarda de
+      overflow do bloco. Peça-exemplo `pecas/_galho.js` (galho curvo em mais
+      de um eixo, afinando, fechado nas duas pontas por polo — watertight e
+      volume assinado positivo, provados por manifold).
 - [ ] **P5 · Contorno como DADO + gabarito IoU** — o formato do contorno
       fechado (pontos, alça reservada) + a bancada que mede silhueta renderizada
       × contorno de referência em N ângulos e devolve VEREDITO calibrado.
