@@ -1365,12 +1365,23 @@ describe('P3 — espelha + rotaciona (seleção transformada)', () => {
     });
 
     it('WELD: vértice EXATAMENTE no plano é COMPARTILHADO (a contagem prova); vértice fora duplica', () => {
-      const semWeld = nucleo([['plano', { id: 0, largura: 2, profundidade: 2, seg: 1 }], ['espelha', { eixo: 'y', pos: 5 }]], {}, {});   // plano é y=0 sempre; pos=5 -> NADA solda
+      // uma parede (quad lateral) do cilindro: 2 cantos na base (y=0) soldam, 2 no topo (y=2) duplicam
+      const n = nucleo([['cilindro', { id: 0, raio: 1, altura: 2, lados: 3 }], ['espelha', { eixo: 'y', pos: 0, sel: { f: [0] } }]], {}, {});
+      const base = 1000;   // baseDoPasso(1)
+      // a face lateral tem 2 cantos em y=0 (soldam) e 2 em y=2 (duplicam) -> só 2 vértices novos
+      expect([...n.V.keys()].filter((k) => k >= base).length).toBe(2);
+      expect(n.F.get(base)).toBeDefined();                    // a face espelhada existe (não é degenerada — não está toda no plano)
+    });
+
+    it('BLOQUEIA-consertado: face INTEIRAMENTE no plano GRITA e é PULADA (sem duplicata coincidente — o polo↔polo do lathe pro espelho)', () => {
+      const semWeld = nucleo([['plano', { id: 0, largura: 2, profundidade: 2, seg: 1 }], ['espelha', { eixo: 'y', pos: 5 }]], {}, {});   // pos=5 -> nada solda, espelho REAL
       expect(semWeld.V.size).toBe(8);
-      const comWeld = nucleo([['plano', { id: 0, largura: 2, profundidade: 2, seg: 1 }], ['espelha', { eixo: 'y', pos: 0 }]], {}, {});   // pos=0 == y do plano -> TUDO solda
-      expect(comWeld.V.size).toBe(4);                          // nenhum vértice novo — os 4 originais reusados
-      expect(comWeld.F.size).toBe(2);
-      expect(comWeld.F.get(1000)!.vs.every((v: number) => v < 4)).toBe(true);   // a face nova só usa ids ORIGINAIS (soldados)
+      expect(semWeld.F.size).toBe(2);                         // original + espelhada (legítima, em y=10)
+      const degen = nucleo([['plano', { id: 0, largura: 2, profundidade: 2, seg: 1 }], ['espelha', { eixo: 'y', pos: 0 }]], {}, {});   // pos=0 == y do plano -> a espelhada seria coincidente
+      expect(degen.V.size).toBe(4);                           // nenhum vértice novo (todos soldados)
+      expect(degen.F.size).toBe(1);                           // a face degenerada foi PULADA — só a original resta
+      expect(degen.F.has(1000)).toBe(false);                  // NÃO criou a coincidente
+      expect(degen.orfaos.some((o: any) => o.op === 'espelha' && /degenerad|no plano/i.test(o.motivo))).toBe(true);
     });
 
     it('winding REVERTIDO: a normal Newell da face espelhada aponta pra FORA (medida contra a face real equivalente)', () => {
@@ -1423,14 +1434,16 @@ describe('P3 — espelha + rotaciona (seleção transformada)', () => {
     });
 
     it('guarda de overflow (D3) no limite EXATO — FACE isolada (zero vértice novo) e VÉRTICE isolado (face longe do limite)', () => {
-      // FACE isolada: N planos-semente de 1 face cada, TODOS em y=0 -> espelhar em eixo=y,pos=0 solda 100%
-      // (0 vértice novo); só a contagem de FACE estoura. 1000 planos = 1000 faces (no limite, passa); 1001 estoura.
+      // FACE isolada: N planos-semente de 1 face cada, TODOS em y=0 -> espelhar em eixo=y,pos=0 solda
+      // 100% (0 vértice novo). Cada face espelhada seria coincidente (todos os cantos no plano) -> é
+      // PULADA como degenerada (B1). O que fica isolado é a GUARDA de FACE: ela conta as faces
+      // SELECIONADAS (faceIds.length) ANTES de pular, então o limite de FACE dispara independente do de vértice.
       const muitosPlanos = (n: number) => { const p: any[] = []; for (let k = 0; k < n; k++) p.push(['plano', { id: k * 1000, largura: 1, profundidade: 1, seg: 1 }]); p.push(['espelha', { eixo: 'y', pos: 0 }]); return p; };
-      const noLimite = nucleo(muitosPlanos(1000), {}, {});
-      expect(noLimite.orfaos).toHaveLength(0);
-      expect([...noLimite.V.keys()].filter((id) => id >= 1000 * 1000)).toHaveLength(0);   // confere: 0 vértice novo (100% soldado)
-      expect([...noLimite.F.keys()].filter((id) => id >= 1000 * 1000)).toHaveLength(1000); // exatamente 1000 faces novas
-      expect(() => nucleo(muitosPlanos(1001), {}, {})).toThrow(/estoura o bloco/);
+      const noLimite = nucleo(muitosPlanos(1000), {}, {});                                    // 1000 faces selecionadas: no limite, a guarda passa
+      expect([...noLimite.V.keys()].filter((id) => id >= 1000 * 1000)).toHaveLength(0);       // 0 vértice novo (100% soldado)
+      expect([...noLimite.F.keys()].filter((id) => id >= 1000 * 1000)).toHaveLength(0);       // 0 face nova — todas degeneradas, puladas (B1)
+      expect(noLimite.orfaos.filter((o: any) => o.op === 'espelha').length).toBe(1000);       // cada face degenerada GRITOU
+      expect(() => nucleo(muitosPlanos(1001), {}, {})).toThrow(/estoura o bloco/);            // 1001: a guarda de FACE estoura (antes de qualquer skip)
 
       // VÉRTICE isolado: 1 plano grande, eixo=x pos=0 (nada solda: seg ÍMPAR não tem coluna central em x=0).
       // seg=30 (900 faces, <1000 vértices novos) passa; seg=31 (961 faces, 1024 vértices novos) estoura SÓ por vértice.
@@ -1453,6 +1466,12 @@ describe('P3 — espelha + rotaciona (seleção transformada)', () => {
       // dos dois lados (nenhum id novo pra base — só a ponta duplicou)
       const usamBase = [...F.values()].filter((f: any) => f.vs.some((v: number) => v >= 1000 && v < 1004));
       expect(usamBase.length).toBe(8);
+
+      // NUMERAÇÃO travada por MEDIÇÃO (formato salvo — D1 do revisor): o `espelha` é o passo 15,
+      // então baseDoPasso(15)=15000; a ponta espelhada (único vértice fora do plano) é 15000,
+      // e as 4 faces novas são 15000..15003. (Antes o comentário da peça dizia 10000, sem teste travando.)
+      expect([...V.keys()].filter((k: number) => k >= 15000 && k < 16000)).toEqual([15000]);
+      expect([...F.keys()].filter((k: number) => k >= 15000 && k < 16000).sort((a: number, b: number) => a - b)).toEqual([15000, 15001, 15002, 15003]);
 
       // MANIFOLD: toda aresta dirigida a->b pareada com b->a exatamente 1× (mesmo método do P1/P2)
       const dirigidas = new Map<string, number>();

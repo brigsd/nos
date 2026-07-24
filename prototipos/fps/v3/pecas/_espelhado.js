@@ -61,12 +61,12 @@ export const TOPO = { cabecaAneis: 6, cabecaLados: 10 };
      passo 7  mescla  (de:[6001,6002,6003] -> para:6000)  -> a tampa 1000 vira área-zero e SOME; as 4 paredes viram TRIÂNGULOS (a ponta comum = 6000)
      passo 8  moveV   (centraliza a ponta 6000 na média dos 4 cantos do anel distante original)
      passo 9  rotaciona (só a ponta 6000, ao redor da base) -> inclina o chifre
-     passos 10-13  pincel/liso/parte (cor+atributo ANTES do espelho, pra herdar)
-     passo 14  espelha (eixo x, pos 0, sel = as 4 faces do chifre: 6000..6003)
+     passos 10-14  pincel×3 + liso + parte (cor+atributo ANTES do espelho, pra herdar) — 5 passos
+     passo 15  espelha (eixo x, pos 0, sel = as 4 faces do chifre: 6000..6003)
                -> a base (1000..1003) SOLDA (x===0 exato, sem id novo); a ponta
-                  6000 (fora do plano) ganha 1 id novo = b+0 = 10000; as 4 faces
-                  novas nascem em 10000..10003 (cantos revertidos, normal pra fora)
-     passo 15  solido (a cabeça entra na colisão) */
+                  6000 (fora do plano) ganha 1 id novo = b+0 = 15000 (baseDoPasso(15));
+                  as 4 faces novas nascem em 15000..15003 (cantos revertidos, normal
+                  pra fora). Ids conferidos por MEDIÇÃO no teste (não recontados no olho). */
 export const PASSOS = [
   ['esfera', { id: 0, raio: 'cabecaRaio', aneis: 'cabecaAneis', lados: 'cabecaLados' }],
 

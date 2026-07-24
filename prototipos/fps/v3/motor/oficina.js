@@ -516,6 +516,9 @@ const OPS = {
      NOVO. Um vértice QUASE-no-plano (ruído de ponto-flutuante) NÃO solda —
      vira um par coincidente-mas-distinto; pra soldar de propósito, ponha a
      borda em `pos` LITERAL na malha original, ou solde depois com `mescla`.
+     (Idem: um vértice FORA do plano cuja reflexão cai EXATAMENTE sobre um
+     vértice EXISTENTE não-afetado ganha CÓPIA nova — o weld só olha o plano,
+     não faz merge geral; solde com `mescla` se quiser.)
 
      NUMERAÇÃO DE VÉRTICE (formato salvo, travada por teste): reúne os
      vértices AFETADOS (os cantos de TODAS as faces da seleção, cada id
@@ -550,7 +553,10 @@ const OPS = {
     // seleção de faces (AUSENTE = todas); dedup + ordena por id ORIGINAL crescente
     const idsSel = new Set();
     if (a.sel == null) { for (const fid of st.F.keys()) idsSel.add(fid); }
-    else { for (const fid of a.sel.f ?? []) { if (!st.F.has(fid)) { grita(st, i, 'espelha', fid, 'face inexistente na seleção'); continue; } idsSel.add(fid); } }
+    else {
+      if (a.sel.v != null) grita(st, i, 'espelha', 'sel.v', 'espelha só espelha FACES (use sel.f); sel.v foi IGNORADO — não vira no-op silencioso');   // N2: o par natural com o rotaciona (que aceita sel.v) confunde
+      for (const fid of a.sel.f ?? []) { if (!st.F.has(fid)) { grita(st, i, 'espelha', fid, 'face inexistente na seleção'); continue; } idsSel.add(fid); }
+    }
     const faceIds = [...idsSel].sort((x, y) => x - y);
     if (!faceIds.length) return;
 
@@ -581,6 +587,11 @@ const OPS = {
     let cursorF = 0;
     for (const fid of faceIds) {
       const f = st.F.get(fid);
+      // face INTEIRAMENTE no plano (TODOS os cantos soldados): a espelhada teria os MESMOS cantos
+      // revertidos = uma face COINCIDENTE de normal OPOSTA no mesmo lugar (z-fight; e o teste de
+      // manifold é CEGO a ela — as arestas se pareiam). GRITA e PULA (0 face, cursor NÃO avança),
+      // o mesmo tratamento do `polo↔polo` degenerado do lathe.
+      if (f.vs.every((v) => mapa.get(v) === v)) { grita(st, i, 'espelha', fid, 'face inteiramente no plano do espelho — degenerado (a espelhada seria coincidente), pulada'); continue; }
       const vs = f.vs.map((v) => mapa.get(v)).reverse();
       const novo = b + cursorF; cursorF++;
       addF(st, novo, vs);
