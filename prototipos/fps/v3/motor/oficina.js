@@ -313,15 +313,20 @@ const OPS = {
     const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // TOPO (pra TODO o perfil): muda a CONTAGEM
 
     /* resolve + valida CADA ponto ANTES de criar qualquer vértice (raio/y podem
-       citar PARAM, como os outros pontos dimensionais da Oficina). */
-    let raioInvalido = false;
+       citar PARAM, como os outros pontos dimensionais da Oficina). FAIL-CLOSED
+       (D-115): um ponto que não seja EXATAMENTE [raio, y] (2 elementos) — 3+
+       (a alça de curva RESERVADA, ainda não implementada) ou <2 (malformado) —
+       GRITA e ABORTA o passo inteiro (0 V/0 F), como o raio<0. Nunca constrói
+       malha "plausível-porém-reservada" que mudaria de figura quando a curva
+       chegar: reserva de formato salvo é fail-closed, não fail-open. */
+    let pontoInvalido = false;
     const pontos = perfil.map((pt, j) => {
-      if (pt.length > 2) grita(st, i, 'lathe', j, 'alça de curva reservada — P2 é só reta');   // reserva (formato salvo): NUNCA ignora em silêncio
+      if (!Array.isArray(pt) || pt.length !== 2) { grita(st, i, 'lathe', j, `ponto ${j} do perfil precisa ser [raio, y] (2 elementos); recebido ${Array.isArray(pt) ? `${pt.length} elemento(s)` : 'não-array'} — a alça de curva (3º elemento) está RESERVADA, ainda não implementada`); pontoInvalido = true; return { raio: 0, y: 0, polo: true }; }
       const raio = st.num(pt[0]), y = st.num(pt[1]);
-      if (raio < 0) { grita(st, i, 'lathe', j, `raio negativo (${raio}) no ponto ${j} do perfil — não dá pra classificar polo/anel`); raioInvalido = true; }
+      if (raio < 0) { grita(st, i, 'lathe', j, `raio negativo (${raio}) no ponto ${j} do perfil — não dá pra classificar polo/anel`); pontoInvalido = true; }
       return { raio, y, polo: raio === 0 };
     });
-    if (raioInvalido) return;   // algum ponto não classifica (polo/anel) -> nada construído neste passo (grita já registrado por ponto)
+    if (pontoInvalido) return;   // algum ponto inválido (aridade ≠ 2, ou raio<0) -> nada construído neste passo (grita já registrado por ponto)
 
     // guarda de overflow (D3): soma EXATA — segmento polo<->polo não soma face — ANTES de inserir
     let nV = 0; for (const p of pontos) nV += p.polo ? 1 : L;

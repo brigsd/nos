@@ -1106,19 +1106,27 @@ describe('P2 — lathe (perfil de revolução)', () => {
     expect(J(neutroCanonico(nucleo(JSON.parse(J(passos)), {}, {})))).toBe(a);
   });
 
-  it('3º elemento do ponto GRITA (a reserva da alça de curva) e NÃO corrompe: constrói RETO, idêntico a um ponto de 2 elementos', () => {
+  it('3º elemento do ponto GRITA e ABORTA o passo (a reserva da alça de curva é FAIL-CLOSED — D-115: não constrói malha "reservada" que mudaria quando a curva chegar)', () => {
     const comAlca = nucleo([['lathe', { id: 0, perfil: [[0, 0], [1, 0, { tipo: 'curva' }], [1, 1], [0, 1]], lados: 4 }]], {}, {});
     expect(comAlca.orfaos).toHaveLength(1);
     expect(comAlca.orfaos[0]).toMatchObject({ op: 'lathe', ref: 1 });
-    expect(comAlca.orfaos[0].motivo).toMatch(/reserva/i);
-    // a malha É a mesma de sem o 3º elemento — a reserva GRITA mas constrói reto (nunca ignora em silêncio, nunca corrompe)
+    expect(comAlca.orfaos[0].motivo).toMatch(/reservad/i);
+    // FAIL-CLOSED: NADA construído (0 V/0 F), como o raio<0 — impossível shipar hoje uma peça de 3º elemento
+    // que renderiza reta agora e mudaria pra curva depois (o fail-open que o revisor pegou no P2)
+    expect(comAlca.V.size).toBe(0);
+    expect(comAlca.F.size).toBe(0);
+    // um ponto NORMAL de 2 elementos nunca dispara a reserva (sem falso-positivo) e constrói de verdade
     const semAlca = nucleo([['lathe', { id: 0, perfil: [[0, 0], [1, 0], [1, 1], [0, 1]], lados: 4 }]], {}, {});
-    expect(J(neutroCanonico(comAlca))).not.toBe(J(neutroCanonico(semAlca)));   // difere só pelo orfaos registrado...
-    expect(comAlca.V.size).toBe(semAlca.V.size);
-    expect(comAlca.F.size).toBe(semAlca.F.size);
-    expect([...comAlca.V.values()]).toEqual([...semAlca.V.values()]);         // ...a GEOMETRIA é idêntica (2 elementos == reto, pra sempre)
-    // um ponto NORMAL de 2 elementos nunca dispara a reserva (sem falso-positivo)
     expect(semAlca.orfaos).toHaveLength(0);
+    expect(semAlca.V.size).toBeGreaterThan(0);
+  });
+
+  it('ponto malformado (aridade ≠ 2, ex. [1]) GRITA e ABORTA — não estoura com throw (NIT-3: fail-closed uniforme, não exceção crua)', () => {
+    const n = nucleo([['lathe', { id: 0, perfil: [[0, 0], [1], [1, 1]], lados: 4 }]], {}, {});   // ponto do meio tem 1 elemento
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0]).toMatchObject({ op: 'lathe', ref: 1 });
+    expect(n.V.size).toBe(0);
+    expect(n.F.size).toBe(0);
   });
 
   it('raio<0 GRITA e a op inteira não constrói NADA neste passo (não dá pra classificar polo/anel — nunca corrompe)', () => {

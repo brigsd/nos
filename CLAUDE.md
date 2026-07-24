@@ -14,7 +14,7 @@ Tiago (`brigsd`) é o **ideador**: dono da visão, do rumo e do escopo. Você (C
 
 ## Regras
 
-- Tudo voltado ao jogador em **pt-BR**; código, nomes de arquivo e commits em inglês. O ID do modelo NUNCA em commit/PR/artefato.
+- Tudo em **pt-BR**: texto de jogo, comentários de código, nomes de arquivo/símbolo e mensagens de commit (a prática real do repo — `esfera`, `_torno.js`, commits PT-BR). O ID do modelo NUNCA em commit/PR/artefato.
 - **Determinismo:** nada de `Date.now()`/`Math.random()` cru — tempo e semente vêm do contexto (a peça, no v3).
 - Toda decisão importante entra em `docs/DECISIONS.md` (índice + detalhe; histórico em `docs/DECISIONS-ARCHIVE.md`) — não re-discuta sem fato novo.
 - Textos de jogo seguem `docs/LORE.md` — consistência narrativa é inegociável.
