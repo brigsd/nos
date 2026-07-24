@@ -2,8 +2,8 @@
   "meta": {
     "name": "O Coração",
     "seed": "commit-primordial",
-    "tickCount": 244,
-    "worldTime": 14640
+    "tickCount": 246,
+    "worldTime": 14760
   },
   "width": 64,
   "height": 64,
@@ -6875,6 +6875,37 @@
       "type": "core_pulse",
       "tick": 244,
       "worldTime": 14640
+    },
+    {
+      "type": "native_spoke",
+      "tick": 245,
+      "worldTime": 14700,
+      "nativeId": "brasa",
+      "message": "Pão quentinho e histórias quentes. Venham se aquecer."
+    },
+    {
+      "type": "native_spoke",
+      "tick": 245,
+      "worldTime": 14700,
+      "nativeId": "broa",
+      "message": "Tem pão quentinho saindo do forno! Venham se aquecer com histórias!"
+    },
+    {
+      "type": "native_spoke",
+      "tick": 245,
+      "worldTime": 14700,
+      "nativeId": "quilha",
+      "message": "O aroma do pão fresco está no ar. Venham, viajantes, aquecer-se com histórias!"
+    },
+    {
+      "type": "core_pulse",
+      "tick": 245,
+      "worldTime": 14700
+    },
+    {
+      "type": "core_pulse",
+      "tick": 246,
+      "worldTime": 14760
     }
   ],
   "natives": {
@@ -6882,8 +6913,8 @@
       "id": "gota",
       "name": "Gota",
       "position": {
-        "x": 0,
-        "y": 5
+        "x": 1,
+        "y": 4
       },
       "behaviorTree": "wanderer",
       "behaviorState": "{}",
