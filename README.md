@@ -13,52 +13,28 @@ Todos rodam direto no navegador do **PC ou do celular**, sem instalar nada. 🌍
 
 ---
 
-**NÓS** é um metaverso que vive **inteiramente dentro do GitHub** — hoje com o mundo-origem, **O Coração** (o mapa 2D acima):
+**NÓS** é um metaverso que vive **inteiramente dentro do GitHub** — sem servidor próprio: o código é o jogo e o Pages é a janela. A frente viva é o **Atelier**: um cliente em primeira pessoa (WebGL) com a **Oficina**, onde se cria cada objeto e cada som direto no navegador. A peça criada **é** a lista de passos que a reconstrói — nada é opaco, tudo é editável e refeito passo a passo.
 
-- 🗄️ O repositório é o banco de dados — o mundo é feito de commits.
-- ❤️ O GitHub Actions é o coração — a cada batida (tick), o tempo passa, com ou sem jogadores online.
-- 🖥️ O GitHub Pages é a janela — o cliente visual do jogo, no navegador do PC ou do celular.
-- ✉️ As issues são as cartas — é por elas que os jogadores agem sobre o mundo.
+## História — O Coração
 
-O primeiro mundo, **O Coração**, pulsou por ~250 batidas; hoje está **congelado** e vive como demo (Clareira / Miragem) no [`nos-mentes`](https://github.com/brigsd/nos-mentes). A frente viva agora é o **Atelier**.
+O primeiro mundo do NÓS foi **O Coração**: um metaverso 2D em pixel art que rodava sozinho dentro do GitHub —
 
-## Status
+- 🗄️ o repositório era o banco de dados (o mundo feito de commits),
+- ❤️ o GitHub Actions era o coração (a cada batida/tick o tempo passava, com ou sem jogadores),
+- 🖥️ o GitHub Pages era a janela, e
+- ✉️ as issues eram as cartas (os jogadores agiam sobre o mundo por elas).
 
-<!-- stats-start -->
-### Status do Mundo
-
-- 💓 **Batidas (Ticks):** `250`
-- 👥 **Jogadores Ativos:** `1`
-<!-- stats-end -->
-
-## Portais e federação
-
-O NÓS é um metaverso: O Coração é o mundo-origem, não o único. O protocolo é
-um arquivo público — [`worlds/registry.json`](worlds/registry.json) — onde
-cada entrada é um mundo com `id`, `name`, `worldUrl` e `status`:
-
-- **Hoje**: o painel **Portais** do [mapa 2D](https://brigsd.github.io/nos/)
-  atravessa de verdade para **O Átrio** (`worlds/atrio.json`, um mundo local
-  deste repositório) — visita só-leitura: você vê e explora, seu avatar não
-  muda de casa. No cliente em primeira pessoa, o **Portal do Átrio** fica no
-  fim do calçamento d'A Clareira; chegar perto dele acende o painel **Mundos
-  Conectados**, que lista os mundos do registro. A travessia pelo próprio
-  portal em primeira pessoa é a fase 3.
-- **Federação (v3)**: `worldUrl` também aceita uma **URL raw absoluta de
-  OUTRO repositório** — cada criador hospeda seu mundo (repo próprio, tick
-  próprio, Pages próprio) e entra na rede **abrindo um PR que adiciona a
-  própria entrada ao registro**, sem tocar em mais nada. Regras, check-in de
-  avatar e economia federada: [`docs/PORTALS_PROTOCOL.md`](docs/PORTALS_PROTOCOL.md).
+Ele pulsou por ~250 batidas e hoje está **congelado**: vive como demo (**Clareira** 2D + **Miragem** raycaster) no [`nos-mentes`](https://github.com/brigsd/nos-mentes), ao lado das mentes-IA d'A Clareira. A ideia de **federação** — cada criador com seu repo, tick e Pages próprios, entrando na rede por um pull request — fica guardada ali como visão.
 
 ## Para quem quer mexer no projeto
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — como o repo é o jogo (engine, tick, duas janelas).
-- [`docs/COMUNICACAO.md`](docs/COMUNICACAO.md) — **IDs visíveis e setores**: aperte `I` no jogo e todo objeto mostra seu identificador (`arvore-38x12`); o mapa grande (`M`) divide a ilha em setores `A1`–`H8`. É o vocabulário para pedir mudanças exatas ("remove a arvore-38x12", "no setor C2…").
-- [`docs/CIDADE.md`](docs/CIDADE.md) — A Clareira: a cidade-oficina e suas fases.
+- [`docs/oficina.md`](docs/oficina.md) — o roteiro do Atelier: a Oficina de objeto + som, passo a passo.
+- [`CLAUDE.md`](CLAUDE.md) — as regras de trabalho: as duas jóias (`render.js` / `motor/som.js`), as três camadas e a prova por medição.
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) — o registro de toda decisão do projeto.
 
 ## Como contribuir
 
-O NÓS é coletivo por natureza — na v3, qualquer pessoa poderá criar um mundo novo via pull request. Antes disso, issues com ideias são bem-vindas.
+O NÓS é coletivo por natureza. A frente aberta é o Atelier; issues com ideias são bem-vindas.
 
 ## Licença
 
