@@ -78,7 +78,7 @@ await new Promise((ok) => estatico.listen(0, '127.0.0.1', ok));
 const baseEstatico = `http://127.0.0.1:${estatico.address().port}`;
 
 const PW = join(REPO, 'node_modules/playwright/index.js');
-if (!existsSync(PW)) { console.error('somexportar: Playwright não encontrado. Rode uma vez: cd site && npm ci'); process.exit(1); }
+if (!existsSync(PW)) { console.error('somexportar: Playwright não encontrado. Rode uma vez: npm ci (na raiz)'); process.exit(1); }
 const pw = (await import(pathToFileURL(PW).href)).default;
 const browser = await pw.chromium.launch();
 const page = await browser.newPage({ viewport: { width: VW, height: VH } });

@@ -7,9 +7,9 @@ description: O fluxo pra construir e entregar QUALQUER feature no repo NÓS — 
 
 Convenções fixas: todo trabalho vai pra **`main`** direto; respostas e docs em **PT-BR, plano e pragmático** (sem gíria); o ID do modelo NUNCA em commit/PR/artefato.
 
-## Git — o tick commita sozinho, então:
+## Git
 
-- **Antes de TODO push**: `git fetch origin main && git rebase origin/main`. O robô do tick commita `world/heart.json` de hora em hora; sem o rebase, o push é rejeitado.
+- **Antes de TODO push**: `git fetch origin main && git rebase origin/main` (se outro push tiver entrado, o seu é rejeitado sem isso). O tick 2D que commitava de hora em hora foi DESLIGADO (D-110/D-111) — a main só muda por trabalho seu ou do ideador.
 - Trabalho de coder vai numa branch `wip/...` (a partir de `origin/main`); depois `git checkout main && git merge --ff-only wip/... && git push -u origin main`. Apague a branch e limpe o `scratchpad/` no fim.
 - **DUAS jóias — `render.js` (render do jogo) e `motor/som.js` (áudio do jogo).** Mudança em qualquer uma é **opt-in e no-op quando desligada** (somar zero, guardar com `?? padrão`, passe/ramo separado), e verificada BYTE-idêntica com o recurso off: `cmp` de PIXEL (`porteiro`/frozen-clock nas peças do jogo) pro render, `cmp` de AMOSTRA (OfflineAudioContext) pro som. Se precisar mudar uma linha EXISTENTE de uma jóia, PARE e reporte. Nunca uma mudança que altere a saída do jogo sem intenção. (O `som.js` virou jóia no roteiro de som — D-99→D-105; a ponte `tocarEvento` do S5b é o único toque, aditivo.)
 
@@ -38,7 +38,7 @@ Depois que ele volta: **reproduza a verificação você mesmo** (não confie no 
 
 ## Prova por medição, não pelo olho
 
-O olho erra em normal, luz, alinhamento e geometria (D-65); e a IA **não escuta**. Onde der, prove com número: `cmp` byte-a-byte (render sem regressão), forma canônica bit-a-bit (replay/determinismo), projeção pelo próprio motor comparada ao esperado (posição na tela). **Pro SOM (o "ouvido", D-102):** `cmp` de amostra via OfflineAudioContext (determinismo), o ESPECTROGRAMA (STFT → imagem tempo×freq que dá pra Read) e os DESCRITORES (tom/brilho-centroide/envelope/duração) do `motor/somanalise.js` (bancada `analisar`/`somtela`; harness `spectro.mjs` no scratchpad), e o A/B contra o som REAL do jogo (bancada `somab`, D-105). "Parece bom" (ou "achei que soou bom") não é prova; o número é.
+O olho erra em normal, luz, alinhamento e geometria (D-65); e a IA **não escuta**. Onde der, prove com número: `cmp` byte-a-byte (render sem regressão), forma canônica bit-a-bit (replay/determinismo), projeção pelo próprio motor comparada ao esperado (posição na tela). **Pro SOM (o "ouvido", D-102):** `cmp` de amostra via OfflineAudioContext (determinismo), o ESPECTROGRAMA (STFT → imagem tempo×freq que dá pra Read) e os DESCRITORES (tom/brilho-centroide/envelope/duração) do `motor/somanalise.js` (bancadas `analisar`/`somtela`), e o A/B contra o som REAL do jogo (bancada `somab`, D-105). "Parece bom" (ou "achei que soou bom") não é prova; o número é.
 
 ## Registre a decisão
 

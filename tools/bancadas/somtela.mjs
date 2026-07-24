@@ -46,7 +46,7 @@ await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const base = `http://127.0.0.1:${server.address().port}/prototipos/fps/v3`;
 
 const PW = join(REPO, 'node_modules/playwright/index.js');
-if (!existsSync(PW)) { console.error('somtela: Playwright não encontrado. Rode uma vez: cd site && npm ci'); process.exit(1); }
+if (!existsSync(PW)) { console.error('somtela: Playwright não encontrado. Rode uma vez: npm ci (na raiz)'); process.exit(1); }
 const pw = (await import(pathToFileURL(PW).href)).default;
 /* política de autoplay PADRÃO de propósito (SEM --autoplay-policy): só assim a prova
    "sem gesto não toca" tem sentido — o AudioContext só liga no clique/tecla, que o

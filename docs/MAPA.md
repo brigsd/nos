@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-99 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+98 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -22,10 +22,6 @@
 
 - `SKILL.md` — Gate de senso crítico [cpu] pra peças do motor v3 (prototipos/fps/v3/pecas/*.js). Roda os críticos validados por benchmark (geometria, paleta, costura, bandi…
 
-## .claude/skills/estruturas/
-
-- `SKILL.md` — LEGADO (frente Miragem — o FPS v2 raycaster de `prototipos/fps/nos-fps.html`, em manutenção). Fluxo de criar/auditar estruturas ALI: prancheta de topo, colis…
-
 ## .claude/skills/nos-fluxo/
 
 - `SKILL.md` — O fluxo pra construir e entregar QUALQUER feature no repo NÓS — orquestrar subagentes (coder + revisor adversarial por risco), verificar por medição, o cuida…
@@ -36,26 +32,29 @@
 
 ## docs/
 
-- `ARCHITECTURE.md` — Arquitetura — NÓS
 - `AUDIO_E_CENAS.md` — Áudio e cenas — música, voz e cutscenes (direção)
-- `CIDADE.md` — A Clareira — a cidade d'O Coração
-- `CODER.md` — A Bancada do Coder — ferramentas, limites e o método (D-35)
-- `COMUNICACAO.md` — Comunicação ideador ↔ coder — identificação de objetos e áreas (D-33)
-- `CONTINUITY.md` — Continuidade — onde paramos
 - `DECISIONS-ARCHIVE.md` — Arquivo de Decisões — NÓS (D-01…D-54)
 - `DECISIONS.md` — Registro de Decisões — NÓS
 - `FERRAMENTAS.md` — FERRAMENTAS — o plano da potência (D-56)
-- `GDD.md` — Game Design Document — NÓS
-- `HABITANTES.md` — Os Habitantes — mentes que JOGAM o jogo (proposta)
-- `IMPLEMENTATION_PLAN.md` — Plano de Implementação — NÓS
 - `LORE.md` — Lore — a bíblia do NÓS
-- `PORTALS_PROTOCOL.md` — Protocolo dos Portais — R6
 - `RECURSOS.md` — Recursos do coder — o índice único
 - `VISION.md` — Visão — NÓS
 - `oficina-referencia.md` — Oficina — referência de como cada coisa funciona
 - `oficina.md` — A Oficina — editor de objetos dentro do jogo
-- `walkthrough_colaborador2.md` — Resumo de Alterações — Colaborador 2 (T5, T6, T8, T9)
 - `walkthrough_colaborador4.md` — Resumo de Alterações — Colaborador 4 (branch `colaborador4`)
+
+## docs/legado/
+
+- `ARCHITECTURE.md` — Arquitetura — NÓS
+- `CIDADE.md` — A Clareira — a cidade d'O Coração
+- `CODER.md` — A Bancada do Coder — ferramentas, limites e o método (D-35)
+- `COMUNICACAO.md` — Comunicação ideador ↔ coder — identificação de objetos e áreas (D-33)
+- `CONTINUITY.md` — Continuidade — onde paramos
+- `GDD.md` — Game Design Document — NÓS
+- `HABITANTES.md` — Os Habitantes — mentes que JOGAM o jogo (proposta)
+- `IMPLEMENTATION_PLAN.md` — Plano de Implementação — NÓS
+- `PORTALS_PROTOCOL.md` — Protocolo dos Portais — R6
+- `walkthrough_colaborador2.md` — Resumo de Alterações — Colaborador 2 (T5, T6, T8, T9)
 
 ## prototipos/fps/v3/
 
@@ -113,7 +112,7 @@
 
 ## tools/
 
-- `README.md` — tools/ — as ferramentas do coder (o lar unificado)
+- `README.md` — tools/ — as ferramentas do Atelier
 - `servir.mjs` — servir.mjs — servidor de DESENVOLVIMENTO da Oficina (passo 10). Faz duas coisas: (1) serve `prototipos/fps/v3/` ESTÁTICO com `Cache-Control: no-store` — mata…
 
 ## tools/bancadas/

@@ -51,12 +51,12 @@ export function construir(ctx) {
 }
 ```
 
-## O ciclo (igual /estruturas, agora pra peças)
+## O ciclo
 
 1. copie `pecas/_modelo.js` → `pecas/minha-peca.js`
 2. `npm run peca -- minha-peca` — screenshots em 3 ângulos (tools/bancadas/out/)
 3. LEIA os PNGs, itere até ficar bom de verdade (crítico, não complacente)
-4. publique: o build copia `v3/` pra `site/public/fps/v3/` —
+4. publique: push na `main` — o `pages.yml` copia `v3/` direto pro Pages —
    `https://brigsd.github.io/nos/fps/v3/visor.html?peca=minha-peca`
 
 ## Limites honestos (hoje)

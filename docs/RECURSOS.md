@@ -1,115 +1,83 @@
 # Recursos do coder — o índice único
 
-O mapa de TUDO que ajuda a desenvolver o NÓS: scripts, ferramentas, MCP e
-agentes, cada um com *como invocar*. Sessão nova? Comece por aqui e por
-`docs/CODER.md` (o método + as bancadas). Achou tooling que não está listado?
-Adicione — a próxima sessão agradece.
+O mapa de TUDO que ajuda a desenvolver o NÓS (hoje: o **Atelier**, `prototipos/fps/v3/`):
+scripts, bancadas, skills e agentes, cada um com *como invocar*. **Sessão nova? Comece
+por aqui e pelo `CLAUDE.md`.** Achou tooling que não está listado? Adicione — a próxima
+sessão agradece.
 
 ## Pré-requisito das bancadas visuais
 
-`npm run olhar` e `npm run ouvir` usam o **Playwright/Chromium do `site/`** (não
-há Playwright na raiz). Rode **uma vez** por checkout fresco:
+`npm ci` na raiz, uma vez por checkout fresco (o Playwright está nas devDependencies;
+o Chromium já vem no ambiente). Sem isso, as bancadas saem avisando.
 
-```bash
-cd site && npm ci
-```
+## Scripts npm (`package.json` da raiz)
 
-Sem isso, as bancadas saem com uma mensagem pedindo exatamente esse comando.
-
-## Scripts npm — raiz (`package.json`)
+### Gates (rodam no CI — rode antes de todo commit)
 
 | Comando | O que faz |
 |---|---|
-| `npm test` | Vitest — cobre `engine/**` e `tools/**` (o gate de sempre) |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run olhar` | **Bancada visual do FPS** (D-35): screenshot de pontos de vista canônicos. `npm run olhar -- forja portais`, `-- 46.2,15.6,0.9`, `-- largo-noite --tod=0.8`. Depois **LEIA os PNGs** em `tools/bancadas/out/` |
-| `npm run ouvir` | **Bancada de som** (D-40): mede estado/ganho/RMS do áudio, barra a regressão muda. `npm run ouvir -- chafariz spawn` |
-| `npm run prancheta` | **Câmera de topo** (D-50): planta técnica viva de um recorte — colisões exatas, paredes+alturas, billboards, planos orientados (via `window.__nosMapa()`). `-- 25,8,50,20` p/ outro recorte. Fluxo completo: skill `/estruturas` |
-| `npm run res-bench` | **Bancada de desempenho** (D-45): FPS real por rAF + perfil por fase (`window.__nosPerf`: céu/chão/paredes/bill + pior-quadro/engasgos) nos 4 presets, com CPU÷4 como proxy de celular. `CAM=x,y,a` muda o ponto |
-| `npm run peca` | **Visor da OFICINA v3** (D-55): renderiza uma peça isolada no motor v3 em 3 ângulos. `npm run peca -- ilha-chao`, `-- arvore3d --e=3 --r=7`. Peças em `prototipos/fps/v3/pecas/` |
-| `npm run jogar` | **O alicerce jogável v3** (D-61): screenshot de `jogo.html` (câmera livre, menu de pausa/configurações) num ponto de vista dado. `npm run jogar -- --cam=-19,0,1.85,0`, `-- --pausado --aba=graficos`, `-- --ts=8 --sombra=0` |
-| `npm run auditar` | **Gate de senso crítico [cpu]** (D-60): roda os 5 críticos numa peça v3 real, exit≠0 em achado. `npm run auditar -- ilha-chao`. Todo julgamento cita ≥1 número |
-| `npm run porteiro` | **Gate de render** (D-60): renderiza a peça via Playwright e falha em pageerror / `__ready`≠true / frame degenerado (decoder PNG próprio via zlib). `npm run porteiro -- arvore3d` |
-| `npm run bench` | **Benchmark dos críticos** (D-60): peças reais × 18 defeitos plantados + controles → placar F1 núcleo/adversarial por ferramenta. Mede se a ferramenta AJUDA, não se roda |
-| `npm run mapa` | **Mapa do repositório** (D-70): regenera `docs/MAPA.md` — a árvore com o resumo de cada arquivo, puxado do CABEÇALHO do próprio arquivo (1º comentário; H1 nos .md). `mapa:check` (roda no CI) falha se o mapa estiver velho ou se algum arquivo estiver sem cabeçalho — criou arquivo? Dê cabeçalho e rode `npm run mapa` |
-| `npm run art` | CLI do art-mcp (= `node tools/art-mcp/cli.cjs`) — ver "Estúdio de arte" abaixo |
-| `npm run build:sprites` | Renderiza `assets/sprites/src/*.json` → `assets/sprites/*.png` + folhas de contato (= `node assets/tools/build.cjs`) |
-| `npm run lint:sprites` | Valida os PNGs de sprite (roda no CI) |
-| `npm run genworld` / `mapascii` / `validate-world` | Scripts da engine (`engine/scripts/*.ts`): gerar mundo, mapa ASCII, validar `world/heart.json` |
-| `npm run tick` | Roda um tick do mundo localmente (`scripts/tick.ts`) |
-| `npm run validate-worlds` | Valida o `worlds/registry.json` e os mundos |
-| `npm run respond-issues` | Processa comandos de issues (`scripts/respond-issues.ts`) |
+| `npm run typecheck` | `tsc --noEmit` (strict) sobre os testes .ts de `tools/som` + `tools/oficina` |
+| `npm test` | Vitest — os testes de núcleo (`tools/**/*.test.ts`) |
+| `npm run mapa:check` | O mapa do repo está em dia? Falha se `docs/MAPA.md` estiver velho ou se algum arquivo estiver SEM cabeçalho — criou arquivo? dê cabeçalho e rode `npm run mapa` |
+| `npm run docs:toc:check` | O índice de `docs/oficina.md` está em dia? (regenerar: `npm run docs:toc`) |
 
-## Scripts npm — `site/` (cliente 2D + publicação do FPS)
-
-Rode de dentro de `site/`. `predev`/`prebuild` já chamam `copy-data` + `build-fps`.
+### Bancadas — objeto / render
 
 | Comando | O que faz |
 |---|---|
-| `npm run dev` | Vite dev server (cliente 2D + `/fps/`) |
-| `npm run build` | Build de produção (o que o Pages publica) |
-| `npm run preview` | Serve o build (`:4173`) |
-| `npm run qa` | Screenshot do 2D (`qa/screenshot.mjs`) — há outros scripts em `site/qa/` rodáveis via `node qa/<x>.mjs` |
+| `npm run peca -- <nome>` | **O visor de peça**: renderiza uma peça de `prototipos/fps/v3/pecas/` em 3 ângulos → PNGs em `tools/bancadas/out/` (LEIA-os). `--res=1400`, `--giro=8` (8 ângulos), `--geo=normais\|flat` (SEM textura: emenda/faceta/silhueta saltam), `--e=<alt> --r=<raio>` (câmera) |
+| `npm run oficina` | **A bancada da Oficina**: prova cada passo do editor (câmera, arrasto, undo, gizmo, extrude, mescla, pincel, exportar, materiais, animação, esqueleto) com NÚMERO — Playwright com eventos reais |
+| `npm run auditar -- <peca>` | **Gate de senso crítico [cpu]**: os 5 críticos (malha, paleta, costura, banding, órfãos) — exit≠0 em achado. Sem argumento roda em todas. Detalhe: skill `auditar-peca` |
+| `npm run porteiro -- <peca>` | **Gate de render**: pageerror / `__ready` / frame degenerado |
+| `npm run executar` | Replay headless do núcleo (`nucleo`/`neutroCanonico`) em Node — determinismo/replay |
+| `npm run jogar` | Screenshot do jogo (`jogo.html`): `-- --cam=x,y,alt,ang`, `-- --pausado --aba=graficos` |
+| `npm run bench` | Benchmark dos críticos (defeitos plantados → placar F1) — rode se mexer nos críticos |
 
-## Estúdio de arte — `tools/art-mcp/`
-
-O ciclo completo de pixel art: **gerar → renderizar → OLHAR → auditar → corrigir**.
-Documentação canônica: `tools/art-mcp/README.md`. Via CLI (`npm run art -- <cmd>` ou
-`node tools/art-mcp/cli.cjs <cmd>`) ou via MCP (server `nos-art-toolkit`, ver abaixo).
+### Bancadas — som (o "ouvido": a IA não escuta, então mede)
 
 | Comando | O que faz |
 |---|---|
-| `gen --preset <p> --size 64 --seed x` | Textura tileável de um preset |
-| `audit --src <json> [--tileable]` | Crítico algorítmico (paleta, costura, órfãos, silhueta) |
-| `view --src <json> [--scale 8]` | Frame ampliado, fundo escuro E claro |
-| `preview --wall <json> [--billboard <json>]` | Cena in-engine (fog/perspectiva do FPS) |
-| `turnaround [--figure <json>]` | Boneco 3D em 8 vistas (andaime pra personagem) |
-| `sheet --dir <dir>` / `diff --before a --after b` / `presets` | Folha de contato / diff / listar presets |
+| `npm run analisar -- <peca-som>` | **O ouvido**: espectrograma (imagem tempo×freq pra Read) + descritores (tom, brilho/centroide, envelope, duração) de uma peça de `pecas-som/` |
+| `npm run sintetizar -- <peca-som>` | Render offline (OfflineAudioContext) → amostras/hash — o `cmp` de amostra do determinismo |
+| `npm run somtela` | A bancada da aba Som (`som.html`): editor de grafo, presets, espectrograma, sem regressão |
+| `npm run somab` | **A/B**: o som REAL do jogo (`som.js`, offline) × o preset — distância por eixo medido |
+| `npm run somexportar` | Round-trip do exportar de som (reabre bit-a-bit) |
 
-Autoria de sprite por código: geradores `assets/tools/author-*.cjs` (ex.: `author-brasa.cjs`,
-D-42). Fonte da verdade = `assets/sprites/src/*.json` (matriz de índices). Detalhe em
-`assets/tools/README.md`.
+### Dev
 
-## Outras ferramentas
+| Comando | O que faz |
+|---|---|
+| `npm run servir` | Servidor local do v3 (`no-store`): `oficina.html`/`som.html` com SALVAR de verdade (`POST /oficina/salvar` → `pecas/`, `POST /som/salvar` → `pecas-som/`) |
+| `npm run mapa` / `docs:toc` | Regenera `docs/MAPA.md` / o índice de `docs/oficina.md` |
 
-| Ferramenta | Caminho | Como rodar |
-|---|---|---|
-| Path tracer da GI assada (D-36) | `prototipos/fps/bake/bake-gi.mjs` | `node prototipos/fps/bake/bake-gi.mjs` (o `build-fps` auto-assa se faltar) |
-| Publicação do FPS | `site/scripts/build-fps.mjs` | roda no `predev`/`prebuild`; tocá-lo **dispara o deploy** (ver nota abaixo) |
-| Estúdio de cena de árvore | `prototipos/estudio/tree-studio.html` | abrir no navegador |
+## Skills — `.claude/skills/`
 
-**Nota de deploy (medida 2026-07-17):** o `pages.yml` só dispara em push a
-`site/**`, `world/**`, `assets/**` ou `engine/types.ts`. Mudança só em
-`prototipos/fps/**` NÃO publica sozinha — toque um arquivo de trigger (ex.:
-`site/scripts/build-fps.mjs`) pra forçar. Correção definitiva (com o ideador):
-adicionar `- 'prototipos/fps/**'` aos paths do `pages.yml`.
-
-## MCP
-
-| Server | Definido em | Expõe | Carga |
-|---|---|---|---|
-| `nos-art-toolkit` | `.mcp.json` (raiz) | as tools do art-mcp (gen/audit/view/preview/…) | automático no início da sessão; no meio dela use o CLI `npm run art` |
+| Skill | Pra quê |
+|---|---|
+| `nos-fluxo` | O FLUXO de entregar qualquer feature: orquestrar coder+revisor, jóias, gates, git, registrar decisão |
+| `oficina` | A ARQUITETURA da Oficina (núcleo/adaptador/interface, o que cada passo construiu, armadilhas) — pra mexer NA ferramenta |
+| `criar-peca` | CRIAR CONTEÚDO com a Oficina (objeto, som, animação por lista de PASSOS + o laço de ver/medir) — pra usar a ferramenta |
+| `auditar-peca` | O gate de senso crítico + a visão de geometria — julgar peça com número, não opinião |
 
 ## Agentes — `.claude/agents/` (D-24, D-106)
 
-Só na frente **Atelier (v3)**; o orquestrador briefa e integra, registrando em
-`docs/DECISIONS.md`. **Modelos (D-24): builder em Sonnet, revisor em Opus.**
+O orquestrador briefa e integra, registrando em `docs/DECISIONS.md`.
 
 | Agente | Papel | Quando despachar | Modelo |
 |---|---|---|---|
 | `game-builder` | Constrói o v3 (motor GPU, Oficina, som, animação, interface); jóias aditivas, três camadas, prova por medição, branch wip sem push | qualquer feature do v3 | sonnet |
 | `revisor-adversarial` | Tenta QUEBRAR por risco: fundação / formato salvo / jóia / conta de julgamento | quando é fundação, mexe no formato salvo, toca uma jóia, ou tem julgamento (dispensa se já provado byte-idêntico) | **opus** |
 
-O DOMÍNIO (som/animação/geometria/pintura) mora nas **skills** que o builder
-carrega, não num agent por assunto (D-106). Os 6 agents do modelo 2D
-(engine-dev/pixel-artist/lore-writer/code-reviewer/art-reviewer/qa-tester) foram
-**aposentados** — vivem no histórico do git se a frente 2D voltar. Fluxo do v3:
-a skill `nos-fluxo`.
+O DOMÍNIO (som/animação/geometria/pintura) mora nas **skills**, não num agent
+por assunto (D-106). Os 6 agents da era 2D e a skill `estruturas` (v2) foram
+aposentados — vivem no histórico do git.
 
 ## Docs de orientação
 
-`CLAUDE.md` (acordo + regras) · `docs/CODER.md` (método + bancadas + limites) ·
-`docs/CONTINUITY.md` (o "save game") · `docs/DECISIONS.md` (índice de todas + ativas em detalhe) · `docs/DECISIONS-ARCHIVE.md` (detalhe histórico D-01…D-54) ·
-`docs/IMPLEMENTATION_PLAN.md` (o plano) · `docs/COMUNICACAO.md` (IDs/setores) ·
-`docs/ARCHITECTURE.md` · `docs/GDD.md` · `docs/LORE.md` · `docs/HABITANTES.md` ·
-`docs/CIDADE.md` · `docs/PORTALS_PROTOCOL.md`.
+- **`CLAUDE.md`** — o acordo de trabalho + as regras (jóias, determinismo, pt-BR).
+- **`docs/oficina.md`** — o roteiro da Oficina (Ordem de construção + specs). `docs/oficina-referencia.md` — o manual de como cada elemento funciona.
+- **`docs/DECISIONS.md`** — TODAS as decisões (índice + detalhe; histórico em `DECISIONS-ARCHIVE.md`).
+- **`docs/MAPA.md`** — a árvore do repo com resumo por arquivo (gerada, sempre fresca).
+- **`docs/LORE.md`** / **`docs/VISION.md`** — narrativa / o que o NÓS é e não é.
+- **`docs/FERRAMENTAS.md`** — o plano de potência das ferramentas (visão). `docs/AUDIO_E_CENAS.md` — direção de música/voz/cenas (nada construído).
+- **`docs/legado/`** — os docs d'O Coração (o mundo 2D congelado) — leitura histórica.
