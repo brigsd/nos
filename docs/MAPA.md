@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-117 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+118 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -47,6 +47,7 @@
 - `oficina-referencia.md` — Oficina — referência de como cada coisa funciona
 - `oficina.md` — A Oficina — editor de objetos dentro do jogo
 - `playground.md` — O Playground — o épico da criação por IA
+- `teto-moto-relatorio.md` — TETO — relatório da moto
 - `walkthrough_colaborador4.md` — Resumo de Alterações — Colaborador 4 (branch `colaborador4`)
 
 ## docs/legado/
