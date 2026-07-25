@@ -1,8 +1,11 @@
 /* moto — MOTOCICLETA FUTURISTA ESTILIZADA, criada 100% em PASSOS (nenhuma linha
    de geometria em JS: `construir` é só `executar`). Baixa e alongada (2.82 de
-   comprimento por 1.14 de altura), duas rodas grandes, carenagem envolvendo o
+   comprimento por 1.12 de altura), duas rodas grandes, carenagem envolvendo o
    miolo e detalhes que ACENDEM (faixa do flanco, cubo das rodas, farol e
-   lanterna). Simétrica em x=0.
+   lanterna). SIMETRIA em x=0, MEDIDA e não suposta: 480 dos 492 vértices têm par
+   espelhado EXATO; os 12 que não têm são os anéis do guidão (passo 10, desvio máx
+   4.45e-3) — o porquê está no comentário daquele passo, e é uma armadilha do `loft`
+   que não está escrita em lugar nenhum.
 
    COMO ELA É FEITA — 12 passos de geometria, todos `loft`/`espelha`:
      0  roda dianteira   loft com caminho em +X (o eixo da roda) — o pneu inteiro
@@ -216,7 +219,14 @@ export const PASSOS = [
         { pos: [0, 0.866, 1.185], raio: 0 },
     ],
   }],
-  // GUIDÃO — loft com caminho em +X: simétrico por construção, sem espelho
+  // GUIDÃO — loft com caminho em +X, SEM espelho. ATENÇÃO (medido, não suposto): isto NÃO
+  //   garante simetria. O frame do loft vem de TRANSPORTE PARALELO propagado a partir da
+  //   PRIMEIRA seção, então ele depende do HISTÓRICO do caminho — e aqui os polos estão mais
+  //   baixos/atrás que os anéis, logo a tangente das pontas não é ±X puro e as duas metades
+  //   saem giradas uma em relação à outra. Medido: os 12 vértices de anel deste passo (10001..
+  //   10012) são os ÚNICOS 12 da peça inteira sem par espelhado exato — desvio máx 4.45e-3.
+  //   As rodas (passos 0/1) escapam porque TODAS as seções delas têm o mesmo y/z, então a
+  //   tangente é (1,0,0) constante. A saída certa seria modelar meio guidão e usar `espelha`.
   ['loft', {
     id: 10000, lados: 'ladosTubo',
     secoes: [
