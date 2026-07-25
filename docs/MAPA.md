@@ -28,11 +28,11 @@
 
 ## .claude/skills/nos-fluxo/
 
-- `SKILL.md` — O fluxo pra construir e entregar QUALQUER feature no repo NÓS — orquestrar subagentes (coder + revisor adversarial por risco), verificar por medição, o cuida…
+- `SKILL.md` — O fluxo pra construir e entregar QUALQUER feature no repo NÓS — a matriz de gates completa, a revisão adversarial por risco (feita solo hoje, e por que), qua…
 
 ## .claude/skills/oficina/
 
-- `SKILL.md` — A Oficina — o editor de objetos in-game do NÓS (arquitetura, ciclo de construção, verificação, armadilhas). Use SEMPRE que for construir/continuar um passo d…
+- `SKILL.md` — A Oficina — o editor de objetos in-game do NÓS (arquitetura, os 3 espaços de trabalho, ciclo de construção, verificação, armadilhas). Use SEMPRE que for cons…
 
 ## docs/
 
