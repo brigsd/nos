@@ -789,6 +789,70 @@ de dentro do mesmo escopo aninhado). (2) os botões de Grupo/Região não
 desabilitavam durante um arrasto, ao contrário de todo outro botão desde o
 P9a ("um dono por vez") — consertado antes da bancada formal, não depois.
 
+### Espaço Material (passo 19, D-127)
+
+O chip "Material" da barra existia desde o passo 13b, mas era HTML morto —
+sem `id`, sem `addEventListener`. Uma investigação (motivada por "clico e
+não acontece nada") confirmou: clicar nele de fato não fazia nada. A spec
+(D-73) já prometia um espaço de verdade — "Modelar, Material e Animação",
+um seletor de 3 vias, não 2. Este passo cumpre a promessa.
+
+**O estado vira 3 vias.** `animLigado` (booleano) virou `espaco` (string:
+`'modelar' | 'material' | 'animacao'`); `setEspacoAnim(on)` virou
+`setEspaco(nome)`. A generalização preserva a ordem de efeitos colaterais de
+antes (limpar seleção de vértice/pincel ao ENTRAR em Animação, resetar o
+preview de animação ao SAIR dela) — só que "sair de Animação" agora é medido
+direto (`espaco === 'animacao'` ANTES da troca), não mais inferido do
+destino. Por isso uma troca DIRETA de Animação pra Material (sem passar por
+Modelar) já reseta o preview corretamente, sem precisar de um caso especial
+— a generalização certa isola a regra que importa (saiu de Animação) da
+regra que era só coincidência (o único destino possível era Modelar).
+
+**Cor e Material saem do Modelar.** Os blocos `#blocoCor` (passo 9) e
+`#blocoMaterial` (12a) trocaram o gate `!modelar` por `espaco !== 'material'`
+— antes apareciam em Modelar com uma face selecionada; agora aparecem no
+espaço Material. É a mudança de comportamento real deste passo: escolher cor
+ou aplicar material passa a exigir trocar de espaço primeiro.
+
+**Pincel fica de fora, de propósito.** Cor/Material moveram; o pincel macio
+(passo 11c) não. Ele já era independente do espaço (só depende de
+`pincelLigado`, e o clique no chip nunca teve guarda contra Animação — só o
+atalho de teclado tinha) e a spec só promete "parâmetros" no espaço Material,
+não pintura. Mover o pincel também empilharia risco sem necessidade clara —
+fica registrado como ajuste possível se a coluna do Modelar ainda estiver
+longa depois deste corte.
+
+**Compatibilidade.** `espacoAnim()`/`ligarAnim()`/`animEstado().animLigado`
+mantêm o comportamento externo de antes por fora — viram invólucros finos
+sobre `espaco`. `ligarAnim(false)` sempre volta pro Modelar, nunca Material
+(o caso que quebraria silenciosamente numa tradução ingênua). Dois hooks
+novos: `espaco()` (a string crua) e `ligarMaterial(b)`, espelhando
+`ligarAnim`.
+
+Dois achados — e nenhum dos dois veio de RODAR, o que é a diferença desta
+rodada em relação às anteriores.
+
+**(1) Na investigação, antes de codar.** Reusar `!animLigado` como "fora de
+Modelar" vazaria os blocos exclusivos de Animação pro Material também, já
+que uma negação só não separa 3 estados: `atualizarPainel` escondia
+`blocoAnim`/`blocoPartes`/`blocoEsqueleto`/`blocoPeso`/`blocoAnims` (+
+`blocoChave` e a linha do tempo) com `hidden = modelar` — sob 3 vias isso
+teria mostrado esses blocos também em Material. Os 3 pontos que dependiam
+dessa leitura viraram testes diretos contra `espaco === 'animacao'`; a
+bancada (passo 19) confirma o resultado, não foi o que achou o problema.
+
+**(2) Na revisão adversarial do próprio diff, já com tudo verde.** A dica do
+painel Vértice (`pvDica`) dizia, com uma face selecionada, "escolha uma cor
+pra pintar" — e ela vive dentro do `blocoVertice`, que é Modelar-only. Com a
+Cor mudando de espaço, a dica passou a MENTIR: mandava escolher uma cor
+justamente no espaço onde o seletor de cor não existe mais. Nada pegaria
+isso: é texto, não comportamento (nenhuma asserção lê `pvDica`), e a
+verificação manual também não pegou, porque eu conferi o que tinha MUDADO,
+não o que tinha ficado para trás. Reescrita pra apontar o espaço Material e
+manter só o que é de fato do Modelar (extrudar pela seta / tecla E). A lição:
+mover uma funcionalidade de lugar não é só mover o bloco — é caçar todo texto
+que apontava pra ela de onde ela morava.
+
 ## Editar objeto de dentro do jogo
 
 O caminho principal de uso, decidido pelo ideador.

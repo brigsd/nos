@@ -209,6 +209,17 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
         closure certo); e os botões de Grupo/Região não desabilitavam no
         arrasto, ao contrário de todo botão desde o P9a — os dois
         consertados antes da bancada formal.
+  - [x] **Espaço Material** (D-127) — não é um P9x: é o conserto que a
+        investigação do fim do P9 achou. O chip "Material" da barra era HTML
+        morto desde o 13b (sem `id`, sem listener — clicar nele não fazia
+        nada), enquanto a spec (D-73) prometia um espaço de verdade. O estado
+        virou 3 vias (`espaco: 'modelar'|'material'|'animacao'`, no lugar do
+        booleano `animLigado`) e os blocos Cor (passo 9) e Material (12a)
+        saíram do Modelar pra dentro dele. Diferente das rodadas anteriores,
+        o risco apareceu ANTES de rodar: reusar `!animLigado` como "fora de
+        Modelar" teria vazado os blocos de Animação pro Material, porque uma
+        negação só não separa 3 estados. O Pincel NÃO foi movido junto — já
+        era independente do espaço, e a spec só promete "parâmetros" aqui.
   - [ ] **Aba Desenho** — canvas 2D vetor (contorno pro `loft`/`inflate` +
         gabarito IoU AO VIVO) + o modo pintura livre (specs em
         docs/oficina.md "Aba Desenho"/"Desenho livre"). Epico à parte, maior

@@ -1547,6 +1547,7 @@ await aoBaseline();
 const CFACE9 = 9;   // topo — pintável e visível de cima pro probe de pixel
 const OUTRA = 8;    // fundo — NÃO selecionada, tem que ficar intacta
 await page.evaluate((id) => window.__oficina.selecionarFaces([id]), CFACE9); await rAF2();
+await page.evaluate(() => window.__oficina.ligarMaterial(true)); await rAF2();   // ESPAÇO MATERIAL: Cor/Material só aparecem nesse espaço agora (passo 19)
 const corAntes9 = await corFace(CFACE9);
 const corOutraAntes = await corFace(OUTRA);
 const painelCorAntes = await page.evaluate(() => window.__oficina.painelCor());
@@ -1617,6 +1618,7 @@ ok('(9 várias) 3 faces + 1 cor → 1 passo pincel com as faces ORDENADAS [3,5,9
    nP_posV === nP_antesV + 1 && ultimoV && ultimoV[0] === 'pincel' && ultimoV[1].modo === 'face' && JSON.stringify(ultimoV[1].faces) === '[3,5,9]' && ultimoV[1].cor === FOLHA,
    `PASSOS ${nP_antesV}->${nP_posV} · último ${JSON.stringify(ultimoV)}`);
 ok('(9 várias) as 3 faces selecionadas viraram a cor', coresV.every((c) => c === FOLHA), `cores #3/#5/#9 ${JSON.stringify(coresV)}`);
+await page.evaluate(() => window.__oficina.ligarMaterial(false)); await rAF2();   // volta pro Modelar — o resto do passo 9 (guarda de extrude) é Modelar-only
 await aoBaseline();
 
 // (9 guarda) pintar NO MEIO de um arrasto (extrude em curso) é IGNORADO
@@ -2216,6 +2218,7 @@ await aoBaseline();
 await page.evaluate(() => { window.__oficina.selecionar(null); window.__oficina.selecionarFaces([]); }); await rAF2();
 const nP12_0 = await nP();
 await page.evaluate(() => window.__oficina.selecionarFaces([9])); await rAF2();   // topo do toco
+await page.evaluate(() => window.__oficina.ligarMaterial(true)); await rAF2();   // ESPAÇO MATERIAL: painelMaterial() só reflete visível nesse espaço agora (passo 19)
 const op12 = await page.evaluate(() => window.__oficina.aplicarMaterial({ cor: '#ff7326', emissivo: 1.4, aspereza: 0, semLuz: true }));
 const mat12 = await page.evaluate(() => window.__oficina.materiais());
 const usa12 = op12 && op12[1] ? op12[1].usa : null;
@@ -2299,6 +2302,7 @@ ok('(12b lote) o adaptarV3 marca o lote do material transparente (transparente:t
 await page.evaluate(() => window.__oficina.orbitar({ az: 0.4, el: 0.7, dist: 1.9, alvo: [0, 0.28, 0] })); await rAF2(); await rAF2();
 await page.screenshot({ path: join(OUT12, 'oficina-material-transp.png') });
 await aoBaseline();
+await page.evaluate(() => window.__oficina.ligarMaterial(false)); await rAF2();   // volta pro Modelar pro resto da bancada compartilhada
 
 /* ==== PASSO 13a: ANIMAÇÃO RÍGIDA POR PARTE (em laço) =========================
    O MOTOR da animação: a op `parte` nomeia faces, o adaptarV3 agrupa por (parte,
@@ -3700,6 +3704,172 @@ else {
 
   await page18.screenshot({ path: join(OUT18, 'oficina-grupo-regiao.png') });
   await page18.close();
+}
+
+/* PASSO 19 — ESPAÇO MATERIAL (window.__oficina.espaco/ligarMaterial/painelCor/painelMaterial):
+   generaliza o seletor de espaço (13b) de 2 pra 3 vias — Modelar (default), Material
+   (NOVO) e Animação — consertando o chip "Material" que era HTML morto (sem id, sem
+   listener) e movendo os blocos Cor (passo 9) e Material (12a) de "aparecem em Modelar"
+   pra "aparecem no espaço Material" (D-73: "Material, os parâmetros"). Afirma:
+   (19 chip) o chip #chipMaterial existe, começa .on FALSO, e um clique REAL muda a
+        classe .on nos 3 chips (só um por vez) e o espaço lido por espaco();
+   (19 cor/material saem do Modelar) com face selecionada, blocoCor/blocoMaterial NÃO
+        aparecem em Modelar (mudou de comportamento — antes apareciam) e aparecem em
+        Material, com o conteúdo batendo corEfetiva()/materialDaFace() (não hardcoded);
+   (19 modelar-only some em Material) os blocos exclusivos de Modelar (Adicionar forma,
+        Vértice, Caixa, Colisão, Editar, Ruído, Transformar, Grupo, Região) somem no
+        espaço Material, igual já sumiam em Animação;
+   (19 extrude bloqueado) a tecla E não extruda fora de Modelar (Material incluído —
+        antes só Animação bloqueava; o canon não muda);
+   (19 pincel permitido) o modo pincel liga normalmente em Material — decisão do brief:
+        pincel fica INDEPENDENTE do espaço, não foi movido pra dentro de Material;
+   (19 compat ★) espacoAnim()/ligarAnim()/animEstado().animLigado mantêm o MESMO
+        comportamento externo de antes (ligarAnim(false) SEMPRE volta pro Modelar, nunca
+        Material) — as asserções de rodadas anteriores que dependem desses hooks não
+        regridem;
+   (19 transição direta) trocar de Animação DIRETO pra Material (sem passar por Modelar)
+        também reseta o preview de animação (tocando/previewT) — a generalização não
+        depende de "passar pelo Modelar no meio";
+   (19 intacto) trocar de espaço, ida e volta, não muda nem 1 vértice/face do canon —
+        câmera/seleção/objeto ficam (D-73), só os painéis mudam. */
+const OUT19 = resolve(REPO, 'scratchpad/passo19');
+mkdirSync(OUT19, { recursive: true });
+
+const page19 = await browser.newPage({ viewport: { width: 1100, height: 620 } });
+page19.on('pageerror', (e) => console.error('PAGEERR(19):', e.message));
+await page19.goto(`${base}?peca=_vazio`, { waitUntil: 'load' });
+await page19.waitForFunction(() => window.__ready === true, { timeout: 15000 }).catch(() => {});
+const ready19 = await page19.evaluate(() => window.__ready === true);
+ok('(19 abre) _vazio abre no editor (window.__ready)', ready19);
+if (!ready19) { console.error('  _vazio não abriu — abortando o passo 19'); await page19.close(); }
+else {
+  const r19 = () => page19.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => res(0)))));
+  const canon19 = () => page19.evaluate(() => JSON.stringify(window.__oficina.canon()));
+
+  // ---- (19 fixture) um cubo conhecido (8V/6F), como o passo 16 ----
+  await page19.evaluate(() => window.__oficina.adicionarForma('cubo', { lado: 1 })); await r19();
+  const canonFixture19 = JSON.parse(await canon19());
+  ok('(19 fixture) o cubo nasce com 8 vértices / 6 faces / 0 órfãos',
+     canonFixture19.V.length === 8 && canonFixture19.F.length === 6 && canonFixture19.orfaos.length === 0,
+     `V ${canonFixture19.V.length} · F ${canonFixture19.F.length}`);
+
+  // ---- (19 inicial) espaço começa 'modelar', só o chip Modelar tem .on ----
+  const espacoInicial = await page19.evaluate(() => window.__oficina.espaco());
+  const paInicial = await page19.evaluate(() => window.__oficina.painelAnim());
+  ok('(19 inicial) espaco() é \'modelar\' e só #chipModelar tem .on',
+     espacoInicial === 'modelar' && paInicial.chipModelar === true && paInicial.chipMaterial === false && paInicial.chipAnim === false,
+     `${espacoInicial} · ${JSON.stringify(paInicial)}`);
+
+  // ---- (19 antes) com a face 0 selecionada, em Modelar, Cor/Material NÃO aparecem ----
+  await page19.evaluate(() => window.__oficina.selecionarFaces([0])); await r19();
+  const corAntes = await page19.evaluate(() => window.__oficina.painelCor());
+  const matAntes = await page19.evaluate(() => window.__oficina.painelMaterial());
+  ok('(19 antes) em Modelar, com face 0 selecionada, blocoCor/blocoMaterial ficam ESCONDIDOS (mudou — antes apareciam aqui)',
+     corAntes.vis === false && matAntes.vis === false, `cor=${JSON.stringify(corAntes)} · mat=${JSON.stringify(matAntes)}`);
+
+  // ---- (19 clique real) o chip Material muda o espaço e só ele fica .on ----
+  await page19.click('#chipMaterial'); await r19();
+  const espacoDepois = await page19.evaluate(() => window.__oficina.espaco());
+  const paDepois = await page19.evaluate(() => window.__oficina.painelAnim());
+  const subDepois = await page19.evaluate(() => document.getElementById('propsSub').textContent);
+  ok('(19 clique real ★) clicar #chipMaterial muda espaco() pra \'material\' e só #chipMaterial fica .on',
+     espacoDepois === 'material' && paDepois.chipMaterial === true && paDepois.chipModelar === false && paDepois.chipAnim === false,
+     `${espacoDepois} · ${JSON.stringify(paDepois)}`);
+  ok('(19 clique real) o subtítulo do painel muda pra "espaço Material"', subDepois === 'espaço Material · cor e parâmetros', subDepois);
+
+  // ---- (19 depois) no espaço Material, Cor/Material aparecem com o conteúdo REAL (não hardcoded) ----
+  const corEfetivaEsperada = await page19.evaluate(() => window.__oficina.corEfetiva(0));
+  const materialEsperado = await page19.evaluate(() => window.__oficina.materialDaFace(0));
+  const corDepois = await page19.evaluate(() => window.__oficina.painelCor());
+  const matDepois = await page19.evaluate(() => window.__oficina.painelMaterial());
+  ok('(19 depois) no espaço Material, com face 0 selecionada, blocoCor aparece e mostra a cor EFETIVA da face (corEfetiva, não hardcoded)',
+     corDepois.vis === true && corDepois.cor.toLowerCase() === String(corEfetivaEsperada).toLowerCase(),
+     `painel=${JSON.stringify(corDepois)} · esperado=${corEfetivaEsperada}`);
+  ok('(19 depois) blocoMaterial aparece; badge mostra "sem" (face 0 nunca recebeu material)',
+     matDepois.vis === true && materialEsperado == null && /^sem/.test(matDepois.badge),
+     `painel=${JSON.stringify(matDepois)} · materialDaFace=${materialEsperado}`);
+
+  // ---- (19 modelar-only some) todo bloco exclusivo de Modelar desaparece em Material ----
+  const modelarOnlyEmMaterial = await page19.evaluate(() => {
+    const ids = ['blocoAdicionar', 'blocoVertice', 'blocoCaixa', 'blocoColisao', 'blocoGrupo', 'blocoRegiao'];
+    return Object.fromEntries(ids.map((id) => [id, document.getElementById(id).hidden]));
+  });
+  const editRuidoTransfMaterial = await Promise.all([
+    page19.evaluate(() => window.__oficina.painelEditar()),
+    page19.evaluate(() => window.__oficina.painelRuido()),
+    page19.evaluate(() => window.__oficina.painelTransformar()),
+  ]);
+  ok('(19 modelar-only some) blocoAdicionar/Vertice/Caixa/Colisao/Grupo/Regiao — todos HIDDEN em Material',
+     Object.values(modelarOnlyEmMaterial).every((h) => h === true), JSON.stringify(modelarOnlyEmMaterial));
+  ok('(19 modelar-only some) blocoEditar/Ruido/Transformar (visíveis por seleção em Modelar) também somem em Material',
+     editRuidoTransfMaterial.every((p) => p.vis === false), JSON.stringify(editRuidoTransfMaterial));
+
+  // ---- (19 extrude bloqueado) tecla E não extruda fora de Modelar ----
+  const canonAntesE = await canon19();
+  await page19.keyboard.press('e'); await r19();
+  const canonDepoisE = await canon19();
+  ok('(19 extrude bloqueado) tecla E no espaço Material não muda o canon (extrude não roda)',
+     canonAntesE === canonDepoisE, 'canon idêntico esperado');
+
+  // ---- (19 pincel permitido) o modo pincel liga normalmente em Material ----
+  const pincelLigouMaterial = await page19.evaluate(() => window.__oficina.ligarPincel(true));
+  await page19.evaluate(() => window.__oficina.ligarPincel(false)); await r19();
+  ok('(19 pincel permitido) ligarPincel(true) funciona no espaço Material (não foi movido pra dentro de Material — fica independente)',
+     pincelLigouMaterial === true, pincelLigouMaterial);
+
+  // ---- (19 volta) clique real no chip Modelar volta tudo ----
+  await page19.click('#chipModelar'); await r19();
+  const espacoVolta = await page19.evaluate(() => window.__oficina.espaco());
+  const corVolta = await page19.evaluate(() => window.__oficina.painelCor());
+  const vAdicVolta = await page19.evaluate(() => !document.getElementById('blocoAdicionar').hidden);
+  ok('(19 volta) clique real no chip Modelar: espaco() volta a \'modelar\', Cor some de novo, Adicionar reaparece',
+     espacoVolta === 'modelar' && corVolta.vis === false && vAdicVolta === true,
+     `${espacoVolta} · cor=${JSON.stringify(corVolta)} · adic=${vAdicVolta}`);
+
+  // ---- (19 compat ★) espacoAnim/ligarAnim/animEstado mantêm o comportamento de antes ----
+  const ligouAnim = await page19.evaluate(() => window.__oficina.ligarAnim(true));
+  const espAnimHook = await page19.evaluate(() => window.__oficina.espacoAnim());
+  const estadoAnim = await page19.evaluate(() => window.__oficina.animEstado());
+  ok('(19 compat) ligarAnim(true) entra em animação; espacoAnim()===true; animEstado().animLigado===true',
+     ligouAnim === true && espAnimHook === true && estadoAnim.animLigado === true,
+     `ligarAnim->${ligouAnim} · espacoAnim->${espAnimHook} · animLigado->${estadoAnim.animLigado}`);
+  const ligouAnimFalse = await page19.evaluate(() => window.__oficina.ligarAnim(false));
+  const espacoAposLigarAnimFalse = await page19.evaluate(() => window.__oficina.espaco());
+  ok('(19 compat ★) ligarAnim(false) SEMPRE volta pro Modelar (nunca Material) — o backward-compat crítico',
+     ligouAnimFalse === false && espacoAposLigarAnimFalse === 'modelar', espacoAposLigarAnimFalse);
+
+  // ---- (19 ligarMaterial) o hook novo entra/sai do espaço Material ----
+  const ligouMaterialHook = await page19.evaluate(() => window.__oficina.ligarMaterial(true));
+  const espacoViaHook = await page19.evaluate(() => window.__oficina.espaco());
+  const ligouMaterialFalseHook = await page19.evaluate(() => window.__oficina.ligarMaterial(false));
+  const espacoViaHookFalse = await page19.evaluate(() => window.__oficina.espaco());
+  ok('(19 ligarMaterial) entra e sai do espaço Material pelo hook novo, espelhando ligarAnim',
+     ligouMaterialHook === true && espacoViaHook === 'material' && ligouMaterialFalseHook === false && espacoViaHookFalse === 'modelar',
+     `${ligouMaterialHook}/${espacoViaHook} · ${ligouMaterialFalseHook}/${espacoViaHookFalse}`);
+
+  // ---- (19 transição direta) Animação -> Material sem passar por Modelar reseta o preview ----
+  await page19.evaluate(() => window.__oficina.ligarAnim(true)); await r19();
+  await page19.evaluate(() => window.__oficina.play()); await r19();
+  const tocandoAntesDireta = (await page19.evaluate(() => window.__oficina.animEstado())).tocando;
+  await page19.click('#chipMaterial'); await r19();
+  const estadoAposDireta = await page19.evaluate(() => window.__oficina.animEstado());
+  const espacoAposDireta = await page19.evaluate(() => window.__oficina.espaco());
+  ok('(19 transição direta) Animação(tocando) -> clique direto em Material: tocando reseta e previewT volta a 0, sem passar por Modelar',
+     tocandoAntesDireta === true && estadoAposDireta.tocando === false && estadoAposDireta.previewT === 0 && espacoAposDireta === 'material',
+     `antes tocando=${tocandoAntesDireta} · depois=${JSON.stringify(estadoAposDireta)} · espaco=${espacoAposDireta}`);
+  await page19.click('#chipModelar'); await r19();
+
+  // ---- (19 intacto) ida e volta pelos 3 espaços não muda 1 vértice/face do canon ----
+  const canonPreVolta = await canon19();
+  await page19.click('#chipMaterial'); await r19();
+  await page19.click('#chipAnim'); await r19();
+  await page19.click('#chipModelar'); await r19();
+  const canonPosVolta = await canon19();
+  ok('(19 intacto ★) ida e volta Modelar->Material->Animação->Modelar não muda 1 byte do canon (câmera/seleção/objeto ficam, D-73)',
+     canonPreVolta === canonPosVolta, canonPreVolta === canonPosVolta ? 'idêntico' : 'DIVERGIU');
+
+  await page19.screenshot({ path: join(OUT19, 'oficina-espaco-material.png') });
+  await page19.close();
 }
 
 await browser.close();

@@ -197,11 +197,12 @@
   <span class="marca">OFICINA</span>
   <div class="grupo"><span class="rot">aba</span>
     <span class="chip">Desenho</span><span class="chip on">Objeto</span><a class="chip" href="som.html">Som</a></div>
-  <!-- PASSO 13b: os espaços de trabalho (D-73) — Modelar (default) e Animação são um
-       SELETOR (estilo do chip Pincel): trocar mantém câmera/seleção/objeto, só muda os
-       painéis. Material segue contextual (aparece com face selecionada), como hoje. -->
+  <!-- ESPAÇO MATERIAL: os espaços de trabalho (D-73) — Modelar (default), Material e
+       Animação são um SELETOR de 3 vias (estilo do chip Pincel): trocar mantém câmera/
+       seleção/objeto, só muda quais painéis aparecem. Material mostra Cor + Material da
+       face selecionada (antes viviam soltos dentro de Modelar). -->
   <div class="grupo"><span class="rot">espaço</span>
-    <span class="chip on" id="chipModelar" title="modelagem: vértice, face, gizmo, extrude">Modelar</span><span class="chip">Material</span><span class="chip" id="chipAnim" title="animação rígida por parte: nomear partes + linha do tempo">Animação</span></div>
+    <span class="chip on" id="chipModelar" title="modelagem: vértice, face, gizmo, extrude">Modelar</span><span class="chip" id="chipMaterial" title="cor e material da face selecionada">Material</span><span class="chip" id="chipAnim" title="animação rígida por parte: nomear partes + linha do tempo">Animação</span></div>
   <!-- PASSO 11c: PINCEL (pintura) — liga/desliga o pintar-arrastando na superfície.
        A tecla B faz o mesmo. Aceso = pintando; apagado = tudo como antes. -->
   <div class="grupo"><span class="rot">ferramenta</span>
@@ -701,14 +702,17 @@ const AMOSTRA_PX = 6;   // amostragem por DISTÂNCIA na tela: só um dab novo a 
    ['material',{faces,usa}]. */
 let materiaisAtual = {};
 
-/* PASSO 13b — ESPAÇO ANIMAÇÃO. Estado da autoria/preview da animação rígida por parte.
-   O MOTOR (op `parte`, seção ANIMACOES, montarAnimar → peca.animar) é o do 13a (D-95);
-   aqui é só a INTERFACE, sem tocar em motor/oficina.js nem render.js.
-     animLigado    — estamos no espaço Animação? (chip "Animação", estilo do Pincel).
-                     LIGADO: painel de animação + linha do tempo, e o reexec fia
-                     ANIMACOES no executar (preview ao vivo); DESLIGADO: tudo modela
-                     como antes (ANIMACOES não vai pro executar → animar undefined →
-                     peça estática, byte-idêntica).
+/* PASSO 13b — ESPAÇOS DE TRABALHO (D-73). Estado da autoria/preview da animação rígida
+   por parte + o seletor de espaço. O MOTOR (op `parte`, seção ANIMACOES, montarAnimar →
+   peca.animar) é o do 13a (D-95); aqui é só a INTERFACE, sem tocar em motor/oficina.js
+   nem render.js.
+     espaco        — 'modelar' | 'material' | 'animacao' (chips da barra, estilo do
+                     Pincel). 'animacao': painel de animação + linha do tempo, e o reexec
+                     fia ANIMACOES no executar (preview ao vivo). 'material': painel de
+                     Cor + Material da face selecionada (ESPAÇO MATERIAL — antes viviam
+                     soltos dentro de Modelar). 'modelar': tudo modela como antes. Fora de
+                     'animacao', ANIMACOES não vai pro executar → animar undefined → peça
+                     estática, byte-idêntica.
      animacoesAtual— a seção ANIMACOES da peça, MUTÁVEL na sessão (espelha mod.ANIMACOES
                      ou {}); o export a grava (como MATERIAIS) e o preview a monta.
                      Forma: {nome:{duracao,repete,trilhas:[{parte,canal,chaves:[[t,v]]}]}}.
@@ -720,7 +724,7 @@ let materiaisAtual = {};
      tocando       — play em laço? (previewT=null e o playhead anda com o relógio).
      tempoMostrado — o tempo do último quadro (pro playhead e pro pause pegar onde parou).
      chaveSel      — {ti,ki} da chave selecionada na faixa (edita valor/tempo/apaga). */
-let animLigado = false;
+let espaco = 'modelar';
 let animacoesAtual = {};
 let animAtual = null;
 let previewT = 0;             // começa PAUSADO em t=0 (pose estável); play zera pra null
@@ -732,7 +736,7 @@ const CANAIS_ANIM = ['rotX', 'rotY', 'rotZ', 'posX', 'posY', 'posZ', 'escala']; 
    chip da barra e os ganchos de __oficina alcançam via estes; a lógica que mexe em
    PASSOS/ANIMACOES + reexec mora no try (como malhaCtl). */
 let animCtl = null;
-let setEspacoAnim = () => {};
+let setEspaco = () => {};
 let renderAnim = () => {};
 let atualizarBotaoParte = () => {};
 let atualizarAnimQuadro = () => {};   // chamado por quadro (visor.rodar, no try EXTERNO) — módulo-escopo pra alcançar de lá
@@ -1129,7 +1133,7 @@ canvas.addEventListener('pointerdown', (e) => {
      togglea; Shift+arrasto LONGO pana), então NÃO retorna — cai no setup de pan
      embaixo e o soltar decide toggle-vs-pan pelo limiar. */
   if (!arrasto && pointers.size === 1 && e.pointerType === 'mouse' && e.button === 0 && e.shiftKey && malhaCtl) {
-    const idSel = animLigado ? null : malhaCtl.hit(e.clientX, e.clientY);   // PASSO 13b: no espaço Animação o Shift+clique NÃO pega vértice (só face, pra nomear parte)
+    const idSel = espaco === 'modelar' ? malhaCtl.hit(e.clientX, e.clientY) : null;   // ESPAÇO MATERIAL: fora do espaço Modelar o Shift+clique NÃO pega vértice (só face, pra nomear parte/pintar)
     if (idSel != null) cliqueSel = { id: idSel, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId };
     else { const fSel = malhaCtl.hitFace(e.clientX, e.clientY); if (fSel != null) cliqueSelFace = { fid: fSel, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId }; }
   }
@@ -1151,10 +1155,11 @@ canvas.addEventListener('pointerdown', (e) => {
     // vazio: sem face sob o cursor — cai pro setup de câmera embaixo (orbita)
   }
   if (!arrasto && pointers.size === 1 && primario && malhaCtl && !pincelLigado) {
-    /* PASSO 13b — no espaço Animação, os hit-tests de VÉRTICE/GIZMO/HANDLE (modelagem)
-       ficam desligados: só a SELEÇÃO DE FACE segue viva (pra nomear parte). No espaço
-       Modelar, tudo idêntico ao de antes. */
-    if (!animLigado) {
+    /* ESPAÇO MATERIAL — fora do espaço Modelar, os hit-tests de VÉRTICE/GIZMO/HANDLE
+       (modelagem) ficam desligados: só a SELEÇÃO DE FACE segue viva (pra nomear parte em
+       Animação, ou pintar/materializar em Material). No espaço Modelar, tudo idêntico ao
+       de antes. */
+    if (espaco === 'modelar') {
       /* PASSO 6 — ORDEM do hit-test (D1: o vértice clicado DIRETO vence a seta que
          passa por cima dele). 1) um vértice OUTRO que o selecionado, sob o cursor,
          vence o gizmo → arrasto LIVRE (você mirou o ponto, não o cabo); 2) senão a
@@ -1192,8 +1197,8 @@ canvas.addEventListener('pointerdown', (e) => {
       }
     }
     /* 4) o CORPO de uma face → clique-candidato de seleção (adiado pro up). Ativo nos
-       DOIS espaços: em Modelar seleciona pra extrudar/pintar, em Animação pra nomear
-       parte. */
+       TRÊS espaços: em Modelar seleciona pra extrudar/pintar, em Material pra cor/
+       material, em Animação pra nomear parte. */
     const fid = malhaCtl.hitFace(e.clientX, e.clientY);
     if (fid != null) {
       /* corpo de uma FACE: a seleção é ADIADA pro pointerup (só um clique curto
@@ -1293,14 +1298,15 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());   // senão o
    setModoPincel/setPincel (não da máquina da malha), então funcionam assim que a
    página carrega. Pintar em si precisa da malha (guardado no pointerdown). */
 { const chip = $('chipPincel'); if (chip) chip.addEventListener('click', () => setModoPincel(!pincelLigado)); }
-/* PASSO 13b — SELETOR DE ESPAÇO (Modelar/Animação): módulo-escopo como o chip do Pincel;
-   setEspacoAnim é a função REAL (assinada no try quando a peça abre) — no clique do
-   usuário ela já vale. */
-{ const cA = $('chipAnim'); if (cA) cA.addEventListener('click', () => setEspacoAnim(true)); }
-{ const cM = $('chipModelar'); if (cM) cM.addEventListener('click', () => setEspacoAnim(false)); }
+/* ESPAÇO MATERIAL — SELETOR DE ESPAÇO (Modelar/Material/Animação): módulo-escopo como o
+   chip do Pincel; setEspaco é a função REAL (assinada no try quando a peça abre) — no
+   clique do usuário ela já vale. */
+{ const cM = $('chipModelar'); if (cM) cM.addEventListener('click', () => setEspaco('modelar')); }
+{ const cMat = $('chipMaterial'); if (cMat) cMat.addEventListener('click', () => setEspaco('material')); }
+{ const cA = $('chipAnim'); if (cA) cA.addEventListener('click', () => setEspaco('animacao')); }
 addEventListener('keydown', (e) => {
   if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName)) return;   // não alterna com o foco num campo
-  if ((e.key === 'b' || e.key === 'B') && !e.ctrlKey && !e.metaKey && !e.altKey) { if (arrasto || animLigado) return; setModoPincel(!pincelLigado); }   // guarda: não vira o modo no meio de um arrasto NEM no espaço Animação
+  if ((e.key === 'b' || e.key === 'B') && !e.ctrlKey && !e.metaKey && !e.altKey) { if (arrasto || espaco === 'animacao') return; setModoPincel(!pincelLigado); }   // guarda: não vira o modo no meio de um arrasto NEM no espaço Animação (Material permite, como Modelar)
 });
 { const c = $('pkCor'); if (c) c.addEventListener('input', () => setPincel({ cor: c.value })); }
 { const pr = $('pkPresets'); if (pr) pr.addEventListener('click', (e) => { const b = e.target.closest('.sw'); if (!b) return; const cor = b.getAttribute('data-cor'); const c = $('pkCor'); if (c) c.value = cor; setPincel({ cor }); }); }
@@ -1391,8 +1397,8 @@ try {
          motor). Fora do espaço Animação, ANIMACOES vai {} → animar undefined → bind pose
          (a peça rigada renderiza em repouso, estática). */
       const esq = esqValido();
-      const peca = executar(passos, PARAMS, TOPO, ctxMotor, materiaisAtual, animLigado ? animacoesAtual : {}, esq);
-      if (animLigado && typeof peca.animar === 'function') {
+      const peca = executar(passos, PARAMS, TOPO, ctxMotor, materiaisAtual, espaco === 'animacao' ? animacoesAtual : {}, esq);
+      if (espaco === 'animacao' && typeof peca.animar === 'function') {
         const base = peca.animar;
         peca.animar = (Twall, lotes) => base(previewT != null ? previewT : Twall, lotes);
       }
@@ -1439,17 +1445,20 @@ try {
     }
     atualizarPainel = () => {
       const badge = $('pvSel'); if (!badge) return;   // markup ausente: no-op (robustez)
-      /* PASSO 13b — ESPAÇOS: Modelar mostra vértice/caixa/colisão (+ cor/material por
-         seleção); Animação mostra o bloco de autoria + a linha do tempo. Trocar de
-         espaço NÃO mexe em câmera/seleção/objeto — só em QUAIS painéis aparecem (D-73). */
-      const modelar = !animLigado;
-      const sub = $('propsSub'); if (sub) sub.textContent = modelar ? 'espaço Modelar · vértice e caixa' : 'espaço Animação · partes e linha do tempo';
+      /* ESPAÇO MATERIAL — 3 ESPAÇOS: Modelar mostra vértice/caixa/colisão; Material mostra
+         cor/material da face selecionada; Animação mostra o bloco de autoria + a linha do
+         tempo. Trocar de espaço NÃO mexe em câmera/seleção/objeto — só em QUAIS painéis
+         aparecem (D-73). `modelar` aqui é só o 1º dos 3 — os outros dois blocos abaixo
+         testam `espaco` direto (uma negação só NÃO separa 3 estados). */
+      const modelar = espaco === 'modelar';
+      const sub = $('propsSub');
+      if (sub) sub.textContent = espaco === 'modelar' ? 'espaço Modelar · vértice e caixa' : espaco === 'material' ? 'espaço Material · cor e parâmetros' : 'espaço Animação · partes e linha do tempo';
       for (const bid of ['blocoAdicionar', 'blocoVertice', 'blocoCaixa', 'blocoColisao', 'blocoGrupo', 'blocoRegiao']) { const el = $(bid); if (el) el.hidden = !modelar; }
       { const bt = $('afBtAdicionar'); if (bt) bt.disabled = !!arrasto; }   // PASSO 15: "um dono por vez" — sem clique novo com edição em voo
       // PASSO 14b: blocoEsqueleto/blocoPeso (rigging) vivem no MESMO espaço Animação (setup de animação)
-      for (const bid of ['blocoAnim', 'blocoPartes', 'blocoEsqueleto', 'blocoPeso', 'blocoAnims']) { const el = $(bid); if (el) el.hidden = modelar; }
-      { const bl = $('blocoChave'); if (bl) bl.hidden = modelar || !chaveSel; }
-      { const lt = $('linha'); if (lt) lt.hidden = modelar; }
+      for (const bid of ['blocoAnim', 'blocoPartes', 'blocoEsqueleto', 'blocoPeso', 'blocoAnims']) { const el = $(bid); if (el) el.hidden = espaco !== 'animacao'; }
+      { const bl = $('blocoChave'); if (bl) bl.hidden = espaco !== 'animacao' || !chaveSel; }
+      { const lt = $('linha'); if (lt) lt.hidden = espaco !== 'animacao'; }
       atualizarBotaoParte();
       atualizarBotaoPeso();   // PASSO 14b: o botão "pesar" segue a seleção de face + o osso ativo
       const temSel = selecionado != null && neutro && neutro.V.has(selecionado);
@@ -1549,15 +1558,19 @@ try {
         ? (arrasto ? 'arrastando — painel em leitura'
           : selVertices.length >= 2 ? `${selVertices.length} vértices — M mescla no ativo #${selecionado} (Ctrl no arrasto = ímã)`
           : 'valor + Enter · Shift+clique soma vértices · Ctrl no arrasto = ímã')
-        : temFace ? (selFaces.length >= 2 ? `${selFaces.length} faces — escolha uma cor pra pintar (a seta extruda a ativa #${faceSelecionada})`
-          : `face #${faceSelecionada} — escolha uma cor pra pintar · arraste a seta / E extruda`)
+        // ESPAÇO MATERIAL: a dica NÃO pode mais mandar "escolha uma cor" aqui — o bloco de
+        // Cor saiu do Modelar. Com face selecionada, aponta pro espaço Material (onde a cor
+        // agora mora) e mantém o que é de fato do Modelar (extrudar pela seta / tecla E).
+        : temFace ? (selFaces.length >= 2 ? `${selFaces.length} faces — cor e material no espaço Material (a seta extruda a ativa #${faceSelecionada})`
+          : `face #${faceSelecionada} — arraste a seta / E extruda · cor e material no espaço Material`)
         : 'clique num vértice ou numa face';
-      // PASSO 9: bloco de COR DE FACE — aparece só com face(s) selecionada(s); mostra
-      // a cor EFETIVA da ATIVA (read-back: neutro.F.cor ?? COR_PADRAO). Não sobrescreve
-      // enquanto o input está em foco (o usuário mexendo no seletor), como os campos XYZ.
+      // PASSO 9 / ESPAÇO MATERIAL: bloco de COR DE FACE — aparece no espaço Material, com
+      // face(s) selecionada(s); mostra a cor EFETIVA da ATIVA (read-back: neutro.F.cor ??
+      // COR_PADRAO). Não sobrescreve enquanto o input está em foco (o usuário mexendo no
+      // seletor), como os campos XYZ.
       const blocoCor = $('blocoCor');
       if (blocoCor) {
-        blocoCor.hidden = !temFace || !modelar;   // PASSO 13b: cor é do espaço Modelar (some na Animação)
+        blocoCor.hidden = !temFace || espaco !== 'material';   // ESPAÇO MATERIAL: cor saiu do Modelar, mora no espaço Material
         if (temFace) {
           const pcFaces = $('pcFaces');
           if (pcFaces) { pcFaces.textContent = '#' + faceSelecionada + (selFaces.length > 1 ? ` +${selFaces.length - 1}` : ''); pcFaces.classList.remove('vazio'); }
@@ -1565,11 +1578,12 @@ try {
           if (pcCor && document.activeElement !== pcCor) pcCor.value = neutro.F.get(faceSelecionada).cor ?? COR_PADRAO;
         }
       }
-      // PASSO 12a: bloco de MATERIAL — aparece com face(s) selecionada(s); o badge mostra
-      // o material EFETIVO da ATIVA (read-back: neutro.F.material, ou "sem" + nº de faces).
+      // PASSO 12a / ESPAÇO MATERIAL: bloco de MATERIAL — aparece no espaço Material, com
+      // face(s) selecionada(s); o badge mostra o material EFETIVO da ATIVA (read-back:
+      // neutro.F.material, ou "sem" + nº de faces).
       const blocoMaterial = $('blocoMaterial');
       if (blocoMaterial) {
-        blocoMaterial.hidden = !temFace || !modelar;   // PASSO 13b: material é do espaço Modelar (some na Animação)
+        blocoMaterial.hidden = !temFace || espaco !== 'material';   // ESPAÇO MATERIAL: material saiu do Modelar, mora no espaço Material
         if (temFace) {
           const pmFaces = $('pmFaces');
           if (pmFaces) {
@@ -2545,7 +2559,7 @@ try {
       const ph = $('anPlayhead'), reg = $('anRegua'), lin = $('linha');
       if (!ph || !reg || !lin) return;
       const dur = anDur(), r = reg.getBoundingClientRect();
-      if (!animLigado || !r.width || dur <= 0) { ph.hidden = true; return; }
+      if (espaco !== 'animacao' || !r.width || dur <= 0) { ph.hidden = true; return; }
       const frac = Math.max(0, Math.min(1, t / dur));
       ph.hidden = false;
       ph.style.left = (r.left + frac * r.width) + 'px';
@@ -2639,7 +2653,7 @@ try {
       }
       // editor da CHAVE selecionada
       const temChave = chaveSel && A && A.trilhas[chaveSel.ti] && A.trilhas[chaveSel.ti].chaves[chaveSel.ki];
-      { const bl = $('blocoChave'); if (bl) bl.hidden = !animLigado || !temChave; }
+      { const bl = $('blocoChave'); if (bl) bl.hidden = espaco !== 'animacao' || !temChave; }
       if (temChave) {
         const k = A.trilhas[chaveSel.ti].chaves[chaveSel.ki];
         const tt = $('anChaveT'); if (tt && document.activeElement !== tt) tt.value = String(k[0]);
@@ -2649,25 +2663,31 @@ try {
       posicionarPlayhead(tempoMostrado);
     };
 
-    /* ENTRA/SAI do espaço Animação (chip "Animação"/"Modelar", estilo do Pincel). É
+    /* ENTRA/SAI de um espaço (chips "Modelar"/"Material"/"Animação", estilo do Pincel). É
        ESPAÇO, não aba: câmera/seleção/objeto ficam; só muda quais painéis aparecem e se o
-       reexec fia a animação. Entrar limpa a seleção de VÉRTICE (sem gizmo), guarda a de
-       FACE (pra nomear parte), desliga o pincel e pausa em t=0. */
-    setEspacoAnim = (on) => {
-      const novo = !!on;
-      const cM = $('chipModelar'), cA = $('chipAnim');
-      if (novo === animLigado) { if (cM) cM.classList.toggle('on', !animLigado); if (cA) cA.classList.toggle('on', animLigado); renderAnim(); renderRig(); atualizarPainel(); return; }
-      animLigado = novo;
-      if (cM) cM.classList.toggle('on', !animLigado);
-      if (cA) cA.classList.toggle('on', animLigado);
-      if (animLigado) {
+       reexec fia a animação. Entrar em Animação limpa a seleção de VÉRTICE (sem gizmo),
+       guarda a de FACE (pra nomear parte), desliga o pincel e pausa em t=0 — Material não
+       mexe em nada disso (só troca quais blocos aparecem; a seleção de face é o que ele
+       lê). ESPAÇO MATERIAL: generaliza o antigo setEspacoAnim(on:boolean) pra um seletor
+       de 3 vias — mesma ordem de efeitos, agora por nome. */
+    setEspaco = (nome) => {
+      const novo = (nome === 'material' || nome === 'animacao') ? nome : 'modelar';
+      const cM = $('chipModelar'), cMat = $('chipMaterial'), cA = $('chipAnim');
+      if (novo === espaco) { if (cM) cM.classList.toggle('on', espaco === 'modelar'); if (cMat) cMat.classList.toggle('on', espaco === 'material'); if (cA) cA.classList.toggle('on', espaco === 'animacao'); renderAnim(); renderRig(); atualizarPainel(); return; }
+      const entrandoNaAnimacao = novo === 'animacao';
+      const saindoDaAnimacao = espaco === 'animacao';
+      espaco = novo;
+      if (cM) cM.classList.toggle('on', espaco === 'modelar');
+      if (cMat) cMat.classList.toggle('on', espaco === 'material');
+      if (cA) cA.classList.toggle('on', espaco === 'animacao');
+      if (entrandoNaAnimacao) {
         setModoPincel(false);           // pincel e animação são exclusivos
         definirSel([]);                 // sai do modo vértice (sem gizmo); a FACE selecionada persiste
         tocando = false; previewT = 0; tempoMostrado = 0; chaveSel = null;
         if (!animAtual) animAtual = Object.keys(animacoesAtual)[0] || null;
         if (!ossoAtual) ossoAtual = (esqueletoAtual.ossos && esqueletoAtual.ossos[0]) ? esqueletoAtual.ossos[0].nome : null;   // PASSO 14b: ativa o 1º osso ao entrar
-      } else {
-        tocando = false; previewT = 0;  // sair: sem preview de animação
+      } else if (saindoDaAnimacao) {
+        tocando = false; previewT = 0;  // saiu de Animação (pra Modelar OU Material): sem preview de animação
       }
       reexec(PASSOS);                   // (des)liga o `animar` wrapper na peça carregada
       renderAnim();
@@ -2806,7 +2826,7 @@ try {
       play() { tocando = true; previewT = null; atualizarPlay(); },   // volta ao relógio de parede (laço)
       pause() { tocando = false; previewT = tempoMostrado; atualizarPlay(); posicionarPlayhead(previewT); atualizarTempoLabel(previewT); },
       // leituras pra a bancada
-      estado: () => ({ animLigado, animAtual, previewT, tocando, tempo: tempoMostrado, chaveSel: chaveSel ? { ...chaveSel } : null }),
+      estado: () => ({ animLigado: espaco === 'animacao', animAtual, previewT, tocando, tempo: tempoMostrado, chaveSel: chaveSel ? { ...chaveSel } : null }),
       animacoes: () => JSON.parse(JSON.stringify(animacoesAtual)),
     };
 
@@ -3002,7 +3022,7 @@ try {
     addEventListener('keydown', (e) => {
       if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName)) return;
       if (e.key !== 'e' && e.key !== 'E') return;
-      if (animLigado) return;   // PASSO 13b: extrude é do espaço Modelar (não vaza pra Animação)
+      if (espaco !== 'modelar') return;   // ESPAÇO MATERIAL: extrude é só do espaço Modelar (não vaza pra Material nem Animação)
       if (arrasto || faceSelecionada == null || !neutro || !neutro.F.has(faceSelecionada)) return;
       PASSOS.push(['extruda', { face: faceSelecionada, dist: EXTRUDE_E }]);
       redo.length = 0;
@@ -3078,14 +3098,15 @@ try {
     const proj = projetarVertices();
     projAtual = proj;   // PASSO 4: o hit-test do #c reusa ESTE estado de projeção (o mesmo que se desenha)
 
-    if (animLigado) desenharPesoOsso(proj);   // PASSO 14b: HEATMAP — tinge as faces pesadas pelo osso ATIVO (sob o destaque da seleção)
-    desenharFaceSel(proj);   // PASSO 7/9: preenchimento das faces SELECIONADAS (nos dois espaços — no Animação mostra as faces da parte que se nomeia/seleciona)
+    if (espaco === 'animacao') desenharPesoOsso(proj);   // PASSO 14b: HEATMAP — tinge as faces pesadas pelo osso ATIVO (sob o destaque da seleção)
+    desenharFaceSel(proj);   // PASSO 7/9: preenchimento das faces SELECIONADAS (nos três espaços — em Material mostra a face que se colore, em Animação a parte que se nomeia/seleciona)
 
-    /* PASSO 13b — no espaço Animação a MALHA (arestas/vértices/gizmo/handle) some: só o
-       destaque de face fica. A malha renderizada ANIMA (por matriz), mas o overlay
-       projeta o NEUTRO (pose de repouso) — mostrar o wireframe aqui pareceria "solto" da
-       peça em movimento. No Modelar, tudo idêntico ao de antes. */
-    if (!animLigado) {
+    /* ESPAÇO MATERIAL — fora do espaço Modelar a MALHA (arestas/vértices/gizmo/handle)
+       some: só o destaque de face fica. A malha renderizada ANIMA (por matriz), mas o
+       overlay projeta o NEUTRO (pose de repouso) — mostrar o wireframe aqui pareceria
+       "solto" da peça em movimento em Animação; em Material o handle de extrude não faz
+       sentido sem a ferramenta de extrudar. No Modelar, tudo idêntico ao de antes. */
+    if (espaco === 'modelar') {
       // ARESTAS: dois passes — halo escuro largo + núcleo claro fino — pra ler tanto
       // sobre a grama clara quanto sobre a casca escura do objeto.
       octx.lineJoin = 'round'; octx.lineCap = 'round';
@@ -3288,7 +3309,7 @@ try {
 
   visor.rodar(
     (fps) => atualizarStatus(fps),          // onFrame (~2×/s): mexe no DOM devagar
-    (dt, T) => { aplicarCamera(); desenharMalha(); if (animLigado) atualizarAnimQuadro(T); },   // antesDoQuadro: câmera + overlay + PASSO 13b: o PLAYHEAD segue o relógio (T em s) no play (o MESMO T que o render passa ao animar)
+    (dt, T) => { aplicarCamera(); desenharMalha(); if (espaco === 'animacao') atualizarAnimQuadro(T); },   // antesDoQuadro: câmera + overlay + PASSO 13b: o PLAYHEAD segue o relógio (T em s) no play (o MESMO T que o render passa ao animar)
   );
 
   /* ganchos de VERIFICAÇÃO (a bancada headless usa; inertes no uso normal).
@@ -3431,9 +3452,11 @@ try {
         return out;
       } catch { return null; }
     },
-    /* ---- PASSO 13b: ESPAÇO ANIMAÇÃO — autoria + preview (a bancada dirige/mede/afirma) ---- */
-    espacoAnim: () => animLigado,                                                     // estamos no espaço Animação?
-    ligarAnim: (b) => { setEspacoAnim(b); return animLigado; },                        // entra/sai do espaço (== clicar o chip Animação/Modelar)
+    /* ---- PASSO 13b / ESPAÇO MATERIAL: os 3 espaços — autoria + preview (a bancada dirige/mede/afirma) ---- */
+    espaco: () => espaco,                                                             // 'modelar' | 'material' | 'animacao', cru
+    espacoAnim: () => espaco === 'animacao',                                          // estamos no espaço Animação? (compat)
+    ligarAnim: (b) => { setEspaco(b ? 'animacao' : 'modelar'); return espaco === 'animacao'; },   // entra/sai do espaço (== clicar o chip Animação/Modelar; false SEMPRE volta pro Modelar, nunca Material)
+    ligarMaterial: (b) => { setEspaco(b ? 'material' : 'modelar'); return espaco === 'material'; },   // entra/sai do espaço Material (== clicar o chip Material/Modelar)
     animEstado: () => (animCtl ? animCtl.estado() : null),                            // {animLigado,animAtual,previewT,tocando,tempo,chaveSel}
     animacoes: () => (animCtl ? animCtl.animacoes() : {}),                            // a seção ANIMACOES ATUAL (cópia; o que o export grava)
     partesAnim: () => (animCtl ? animCtl.partes() : []),                              // [{nome,faces}] das partes nomeadas (do neutro)
@@ -3458,6 +3481,7 @@ try {
     painelAnim: () => ({                                                              // leitura do painel/linha do tempo pra a bancada afirmar
       chipAnim: $('chipAnim') ? $('chipAnim').classList.contains('on') : false,
       chipModelar: $('chipModelar') ? $('chipModelar').classList.contains('on') : false,
+      chipMaterial: $('chipMaterial') ? $('chipMaterial').classList.contains('on') : false,
       blocoAnim: $('blocoAnim') ? !$('blocoAnim').hidden : false,
       linha: $('linha') ? !$('linha').hidden : false,
       blocoVertice: $('blocoVertice') ? !$('blocoVertice').hidden : false,
