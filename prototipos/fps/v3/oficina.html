@@ -351,6 +351,43 @@
     <div class="dica" id="edDica">—</div>
   </section>
 
+  <!-- PASSO 17 (P9c do playground): RUÍDO — painel do `displace` (P8c, D-122, núcleo já
+       provado, não se toca aqui), o MOLDE do painel Material (campos + botão aplicar).
+       Desloca a seleção ATUAL (vértice(s) OU face(s) — vira `sel:{v:[...]}` ou
+       `sel:{f:[...]}` do `resolverAlvosV`) ao longo da própria normal por ruído
+       seedado. Aparece com QUALQUER seleção — ao contrário do bloco Editar acima, o
+       núcleo aceita qualquer contagem, não só 1 face ou um par de vértices. -->
+  <section class="bloco" id="blocoRuido" hidden>
+    <div class="rotulo">Ruído <span id="rdAlvo" class="badge vazio">—</span></div>
+    <label class="campo"><span class="rk">amplit.</span><input id="rdAmplitude" type="number" step="0.01" value="0.1"></label>
+    <label class="campo"><span class="rk">frequên.</span><input id="rdFrequencia" type="number" step="0.1" value="1"></label>
+    <label class="campo"><span class="rk">semente</span><input id="rdSemente" type="number" step="1" value="0"></label>
+    <button id="rdBtAplicar" class="btmini" type="button">Aplicar ruído</button>
+    <div class="dica" id="rdDica">—</div>
+  </section>
+
+  <!-- PASSO 17 (P9c do playground): TRANSFORMAR — botões pro `espelha`/`rotaciona` (P3,
+       D-116, núcleo já provado, sem UI desde então). Espelhar DUPLICA as FACES
+       selecionadas refletidas no plano eixo=pos (`sel:{f:[...]}` — espelha só aceita
+       face, nunca vértice solto, doc da op: `sel.v` GRITA e é ignorado). Rotacionar
+       GIRA a seleção atual (vértice(s) OU face(s)) em torno do CENTROIDE dela (pivô
+       default do núcleo — sem campo de pivô explícito aqui, escopo contido). Aparece
+       com QUALQUER seleção; Espelhar fica desabilitado sem face (Rotacionar não). -->
+  <section class="bloco" id="blocoTransformar" hidden>
+    <div class="rotulo">Transformar <span id="tfAlvo" class="badge vazio">—</span></div>
+    <div class="linha2"><label>espelhar</label>
+      <select id="tfEspEixo" aria-label="eixo do espelho"><option value="x">X</option><option value="y">Y</option><option value="z">Z</option></select>
+      <input id="tfEspPos" type="number" step="0.01" value="0" aria-label="posição do plano">
+    </div>
+    <button id="tfEspBt" class="btmini" type="button">Espelhar faces selecionadas</button>
+    <div class="linha2"><label>rotacionar</label>
+      <select id="tfRotEixo" aria-label="eixo da rotação"><option value="x">X</option><option value="y">Y</option><option value="z">Z</option></select>
+      <input id="tfRotGraus" type="number" step="1" value="0" aria-label="graus">
+    </div>
+    <button id="tfRotBt" class="btmini" type="button">Rotacionar seleção</button>
+    <div class="dica" id="tfDica">—</div>
+  </section>
+
   <!-- PASSO 13b: ESPAÇO ANIMAÇÃO — autoria da animação rígida por parte. Só aparece no
        espaço Animação. Nomear parte (a op ['parte',{nome,faces}] do 13a) a partir das
        faces selecionadas, a lista de partes (clicar seleciona as faces dela), criar/
@@ -1421,6 +1458,37 @@ try {
           }
         }
       }
+      // PASSO 17: blocos RUÍDO e TRANSFORMAR — aparecem com QUALQUER seleção (vértice(s)
+      // OU face(s); o núcleo do displace/rotaciona aceita qualquer contagem, ao contrário
+      // do bloco Editar acima). Espelhar fica desabilitado sem FACE (a op só aceita sel.f).
+      {
+        const nAlvo = selVertices.length || selFaces.length;
+        const temAlvo = nAlvo > 0;
+        const tipoAlvo = selVertices.length ? (nAlvo > 1 ? 'vértices' : 'vértice') : (nAlvo > 1 ? 'faces' : 'face');
+        const blR = $('blocoRuido');
+        if (blR) {
+          const vis = modelar && temAlvo;
+          blR.hidden = !vis;
+          if (vis) {
+            const badge = $('rdAlvo'); if (badge) { badge.textContent = `${nAlvo} ${tipoAlvo}`; badge.classList.remove('vazio'); }
+            const bt = $('rdBtAplicar'); if (bt) bt.disabled = !!arrasto;
+            const dica = $('rdDica'); if (dica) dica.textContent = `desloca ${nAlvo} ${tipoAlvo} ao longo da normal, por ruído seedado`;
+          }
+        }
+        const blT = $('blocoTransformar');
+        if (blT) {
+          const vis = modelar && temAlvo;
+          blT.hidden = !vis;
+          if (vis) {
+            const badge = $('tfAlvo'); if (badge) { badge.textContent = `${nAlvo} ${tipoAlvo}`; badge.classList.remove('vazio'); }
+            const btE = $('tfEspBt'); if (btE) btE.disabled = !temFace || !!arrasto;
+            const btR = $('tfRotBt'); if (btR) btR.disabled = !!arrasto;
+            const dica = $('tfDica'); if (dica) dica.textContent = temFace
+              ? `espelha as ${selFaces.length} face(s) selecionada(s) · rotaciona ${nAlvo} ${tipoAlvo} em torno do centroide`
+              : `rotacionar gira ${nAlvo} ${tipoAlvo} em torno do centroide · espelhar exige face(s) selecionada(s)`;
+          }
+        }
+      }
       $('pvDica').textContent = temSel
         ? (arrasto ? 'arrastando — painel em leitura'
           : selVertices.length >= 2 ? `${selVertices.length} vértices — M mescla no ativo #${selecionado} (Ctrl no arrasto = ímã)`
@@ -1555,6 +1623,25 @@ try {
       }); }
     { const bt = $('edBtVira'); if (bt) bt.addEventListener('click', () => { if (malhaCtl) malhaCtl.virarFace(); }); }
     { const bt = $('edBtApagar'); if (bt) bt.addEventListener('click', () => { if (malhaCtl) malhaCtl.apagarFace(); }); }
+    /* PASSO 17 — os botões de RUÍDO (displace) e TRANSFORMAR (espelha/rotaciona): lêem
+       os campos e chamam o malhaCtl correspondente. Rotacionar zera o campo `graus`
+       num sucesso (é um giro RELATIVO somado, como o dX/dY/dZ do passo 16 — nada a
+       manter mostrado); ruído/espelhar mantêm os campos (são parâmetros persistentes,
+       como o painel Material, não deltas). */
+    { const bt = $('rdBtAplicar'); if (bt) bt.addEventListener('click', () => {
+        if (!malhaCtl) return;
+        malhaCtl.aplicarRuido({ amplitude: +$('rdAmplitude').value, frequencia: +$('rdFrequencia').value, semente: +$('rdSemente').value });
+      }); }
+    { const bt = $('tfEspBt'); if (bt) bt.addEventListener('click', () => {
+        if (!malhaCtl) return;
+        malhaCtl.espelhar({ eixo: $('tfEspEixo').value, pos: +$('tfEspPos').value });
+      }); }
+    { const bt = $('tfRotBt'); if (bt) bt.addEventListener('click', () => {
+        if (!malhaCtl) return;
+        const graus = $('tfRotGraus');
+        const passo = malhaCtl.rotacionar({ eixo: $('tfRotEixo').value, graus: +graus.value });
+        if (passo && graus) graus.value = '0';
+      }); }
     /* PASSO 10 — o botão "Salvar peça" serializa o estado ATUAL (mod/PASSOS/PARAMS/
        TOPO) e POSTa pro servidor de dev; sem servidor, baixa o .js (fallback). */
     { const bt = $('btSalvar'); if (bt) bt.addEventListener('click', async () => {
@@ -1968,6 +2055,101 @@ try {
         atualizarPassos();
         atualizarPainel();
         console.log(`oficina passo 16 (apagaFace): ['apagaFace', {face:${fid}}] — PASSOS agora ${PASSOS.length}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+
+      /* ---- PASSO 17 (P9c do playground): RUÍDO + TRANSFORMAR (displace/espelha/rotaciona) -- */
+      /* seleção ATUAL como `sel` do resolverAlvosV — vértices se houver, senão as faces
+       (cantos delas), senão null (nenhuma seleção; os 3 métodos abaixo tratam null como
+       guarda "sem alvo", nunca mandam ausente pro núcleo — ausente significaria MALHA
+       INTEIRA em displace/rotaciona, um alvo bem maior que "nada selecionado"). */
+      selAtual() {
+        if (selVertices.length) return { v: selVertices.slice() };
+        if (selFaces.length) return { f: selFaces.slice() };
+        return null;
+      },
+      /* APLICAR RUÍDO: grava ['displace',{sel,amplitude,frequencia,semente}] no fim de
+         PASSOS (a op do P8c/D-122 — não se toca nela). Campo vazio/lixo cai no DEFAULT
+         do núcleo (Number.isFinite manda, como o adicionarForma do passo 15) — nunca
+         NaN. GUARDAS: arrasto em voo, sem seleção nenhuma; |amplitude| > LIM_VALOR
+         RECUSA inteiro (D4, o mesmo limite do valor exato do passo 6); amplitude===0 é
+         no-op determinístico — desvio sempre zero, sem passo fantasma (D3). Devolve o
+         passo gravado (ou null). */
+      aplicarRuido(params) {
+        if (arrasto) return null;
+        const sel = this.selAtual();
+        if (!sel) return null;
+        const p = params || {};
+        const va = +p.amplitude, vf = +p.frequencia, vs = +p.semente;
+        const amplitude = Number.isFinite(va) ? va : 0.1;
+        const frequencia = Number.isFinite(vf) ? vf : 1;
+        const semente = Number.isFinite(vs) ? vs : 0;
+        if (Math.abs(amplitude) > LIM_VALOR) return null;
+        if (amplitude === 0) return null;
+        const passo = ['displace', { sel, amplitude, frequencia, semente }];
+        PASSOS.push(passo);
+        redo.length = 0;
+        reexec(PASSOS);
+        atualizarPassos();
+        atualizarPainel();
+        console.log(`oficina passo 17 (displace): ['displace', ${JSON.stringify({ sel, amplitude, frequencia, semente })}] — PASSOS agora ${PASSOS.length}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+      /* ESPELHAR: grava ['espelha',{eixo,pos,sel:{f:[ordenadas]}}] no fim de PASSOS (a
+         op do P3/D-116 — não se toca nela). SÓ FACE (a op não aceita `sel.v` — GRITA e
+         ignora se receber; esta UI nunca manda). Depois de espelhar, seleciona as faces
+         NOVAS (calculadas por id no bloco do passo, como o adicionarForma do passo 15 —
+         nunca hardcoded por contagem), pra ver/ajustar o resultado na hora. GUARDAS:
+         arrasto em voo, sem face selecionada; |pos| > LIM_VALOR RECUSA inteiro (D4).
+         Eixo fora de x/y/z cai em 'x' (defensivo — o <select> só lista os 3 válidos).
+         Devolve o passo (ou null). */
+      espelhar(params) {
+        if (arrasto) return null;
+        if (!selFaces.length || !neutro) return null;
+        const faces = selFaces.filter((id) => neutro.F.has(id)).sort((a, b) => a - b);
+        if (!faces.length) return null;
+        const p = params || {};
+        const eixo = ['x', 'y', 'z'].includes(p.eixo) ? p.eixo : 'x';
+        const vp = +p.pos;
+        const pos = Number.isFinite(vp) ? vp : 0;
+        if (Math.abs(pos) > LIM_VALOR) return null;
+        const antes = mod.PASSOS.length;
+        const passo = ['espelha', { eixo, pos, sel: { f: faces } }];
+        PASSOS.push(passo);
+        redo.length = 0;
+        reexec(PASSOS);
+        const base = antes * BLOCO;
+        const novas = [...neutro.F.keys()].filter((id) => id >= base && id < base + BLOCO).sort((a, b) => a - b);
+        if (novas.length) this.selecionarFaces(novas);
+        atualizarPassos();
+        atualizarPainel();
+        console.log(`oficina passo 17 (espelha): ['espelha', ${JSON.stringify({ eixo, pos, sel: { f: faces } })}] — PASSOS agora ${PASSOS.length}${novas.length ? '' : ' — SEM face nova'}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+      /* ROTACIONAR: grava ['rotaciona',{eixo,graus,sel}] no fim de PASSOS (a op do
+         P3/D-116 — não se toca nela). Pivô AUSENTE (default do núcleo = centroide da
+         seleção) — sem campo de pivô explícito nesta rodada, escopo contido. `graus` é
+         um giro RELATIVO somado ao estado atual (como o `d` do moveF/moveA) — não faz
+         sentido limitar por LIM_VALOR (não é distância de mundo; 720° é um giro válido,
+         só duas voltas). GUARDAS: arrasto em voo, sem seleção nenhuma; graus===0 é
+         no-op determinístico (ângulo zero não move nada — sem passo fantasma, D3).
+         Devolve o passo (ou null). */
+      rotacionar(params) {
+        if (arrasto) return null;
+        const sel = this.selAtual();
+        if (!sel) return null;
+        const p = params || {};
+        const eixo = ['x', 'y', 'z'].includes(p.eixo) ? p.eixo : 'x';
+        const vg = +p.graus;
+        const graus = Number.isFinite(vg) ? vg : 0;
+        if (graus === 0) return null;
+        const passo = ['rotaciona', { eixo, graus, sel }];
+        PASSOS.push(passo);
+        redo.length = 0;
+        reexec(PASSOS);
+        atualizarPassos();
+        atualizarPainel();
+        console.log(`oficina passo 17 (rotaciona): ['rotaciona', ${JSON.stringify({ eixo, graus, sel })}] — PASSOS agora ${PASSOS.length}`);
         return JSON.parse(JSON.stringify(passo));
       },
 
@@ -3092,6 +3274,12 @@ try {
     virarFace: () => (malhaCtl ? malhaCtl.virarFace() : null),
     apagarFace: () => (malhaCtl ? malhaCtl.apagarFace() : null),
     painelEditar: () => ({ vis: !$('blocoEditar').hidden, alvo: $('edAlvo').textContent, dica: $('edDica').textContent, btVira: !$('edBtVira').hidden, btApagar: !$('edBtApagar').hidden }),
+    // PASSO 17: RUÍDO (displace) + TRANSFORMAR (espelha/rotaciona) — aplicar/ler o painel pra bancada
+    aplicarRuido: (params) => (malhaCtl ? malhaCtl.aplicarRuido(params || {}) : null),
+    espelhar: (params) => (malhaCtl ? malhaCtl.espelhar(params || {}) : null),
+    rotacionar: (params) => (malhaCtl ? malhaCtl.rotacionar(params || {}) : null),
+    painelRuido: () => ({ vis: !$('blocoRuido').hidden, alvo: $('rdAlvo').textContent, dica: $('rdDica').textContent }),
+    painelTransformar: () => ({ vis: !$('blocoTransformar').hidden, alvo: $('tfAlvo').textContent, dica: $('tfDica').textContent, btEspDisabled: $('tfEspBt').disabled, btRotDisabled: $('tfRotBt').disabled }),
     solidoDe: (id) => { const f = neutro && neutro.F.get(id); return f ? !!f.solido : false; },   // a face id é sólida no neutro?
     temSolido: () => { const F = neutro && neutro.F; return F ? [...F.values()].some((f) => f.solido) : false; },   // há ALGUMA face sólida?
     colisao: () => { try { return colisaoDe(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual); } catch { return null; } },   // {forma,raio,altura,base} do estado atual (a MESMA função que o arquivo salvo chama no load)

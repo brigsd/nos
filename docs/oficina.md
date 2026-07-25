@@ -719,6 +719,43 @@ RECUSADO inteiro, não clampado (D4, o mesmo limite do valor exato do passo
 6). Depois de `apagaFace`, o id apagado não existe mais — a seleção zera e o
 bloco some, como qualquer edição que invalida o que estava selecionado.
 
+### Ruído + Transformar (P9c do playground, D-125)
+
+Dois blocos, também por último no painel Modelar (a mesma lição de posição
+do P9b: nada fica visível ANTES de algo que um clique de coordenada crua
+dependa). Aparecem com QUALQUER seleção — vértice(s) OU face(s), o núcleo do
+`displace`/`rotaciona` aceita qualquer contagem, ao contrário do par-exato
+do bloco Editar.
+
+**Ruído** — painel do `displace` (P8c): campos `amplitude`/`frequência`/
+`semente` + o botão Aplicar (o molde do painel Material — parâmetros
+persistentes, não deltas que zeram sozinhos). Desloca a seleção atual ao
+longo da própria normal por ruído seedado. Campo vazio/lixo cai no DEFAULT
+do núcleo; `amplitude` além de ±100 é RECUSADA inteira (D4); `amplitude=0`
+é no-op (D3).
+
+**Transformar** — botões pro `espelha` e `rotaciona` (P3, sem UI desde que
+existem): Espelhar (eixo + posição do plano) DUPLICA as FACES selecionadas
+— fica DESABILITADO sem face (a op só aceita `sel.f`, nunca vértice solto);
+depois de espelhar, a seleção pula pras faces NOVAS, o mesmo padrão do
+bloco Adicionar forma. Rotacionar (eixo + graus) gira a seleção atual em
+torno do CENTROIDE dela (pivô default do núcleo — sem campo de pivô
+explícito nesta rodada); `graus` é um giro RELATIVO como o `dX/dY/dZ` do
+bloco Editar — o campo volta a `0` num sucesso, e `graus=0` é no-op (D3).
+
+Achado ao rodar a bancada (não hipotético): o round-trip de exportar e
+reabrir uma peça com `displace` na lista NÃO bate bit-a-bit entre o
+canônico da página (Chromium) e o do Node — diverge na 12ª-13ª casa decimal
+(~1e-13). Causa: o ruído (`hash3`) usa `Math.sin`, e o ECMAScript só
+garante bit-exatidão pra `+`/`-`/`*`/`/` — funções transcendentais são de
+implementação, então builds distintas de V8 (o do Chromium, o do binário
+Node) podem divergir por ULPs. Não é bug: dentro do MESMO motor (o caso
+real — jogo OU ferramenta, nunca os dois comparados) o resultado é
+determinístico; a divergência só aparece nesse cross-check síntético
+página↔Node. A bancada compara estrutura EXATA (ids, contagem, winding) e
+posição de vértice com epsilon 1e-9 (~4 ordens de grandeza de folga sobre o
+ruído medido).
+
 ## Editar objeto de dentro do jogo
 
 O caminho principal de uso, decidido pelo ideador.

@@ -3292,6 +3292,271 @@ else {
   await page16.close();
 }
 
+/* ==== PASSO 17: RUÍDO + TRANSFORMAR (P9c do playground) =======================
+   Os blocos Ruído (op `displace`, P8c/D-122) e Transformar (`espelha`/`rotaciona`,
+   P3/D-116) — as três já provadas no núcleo, sem UI até aqui. PURO NÚCLEO POR CIMA
+   (jóia + núcleo intactos, git diff à parte). Mesma fixture do passo 16: um cubo
+   (`_vazio` + adicionarForma) — 8V/6F, ids 0..7/0..5 conhecidos:
+   (17 fixture) o cubo nasce com 8V/6F/0 órfãos;
+   (17 oculto) sem seleção, os dois blocos ficam ESCONDIDOS;
+   (17 face) selecionar a face 0 mostra os dois blocos, Espelhar HABILITADO;
+   (17 ruído real) fill+clique REAIS gravam ['displace',{sel:{f:[0]},amplitude,
+        frequencia,semente}] com o valor DIGITADO — os 4 cantos da face 0 de fato
+        MOVERAM, e o deslocamento de cada um fica DENTRO de `amplitude` (a fórmula
+        do ruído já é provada no P8c — aqui só confere que o VALOR DIGITADO chega
+        inteiro na op, não re-deriva o ruído);
+   (17 ruído no-op) amplitude=0 não grava passo (D3);
+   (17 espelha real) clique REAL grava ['espelha',{eixo,pos,sel:{f:[0]}}] — a
+        contagem de vértices NOVOS é DERIVADA do canon real (só quem não está
+        EXATAMENTE no plano solda), não hardcoded; F cresce exatamente +1 (1 face
+        selecionada); a seleção pula pra face NOVA (o mesmo padrão do
+        adicionarForma/passo 15);
+   (17 rotaciona real, face) clique REAL grava ['rotaciona',{eixo,graus,sel:{f}}]
+        — a posição NOVA de cada vértice afetado bate a fórmula do PRÓPRIO
+        comentário da op (`p'=pivo+R_eixo(graus)·(p−pivo)`), REIMPLEMENTADA aqui
+        de forma INDEPENDENTE (não importada do núcleo) — a mesma disciplina do
+        passo 16 (canon antes+d==canon depois), agora pra rotação;
+   (17 rotaciona no-op) graus=0 não grava passo (D3); o campo volta a '0' num
+        sucesso (giro RELATIVO, como o dX/dY/dZ do passo 16);
+   (17 sem face) com vértices selecionados (não face), Espelhar fica DESABILITADO
+        no DOM e espelhar() por hook devolve null — a op só aceita sel.f;
+   (17 rotaciona real, vértices) a MESMA fórmula independente bate pra sel:{v:[..]};
+   (17 guarda) arrastar um vértice de uma seleção de 3 RESSELECIONA sozinho pra 1
+        (a lei do passo 8) — os blocos CONTINUAM visíveis (1 vértice ainda
+        satisfaz "alguma seleção", ao contrário do par-exato do bloco Editar) com
+        os botões DESABILITADOS; aplicarRuido()/rotacionar() por hook devolvem
+        null durante o arrasto; soltar de volta na origem não grava nada;
+   (17 undo/redo) Ctrl+Z tira o último rotaciona (canônico volta); Ctrl+Y devolve;
+   (17 serial ★) exporta os 5 passos, reabre em Node: PASSOS e canônico idênticos. */
+const OUT17 = resolve(REPO, 'scratchpad/passo17');
+mkdirSync(OUT17, { recursive: true });
+const T_MOTOR17 = join(OUT17, 'motor'), T_RT17 = join(OUT17, 'rt');
+for (const d of [T_MOTOR17, T_RT17]) { rmSync(d, { recursive: true, force: true }); mkdirSync(d, { recursive: true }); }
+writeFileSync(join(T_MOTOR17, 'oficina.js'), `export * from ${JSON.stringify(relative(T_MOTOR17, resolve(REPO, 'prototipos/fps/v3/motor/oficina.js')).split(pathSep).join('/'))};\n`);
+const reimportar17 = async (conteudo, nomeArq) => { const arq = join(T_RT17, nomeArq + '.js'); writeFileSync(arq, conteudo); return import(pathToFileURL(arq).href + '?v=' + Date.now()); };
+/* reimplementação INDEPENDENTE da fórmula de rotação do comentário da op (não
+   importa nada do núcleo) — o cross-check do passo 16 (canon antes+d==depois),
+   adaptado pra rotação: p' = pivo + R_eixo(graus)·(p−pivo). */
+function rodarIndep(p, pivo, eixo, graus) {
+  const rad = (graus * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
+  const dx = p[0] - pivo[0], dy = p[1] - pivo[1], dz = p[2] - pivo[2];
+  let rx = dx, ry = dy, rz = dz;
+  if (eixo === 'x') { ry = dy * c - dz * s; rz = dy * s + dz * c; }
+  else if (eixo === 'y') { rx = dx * c + dz * s; rz = -dx * s + dz * c; }
+  else { rx = dx * c - dy * s; ry = dx * s + dy * c; }
+  return [pivo[0] + rx, pivo[1] + ry, pivo[2] + rz];
+}
+const centroideDe = (canonObj, ids) => {
+  let x = 0, y = 0, z = 0, n = 0;
+  for (const id of ids) { const row = canonObj.V.find((r) => r[0] === id); if (row) { x += row[1]; y += row[2]; z += row[3]; n++; } }
+  return n ? [x / n, y / n, z / n] : [0, 0, 0];
+};
+
+const page17 = await browser.newPage({ viewport: { width: 900, height: 620 } });
+page17.on('pageerror', (e) => console.error('PAGEERR(17):', e.message));
+await page17.goto(`${base}?peca=_vazio`, { waitUntil: 'load' });
+await page17.waitForFunction(() => window.__ready === true, { timeout: 15000 }).catch(() => {});
+const ready17 = await page17.evaluate(() => window.__ready === true);
+ok('(17 abre) _vazio abre no editor (window.__ready)', ready17);
+if (!ready17) { console.error('  _vazio não abriu — abortando o passo 17'); await page17.close(); }
+else {
+  const r17 = () => page17.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => res(0)))));
+  const nP17 = () => page17.evaluate(() => window.__oficina.nPassos());
+  const canon17 = () => page17.evaluate(() => window.__oficina.canon());
+  const vRow17 = (c, vid) => c.V.find((row) => row[0] === vid);
+  const ctrlZ17 = async () => { await page17.keyboard.down('Control'); await page17.keyboard.press('KeyZ'); await page17.keyboard.up('Control'); await r17(); };
+  const ctrlY17 = async () => { await page17.keyboard.down('Control'); await page17.keyboard.press('KeyY'); await page17.keyboard.up('Control'); await r17(); };
+
+  // ---- (17 fixture) cubo conhecido (8V/6F, ids 0..7/0..5) pelo hook do passo 15 ----
+  await page17.evaluate(() => window.__oficina.adicionarForma('cubo', { lado: 1 })); await r17();
+  let c = await canon17();
+  ok('(17 fixture) o cubo nasce com 8 vértices / 6 faces / 0 órfãos', (await nP17()) === 1 && c.V.length === 8 && c.F.length === 6 && c.orfaos.length === 0, `PASSOS ${await nP17()} · V ${c.V.length} · F ${c.F.length} · órfãos ${c.orfaos.length}`);
+
+  // ---- (17 oculto) sem seleção nenhuma ----
+  await page17.evaluate(() => window.__oficina.selecionarFaces([])); await r17();
+  let pR = await page17.evaluate(() => window.__oficina.painelRuido()), pT = await page17.evaluate(() => window.__oficina.painelTransformar());
+  ok('(17 oculto) sem seleção nenhuma, #blocoRuido e #blocoTransformar ficam ESCONDIDOS', pR.vis === false && pT.vis === false, `ruido ${JSON.stringify(pR)} · transformar ${JSON.stringify(pT)}`);
+
+  // ---- (17 face) selecionar a face 0 mostra os dois blocos, Espelhar habilitado ----
+  await page17.evaluate(() => window.__oficina.selecionarFace(0)); await r17();
+  pR = await page17.evaluate(() => window.__oficina.painelRuido()); pT = await page17.evaluate(() => window.__oficina.painelTransformar());
+  ok('(17 face) face 0 ativa: os dois blocos visíveis, alvo "1 face", Espelhar/Rotacionar habilitados',
+     pR.vis === true && pR.alvo === '1 face' && pT.vis === true && pT.alvo === '1 face' && pT.btEspDisabled === false && pT.btRotDisabled === false,
+     `ruido ${JSON.stringify(pR)} · transformar ${JSON.stringify(pT)}`);
+
+  // ---- (17 ruído real) fill+clique REAIS gravam displace; os 4 cantos MOVERAM dentro de amplitude ----
+  const canonAntesRd = await canon17();
+  const face0Vs = canonAntesRd.F.find((f) => f[0] === 0)[1].slice();
+  await page17.fill('#rdAmplitude', '0.05'); await page17.fill('#rdFrequencia', '2'); await page17.fill('#rdSemente', '7');
+  const n17_antesRd = await nP17();
+  await page17.click('#rdBtAplicar'); await r17();
+  const canonPosRd = await canon17();
+  const ultimoRd = await page17.evaluate(() => window.__oficina.ultimoPasso());
+  ok('(17 ruído real) select+fill+clique REAIS gravam [\'displace\',{sel:{f:[0]},amplitude:0.05,frequencia:2,semente:7}] — o valor DIGITADO',
+     (await nP17()) === n17_antesRd + 1 && JSON.stringify(ultimoRd) === JSON.stringify(['displace', { sel: { f: [0] }, amplitude: 0.05, frequencia: 2, semente: 7 }]),
+     `${JSON.stringify(ultimoRd)}`);
+  const dentroDaAmplitude = face0Vs.every((vid) => {
+    const a = vRow17(canonAntesRd, vid), d = vRow17(canonPosRd, vid);
+    const dist = Math.hypot(d[1] - a[1], d[2] - a[2], d[3] - a[3]);
+    return dist > 1e-6 && dist <= 0.05 + 1e-9;
+  });
+  ok('(17 ruído real ★) os 4 cantos da face 0 de fato MOVERAM, cada um dentro de |amplitude|=0.05 (a fórmula do ruído já é do P8c — aqui confere só o valor digitado)',
+     dentroDaAmplitude, `face0Vs=${JSON.stringify(face0Vs)}`);
+
+  // ---- (17 ruído no-op) amplitude=0 não grava ----
+  await page17.fill('#rdAmplitude', '0');
+  const n17_antesNoopRd = await nP17();
+  await page17.click('#rdBtAplicar'); await r17();
+  ok('(17 ruído no-op) amplitude=0 não grava passo (D3)', (await nP17()) === n17_antesNoopRd, `PASSOS ${await nP17()}`);
+  await page17.fill('#rdAmplitude', '0.05');   // devolve o campo pro valor usado depois, se precisar
+
+  // ---- (17 espelha real) clique REAL grava espelha; V-novos DERIVADO do canon (weld real), F+1, seleção pula pra face nova ----
+  const canonAntesEsp = await canon17();
+  const nVAntesEsp = canonAntesEsp.V.length, nFAntesEsp = canonAntesEsp.F.length;
+  const face0VsPosRd = canonAntesEsp.F.find((f) => f[0] === 0)[1];
+  const soldamNoPlano = face0VsPosRd.filter((vid) => vRow17(canonAntesEsp, vid)[1] === 0).length;   // x===0 EXATO solda (doc da op)
+  const n17_antesEsp = await nP17();
+  await page17.click('#tfEspBt'); await r17();
+  const canonPosEsp = await canon17();
+  const ultimoEsp = await page17.evaluate(() => window.__oficina.ultimoPasso());
+  const selPosEsp = await page17.evaluate(() => window.__oficina.selecaoFaces());
+  ok('(17 espelha real) clique REAL grava [\'espelha\',{eixo:\'x\',pos:0,sel:{f:[0]}}]', (await nP17()) === n17_antesEsp + 1 && JSON.stringify(ultimoEsp) === JSON.stringify(['espelha', { eixo: 'x', pos: 0, sel: { f: [0] } }]), `${JSON.stringify(ultimoEsp)}`);
+  ok('(17 espelha real ★) F cresce EXATAMENTE +1 (1 face selecionada) e V cresce pelo Nº de cantos NÃO-soldados (derivado do canon real, não hardcoded)',
+     canonPosEsp.F.length === nFAntesEsp + 1 && canonPosEsp.V.length === nVAntesEsp + (4 - soldamNoPlano),
+     `F ${nFAntesEsp}->${canonPosEsp.F.length} · V ${nVAntesEsp}->${canonPosEsp.V.length} (soldados no plano: ${soldamNoPlano})`);
+  ok('(17 espelha real) a seleção pula pra face NOVA (o mesmo padrão do adicionarForma/passo 15)', selPosEsp.length === 1 && selPosEsp[0] >= 2000, `${JSON.stringify(selPosEsp)}`);
+
+  // ---- (17 rotaciona real, face) clique REAL grava rotaciona; posição bate a fórmula INDEPENDENTE ----
+  const faceNova = selPosEsp[0];
+  const canonAntesRotF = await canon17();
+  const alvosRotF = canonAntesRotF.F.find((f) => f[0] === faceNova)[1];
+  const pivoRotF = centroideDe(canonAntesRotF, alvosRotF);
+  await page17.fill('#tfRotGraus', '30');   // eixo já é 'x' por default
+  const n17_antesRotF = await nP17();
+  await page17.click('#tfRotBt'); await r17();
+  const canonPosRotF = await canon17();
+  const ultimoRotF = await page17.evaluate(() => window.__oficina.ultimoPasso());
+  const campoRotZerou = await page17.$eval('#tfRotGraus', (el) => el.value);
+  ok('(17 rotaciona real, face) clique REAL grava [\'rotaciona\',{eixo:\'x\',graus:30,sel:{f:[...]}}]; o campo volta a \'0\' (giro relativo)',
+     (await nP17()) === n17_antesRotF + 1 && ultimoRotF[0] === 'rotaciona' && ultimoRotF[1].eixo === 'x' && ultimoRotF[1].graus === 30 && campoRotZerou === '0',
+     `${JSON.stringify(ultimoRotF)} · campo '${campoRotZerou}'`);
+  const bateRotF = alvosRotF.every((vid) => {
+    const esperado = rodarIndep(vRow17(canonAntesRotF, vid).slice(1, 4), pivoRotF, 'x', 30);
+    const real = vRow17(canonPosRotF, vid).slice(1, 4);
+    return Math.hypot(real[0] - esperado[0], real[1] - esperado[1], real[2] - esperado[2]) < 1e-9;
+  });
+  ok('(17 rotaciona real, face ★) a posição NOVA bate a fórmula p\'=pivo+R_x(30°)·(p−pivo) REIMPLEMENTADA de forma independente (não importada do núcleo)', bateRotF, `pivo=${JSON.stringify(pivoRotF)}`);
+
+  // ---- (17 rotaciona no-op) graus=0 não grava ----
+  const n17_antesNoopRot = await nP17();
+  await page17.click('#tfRotBt'); await r17();   // campo já está em '0' do reset acima
+  ok('(17 rotaciona no-op) graus=0 (o reset do clique anterior) não grava passo (D3)', (await nP17()) === n17_antesNoopRot, `PASSOS ${await nP17()}`);
+
+  // ---- (17 sem face) 2 vértices selecionados: Espelhar desabilitado no DOM e por hook ----
+  await page17.evaluate(() => window.__oficina.selecionarVarios([1, 2])); await r17();
+  pT = await page17.evaluate(() => window.__oficina.painelTransformar());
+  const espBtDomDisabled = await page17.$eval('#tfEspBt', (el) => el.disabled);
+  const espHookNull = await page17.evaluate(() => window.__oficina.espelhar({ eixo: 'x', pos: 0 }));
+  ok('(17 sem face) com vértices selecionados (não face), Espelhar fica DESABILITADO no DOM e espelhar() por hook devolve null (a op só aceita sel.f)',
+     pT.vis === true && pT.btEspDisabled === true && espBtDomDisabled === true && espHookNull === null, `painel ${JSON.stringify(pT)} · dom-disabled ${espBtDomDisabled} · hook ${espHookNull}`);
+
+  // ---- (17 rotaciona real, vértices) a MESMA fórmula independente bate pra sel:{v:[...]} ----
+  const canonAntesRotV = await canon17();
+  const pivoRotV = centroideDe(canonAntesRotV, [1, 2]);
+  await page17.selectOption('#tfRotEixo', 'z');
+  await page17.fill('#tfRotGraus', '15');
+  const n17_antesRotV = await nP17();
+  await page17.click('#tfRotBt'); await r17();
+  const canonPosRotV = await canon17();
+  const ultimoRotV = await page17.evaluate(() => window.__oficina.ultimoPasso());
+  ok('(17 rotaciona real, vértices) clique REAL grava [\'rotaciona\',{eixo:\'z\',graus:15,sel:{v:[1,2]}}]',
+     (await nP17()) === n17_antesRotV + 1 && JSON.stringify(ultimoRotV) === JSON.stringify(['rotaciona', { eixo: 'z', graus: 15, sel: { v: [1, 2] } }]), `${JSON.stringify(ultimoRotV)}`);
+  const bateRotV = [1, 2].every((vid) => {
+    const esperado = rodarIndep(vRow17(canonAntesRotV, vid).slice(1, 4), pivoRotV, 'z', 15);
+    const real = vRow17(canonPosRotV, vid).slice(1, 4);
+    return Math.hypot(real[0] - esperado[0], real[1] - esperado[1], real[2] - esperado[2]) < 1e-9;
+  });
+  ok('(17 rotaciona real, vértices ★) a posição NOVA bate a fórmula independente com sel:{v:[...]} (mesmo caminho de código, alvo diferente)', bateRotV, `pivo=${JSON.stringify(pivoRotV)}`);
+
+  // ---- (17 guarda) arrastar 1 de 3 vértices RESSELECIONA sozinho pra 1 — blocos continuam visíveis (1 ainda é "alguma seleção"), botões desabilitados ----
+  await page17.evaluate(() => window.__oficina.selecionarVarios([1, 2, 4])); await r17();
+  const canonAntesGuarda17 = await canon17();
+  const projV1_17 = await page17.evaluate(() => window.__oficina.projMalha()).then((ps) => ps.find((p) => p.id === 1));
+  ok('(17 guarda setup) o vértice #1 (de 3 selecionados) projeta na tela', !!projV1_17, `${JSON.stringify(projV1_17)}`);
+  if (projV1_17) {
+    await page17.mouse.move(projV1_17.x, projV1_17.y);
+    await page17.mouse.down();
+    await page17.mouse.move(projV1_17.x + 18, projV1_17.y + 14, { steps: 6 });
+    const emArr17 = await page17.evaluate(() => window.__oficina.emArrasto());
+    const painelRdDurArr = await page17.evaluate(() => window.__oficina.painelRuido());
+    const painelTfDurArr = await page17.evaluate(() => window.__oficina.painelTransformar());
+    const n17_durArr = await nP17();
+    const ruidoDurArr = await page17.evaluate(() => window.__oficina.aplicarRuido({ amplitude: 0.05 }));
+    const rotDurArr = await page17.evaluate(() => window.__oficina.rotacionar({ eixo: 'x', graus: 10 }));
+    const n17_posOps = await nP17();
+    await page17.mouse.move(projV1_17.x, projV1_17.y, { steps: 6 });
+    await page17.mouse.up(); await r17();
+    const n17_posSolta = await nP17();
+    ok('(17 guarda) arrastar 1 vértice de 3 RESSELECIONA sozinho pra 1 (a lei do passo 8) — os blocos CONTINUAM visíveis (1 ainda satisfaz "alguma seleção") com os botões DESABILITADOS',
+       !!emArr17 && painelRdDurArr.vis === true && painelTfDurArr.vis === true, `emArrasto ${JSON.stringify(emArr17)} · ruído ${JSON.stringify(painelRdDurArr)} · transformar ${JSON.stringify(painelTfDurArr)}`);
+    ok('(17 guarda ★) MESMO visíveis, aplicarRuido()/rotacionar() por hook devolvem null durante o arrasto — PASSOS não muda nem depois de soltar (de volta na origem)',
+       ruidoDurArr === null && rotDurArr === null && n17_posOps === n17_durArr && n17_posSolta === n17_durArr,
+       `PASSOS durante=${n17_durArr} pós-ops=${n17_posOps} pós-solta=${n17_posSolta}`);
+    const canonPosGuarda17 = await canon17();
+    ok('(17 guarda) o canônico depois de soltar de volta na origem bate BIT-A-BIT com o de ANTES do arrasto',
+       JSON.stringify(canonPosGuarda17) === JSON.stringify(canonAntesGuarda17), `${JSON.stringify(canonPosGuarda17) === JSON.stringify(canonAntesGuarda17) ? 'bate' : 'DIVERGE'}`);
+  }
+
+  // ---- (17 undo/redo) Ctrl+Z tira o rotaciona-em-vértices; Ctrl+Y devolve ----
+  await ctrlZ17();
+  const canonPosUndo17 = await canon17();
+  ok('(17 undo) Ctrl+Z tira o último passo (rotaciona em vértices): PASSOS −1 e o canônico volta a bater com o de ANTES dele',
+     (await nP17()) === n17_antesRotV && JSON.stringify(canonPosUndo17) === JSON.stringify(canonAntesRotV), `PASSOS ${await nP17()} (esp ${n17_antesRotV}) · canônico ${JSON.stringify(canonPosUndo17) === JSON.stringify(canonAntesRotV) ? 'bate' : 'DIVERGE'}`);
+  await ctrlY17();
+  const canonPosRedo17 = await canon17();
+  ok('(17 redo) Ctrl+Y devolve o passo: PASSOS volta e o canônico bate BIT-A-BIT com o de DEPOIS dele',
+     (await nP17()) === n17_antesRotV + 1 && JSON.stringify(canonPosRedo17) === JSON.stringify(canonPosRotV), `PASSOS ${await nP17()} · canônico ${JSON.stringify(canonPosRedo17) === JSON.stringify(canonPosRotV) ? 'bate' : 'DIVERGE'}`);
+
+  // ---- (17 serial ★) exporta os 5 passos, reabre em Node: PASSOS + canônico idênticos ----
+  const strTransf = await page17.evaluate(() => window.__oficina.serializar());
+  const passosTransf = await page17.evaluate(() => window.__oficina.passos());
+  const canonTransf = await canon17();
+  const Mrt17 = await reimportar17(strTransf, 'rt_transformar17');
+  const canonNode17 = neutroCanonico(nucleo(Mrt17.PASSOS, Mrt17.PARAMS ?? {}, Mrt17.TOPO ?? {}));
+  ok('(17 serial) PASSOS reabrem iguais (cubo+displace+espelha+rotaciona×2 = 5 passos) — serializarPeca não precisou de NENHUMA mudança',
+     JSON.stringify(Mrt17.PASSOS) === JSON.stringify(passosTransf) && Mrt17.PASSOS.length === 5, `${Mrt17.PASSOS.length} passos`);
+  /* achado ao rodar (não hipotético, D-116): com `displace` na lista, o canônico
+     PÁGINA (Chromium) e NODE não batem BIT-A-BIT — divergem na 12ª-13ª casa decimal
+     (~1e-13, medido nos 12 vértices). Causa: `hash3` usa Math.sin, e o padrão
+     ECMAScript garante bit-exatidão só pra +,-,*,/ — funções transcendentais
+     (sin/cos) são de IMPLEMENTAÇÃO, então o V8 do Chromium e o do binário Node
+     (builds distintas) podem divergir por ULPs. NÃO é bug do displace (P8c) nem
+     desta rodada: dentro do MESMO motor (a peça sempre roda só num, jogo OU
+     ferramenta, nunca os dois comparados) o resultado é determinístico — a
+     divergência só aparece NESTE cross-check síntético página↔Node, o único lugar
+     que roda os dois lados. As outras op (cubo/espelha/rotaciona/moveV/…) usam só
+     +,-,*,/ e continuam BIT-A-BIT em todo o resto da bancada (passos 10/15/16).
+     Por isso: estrutura (ids, contagem V/F, faces) exige IGUALDADE EXATA; só a
+     POSIÇÃO de cada vértice usa epsilon 1e-9 (~4 ordens de grandeza acima do
+     ruído medido — folga generosa sem esconder um bug de verdade, que erraria
+     por muito mais que ULPs). */
+  const mesmosIds = canonNode17.V.length === canonTransf.V.length && canonNode17.F.length === canonTransf.F.length && canonNode17.orfaos.length === canonTransf.orfaos.length
+    && canonNode17.V.every((row) => canonTransf.V.some((r) => r[0] === row[0])) && canonNode17.F.every((row) => canonTransf.F.some((r) => r[0] === row[0]));
+  const posDentroEpsilon = canonTransf.V.every((rowP) => {
+    const rowN = canonNode17.V.find((r) => r[0] === rowP[0]);
+    return rowN && Math.hypot(rowN[1] - rowP[1], rowN[2] - rowP[2], rowN[3] - rowP[3]) < 1e-9;
+  });
+  const facesIguais = canonTransf.F.every((rowP) => {
+    const rowN = canonNode17.F.find((r) => r[0] === rowP[0]);
+    return rowN && JSON.stringify(rowN[1]) === JSON.stringify(rowP[1]) && rowN[2] === rowP[2] && rowN[3] === rowP[3] && rowN[4] === rowP[4] && rowN[5] === rowP[5];
+  });
+  ok('(17 serial ★) o canônico bate: estrutura EXATA (ids/contagem V/F/órfãos, winding/atributos de face) + posição de vértice dentro de 1e-9 (o `Math.sin` do displace não é garantido bit-exato entre engines, achado ao rodar — comentário acima)',
+     mesmosIds && posDentroEpsilon && facesIguais, `V ${canonTransf.V.length}/${canonNode17.V.length} · F ${canonTransf.F.length}/${canonNode17.F.length} · ids ${mesmosIds} · posições≤1e-9 ${posDentroEpsilon} · faces ${facesIguais}`);
+
+  await page17.screenshot({ path: join(OUT17, 'oficina-ruido-transformar.png') });
+  await page17.close();
+}
+
 await browser.close();
 server.close();
 

@@ -183,9 +183,18 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
         delta `dX/dY/dZ` RELATIVO (não um alvo absoluto — isso é o painel
         Vértice, só faz sentido pra 1 vértice), guardado como o valor exato
         do passo 6 (D3 no-op de zero, D4 recusa além de ±100).
-  - [ ] **P9c** — painel do `displace` (amplitude/frequência/semente + botão
-        aplicar, o molde do painel de material) e botões pro `espelha`/
-        `rotaciona` (P3, sem UI desde que existem).
+  - [x] **P9c** (D-125) — blocos `#blocoRuido` (`displace`, P8c) e
+        `#blocoTransformar` (`espelha`/`rotaciona`, P3), no fim do painel
+        Modelar (a mesma lição de posição do P9b). Aparecem com QUALQUER
+        seleção (vértice(s) OU face(s) — o núcleo aceita qualquer contagem,
+        ao contrário do par-exato do bloco Editar); Espelhar fica
+        desabilitado sem face (a op só aceita `sel.f`). Depois de espelhar,
+        a seleção pula pras faces NOVAS (o padrão do adicionarForma).
+        Achado ao rodar (não hipotético): o round-trip página↔Node com
+        `displace` na lista diverge na 12ª casa decimal (`Math.sin` do
+        ruído não é garantido bit-exato entre engines, D-116) — não é bug,
+        é limite de medição; a bancada compara estrutura EXATA + posição
+        com epsilon 1e-9.
   - [ ] **P9d** — seleção por REGIÃO (caixa) e por GRUPO generalizada pro
         espaço Modelar (`resolverAlvosV`/P8a já aceita os dois no núcleo; a
         UI só tem grupo, parcial, dentro do espaço Animação).
