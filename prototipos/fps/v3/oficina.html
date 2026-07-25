@@ -218,6 +218,24 @@
   <h2>Propriedades</h2>
   <div class="sub" id="propsSub">espaço Modelar · vértice e caixa</div>
 
+  <!-- PASSO 15 — ADICIONAR FORMA (P9a do playground): a Oficina, até aqui, só EDITAVA
+       uma peça já escrita à mão (nenhum botão criava geometria do zero — achado da
+       investigação antes de codar esta op). Este bloco é o primeiro passo desse gap:
+       lista as PRIMITIVAS de parâmetro ESCALAR do núcleo (cubo/cilindro/esfera/cone/
+       plano/chamferBox — a tabela FORMAS, abaixo no JS); `lathe`/`loft`/`inflate` ficam
+       de fora de propósito (pedem perfil/contorno — um array de pontos, não campo
+       escalar — a Aba Desenho ainda não existe, docs/oficina.md). SEMPRE visível no
+       espaço Modelar (não depende de seleção nenhuma — o oposto de todo bloco abaixo).
+       Nasce na ORIGEM (a convenção "chão embaixo" de toda primitiva) — reposicionar é
+       edição normal com o vértice/gizmo já existentes, não uma feature nova. -->
+  <section class="bloco" id="blocoAdicionar">
+    <div class="rotulo">Adicionar forma</div>
+    <div class="linha2"><label>tipo</label><select id="afTipo" aria-label="tipo de forma"></select></div>
+    <div id="afCampos"></div>
+    <button id="afBtAdicionar" class="btmescla" type="button">+ Adicionar</button>
+    <div class="dica" id="afDica">nasce na origem — arraste os vértices pra posicionar</div>
+  </section>
+
   <section class="bloco" id="blocoVertice">
     <div class="rotulo">Vértice <span id="pvSel" class="badge vazio">—</span></div>
     <label class="campo"><span class="eixo ex">X</span><input id="pvx" type="number" step="0.01" disabled></label>
@@ -422,7 +440,7 @@
    "abrir solta o cursor travado, senão não dá pra clicar em nada") — NENHUM
    requestPointerLock; os passos futuros clicam em vértice/face. */
 import { criarVisor } from './motor/render.js';
-import { nucleo, executar, neutroCanonico, colisaoDe, adaptarV3, montarAnimar } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números); passo 4: re-executa a lista ao vivo (executar/nucleo) e compara canônico; passo 10: colisaoDe (colisão sugerida no painel + a CHAMADA gravada no export); passo 11c: adaptarV3 pro ATLAS (mapa superfície→texel do raycast do pincel); passo 13b: montarAnimar pro gancho de matriz-em-T do preview (prova página==Node)
+import { nucleo, executar, neutroCanonico, colisaoDe, adaptarV3, montarAnimar, BLOCO } from './motor/oficina.js';   // passo 3: o NEUTRO (V/F em números); passo 4: re-executa a lista ao vivo (executar/nucleo) e compara canônico; passo 10: colisaoDe (colisão sugerida no painel + a CHAMADA gravada no export); passo 11c: adaptarV3 pro ATLAS (mapa superfície→texel do raycast do pincel); passo 13b: montarAnimar pro gancho de matriz-em-T do preview (prova página==Node); passo 15: BLOCO pra achar as faces da forma recém-criada (ids [base, base+BLOCO))
 import { m4 } from './motor/mat4.js';
 import * as tex from './motor/tex.js';
 import * as geo from './motor/geo.js';
@@ -453,6 +471,32 @@ const LIMIAR_PX = 4;               // px: abaixo disto o gesto é CLIQUE — só
    de OUTRO vértice projetado COLA o arrastado na posição EXATA dele. 1.5×RAIO_HIT:
    pega o vizinho que está perto sem grudar num que só passou de leve. */
 const IMA_RAIO = RAIO_HIT * 1.5;
+
+/* PASSO 15 — ADICIONAR FORMA: as primitivas de parâmetro ESCALAR do núcleo
+   (motor/oficina.js) que o bloco #blocoAdicionar oferece. Cada entrada é só
+   APRESENTAÇÃO (rótulo do tipo + [chave, rótulo do campo, default] por campo) — o
+   núcleo já valida/clampa cada argumento sozinho (aridade, mín de `lados`/`aneis`,
+   a faixa de `chanfro`), então um campo com lixo ou vazio aqui nunca corrompe nada:
+   cai no default listado (Number.isFinite manda, `malhaCtl.adicionarForma` abaixo).
+   `lathe`/`loft`/`inflate` ficam de fora — pedem um PERFIL/CONTORNO (array de
+   pontos), não campo escalar; isso é a Aba Desenho (ainda placeholder,
+   docs/oficina.md), um passo futuro. */
+const FORMAS = {
+  cubo: { rotulo: 'Cubo', campos: [['lado', 'lado', 1]] },
+  cilindro: { rotulo: 'Cilindro', campos: [['raio', 'raio', 0.5], ['altura', 'altura', 1], ['lados', 'lados', 8]] },
+  esfera: { rotulo: 'Esfera', campos: [['raio', 'raio', 0.5], ['aneis', 'anéis', 6], ['lados', 'lados', 8]] },
+  cone: { rotulo: 'Cone', campos: [['raio', 'raio', 0.5], ['altura', 'altura', 1], ['lados', 'lados', 8]] },
+  plano: { rotulo: 'Plano', campos: [['largura', 'largura', 1], ['profundidade', 'profundidade', 1], ['seg', 'segmentos', 1]] },
+  chamferBox: { rotulo: 'Caixa chanfrada', campos: [['larg', 'largura', 1], ['alt', 'altura', 1], ['prof', 'profundidade', 1], ['chanfro', 'chanfro', 0.1]] },
+};
+function montarSelectFormas() {
+  const sel = $('afTipo'); if (!sel) return;
+  sel.innerHTML = Object.entries(FORMAS).map(([k, f]) => `<option value="${k}">${f.rotulo}</option>`).join('');
+}
+function montarCamposForma(tipo) {
+  const wrap = $('afCampos'), f = FORMAS[tipo]; if (!wrap || !f) return;
+  wrap.innerHTML = f.campos.map(([chave, rotulo, def]) => `<label class="campo"><span class="rk">${rotulo}</span><input type="number" step="0.01" data-campo="${chave}" value="${def}"></label>`).join('');
+}
 
 /* PASSO 6: GIZMO DE MOVER — 3 setas (X/Y/Z) no vértice SELECIONADO, arrastáveis
    TRAVADAS num eixo. Desenhadas no overlay 2D projetando base e ponta (nenhum
@@ -1159,6 +1203,17 @@ addEventListener('keydown', (e) => {
 { const d = $('pkDureza'); if (d) d.addEventListener('input', () => setPincel({ dureza: parseFloat(d.value) })); }
 atualizarPainelPincel();   // valores iniciais dos sliders no painel
 
+/* PASSO 15 — ADICIONAR FORMA: popula o <select> + os campos do 1º tipo. Puramente
+   DOM (não depende de `neutro`/`malhaCtl`/da peça carregada) — roda cedo, como o
+   pincel acima; o botão só passa a fazer algo depois que a peça carrega (guarda
+   `if (!malhaCtl) return` no listener, abaixo). */
+montarSelectFormas();
+montarCamposForma(Object.keys(FORMAS)[0]);
+{
+  const sel = $('afTipo');
+  if (sel) sel.addEventListener('change', () => montarCamposForma(sel.value));
+}
+
 /* ---- carrega a peça e roda o motor --------------------------------------- */
 let visor;
 try {
@@ -1284,7 +1339,8 @@ try {
          espaço NÃO mexe em câmera/seleção/objeto — só em QUAIS painéis aparecem (D-73). */
       const modelar = !animLigado;
       const sub = $('propsSub'); if (sub) sub.textContent = modelar ? 'espaço Modelar · vértice e caixa' : 'espaço Animação · partes e linha do tempo';
-      for (const bid of ['blocoVertice', 'blocoCaixa', 'blocoColisao']) { const el = $(bid); if (el) el.hidden = !modelar; }
+      for (const bid of ['blocoAdicionar', 'blocoVertice', 'blocoCaixa', 'blocoColisao']) { const el = $(bid); if (el) el.hidden = !modelar; }
+      { const bt = $('afBtAdicionar'); if (bt) bt.disabled = !!arrasto; }   // PASSO 15: "um dono por vez" — sem clique novo com edição em voo
       // PASSO 14b: blocoEsqueleto/blocoPeso (rigging) vivem no MESMO espaço Animação (setup de animação)
       for (const bid of ['blocoAnim', 'blocoPartes', 'blocoEsqueleto', 'blocoPeso', 'blocoAnims']) { const el = $(bid); if (el) el.hidden = modelar; }
       { const bl = $('blocoChave'); if (bl) bl.hidden = modelar || !chaveSel; }
@@ -1421,6 +1477,16 @@ try {
        S/E/R pra escala/extruda/rotação — então a marcação vive no painel, como o
        pincel do passo 9. */
     { const bt = $('btSolido'); if (bt) bt.addEventListener('click', () => { if (malhaCtl) malhaCtl.marcarSolido(); }); }
+    /* PASSO 15 — o botão "+ Adicionar" lê o <select> de tipo + os campos DINÂMICOS
+       (data-campo, montados por montarCamposForma) e chama malhaCtl.adicionarForma.
+       malhaCtl só existe depois que a peça carrega — a UI fica montada desde cedo
+       (montarSelectFormas/montarCamposForma acima), mas o clique é no-op até lá. */
+    { const bt = $('afBtAdicionar'); if (bt) bt.addEventListener('click', () => {
+        const sel = $('afTipo'); if (!malhaCtl || !sel) return;
+        const campos = {};
+        for (const el of document.querySelectorAll('#afCampos [data-campo]')) campos[el.dataset.campo] = el.value;
+        malhaCtl.adicionarForma(sel.value, campos);
+      }); }
     /* PASSO 10 — o botão "Salvar peça" serializa o estado ATUAL (mod/PASSOS/PARAMS/
        TOPO) e POSTa pro servidor de dev; sem servidor, baixa o .js (fallback). */
     { const bt = $('btSalvar'); if (bt) bt.addEventListener('click', async () => {
@@ -1717,6 +1783,46 @@ try {
         atualizarPassos();
         atualizarPainel();
         console.log(`oficina passo 12a (material): ['material', {faces:[${faces.join(', ')}], usa:'${usa}'}] = ${JSON.stringify(def)} — PASSOS agora ${PASSOS.length}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+
+      /* ---- PASSO 15: ADICIONAR FORMA (P9a do playground) --------------------- */
+      /* Cria uma PRIMITIVA nova do zero — a única ação deste arquivo que NÃO parte
+         de uma seleção. `campos` é o dict cru {chave: string} lido dos <input> do
+         painel (ou passado direto pelo hook de teste); cada valor vira Number com
+         fallback pro DEFAULT da tabela FORMAS se vier vazio/lixo (NaN nunca chega
+         no núcleo — o `st.num` do motor já rejeita não-finito por lei, D-118, mas
+         aqui nem tenta: cai no default ANTES). Empurra [tipo,{...campos}] no fim de
+         PASSOS — cai no BLOCO livre seguinte por POSIÇÃO (baseDoPasso), nunca colide
+         com o que já existe, não importa quantas formas já foram criadas. Depois de
+         reexec, seleciona as faces que nasceram no bloco daquele passo (filtra
+         neutro.F por id — funciona pra QUALQUER primitiva, sem hardcode de contagem
+         por tipo). Se o tipo tem parâmetro inválido (ex.: chanfro fora da faixa do
+         chamferBox) o núcleo GRITA e não cria nada — 0 faces no bloco; a dica avisa
+         em vez de falhar silenciosa. Nasce na ORIGEM sempre (a convenção de toda
+         primitiva) — reposicionar é o vértice/gizmo já existentes, não uma feature
+         nova aqui. */
+      adicionarForma(tipo, campos) {
+        if (arrasto) return null;                          // guarda: não adiciona com edição em voo
+        const f = FORMAS[tipo];
+        if (!f) return null;                                // tipo desconhecido — defensivo (o <select> só lista os válidos)
+        const args = {};
+        for (const [chave, , def] of f.campos) { const v = Number(campos && campos[chave]); args[chave] = Number.isFinite(v) ? v : def; }
+        const antes = mod.PASSOS.length;                    // índice posicional do passo NOVO — baseDoPasso(antes) = antes*BLOCO
+        const passo = [tipo, args];
+        PASSOS.push(passo);
+        redo.length = 0;                                    // edição nova invalida o refazer (semântica do passo 5)
+        reexec(PASSOS);
+        const base = antes * BLOCO;
+        const faces = [...neutro.F.keys()].filter((id) => id >= base && id < base + BLOCO).sort((a, b) => a - b);
+        const dica = $('afDica');
+        if (faces.length) {
+          this.selecionarFaces(faces);
+          if (dica) dica.textContent = `${f.rotulo} adicionado — ${faces.length} face(s) selecionada(s), arraste os vértices pra posicionar`;
+        } else if (dica) dica.textContent = `${f.rotulo}: nada foi criado — parâmetro inválido (veja o console)`;
+        atualizarPassos();
+        atualizarPainel();
+        console.log(`oficina passo 15 (adicionar forma): [${JSON.stringify(tipo)}, ${JSON.stringify(args)}] — PASSOS agora ${PASSOS.length}${faces.length ? '' : ' — SEM face nova (órfão)'}`);
         return JSON.parse(JSON.stringify(passo));
       },
 
@@ -2831,6 +2937,11 @@ try {
     painelMaterial: () => ({ vis: !$('blocoMaterial').hidden, badge: $('pmFaces').textContent }),   // leitura do bloco de material pra a bancada afirmar
     /* ---- PASSO 10: sólido + colisão + serialização + salvar (a bancada mede) --- */
     marcarSolido: () => (malhaCtl ? malhaCtl.marcarSolido() : null),                  // marca as faces selecionadas como sólidas; devolve o passo (ou null se no-op/guarda)
+    // PASSO 15: tipos disponíveis (introspecção pra bancada) + criar uma forma sem simular clique/campo real
+    tiposForma: () => Object.keys(FORMAS),
+    camposForma: (tipo) => (FORMAS[tipo] ? FORMAS[tipo].campos.map(([chave, rotulo, def]) => ({ chave, rotulo, def })) : null),
+    adicionarForma: (tipo, campos) => (malhaCtl ? malhaCtl.adicionarForma(tipo, campos || {}) : null),
+    dicaAdicionar: () => { const el = $('afDica'); return el ? el.textContent : null; },
     solidoDe: (id) => { const f = neutro && neutro.F.get(id); return f ? !!f.solido : false; },   // a face id é sólida no neutro?
     temSolido: () => { const F = neutro && neutro.F; return F ? [...F.values()].some((f) => f.solido) : false; },   // há ALGUMA face sólida?
     colisao: () => { try { return colisaoDe(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual); } catch { return null; } },   // {forma,raio,altura,base} do estado atual (a MESMA função que o arquivo salvo chama no load)

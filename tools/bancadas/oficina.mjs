@@ -2899,9 +2899,175 @@ ok('(14b JÓIA) o motor do 14a (op `pesar` + resolverEsqueleto + skinning) segue
    motor14bok, `pesar+resolverEsqueleto+hook: ${motor14bok}`);
 await pageC.close();
 
+/* ==== PASSO 15: ADICIONAR FORMA (P9a do playground, D-123) ====================
+   Até aqui a Oficina só EDITAVA uma peça já escrita à mão — achado da investigação
+   antes de codar: NENHUM botão criava geometria do zero. Este passo fecha essa
+   lacuna pras 6 primitivas de parâmetro ESCALAR (cubo/cilindro/esfera/cone/plano/
+   chamferBox); lathe/loft/inflate (perfil/contorno) ficam pra Aba Desenho.
+   PURO NÚCLEO POR CIMA — nenhuma linha de motor/oficina.js muda (jóia + núcleo
+   inteiro intactos, conferido por git diff à parte). Roda numa peça FRESCA
+   (`_vazio`, PASSOS=[]) — o caso real de "começar do nada":
+   (15 bloco) #blocoAdicionar é o ÚNICO bloco sempre visível em Modelar sem seleção
+        nenhuma, e some no espaço Animação (como os outros blocos de Modelar);
+   (15 tipos) o <select> lista as MESMAS 6 primitivas que tiposForma() devolve;
+   (15 campos) trocar o tipo RECONSTRÓI #afCampos (chave+default) batendo com
+        camposForma(tipo) — a tabela FORMAS não é hardcode duplicado no teste;
+   (15 clique real) select+fill+clique REAIS (Playwright) gravam o VALOR DIGITADO
+        (não o default) — prova a fiação DOM→args, não só o atalho do hook;
+   (15 seleção) a forma recém-criada nasce com as PRÓPRIAS faces selecionadas
+        (ids do bloco do passo, calculados — não hardcoded por tipo);
+   (15 sequência) 5 formas a mais, cada uma um passo — nenhum id colide (BLOCO por
+        POSIÇÃO), e o canônico da PÁGINA bate BIT-A-BIT com nucleo() RODADO EM NODE
+        na MESMA lista lida da página (não reconstruída à mão — a lição D-116);
+   (15 guarda) um vértice em arrasto (drag real, sem soltar) DESABILITA o botão e
+        adicionarForma() devolve null — "um dono por vez", como todo outro botão;
+   (15 inválido) chamferBox com chanfro fora da faixa GRITA (o passo ENTRA em PASSOS
+        mas 0 faces nascem) — a geometria JÁ existente fica com V/F INTACTOS, prova
+        de que não corrompe nada mesmo com parâmetro ruim vindo da UI;
+   (15 undo/redo) Ctrl+Z tira a ÚLTIMA forma (canônico volta bit-a-bit); Ctrl+Y
+        devolve (bate com o de depois) — a MESMA máquina genérica do passo 5;
+   (15 serial ★) exporta com 7 formas na lista, reabre em Node: PASSOS e canônico
+        idênticos (serializarPeca não precisou de nenhuma mudança — os args de
+        TODAS as formas são números/strings planos, confirmado na investigação). */
+const OUT15 = resolve(REPO, 'scratchpad/passo15');
+mkdirSync(OUT15, { recursive: true });
+const T_MOTOR15 = join(OUT15, 'motor'), T_RT15 = join(OUT15, 'rt');
+for (const d of [T_MOTOR15, T_RT15]) { rmSync(d, { recursive: true, force: true }); mkdirSync(d, { recursive: true }); }
+writeFileSync(join(T_MOTOR15, 'oficina.js'), `export * from ${JSON.stringify(relative(T_MOTOR15, resolve(REPO, 'prototipos/fps/v3/motor/oficina.js')).split(pathSep).join('/'))};\n`);
+const reimportar15 = async (conteudo, nomeArq) => { const arq = join(T_RT15, nomeArq + '.js'); writeFileSync(arq, conteudo); return import(pathToFileURL(arq).href + '?v=' + Date.now()); };
+
+const page15 = await browser.newPage({ viewport: { width: 900, height: 620 } });
+page15.on('pageerror', (e) => console.error('PAGEERR(15):', e.message));
+await page15.goto(`${base}?peca=_vazio`, { waitUntil: 'load' });
+await page15.waitForFunction(() => window.__ready === true, { timeout: 15000 }).catch(() => {});
+const ready15 = await page15.evaluate(() => window.__ready === true);
+ok('(15 abre) _vazio abre no editor (window.__ready) — peça sem PASSOS nenhum, o ponto de partida real de "criar do zero"', ready15);
+if (!ready15) { console.error('  _vazio não abriu — abortando o passo 15'); await page15.close(); }
+else {
+  const r15 = () => page15.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => res(0)))));
+  const nP15 = () => page15.evaluate(() => window.__oficina.nPassos());
+  const canon15 = () => page15.evaluate(() => JSON.stringify(window.__oficina.canon()));
+
+  // ---- (15 bloco) sempre visível em Modelar sem seleção; some em Animação ----
+  const visAdicModelar = await page15.evaluate(() => !document.getElementById('blocoAdicionar').hidden);
+  await page15.click('#chipAnim'); await r15();
+  const visAdicAnim = await page15.evaluate(() => document.getElementById('blocoAdicionar').hidden);
+  await page15.click('#chipModelar'); await r15();
+  ok('(15 bloco) #blocoAdicionar aparece em Modelar SEM nenhuma seleção (o único bloco assim) e some em Animação',
+     visAdicModelar === true && visAdicAnim === true, `modelar-visível ${visAdicModelar} · anim-escondido ${visAdicAnim}`);
+
+  // ---- (15 tipos) o <select> lista as 6 primitivas de tiposForma() ----
+  const tipos15 = await page15.evaluate(() => window.__oficina.tiposForma());
+  const opcoesDom = await page15.$$eval('#afTipo option', (os) => os.map((o) => o.value));
+  ok('(15 tipos) tiposForma() e as <option> do DOM listam as MESMAS 6 primitivas, na mesma ordem',
+     JSON.stringify(tipos15) === JSON.stringify(opcoesDom) && tipos15.length === 6, `${JSON.stringify(tipos15)}`);
+
+  // ---- (15 campos) trocar pra 'esfera' reconstrói #afCampos batendo com camposForma ----
+  await page15.selectOption('#afTipo', 'esfera'); await r15();
+  const camposDom = await page15.$$eval('#afCampos [data-campo]', (els) => els.map((e) => ({ chave: e.dataset.campo, valor: Number(e.value) })));
+  const camposEsperados = await page15.evaluate(() => window.__oficina.camposForma('esfera'));
+  ok('(15 campos) trocar o tipo reconstrói #afCampos (chave+default) batendo com camposForma(tipo) — a tabela FORMAS não duplicada no teste',
+     JSON.stringify(camposDom.map((c) => c.chave)) === JSON.stringify(camposEsperados.map((c) => c.chave)) && camposDom.every((c, i) => c.valor === camposEsperados[i].def),
+     `dom ${JSON.stringify(camposDom)} · esperado ${JSON.stringify(camposEsperados)}`);
+
+  // ---- (15 clique real) select+fill+clique REAIS gravam o VALOR DIGITADO, não o default ----
+  await page15.fill('#afCampos input[data-campo="raio"]', '0.77');
+  await page15.fill('#afCampos input[data-campo="aneis"]', '9');
+  const n15_antesClique = await nP15();
+  await page15.click('#afBtAdicionar'); await r15();
+  const passo15_clique = await page15.evaluate(() => window.__oficina.ultimoPasso());
+  ok('(15 clique real) select+campo+botão REAIS (Playwright) gravam [esfera,{raio:0.77,aneis:9,lados:8}] — o valor DIGITADO, não o default',
+     (await nP15()) === n15_antesClique + 1 && JSON.stringify(passo15_clique) === JSON.stringify(['esfera', { raio: 0.77, aneis: 9, lados: 8 }]),
+     `${JSON.stringify(passo15_clique)}`);
+
+  // ---- (15 seleção) a esfera nasce com as PRÓPRIAS faces selecionadas (calculado, não hardcoded) ----
+  const selEsfera = await page15.evaluate(() => window.__oficina.selecaoFaces());
+  const ativaEsfera = await page15.evaluate(() => window.__oficina.faceAtiva());
+  const esperadoEsfera = Array.from({ length: 9 * 8 }, (_, k) => k);   // aneis(9)·lados(8) faces, ids 0..71 (1º passo -> base 0)
+  ok('(15 seleção) a esfera recém-criada fica com TODAS as 72 faces dela selecionadas (aneis·lados), a ATIVA é a de maior id',
+     JSON.stringify(selEsfera) === JSON.stringify(esperadoEsfera) && ativaEsfera === 71,
+     `${selEsfera.length} faces (esperado 72) · ativa ${ativaEsfera}`);
+
+  // ---- (15 sequência) 5 formas a mais por hook — nenhum id colide, canônico PÁGINA==NODE na lista LIDA da página ----
+  const outrosTipos = tipos15.filter((t) => t !== 'esfera');
+  for (const tipo of outrosTipos) await page15.evaluate((t) => window.__oficina.adicionarForma(t, {}), tipo);
+  await r15();
+  const passosLidos = await page15.evaluate(() => window.__oficina.passos());
+  const canonPagina = await canon15();
+  const canonNode = JSON.stringify(neutroCanonico(nucleo(passosLidos, {}, {})));
+  ok('(15 sequência) 6 formas em sequência (1 custom + 5 default): PASSOS = 6, 0 órfãos, nenhum id de face/vértice colide entre elas',
+     passosLidos.length === 6 && JSON.parse(canonPagina).orfaos.length === 0,
+     `PASSOS ${passosLidos.length} · órfãos ${JSON.parse(canonPagina).orfaos.length}`);
+  ok('(15 sequência ★) o canônico da PÁGINA bate BIT-A-BIT com nucleo() rodado em NODE na MESMA lista lida da página (não recalculada à mão)',
+     canonNode === canonPagina, `${canonNode === canonPagina ? 'idêntico' : 'DIVERGE'} (${JSON.parse(canonPagina).V.length} vértices · ${JSON.parse(canonPagina).F.length} faces)`);
+  const nV_antesInvalido = JSON.parse(canonPagina).V.length, nF_antesInvalido = JSON.parse(canonPagina).F.length;
+
+  // ---- (15 guarda) vértice em arrasto (drag real, sem soltar) desabilita o botão; adicionarForma() vira null ----
+  const projV0 = await page15.evaluate(() => window.__oficina.projMalha()).then((ps) => ps.find((p) => p.id === 0));
+  ok('(15 guarda setup) o vértice #0 (do cubo, 1º passo default) projeta na tela', !!projV0, `${JSON.stringify(projV0)}`);
+  if (projV0) {
+    await page15.mouse.move(projV0.x, projV0.y);
+    await page15.mouse.down();
+    await page15.mouse.move(projV0.x + 18, projV0.y + 14, { steps: 6 });
+    const emArr15 = await page15.evaluate(() => window.__oficina.emArrasto());
+    const btDisabled = await page15.$eval('#afBtAdicionar', (el) => el.disabled);
+    const n15_durArr = await nP15();
+    const adicDurArr = await page15.evaluate(() => window.__oficina.adicionarForma('cubo', {}));
+    const n15_posAdic = await nP15();               // captura AINDA em arrasto — não depois de soltar
+    // solta de VOLTA na posição ORIGINAL (deslocamento líquido ~0, abaixo do LIMIAR_PX) — soltar()
+    // não grava moveV nenhum; sem isso o release ficaria >LIMIAR e gravaria um moveV de verdade,
+    // desalinhando a contagem de PASSOS dos testes seguintes (achado ao rodar — não hipotético)
+    await page15.mouse.move(projV0.x, projV0.y, { steps: 6 });
+    await page15.mouse.up(); await r15();
+    const n15_posSolta = await nP15();
+    ok('(15 guarda) com um vértice em arrasto (emArrasto() != null), o botão fica DISABLED e adicionarForma() devolve null (PASSOS não muda, nem depois de soltar) — "um dono por vez"',
+       !!emArr15 && btDisabled === true && adicDurArr === null && n15_posAdic === n15_durArr && n15_posSolta === n15_durArr,
+       `emArrasto ${JSON.stringify(emArr15)} · disabled ${btDisabled} · adicionar→${adicDurArr === null ? 'null' : 'GRAVOU'} · PASSOS durante=${n15_durArr} pós-adicionar=${n15_posAdic} pós-solta=${n15_posSolta}`);
+  }
+
+  // ---- (15 inválido) chamferBox com chanfro fora da faixa: passo ENTRA mas 0 faces nascem; geometria EXISTENTE intacta ----
+  const n15_antesInvalido = await nP15();
+  const passoInvalido = await page15.evaluate(() => window.__oficina.adicionarForma('chamferBox', { larg: 1, alt: 1, prof: 1, chanfro: 5 })); await r15();
+  const canonPosInvalido = JSON.parse(await canon15());
+  const dicaInvalida = await page15.evaluate(() => window.__oficina.dicaAdicionar());
+  ok('(15 inválido) chanfro=5 (fora de <min(0.5,0.5,0.5)) GRITA: o passo ENTRA em PASSOS (não é descartado), mas 0 faces novas nascem — órfão registrado',
+     (await nP15()) === n15_antesInvalido + 1 && JSON.stringify(passoInvalido[1]) === JSON.stringify({ larg: 1, alt: 1, prof: 1, chanfro: 5 }) && canonPosInvalido.orfaos.length === 1,
+     `PASSOS ${n15_antesInvalido}→${await nP15()} · órfãos ${canonPosInvalido.orfaos.length}`);
+  ok('(15 inválido) a dica avisa "nada foi criado" (sem falhar silencioso) e a geometria JÁ existente (V/F das 6 formas de antes) fica INTACTA',
+     /nada foi criado/.test(dicaInvalida) && canonPosInvalido.V.length === nV_antesInvalido && canonPosInvalido.F.length === nF_antesInvalido,
+     `dica '${dicaInvalida}' · V ${nV_antesInvalido}→${canonPosInvalido.V.length} · F ${nF_antesInvalido}→${canonPosInvalido.F.length}`);
+
+  // ---- (15 undo/redo) Ctrl+Z tira a forma inválida (PASSOS -1, canônico volta); Ctrl+Y devolve ----
+  const canonAntesUndo15 = await canon15();
+  const ctrlZ15 = async () => { await page15.keyboard.down('Control'); await page15.keyboard.press('KeyZ'); await page15.keyboard.up('Control'); await r15(); };
+  const ctrlY15 = async () => { await page15.keyboard.down('Control'); await page15.keyboard.press('KeyY'); await page15.keyboard.up('Control'); await r15(); };
+  await ctrlZ15();
+  const canonPosUndo15 = await canon15();
+  ok('(15 undo) Ctrl+Z tira o último passo (o chamferBox inválido): PASSOS −1 e o canônico volta a bater com o de ANTES dele',
+     (await nP15()) === n15_antesInvalido && canonPosUndo15 === canonPagina, `PASSOS ${await nP15()} (esp ${n15_antesInvalido}) · canônico ${canonPosUndo15 === canonPagina ? 'bate' : 'DIVERGE'}`);
+  await ctrlY15();
+  const canonPosRedo15 = await canon15();
+  ok('(15 redo) Ctrl+Y devolve o passo: PASSOS volta e o canônico bate BIT-A-BIT com o de DEPOIS dele (mesma máquina genérica do passo 5, sem código novo)',
+     (await nP15()) === n15_antesInvalido + 1 && canonPosRedo15 === canonAntesUndo15, `PASSOS ${await nP15()} · canônico ${canonPosRedo15 === canonAntesUndo15 ? 'bate' : 'DIVERGE'}`);
+
+  // ---- (15 serial ★) exporta com as 7 formas, reabre em Node: PASSOS + canônico idênticos ----
+  const strForma = await page15.evaluate(() => window.__oficina.serializar());
+  const passosForma = await page15.evaluate(() => window.__oficina.passos());
+  const canonForma = await canon15();
+  const Mrt15 = await reimportar15(strForma, 'rt_formas15');
+  const canonNode15 = JSON.stringify(neutroCanonico(nucleo(Mrt15.PASSOS, Mrt15.PARAMS ?? {}, Mrt15.TOPO ?? {})));
+  ok('(15 serial) PASSOS reabrem iguais (7 formas: 1 esfera custom + 5 default + 1 chamferBox inválido) — serializarPeca não precisou de NENHUMA mudança',
+     JSON.stringify(Mrt15.PASSOS) === JSON.stringify(passosForma) && Mrt15.PASSOS.length === 7, `${Mrt15.PASSOS.length} passos`);
+  ok('(15 serial ★) o canônico BIT-A-BIT: a peça exportada REABRE IDÊNTICA (página == Node), inclusive o órfão do chamferBox inválido',
+     canonNode15 === canonForma, `${canonNode15 === canonForma ? 'idêntico' : 'DIVERGE'}`);
+
+  await page15.screenshot({ path: join(OUT15, 'oficina-adicionar-forma.png') });
+  await page15.close();
+}
+
 await browser.close();
 server.close();
 
-console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}\n               ${join(OUT10, 'oficina-sem-solido-aviso.png')}\n               ${join(OUT10, 'oficina-colisao-painel.png')}\n               ${join(OUT11, 'oficina-atlas-toco.png')}\n               ${join(OUT11C, 'oficina-pincel-macio.png')}\n               ${join(OUT12, 'oficina-material-brasa.png')}\n               ${join(OUT13, 'oficina-anim.png')}\n               ${join(OUT13B, 'oficina-anim-ui.png')}\n               ${join(OUT14, 'oficina-esqueleto.png')}`);
+console.log(`\n  screenshots: ${join(OUT, 'oficina-antes.png')}\n               ${join(OUT, 'oficina-depois.png')}\n               ${join(OUT3, 'oficina-malha.png')}\n               ${join(OUT3, 'oficina-malha-ids.png')}\n               ${join(OUT4, 'oficina-vertice-arrastado.png')}\n               ${join(OUT5, 'oficina-desfazer-refazer.png')}\n               ${join(OUT6, 'oficina-gizmo.png')}\n               ${join(OUT6, 'oficina-gizmo-ids.png')}\n               ${join(OUT7, 'oficina-face-handle.png')}\n               ${join(OUT7, 'oficina-face-extrudada.png')}\n               ${join(OUT8, 'oficina-multiselecao.png')}\n               ${join(OUT8, 'oficina-ima.png')}\n               ${join(OUT9, 'oficina-faces-selecionadas.png')}\n               ${join(OUT9, 'oficina-faces-pintadas.png')}\n               ${join(OUT10, 'oficina-sem-solido-aviso.png')}\n               ${join(OUT10, 'oficina-colisao-painel.png')}\n               ${join(OUT11, 'oficina-atlas-toco.png')}\n               ${join(OUT11C, 'oficina-pincel-macio.png')}\n               ${join(OUT12, 'oficina-material-brasa.png')}\n               ${join(OUT13, 'oficina-anim.png')}\n               ${join(OUT13B, 'oficina-anim-ui.png')}\n               ${join(OUT14, 'oficina-esqueleto.png')}\n               ${join(OUT15, 'oficina-adicionar-forma.png')}`);
 if (falhas.length) { console.error(`\nBANCADA FALHOU — ${falhas.length}: ${falhas.join('; ')}`); process.exit(1); }
 console.log(`\nBANCADA OK — passo 2: órbita/pan/zoom + cursor livre + objeto centrado (piso ${pisoDiff}px, gesto ${gestoDiff}px); passo 3: overlay da malha (${N_VERT} vértices, arestas das ${N_FACE} faces) alinhado sobre o objeto; passo 4: seleciona + arrasta (segue o cursor a ${erroSegue.toFixed(2)}px) + grava moveV + replay da lista editada idêntico (página == Node) + câmera intacta no vazio; passo 5: desfazer/refazer (Ctrl+Z/Y/Shift+Z, baseline ${baseN}) — neutro canônico bate bit-a-bit com antes/depois, piso do baseline no-op, edição nova limpa o redo, 3 arrastos↔3 desfaz↔3 refaz idêntico; passo 6: gizmo de eixos (3 setas X/Y/Z) — arrasto TRAVADO grava d no eixo (vazamento máx ${vazMax.toExponential(2)} nos outros), o vértice segue a seta, a roda e o Ctrl+Z durante o arrasto são ignorados (guardas cobrem), o painel reflete vértice+caixa e fica de leitura no arrasto, e um clique num vértice coberto por uma seta seleciona o VÉRTICE (D1: precedência do alvo direto sobre o gizmo); o campo de valor exato recusa números absurdos (D4: limite de sanidade ±${limV}); passo 7: extruda UMA face pelo handle da normal — hit-test pega a face da FRENTE na sobreposição, o arrasto grava ['extruda',{face,dist}] com dist·compr ${distPx.toFixed(1)}px batendo o cursor ${ALONG7}px na normal (centroide projetado avançou ${alongC.toFixed(1)}px), o anel novo nasce no bloco ${blocoEsp} (idx·1000), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, a roda e o Ctrl+Z no arrasto são ignorados (MESMA máquina) e a face com a normal ~pra câmera não extruda (handle travado); passo 8: MESCLAR + ÍMÃ — Shift+clique multi-seleciona (o ativo é o último), a tecla M e o botão gravam ['mescla',{de,para}] (V ${V_antesM}->${V_posM}, o 'para' mantém a posição, as faces trocam de→para, a seleção vira o 'para'), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, o ímã cola A na posição EXATA de B (erro ${erroMundo.toExponential(1)} em mundo; sem Ctrl o gap é ${gapMundoB.toFixed(2)}un), Ctrl+Z e a roda no meio do arrasto-com-ímã são ignorados (MESMA máquina), e mesclar cantos adjacentes apaga a face de área-zero quieto sem corromper o resto; passo 9: PINTAR FACES — Shift+clique multi-seleciona faces (a ativa é a última), o \`change\` do <input type=color> grava ['pincel',{modo:'face',faces:[ordenadas],cor}] (neutro.F.cor vira a cor, face não-selecionada intacta), a cor APARECE no render (paleta do swatch tem o hex + probe de pixel do topo: madeira→azul), replay página==Node bit-a-bit, undo/redo voltam ao neutro de antes/depois, 3 faces + 1 cor = 1 passo com as 3 ORDENADAS, pintar no meio de um arrasto é ignorado, pintar a cor que a face já mostra é no-op (sem passo fantasma) e pintar face sem cor prévia grava (null → hex); passo 10: EXPORTAR + COLISÃO — o painel reflete colisaoDe (raio/altura/base) e o botão REAL grava ['solido',{faces:[ordenadas]}] (neutro.F.solido vira true, desfazível, no-op se já-sólido, ignorado no arrasto); a serialização IDA-E-VOLTA depois de editar (arrasto+extruda+pincel+solido) reabre BIT-A-BIT idêntica (página == Node, com a CHAMADA colisaoDe(PASSOS, PARAMS, TOPO) gravada, não o valor); o servir.mjs REAL grava pecas/<nome>.js num dir TEMP (arquivo === conteúdo, re-import replica), rejeita ../.., /etc, a/b, .., espaço e símbolo sem escrever fora, e serve com Cache-Control: no-store; uma peça sem solido mostra o AVISO e a colisão vira o objeto INTEIRO (marcar o topo a muda: altura 1→0); e sem a rota o Salvar cai no download sem quebrar; passo 11a: ATLAS POR FACE (fundação da textura pintável) — o adaptarV3 troca o SWATCH por um atlas de ${N_FACE} ILHAS DISJUNTAS (grade ${R11.atlas.cols}×${R11.atlas.rows}, ilha ${R11.atlas.tile}px, gutter ${R11.atlas.gutter}px, textura ${R11.atlas.W}×${R11.atlas.H}), o FURO da caixa GLOBAL (fundo #8 e topo #9 quase no mesmo XZ, IoU ${iouGlobal.toFixed(2)}) some com ilhas separadas, e o toco renderiza cada face na SUA cor IGUAL ao swatch (topo #9 madeira clara rgb ${rgbTopo11.r.toFixed(0)},${rgbTopo11.g.toFixed(0)},${rgbTopo11.b.toFixed(0)}; cmp byte-a-byte swatch↔atlas = 0 pixels no relatório). O mapa por face (ilha + projeta) fica anexado em atlas pro pincel macio do 11b; passo 11b (MOTOR): PINCEL MACIO no núcleo — a op 'livre' grava a tinta ANCORADA à face ({a,b} face-local, o mesmo s,t da projeção — não um texel cru) e o adaptarV3 rasteriza um DAB radial macio na ilha (centro=cor rgb ${centroL11}, +8px=base rgb ${bordaL11}, meio esmaece rgb ${meioL11}); determinístico (canon 2x + round-trip JSON estáveis, a tinta ENTRA na canon), a tinta ACOMPANHA a face num moveV (o centro segue cor mesmo com o UV do canto deslizando), órfão grita (#999, malha intacta), raio maior tinge mais texels (0.2→${tPeq11} < 0.4→${tGde11}) e dureza controla a borda, e o dab fica PRESO na célula (não vaza pra vizinha) — o modo 'face' segue BYTE-idêntico (o toco canoniza igual, linha F de 6); passo 11c: PINCEL MACIO na INTERFACE (pintar arrastando) — o modo pincel (chip "Pincel" + tecla B) LIGADO faz o arrasto na superfície PINTAR em vez de orbitar/selecionar (grava ['pincel',{modo:'livre',cor,raio,dureza,pontos:[{f,a,b}]}], câmera parada, nenhum vértice mexido), DESLIGADO tudo segue como antes (arrasto de vértice ainda grava moveV); o RAYCAST do cursor é o inverso EXATO de projetar (com lente) — o ponto de superfície projeta de volta a ${erroRT.toFixed(2)}px do cursor —, acha a face da FRENTE (hitFace) e intersecta o plano dela → {f,a,b} FACE-LOCAL (abInMundo bate o raycast); os pontos caem na face certa (#9) e ACOMPANHAM o arrasto (a monotônico, spread ${aSpread.toFixed(2)}); a pincelada APARECE no render (o centro vira azul rgb ${rgbDepois11c.r | 0},${rgbDepois11c.g | 0},${rgbDepois11c.b | 0}; a borda não pintada segue madeira), replay página==Node bit-a-bit (a tinta livre entra na canon), undo/redo voltam a superfície ao baseline/depois, os sliders de raio/dureza refletem na op e no tamanho da mancha (raio 0.08→${nTexPeq} texels < 0.5→${nTexGde}), a roda e o Ctrl+Z DURANTE a pincelada são ignorados (reusa a máquina arrasto/soltar), um arrasto no VAZIO no modo pincel não grava op vazia (orbita), e um arrasto atravessando o topo e um lado grava pontos em faces diferentes num só passo (${JSON.stringify(facesCross)}); passo 12a: MATERIAIS OPACOS — a UI aplica um material às faces selecionadas (grava ['material',{faces:[9],usa:'${usa12}'}], seta f.material só na face 9, registra ${JSON.stringify(mat12[usa12])} — aspereza:0 omitido —, painel mostra), o material ENTRA na canon e o replay página==Node é bit-a-bit (${canonPage12.length} chars, difere da canon SEM material), aplicar o mesmo material de novo é no-op (sem passo fantasma), o adaptarV3 AGRUPA por material em 3 LOTES (brasa emissivo 1.4+semLuz, casca aspereza 0.9, + o padrão) conservando os triângulos (${somaMat}==${somaBase}), e o Ctrl+Z tira o passo (a face volta a sem material). A JÓIA (render.js compartilhado com o JOGO) fica BYTE-idêntica com material desligado — provado por cmp à parte; passo 13a: ANIMAÇÃO RÍGIDA POR PARTE — a op \`parte\` nomeia faces (f.parte na canon, órfão grita, última vence) e face SEM parte fica byte-idêntica (toco: ${canonTocoRows13.length} linhas de 6); o adaptarV3 agrupa por (parte,material) — a roda (2 materiais) vira 2 lotes + o braço, triângulos conservados (${somaAnim13}), toco sem-parte-sem-material = 1 lote; o pivô default é o CENTROIDE (roda puxada pro dente) e o override é EXPLÍCITO (braço na base); o interpolador (avaliarChaves) é smoothstep (meio 15, quarto 11.5625 ≠ linear 12.5); montarAnimar escreve a matriz por ÍNDICE (infoPorLote ${JSON.stringify(infoLote13)}), determinística (mesmo T -> mesma matriz), com o pivô fixo, {}->undefined e canal ruim gritando; executar fia ANIMACOES (sem -> animar undefined = byte-idêntico); a peça COM parte faz replay página==Node bit-a-bit e as MATRIZES batem página==Node em 5 tempos; e no relógio congelado a mesma fase 2x é idêntica (${dSame0}px) e T=0 vs T=1 os pixels DIFEREM (${dMove}px — a parte moveu). O hook animar(T,lotes) do 13a segue no render.js (${hook14ok ? 'confirmado' : 'AUSENTE'}) — o 14a estendeu o motor (skinning) por cima, aditivo; passo 13b: ESPAÇO ANIMAÇÃO (a INTERFACE) — o chip "Animação" (estilo Pincel) entra no espaço mantendo câmera/seleção/objeto (painel de partes/animações/trilhas + linha do tempo aparecem, modelagem some), NOMEAR parte grava ['parte',{nome,faces:[ordenadas]}] pelo botão REAL (desfazível por Ctrl+Z, refazível), a lista de partes seleciona as faces da parte; cria-se UMA animação (duracao/repete) + trilha (parte+canal, canal/parte inválidos GRITAM) + chaves [t,v] na faixa; o PREVIEW ao vivo (reexec fia ANIMACOES no executar + wrapper de previewT, render.js intocado) discrimina por pixel no relógio congelado: mesmo T 2x = idêntico (${dSameB0}px) e T=0 vs T=2 movem (${dMoveB}px), e o SCRUB REAL na régua re-poza; play zera previewT (laço), pause congela; a serialização IDA-E-VOLTA reabre BIT-A-BIT (PASSOS com a op parte + ANIMACOES idênticos, o construir passa {},ANIMACOES) e a POSE em T=1 bate página==Node. O motor do 13b (montarAnimar + hook) segue intacto (${motor13bok ? 'confirmado' : 'QUEBROU'}) — o 14a é aditivo por cima; passo 14a: ESQUELETO com DEFORMAÇÃO SUAVE (linear blend skinning) — a op \`pesar\` acumula peso por (vértice,osso) e o adaptarV3 normaliza top-4 (mesh de 16 floats só no lote skinado; sem esqueleto = 8 floats, o caminho de hoje intocado), osso/vértice órfão GRITA sem corromper e ciclo/pai/teto(33>32) GRITAM; o skin é LBS determinístico (bind pose = identidade -> deforma 0; a raiz FICA ${baseFica.toExponential(1)}, a ponta GIRA ${pontaGira.toFixed(3)}, a junta MISTA cai ENTRE os dois ossos por média exata — combinação convexa, não rígida), as MATRIZES de osso batem página==Node bit-a-bit em ${TS14.length} tempos, e no relógio congelado o tentáculo DEFORMA na tela (T=0 reto vs T=1.5 curvado ${dDeform}px; mesma fase 2x ${dSameEsq}px). A JÓIA render.js ganhou o programa/stride SKINADO num passe SEPARADO (aditivo, precedente do 12b); o gate BYTE-IDÊNTICO do jogo (arvore3d/ilha-chao/arvore-cartoon × 3, relógio congelado, render.js HEAD↔origin/main) é 9/9 @ 0px, provado À PARTE (scratchpad/frz-jewel); passo 14b: RIGGING (a INTERFACE do esqueleto) — num objeto FRESCO (o toco) o loop COMPLETO no espaço Animação: cria b0 (raiz) + b1 (filho, pivô [0,0.3,0]) pelos widgets REAIS, PESA pelo botão (grava ['pesar',{osso,faces:[ordenadas],peso}]) — a junta 50/50 (dois pesares nas MESMAS faces) ACUMULA pra b0 ${pesoB0.toFixed(2)} / b1 ${pesoB1.toFixed(2)} (combinação convexa), o rig completo tem 4 ops pesar; o dropdown de alvo da trilha lista os OSSOS e a trilha girando b1 (rotZ) DOBRA a malha no preview ao vivo (relógio congelado: T=0 vs T=1.5 ${dDeformC}px, mesma pose 2x ${dSameC0}px); Ctrl+Z desfaz o pesar (a canon volta), ciclo e pai-inexistente GRITAM na UI sem quebrar; a serialização IDA-E-VOLTA reabre BIT-A-BIT (PASSOS com as ops pesar + ESQUELETO idênticos, o construir passa {},ANIMACOES,ESQUELETO) e a pose skinada em T=1 (as matrizes de osso + a posição do vértice #8, deslocou ${deslocou.toFixed(3)} do repouso) bate página==Node. O motor do 14a (pesar + resolverEsqueleto + skinning) NÃO foi tocado — o 14b é SÓ a interface (git diff de oficina.js/render.js VAZIO).`);

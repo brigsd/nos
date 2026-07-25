@@ -669,6 +669,28 @@ Mesmo esqueleto em todas as telas, pra que aprender uma seja saber todas:
 Nas abas sem 3D: Desenho é o canvas 2D no centro com as ferramentas à esquerda;
 Som é a forma de onda no centro, os blocos à direita e o play embaixo.
 
+### Adicionar forma (P9a do playground, D-123)
+
+Até o P9a, o painel de propriedades só reagia à SELEÇÃO — nenhum bloco criava
+geometria nova; abrir a Oficina sem uma peça já escrita à mão (`_vazio.js`, por
+exemplo) era um beco sem saída, sem nenhum botão pra colocar o primeiro vértice.
+O bloco **Adicionar forma** é o primeiro do painel, e o ÚNICO sempre visível no
+espaço Modelar sem depender de seleção nenhuma: um `<select>` com as 6
+primitivas de parâmetro ESCALAR do núcleo (`cubo`/`cilindro`/`esfera`/`cone`/
+`plano`/`chamferBox`), campos numéricos que trocam conforme o tipo, e um botão
+que empurra `[tipo, {...campos}]` no fim de PASSOS. `lathe`/`loft`/`inflate`
+ficam de fora de propósito — pedem um PERFIL/CONTORNO (array de pontos), não
+campo escalar; isso é a Aba Desenho, ainda por vir.
+
+A forma nova sempre nasce na ORIGEM (a convenção "chão embaixo" de toda
+primitiva) e já sai com as PRÓPRIAS faces selecionadas — reposicionar é edição
+normal com o vértice/gizmo já existentes (arrastar), não uma feature nova.
+Como cada op numera pela PRÓPRIA posição na lista (`baseDoPasso`), adicionar
+formas em sequência nunca colide de id, não importa quantas já existem. Um
+parâmetro inválido (ex.: `chanfro` fora da faixa do `chamferBox`) GRITA — o
+passo entra em PASSOS mas nasce sem face nenhuma — e a UI avisa em vez de
+falhar silenciosa; a geometria já existente fica intacta.
+
 ## Editar objeto de dentro do jogo
 
 O caminho principal de uso, decidido pelo ideador.

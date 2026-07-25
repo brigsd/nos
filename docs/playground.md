@@ -149,8 +149,40 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
         `pecas/_pedra.js` combina as duas: chamferBox + displace = pedra
         lascada, watertight por cima do relevo (displace só move posição,
         nunca topologia).
-- [ ] **P9 · Onda de interface** — os botões da Oficina pras ops novas + o
-      canvas da Aba Desenho (specs no oficina.md).
+- **P9 · Onda de interface** — os botões da Oficina pras ops novas + o canvas
+      da Aba Desenho (specs no oficina.md). Investigação antes de codar (achado
+      que define o tamanho do épico): NENHUMA op do playground (P1-P8) tinha
+      QUALQUER botão até aqui — nem `espelha`/`rotaciona`, que existem no núcleo
+      desde o P3 — e não existia jeito nenhum de criar geometria do zero pela UI
+      (só editar uma peça já escrita à mão). `serializarPeca`/desfazer/refazer já
+      são 100% genéricos (não sabem nome de op) — não precisam mudar pra nenhuma
+      op nova. Fatiado como o P8, cada rodada uma capacidade coerente:
+  - [x] **P9a** (D-123) — Adicionar forma: o bloco `#blocoAdicionar`
+        (`oficina.html`, "Passo 15" — o comentário-mestre da linha 2 já estava
+        desatualizado antes desta rodada, não documentava o Passo 14b; a
+        numeração daqui em diante é só nos comentários locais, não mais
+        emendada nele) lista as 6 primitivas de parâmetro ESCALAR (cubo/
+        cilindro/esfera/cone/plano/`chamferBox`) — `lathe`/`loft`/`inflate`
+        ficam de fora de propósito (pedem perfil/contorno, um array de
+        pontos — a Aba Desenho, P9-futuro). Empurra `[tipo,{...campos}]` no
+        fim de PASSOS (cai no BLOCO livre seguinte por POSIÇÃO, nunca colide
+        com o que já existe) e seleciona as faces novas. Nasce na ORIGEM
+        sempre — reposicionar é o vértice/gizmo já existentes, não uma
+        feature nova. Parâmetro inválido (ex. chanfro fora da faixa) GRITA
+        sem corromper a geometria já existente (provado).
+  - [ ] **P9b** — botões pras 4 ops de edição do P8a (`moveF`/`moveA`/`vira`/
+        `apagaFace`) sobre a seleção já existente. `moveA` precisa de seleção
+        de ARESTA, que não existe ainda na UI (só vértice/face) — nasce aqui.
+  - [ ] **P9c** — painel do `displace` (amplitude/frequência/semente + botão
+        aplicar, o molde do painel de material) e botões pro `espelha`/
+        `rotaciona` (P3, sem UI desde que existem).
+  - [ ] **P9d** — seleção por REGIÃO (caixa) e por GRUPO generalizada pro
+        espaço Modelar (`resolverAlvosV`/P8a já aceita os dois no núcleo; a
+        UI só tem grupo, parcial, dentro do espaço Animação).
+  - [ ] **Aba Desenho** — canvas 2D vetor (contorno pro `loft`/`inflate` +
+        gabarito IoU AO VIVO) + o modo pintura livre (specs em
+        docs/oficina.md "Aba Desenho"/"Desenho livre"). Epico à parte, maior
+        que o resto do P9 somado — não teto de uma rodada só.
 
 ## A régua de pronto
 
