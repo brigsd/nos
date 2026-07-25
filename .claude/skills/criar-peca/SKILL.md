@@ -43,6 +43,7 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 | `esfera` | `raio` (PARAM, 0.5), `aneis` (TOPO, 6, mín 2), `lados` (TOPO, 8, mín 3) | UV-sphere apoiada no chão (polo sul y=0, norte y=2·raio); numeração no comentário da op |
 | `cone` | `raio` (PARAM, 0.5), `altura` (PARAM, 1), `lados` (TOPO, 8, mín 3) | anel da base b+0..b+lados−1 (y=0), ápice b+lados; tampa −y como o fundo do cilindro |
 | `plano` | `largura` (PARAM, 1), `profundidade` (PARAM, 1), `seg` (TOPO, 1, mín 1) | grade XZ centrada na origem, y=0, linha a linha; seg² quads +y — o chão |
+| `chamferBox` | `larg`/`alt`/`prof` (ou `lado`, PARAM — a convenção do cubo, chão embaixo), `chanfro` (PARAM, distância do corte) | o cubo com CANTOS E ARESTAS chanfrados — corte FLAT (não arredonda). SEM parâmetro TOPO: sempre 24 vértices/26 faces, não tem como estourar o bloco. `chanfro` precisa ser `>0` e `<min(larg/2,prof/2,alt/2)` (cortes de pontas opostas da mesma aresta não podem se cruzar) — fora da faixa GRITA e aborta (0V/0F) |
 | `lathe` | `perfil:[[raio,y],...]` (≥2 pontos, PARAM), `lados` (TOPO, mín 3) | perfil 2D girado no eixo Y — generaliza a esfera (polo↔anel↔polo). Ponto de 2 elementos = canto reto PRA SEMPRE; ponto ≠ 2 elementos (a alça de curva reservada num 3º elemento, ou malformado) GRITA e ABORTA o passo (fail-closed). `raio` resolvido `===0` vira polo (1 vértice), `>0` vira anel (`lados` vértices), `<0` GRITA e aborta. Sem tampas automáticas: fechar uma ponta é terminar no eixo (raio 0) |
 | `loft` | `secoes:[{pos:[x,y,z],raio} ou {pos,contorno:[[u,w],...]},...]` (≥2 seções, PARAM), `lados` (TOPO, mín 3) | seções ao longo de um CAMINHO 3D arbitrário — generaliza o lathe (que é o caso degenerado de caminho reto no eixo Y). Cada anel é orientado por TRANSPORTE PARALELO (não torce numa curva — o mesmo `quadro`/`transporta` do `galhoSeca` de `arvore-cartoon.js`, reimplementado local ao núcleo). `raio` resolvido `===0` vira polo, `>0` vira anel, `<0` GRITA e aborta — igual ao lathe. `contorno` (P5) troca o círculo por EXATAMENTE `lados` pontos `[u,w]` explícitos (estrela, hexágono, retângulo — não-circular) no plano local do anel; `raio` e `contorno` são mutuamente exclusivos (os dois juntos, ou nenhum, GRITA); ponto com aridade ≠ 2 (a alça de curva reservada) e winding CW/degenerado também GRITAM e ABORTAM. Também GRITAM e ABORTAM: seção malformada, `pos` com aridade ≠ 3, segmento de comprimento zero (duas seções na mesma posição) e CUSP (caminho dobrando ~180°) — nos dois últimos a tangente fica indefinida. Sem tampas automáticas: fechar uma ponta é terminar a seção com raio 0 |
 | `moveV` | `v`, `d:[x,y,z]` | ADITIVO (`p+d`), nunca posição absoluta |
@@ -50,6 +51,7 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 | `moveA` | `a`, `b`, `d:[x,y,z]` | move as duas pontas de uma aresta, ADITIVO — açúcar sobre dois `moveV`; não exige `a`/`b` ligados por face |
 | `vira` | `face` | inverte o winding (reverte `f.vs`) — SINGULAR, uma face por passo. Virar face JÁ consistente desalinha o pareamento com as vizinhas (não é bug — use pra consertar face já de costas, não como correção automática) |
 | `apagaFace` | `face` | remove a face; os vértices dela CONTINUAM existindo (buraco de propósito — porta, janela, preparo pra composição manual) |
+| `displace` | `sel?` (o formato do `rotaciona`, default = malha inteira), `amplitude` (PARAM, 0.1), `frequencia` (PARAM, 1), `semente` (PARAM, 0) | desloca cada vértice ao longo da NORMAL MÉDIA (Newell das faces que o tocam) por ruído seedado determinístico (`ruido3` — value noise, [0,1) remapeado pra [−amplitude,+amplitude]). Vértice sem face nenhuma GRITA (sem normal pra seguir). Id-estável (não cria/apaga nada) — preserva manifold de malha já fechada. Peça-exemplo `_pedra.js` |
 | `extruda` | `face`, `dist` | só face única; anel novo nasce no bloco do passo |
 | `mescla` | `de:[ids]`, `para:id` | solda; face de área zero some quieta |
 | `rotaciona` | `eixo` (`'x'\|'y'\|'z'`), `graus` (PARAM), `sel?` (`{v:[ids]}` e/ou `{f:[ids]}` e/ou `{regiao:{min,max}}` e/ou `{grupo:'nome'}`, default = malha inteira), `pivo?` (`[x,y,z]`, default = centroide da seleção) | SIMPLES: só move posição (`p' = pivo + R_eixo(graus)·(p−pivo)`); NUNCA cria vértice/face nem renumera. `regiao` é caixa delimitadora (min/max os dois OBRIGATÓRIOS, sem `Infinity`); `grupo` são as faces daquele `f.parte` |
@@ -80,9 +82,15 @@ borda EXATA no plano do espelho pra soldar) e complete com `espelha`; incline
 uma parte com `rotaciona`. `inflate` destrava corpo com largura≠altura (torso,
 pedra, casco achatado) a partir de dois perfis 2D — mas sai BLOCKY (voxel, não
 suave); se o caso pedir superfície lisa e orgânica, `inflate` ainda não serve,
-reporte o limite (ou use o caminho JS-puro abaixo). Exemplo das primitivas
-novas: `_primitivas.js`; do loft com raio: `_galho.js`; do loft com contorno
-explícito (seção não-circular): `_viga.js`; do inflate: `_corpo.js`.
+reporte o limite (ou use o caminho JS-puro abaixo). `chamferBox` destrava caixa
+"macia" sem virar redonda (baú, caixote, pedestal, bloco de concreto puído —
+ainda faces PLANAS, só sem quina viva); `displace` quebra a monotonia de
+qualquer malha fechada com relevo orgânico determinístico (pedra, tronco
+áspero, terreno) — os dois juntos (chamferBox + displace) dão pedra
+lascada/rocha sem precisar de `inflate`. Exemplo das primitivas novas:
+`_primitivas.js`; do loft com raio: `_galho.js`; do loft com contorno
+explícito (seção não-circular): `_viga.js`; do inflate: `_corpo.js`; do
+chamferBox+displace: `_pedra.js`.
 
 ## O laço de VER (você tem olhos — use-os)
 

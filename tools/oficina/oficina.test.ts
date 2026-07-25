@@ -2236,3 +2236,205 @@ describe('P8 — edição restante (moveF/moveA/vira/apagaFace + seleção por r
     expect(canon()).toBe(canon());
   });
 });
+
+/* P8b do playground — `chamferBox` (caixa com cantos/arestas chanfrados, o cubo
+   cantelado). Prova por MEDIÇÃO, não recontagem de cabeça: a primeira derivação à
+   mão desta topologia (puxar o vértice de canto por UM eixo só — "truncagem") dava
+   uma malha que NÃO fecha (V−E+F ≠ 2, provado num script fora do repo antes de
+   escrever esta op); a fórmula certa puxa os DOIS eixos que não são o da própria
+   face ("cantelação" — cada FACE encolhe, não cada canto vira 1 corte). Os testes
+   abaixo travam a numeração EXATA, o manifold+winding nas 26 faces (não numa
+   amostra) e a fronteira exata do `chanfro` válido — a mesma disciplina do P1/P6. */
+describe('P8b — chamferBox (caixa cantelada: cantos e arestas chanfrados)', () => {
+  const newell = (V: any, vs: number[]) => {
+    let nx = 0, ny = 0, nz = 0;
+    for (let k = 0; k < vs.length; k++) {
+      const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]);
+      nx += (c[1] - n[1]) * (c[2] + n[2]); ny += (c[2] - n[2]) * (c[0] + n[0]); nz += (c[0] - n[0]) * (c[1] + n[1]);
+    }
+    return [nx, ny, nz];
+  };
+  const centroide = (V: any, vs: number[]) => {
+    const c = [0, 0, 0];
+    for (const v of vs) { const p = V.get(v); c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; }
+    return c.map((x) => x / vs.length);
+  };
+  const manifoldRuim = (F: any) => {
+    const m = new Map<string, number>();
+    for (const f of F.values()) for (let k = 0; k < (f as any).vs.length; k++) { const a = (f as any).vs[k], b = (f as any).vs[(k + 1) % (f as any).vs.length]; m.set(`${a},${b}`, (m.get(`${a},${b}`) ?? 0) + 1); }
+    let ruim = 0; for (const [k, c] of m) { const [a, b] = k.split(','); if (c !== 1 || (m.get(`${b},${a}`) ?? 0) !== 1) ruim++; } return ruim;
+  };
+  const volume = (V: any, F: any) => {
+    let vol = 0;
+    for (const f of F.values()) { const vs = (f as any).vs; for (let k = 1; k + 1 < vs.length; k++) {
+      const a = V.get(vs[0]), b = V.get(vs[k]), c = V.get(vs[k + 1]);
+      vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
+    } }
+    return vol;
+  };
+
+  it('numeração EXATA travada — vértices dos cantos 0 e 6, faces das 3 famílias (derivado da fórmula documentada, medido)', () => {
+    // larg=alt=prof=2 -> lx=1,ly=2,lz=1 (o mesmo ly CHEIO do cubo, não /2); chanfro=0.3
+    const { V, F, orfaos } = nucleo([['chamferBox', { id: 0, larg: 2, alt: 2, prof: 2, chanfro: 0.3 }]], {}, {});
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(24);
+    expect(F.size).toBe(26);
+    // canto 0 = (sx=-1,sy=0,sz=-1): X=b+0, Y=b+1, Z=b+2
+    expect(V.get(0)).toEqual([-1, 0.3, -0.7]);    // X: x CHEIO (-lx), y/z encolhidos (+oy·c no y pois sy=0 empurra pra dentro)
+    expect(V.get(1)).toEqual([-0.7, 0, -0.7]);    // Y: y CHEIO (0), x/z encolhidos
+    expect(V.get(2)).toEqual([-0.7, 0.3, -1]);    // Z: z CHEIO (-lz), x/y encolhidos
+    // canto 6 = (sx=1,sy=1,sz=1): X=b+18, Y=b+19, Z=b+20
+    expect(V.get(18)).toEqual([1, 1.7, 0.7]);
+    expect(V.get(19)).toEqual([0.7, 2, 0.7]);
+    expect(V.get(20)).toEqual([0.7, 1.7, 1]);
+    // uma face de cada família (ids fixos, formato salvo)
+    expect(F.get(0)!.vs).toEqual([1, 4, 7, 10]);      // fundo -y: os 4 vértices Y dos cantos 0..3
+    expect(F.get(6)!.vs.length).toBe(4);              // 1a aresta (retângulo)
+    expect(F.get(18)!.vs.length).toBe(3);             // 1o triângulo de canto
+  });
+
+  it('manifold + winding pra FORA em TODAS as 26 faces (não numa amostra) + volume < caixa reta, em geometrias variadas (não só cúbica)', () => {
+    for (const [larg, alt, prof, chanfro] of [[2.6, 2.1, 1.6, 0.25], [2, 2, 2, 0.01], [4, 1, 4, 0.2], [0.6, 5, 3.4, 0.1]] as const) {
+      const { V, F, orfaos } = nucleo([['chamferBox', { id: 0, larg, alt, prof, chanfro }]], {}, {});
+      expect(orfaos).toHaveLength(0);
+      expect(manifoldRuim(F)).toBe(0);
+      const centro = [0, alt / 2, 0];
+      for (const f of F.values()) {
+        const n = newell(V, (f as any).vs), c = centroide(V, (f as any).vs);
+        const dot = n[0] * (c[0] - centro[0]) + n[1] * (c[1] - centro[1]) + n[2] * (c[2] - centro[2]);
+        expect(dot).toBeGreaterThan(0);
+      }
+      const vol = volume(V, F), volReto = larg * alt * prof;
+      expect(vol).toBeGreaterThan(0);
+      expect(vol).toBeLessThan(volReto);   // chanfro sempre CORTA volume, nunca adiciona
+    }
+  });
+
+  it('fronteira EXATA de `chanfro` válido (lado=1 -> limite=min(0.5,0.5,0.5)=0.5): dentro passa, no limite e além GRITA e não constrói nada', () => {
+    const dentro = nucleo([['chamferBox', { id: 0, lado: 1, chanfro: 0.499999 }]], {}, {});
+    expect(dentro.orfaos).toHaveLength(0);
+    expect(dentro.V.size).toBe(24);
+
+    for (const chanfro of [0.5, 0.500001, 0, -0.1]) {
+      const { V, F, orfaos } = nucleo([['chamferBox', { id: 0, lado: 1, chanfro }]], {}, {});
+      expect(orfaos).toHaveLength(1);
+      expect(orfaos[0]).toMatchObject({ op: 'chamferBox' });
+      expect(V.size).toBe(0);   // fail-closed: NADA se constrói, não uma malha degenerada
+      expect(F.size).toBe(0);
+    }
+  });
+
+  it('larg/alt/prof/chanfro citam PARAM por nome; determinismo bit-a-bit em 2 rodadas', () => {
+    const { V, orfaos } = nucleo([['chamferBox', { id: 0, larg: 'w', alt: 'h', prof: 'p', chanfro: 'c' }]], { w: 3, h: 2, p: 1.5, c: 0.2 }, {});
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(24);
+    const canon = () => { const n = nucleo([['chamferBox', { id: 0, larg: 2, alt: 1.4, prof: 1.8, chanfro: 0.15 }]], {}, {});
+      return JSON.stringify([[...n.V.entries()].sort((a, b) => a[0] - b[0]), [...n.F.entries()].sort((a, b) => a[0] - b[0]).map(([k, f]) => [k, (f as any).vs])]); };
+    expect(canon()).toBe(canon());
+  });
+
+  it('guarda de id da posição (o mesmo confereId de toda primitiva) e órfão não corrompe passo seguinte', () => {
+    const n = nucleo([['plano', { id: 0 }], ['chamferBox', { id: 999 }]], {}, {});   // id escrito ≠ base da posição (1000)
+    expect(n.orfaos.some((o: any) => o.op === 'chamferBox' && o.motivo.includes('posição'))).toBe(true);
+    expect(n.V.size).toBe(4 + 24);   // plano seg=1 default -> (1+1)²=4 + chamferBox: segue construindo normal, só o AVISO de id
+  });
+});
+
+/* P8c do playground — `displace` (desloca uma seleção ao longo da normal média por
+   ruído seedado). O ruído (`hash3`/`ruido3`, no núcleo) é reimplementado AQUI —
+   igual ao `newell` de todo describe acima — porque não é exportado; os testes
+   provam determinismo/semente por MEDIÇÃO (recomputando o valor esperado com a
+   MESMA fórmula, não só comparando contra si mesmo). */
+describe('P8c — displace (deslocamento por ruído seedado ao longo da normal)', () => {
+  const hash3 = (x: number, y: number, z: number, seed: number) => { const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + seed * 269.5) * 43758.5453123; return s - Math.floor(s); };
+  const ruido3 = (x: number, y: number, z: number, seed: number) => {
+    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+    const xf = x - xi, yf = y - yi, zf = z - zi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+    const c000 = hash3(xi, yi, zi, seed), c100 = hash3(xi + 1, yi, zi, seed);
+    const c010 = hash3(xi, yi + 1, zi, seed), c110 = hash3(xi + 1, yi + 1, zi, seed);
+    const c001 = hash3(xi, yi, zi + 1, seed), c101 = hash3(xi + 1, yi, zi + 1, seed);
+    const c011 = hash3(xi, yi + 1, zi + 1, seed), c111 = hash3(xi + 1, yi + 1, zi + 1, seed);
+    const x00 = c000 + (c100 - c000) * u, x10 = c010 + (c110 - c010) * u;
+    const x01 = c001 + (c101 - c001) * u, x11 = c011 + (c111 - c011) * u;
+    const y0 = x00 + (x10 - x00) * v, y1 = x01 + (x11 - x01) * v;
+    return y0 + (y1 - y0) * w;
+  };
+  const manifoldRuim = (F: any) => {
+    const m = new Map<string, number>();
+    for (const f of F.values()) for (let k = 0; k < (f as any).vs.length; k++) { const a = (f as any).vs[k], b = (f as any).vs[(k + 1) % (f as any).vs.length]; m.set(`${a},${b}`, (m.get(`${a},${b}`) ?? 0) + 1); }
+    let ruim = 0; for (const [k, c] of m) { const [a, b] = k.split(','); if (c !== 1 || (m.get(`${b},${a}`) ?? 0) !== 1) ruim++; } return ruim;
+  };
+
+  it('desloca CADA vértice ao longo da normal média — magnitude bate a fórmula EXATA recomputada (cubo: normal por vértice é a média de 3 faces axis-aligned)', () => {
+    const { V, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }], ['displace', { amplitude: 0.2, frequencia: 1.5, semente: 7 }]], {}, {});
+    expect(orfaos).toHaveLength(0);
+    // vértice 0 do cubo lado=1: [-0.5,0,-0.5], tocado pelas faces fundo(-y), -z, -x -> normal média = norm3(-1,-1,-1) = cada eixo -1/√3
+    const nrm = 1 / Math.sqrt(3);
+    const p0 = [-0.5, 0, -0.5];
+    const r = ruido3(p0[0] * 1.5, p0[1] * 1.5, p0[2] * 1.5, 7);
+    const d = (r * 2 - 1) * 0.2;
+    expect(V.get(0)![0]).toBeCloseTo(p0[0] + -nrm * d, 9);
+    expect(V.get(0)![1]).toBeCloseTo(p0[1] + -nrm * d, 9);
+    expect(V.get(0)![2]).toBeCloseTo(p0[2] + -nrm * d, 9);
+  });
+
+  it('amplitude=0 é no-op determinístico (posição intacta)', () => {
+    const antes = nucleo([['cubo', { id: 0, lado: 1 }]], {}, {});
+    const depois = nucleo([['cubo', { id: 0, lado: 1 }], ['displace', { amplitude: 0, semente: 42 }]], {}, {});
+    for (const id of antes.V.keys()) expect(depois.V.get(id)).toEqual(antes.V.get(id));
+  });
+
+  it('determinismo: mesma semente -> 2 rodadas idênticas bit-a-bit; semente diferente diverge em pelo menos um vértice', () => {
+    const passos = (semente: number) => [['cubo', { id: 0, lado: 1 }], ['displace', { amplitude: 0.3, semente }]];
+    const canon = (semente: number) => { const n = nucleo(passos(semente) as any, {}, {}); return JSON.stringify([...n.V.entries()].sort((a, b) => a[0] - b[0])); };
+    expect(canon(5)).toBe(canon(5));
+    expect(canon(5)).not.toBe(canon(6));
+  });
+
+  it('seleção parcial (sel.regiao) só desloca os vértices ATINGIDOS — o resto fica intacto', () => {
+    // topo do cubo (y=1 exato, ly não /2) via regiao — o mesmo teste do resolverAlvosV do P8
+    const { V, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }],
+      ['displace', { amplitude: 0.4, semente: 1, sel: { regiao: { min: [-2, 0.9, -2], max: [2, 1.1, 2] } } }],
+    ], {}, {});
+    expect(orfaos).toHaveLength(0);
+    expect(V.get(0)).toEqual([-0.5, 0, -0.5]);   // base fora da região, intacta
+    expect(V.get(4)).not.toEqual([-0.5, 1, -0.5]);   // topo deslocado
+  });
+
+  it('vértice sem NENHUMA face (apagaFace deixou solto) GRITA e fica parado — nunca desloca às cegas', () => {
+    const passos: any[] = [['cubo', { id: 0, lado: 1 }]];
+    for (let f = 0; f < 6; f++) passos.push(['apagaFace', { face: f }]);   // apaga as 6 faces -> todo vértice fica sem face
+    passos.push(['displace', { amplitude: 0.5, semente: 1 }]);
+    const { V, orfaos } = nucleo(passos, {}, {});
+    expect(orfaos.filter((o: any) => o.op === 'displace')).toHaveLength(8);   // os 8 vértices, um órfão cada
+    expect(V.get(0)).toEqual([-0.5, 0, -0.5]);   // nenhum moveu
+  });
+
+  it('composição: displace em cima de inflate/loft/rotaciona/espelha — sem NaN nem órfão indevido; manifold PRESERVADO (só move posição, nunca muda topologia)', () => {
+    const QUAD = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    for (const passos of [
+      [['cubo', { id: 0, lado: 1 }], ['rotaciona', { eixo: 'y', graus: 25 }], ['displace', { amplitude: 0.1, semente: 3 }]],
+      [['inflate', { id: 0, contornoLado: QUAD, contornoTopo: QUAD, divisoes: 3 }], ['displace', { amplitude: 0.05, frequencia: 2, semente: 9 }]],
+      [['cubo', { id: 0, lado: 1 }], ['espelha', { eixo: 'x', pos: 0 }], ['displace', { amplitude: 0.1, semente: 2 }]],
+    ] as const) {
+      const { V, F, orfaos } = nucleo(passos as any, {}, {});
+      expect(orfaos).toHaveLength(0);
+      expect(manifoldRuim(F)).toBe(0);
+      expect([...V.values()].every((p: any) => p.every((c: number) => Number.isFinite(c)))).toBe(true);
+    }
+  });
+
+  it('peça-exemplo _pedra (chamferBox + displace): sem órfãos, V/F exatos (24/26 — displace não cria/apaga), MANIFOLD intacto por cima do relevo, colisão calculada', async () => {
+    const pUrl = new URL('../../prototipos/fps/v3/pecas/_pedra.js', import.meta.url);
+    const peca: any = await import(fileURLToPath(pUrl));
+    const n = nucleo(peca.PASSOS, peca.PARAMS, peca.TOPO);
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.V.size).toBe(24);
+    expect(n.F.size).toBe(26);
+    expect(manifoldRuim(n.F)).toBe(0);
+    expect([...n.V.values()].every((p: any) => p.every((c: number) => Number.isFinite(c)))).toBe(true);
+    expect(peca.meta.colisao.forma).toBe('cilindro');
+    expect(peca.meta.colisao.raio).toBeGreaterThan(0);
+  });
+});

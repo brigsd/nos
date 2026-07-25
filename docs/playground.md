@@ -128,10 +128,27 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
         `f.parte`, reusa a nomeação do passo 13a) — refatorado sem mudar o
         comportamento de `{v}`/`{f}` (141 testes preexistentes continuam
         batendo byte-a-byte).
-  - [ ] **P8b** — `chamferBox` (primitiva nova: caixa com cantos/arestas
-        chanfrados).
-  - [ ] **P8c** — `displace` (deslocamento procedural ao longo da normal,
-        com semente — determinístico).
+  - [x] **P8b** (D-122) — `chamferBox`: primitiva nova, a caixa CANTELADA
+        (cantos e arestas chanfrados por um corte flat só — não arredonda).
+        Fórmula fechada como cubo/esfera/cone (SEM parâmetro TOPO: a
+        contagem é sempre 24 vértices/26 faces, sem guarda de overflow —
+        não tem como estourar). A primeira derivação à mão (puxar o
+        vértice de canto por UM eixo — "truncagem") dava uma malha que NÃO
+        fecha (provado errado por característica de Euler, V−E+F≠2, ANTES
+        de escrever uma linha de oficina.js); a certa é cantelação (cada
+        FACE encolhe pelos dois eixos que não são o dela). Winding não tem
+        giro único (ao contrário do cilindro/esfera) — cada face se
+        auto-orienta contra o centro real da caixa, verificado nas 26
+        faces por teste, não numa amostra.
+  - [x] **P8c** (D-122) — `displace`: desloca uma seleção ao longo da
+        NORMAL MÉDIA (Newell por vértice) por ruído de valor 3D seedado
+        (`ruido3`/`hash3`, novo utilitário do núcleo — FORMATO SALVO: a
+        fórmula do ruído é o que faz a peça salva reproduzir o mesmo
+        relevo sempre). Reusa `resolverAlvosV` (P8a) pra seleção; vértice
+        sem nenhuma face GRITA (sem normal pra seguir). Peça-exemplo
+        `pecas/_pedra.js` combina as duas: chamferBox + displace = pedra
+        lascada, watertight por cima do relevo (displace só move posição,
+        nunca topologia).
 - [ ] **P9 · Onda de interface** — os botões da Oficina pras ops novas + o
       canvas da Aba Desenho (specs no oficina.md).
 

@@ -47,6 +47,30 @@ function normalDaFace(V, vs) {
   return norm3(nx, ny, nz);
 }
 
+/* ruído de valor 3D determinístico com SEMENTE — usado só pela op `displace` (P8c do
+   playground). `hash3` é um hash barato baseado em seno (mesma classe de determinismo
+   que sin/cos já usado em lathe/cilindro/esfera: mesmo motor JS, mesma entrada, mesma
+   saída sempre — não pretende ser aleatório de verdade, só parecer). `ruido3` amostra
+   os 8 cantos do RETICULADO que envolve o ponto e interpola por smoothstep (suave, sem
+   quina em cada célula do reticulado) — é "value noise" clássico, devolve sempre
+   [0,1). FORMATO SALVO (docs/playground.md regra 4): a fórmula em si é o que faz o
+   `displace` de uma peça salva reproduzir o mesmo relevo sempre — mudar hash3/ruido3
+   reformaria toda peça que usa `displace`, como renumerar mudaria a malha. */
+function hash3(x, y, z, seed) { const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + seed * 269.5) * 43758.5453123; return s - Math.floor(s); }
+function ruido3(x, y, z, seed) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);   // smoothstep — suaviza a transição entre células
+  const c000 = hash3(xi, yi, zi, seed), c100 = hash3(xi + 1, yi, zi, seed);
+  const c010 = hash3(xi, yi + 1, zi, seed), c110 = hash3(xi + 1, yi + 1, zi, seed);
+  const c001 = hash3(xi, yi, zi + 1, seed), c101 = hash3(xi + 1, yi, zi + 1, seed);
+  const c011 = hash3(xi, yi + 1, zi + 1, seed), c111 = hash3(xi + 1, yi + 1, zi + 1, seed);
+  const x00 = c000 + (c100 - c000) * u, x10 = c010 + (c110 - c010) * u;
+  const x01 = c001 + (c101 - c001) * u, x11 = c011 + (c111 - c011) * u;
+  const y0 = x00 + (x10 - x00) * v, y1 = x01 + (x11 - x01) * v;
+  return y0 + (y1 - y0) * w;
+}
+
 /* colapsa cantos repetidos consecutivos (inclusive no fecho do ciclo) — o que
    a mescla deixa pra trás quando dois cantos de uma face viram o mesmo id. */
 function colapsaCiclo(vs) {
@@ -305,6 +329,93 @@ export const OPS = {
     const v = (ix, iz) => b + iz * (S + 1) + ix;
     for (let iz = 0; iz <= S; iz++) for (let ix = 0; ix <= S; ix++) addV(st, v(ix, iz), [(ix / S - 0.5) * lx, 0, (iz / S - 0.5) * lz]);
     for (let iz = 0; iz < S; iz++) for (let ix = 0; ix < S; ix++) addF(st, b + iz * S + ix, [v(ix, iz), v(ix, iz + 1), v(ix + 1, iz + 1), v(ix + 1, iz)]);
+  },
+
+  /* chamferBox — P8b do playground: o `cubo` com CANTOS E ARESTAS chanfrados (o corte
+     de UM nível só — a versão "flat", sem arredondar; suavizar/arredondar é a mesma
+     classe do "lathe só reto por enquanto", fica pra quando o caso real pedir). Chão
+     embaixo como o cubo: `larg`/`alt`/`prof` (ou `lado`, os três) definem a mesma caixa
+     x∈[-larg/2,larg/2], y∈[0,alt], z∈[-prof/2,prof/2]; `chanfro` é a distância do corte,
+     em unidade de mundo, IGUAL pras 12 arestas.
+
+     VALIDADE: `chanfro` precisa ser `> 0` e `< min(larg/2, prof/2, alt/2)` — cortes de
+     CANTOS OPOSTOS da mesma aresta não podem se cruzar (uma aresta de comprimento L leva
+     um corte de `chanfro` em CADA ponta, sobra `L − 2·chanfro`; a mais curta entre as 3
+     famílias de aresta manda). No limite EXATO a malha já degenera (medido: normal
+     zerada, arestas soltas) — por isso o teste é estrito. Fora da faixa GRITA e a op
+     não constrói nada neste passo (0 vértices/faces) — o mesmo tratamento do perfil
+     inválido do lathe: mais seguro que adivinhar quantos ids um corte inválido ocuparia.
+
+     TOPOLOGIA (formato salvo, travada por teste) — SEM parâmetro TOPO, a contagem é
+     SEMPRE 24 vértices / 26 faces (bem abaixo do bloco; sem guarda de overflow, não tem
+     como estourar). Cada um dos 8 CANTOS do cubo reto (mesma ordem de sinal do `cubo`:
+     0..3 no chão CCW-de-cima, 4..7 no topo) vira 3 vértices — um por EIXO — porque as 3
+     faces que se encontravam ali (X, Y, Z) cada uma ENCOLHE por conta própria: o vértice
+     "do eixo X" fica com a coordenada X no valor CHEIO do canto (ele mora na face X) e
+     as OUTRAS duas (Y, Z) encolhidas por `chanfro` pra dentro — é CANTELAÇÃO (cada FACE
+     encolhe), não truncagem de canto (cada canto vira 1 corte só) — as duas são
+     chanfros válidos mas com topologia diferente; truncagem dava hexágono/octógono nas
+     faces originais em vez de quad menor (confundi as duas na primeira derivação desta
+     op — provado errado por característica de Euler, V−E+F≠2, antes de escrever
+     qualquer linha aqui: a lição de sempre, medir em vez de recontar de cabeça).
+     Vértice do canto k, eixo X/Y/Z: id `b + k*3 + {0,1,2}`.
+
+     FACES: `b+0..5` as 6 faces originais (MESMO padrão de canto do `cubo`, cada uma só
+     trocando pelo vértice-do-eixo-certo); `b+6..17` os 12 retângulos de aresta (4 por
+     eixo, na ordem X,Y,Z — cada retângulo cobre a aresta cortada, ligando o vértice dos
+     DOIS OUTROS eixos nas duas pontas); `b+18..25` os 8 triângulos de canto (ordem de
+     k, ligando os 3 vértices daquele canto). Winding: ao contrário do cilindro/esfera
+     (uma superfície de revolução com um giro só, então um sentido só resolve tudo), o
+     chanfro não tem simetria rotacional — CADA face nasce numa ordem fixa e se
+     AUTO-ORIENTA contra o CENTRO real da caixa (normal de Newell · direção do centro
+     pro centroide da face; inverte se apontar pra dentro) em vez de uma tabela de sinal
+     por canto decorada à mão (mais fácil de errar decorando do que deixando a própria
+     geometria decidir) — verificado por teste nas 26 faces, não numa amostra. */
+  chamferBox(st, a, i) {
+    const b = confereId(st, i, 'chamferBox', a);
+    const lx = st.num(a.larg ?? a.lado ?? 1) / 2;
+    const ly = st.num(a.alt ?? a.lado ?? 1);
+    const lz = st.num(a.prof ?? a.lado ?? 1) / 2;
+    const c = st.num(a.chanfro ?? 0.1);
+    const lim = Math.min(lx, lz, ly / 2);
+    if (!(c > 0) || !(c < lim)) return grita(st, i, 'chamferBox', c, `chanfro precisa ser > 0 e < ${lim} (o menor entre metade da largura, metade da profundidade e metade da altura) — senão os cortes de pontas opostas da mesma aresta se cruzam`);
+
+    const CANTOS = [[-1, 0, -1], [1, 0, -1], [1, 0, 1], [-1, 0, 1], [-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]];   // mesma ordem de sinal do cubo
+    const loc = new Map();   // local (0..23) -> posição, construído ANTES de tocar st (o padrão do inflate)
+    const X = (k) => k * 3, Y = (k) => k * 3 + 1, Z = (k) => k * 3 + 2;
+    CANTOS.forEach(([sx, sy, sz], k) => {
+      const oy = sy ? -1 : 1;   // "pra dentro" no y: chão (sy=0) empurra +y, topo (sy=1) empurra -y
+      loc.set(X(k), [sx * lx, sy * ly + oy * c, sz * (lz - c)]);
+      loc.set(Y(k), [sx * (lx - c), sy * ly, sz * (lz - c)]);
+      loc.set(Z(k), [sx * (lx - c), sy * ly + oy * c, sz * lz]);
+    });
+
+    const centro = [0, ly / 2, 0];   // centro REAL da caixa (y não é centrado em 0 — chão embaixo, como o cubo)
+    const orienta = (vs) => {
+      const n = normalDaFace(loc, vs);
+      let cx = 0, cy = 0, cz = 0;
+      for (const id of vs) { const p = loc.get(id); cx += p[0]; cy += p[1]; cz += p[2]; }
+      const dir = norm3(cx / vs.length - centro[0], cy / vs.length - centro[1], cz / vs.length - centro[2]);
+      const dot = n[0] * dir[0] + n[1] * dir[1] + n[2] * dir[2];
+      return dot < 0 ? vs.slice().reverse() : vs;
+    };
+
+    const faces = [];
+    faces.push(orienta([Y(0), Y(1), Y(2), Y(3)]));   // fundo -y — padrão do cubo
+    faces.push(orienta([Y(7), Y(6), Y(5), Y(4)]));   // topo  +y
+    faces.push(orienta([Z(1), Z(0), Z(4), Z(5)]));   // -z
+    faces.push(orienta([X(2), X(1), X(5), X(6)]));   // +x
+    faces.push(orienta([Z(3), Z(2), Z(6), Z(7)]));   // +z
+    faces.push(orienta([X(0), X(3), X(7), X(4)]));   // -x
+
+    const achaCanto = (sx, sy, sz) => CANTOS.findIndex(([a2, b2, c2]) => a2 === sx && b2 === sy && c2 === sz);
+    for (const [sy, sz] of [[0, -1], [0, 1], [1, -1], [1, 1]]) { const k1 = achaCanto(-1, sy, sz), k2 = achaCanto(1, sy, sz); faces.push(orienta([Y(k1), Y(k2), Z(k2), Z(k1)])); }   // 4 arestas-X
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const k1 = achaCanto(sx, 0, sz), k2 = achaCanto(sx, 1, sz); faces.push(orienta([X(k1), X(k2), Z(k2), Z(k1)])); }   // 4 arestas-Y
+    for (const [sx, sy] of [[-1, 0], [1, 0], [1, 1], [-1, 1]]) { const k1 = achaCanto(sx, sy, -1), k2 = achaCanto(sx, sy, 1); faces.push(orienta([X(k1), X(k2), Y(k2), Y(k1)])); }   // 4 arestas-Z
+    for (let k = 0; k < 8; k++) faces.push(orienta([X(k), Y(k), Z(k)]));   // 8 triângulos de canto
+
+    loc.forEach((p, id) => addV(st, b + id, p));
+    faces.forEach((vs, k) => addF(st, b + k, vs.map((id) => b + id)));
   },
 
   /* lathe — P2 do playground: um perfil 2D `[[raio,y],...]` GIRADO em torno do
@@ -863,8 +974,8 @@ export const OPS = {
     st.merges.push({ de: [...rem].sort((x, y) => x - y), para });
   },
 
-  /* ---- P8 do playground: edição restante — moveF/moveA/vira/apagaFace são
-     id-estável puro (como moveV/extruda/mescla acima: nunca criam id, nunca
+  /* ---- P8 do playground: edição restante — moveF/moveA/vira/apagaFace/displace
+     são id-estável puro (como moveV/extruda/mescla acima: nunca criam id, nunca
      renumeram); nenhuma tem numeração própria pra documentar. ---- */
 
   /* moveF: move TODOS os cantos de uma face pelo mesmo delta — ADITIVO
@@ -930,6 +1041,55 @@ export const OPS = {
     const fid = a.face;
     if (!st.F.has(fid)) return grita(st, i, 'apagaFace', fid, 'face inexistente');
     st.F.delete(fid);
+  },
+
+  /* displace — P8c do playground: desloca uma SELEÇÃO de vértices ao longo da própria
+     NORMAL (a média das normais de Newell — `normalDaFace` — de TODAS as faces ATUAIS
+     que tocam aquele vértice, medida ANTES de mover qualquer um, como o centroide do
+     `rotaciona`) por uma distância de RUÍDO 3D seedado (`ruido3`, acima) amostrado na
+     posição do vértice × `frequencia`. Determinístico: a mesma peça com o mesmo
+     `semente` sempre desloca pro MESMO lugar (a razão de existir uma semente — sem
+     ela não daria pra reproduzir a peça salva, a mesma lei do resto do formato).
+
+     SELEÇÃO (`sel`, opcional, via `resolverAlvosV` — P8): AUSENTE = malha inteira,
+     como o `rotaciona`. `amplitude` (padrão 0,1) é o desvio MÁXIMO (mundo); `ruido3`
+     devolve [0,1), remapeado pra [−amplitude,+amplitude] antes de multiplicar a
+     normal. `frequencia` (padrão 1) escala a posição ANTES de amostrar o ruído — mais
+     alta = relevo mais fino (as células do reticulado do ruído cabem mais vezes no
+     mesmo espaço); não passa por validação própria (qualquer finito serve, `st.num`
+     já barra o resto). Vértice SEM NENHUMA face (ex.: sobrou solto de um `apagaFace`)
+     não tem normal pra seguir — GRITA (órfão) e fica no lugar, nunca desloca às
+     cegas. Amplitude 0 é no-op determinístico (desvio sempre 0, mas ainda soma —
+     não é atalho, só o resultado natural da fórmula). */
+  displace(st, a, i) {
+    const alvos = resolverAlvosV(st, a.sel, 'displace', i);
+    if (!alvos.size) return;
+    const amplitude = st.num(a.amplitude ?? 0.1);
+    const frequencia = st.num(a.frequencia ?? 1);
+    const semente = st.num(a.semente ?? 0);
+
+    // normal média por vértice: soma as normais (Newell) de TODAS as faces atuais que
+    // tocam cada vértice — UMA passada sobre st.F, medida antes de mover qualquer coisa
+    const somaN = new Map();   // vid -> [nx,ny,nz,contagem]
+    for (const f of st.F.values()) {
+      const n = normalDaFace(st.V, f.vs);
+      for (const v of f.vs) {
+        let acc = somaN.get(v);
+        if (!acc) { acc = [0, 0, 0, 0]; somaN.set(v, acc); }
+        acc[0] += n[0]; acc[1] += n[1]; acc[2] += n[2]; acc[3]++;
+      }
+    }
+
+    for (const v of alvos) {
+      const p = st.V.get(v);
+      if (!p) continue;   // defensivo (nunca deveria faltar — veio de st.V.keys() ou de um canto de face já validado)
+      const acc = somaN.get(v);
+      if (!acc || !acc[3]) { grita(st, i, 'displace', v, 'vértice sem face nenhuma — sem normal pra seguir (apagaFace deixou solto?)'); continue; }
+      const nrm = norm3(acc[0], acc[1], acc[2]);
+      const r = ruido3(p[0] * frequencia, p[1] * frequencia, p[2] * frequencia, semente);   // [0,1)
+      const d = (r * 2 - 1) * amplitude;   // remapeia pra [-amplitude, +amplitude]
+      st.V.set(v, [p[0] + nrm[0] * d, p[1] + nrm[1] * d, p[2] + nrm[2] * d]);
+    }
   },
 
   /* ---- P3 do playground: espelha + rotaciona — as duas transformam uma SELEÇÃO,
