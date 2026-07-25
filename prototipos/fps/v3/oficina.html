@@ -388,6 +388,45 @@
     <div class="dica" id="tfDica">—</div>
   </section>
 
+  <!-- PASSO 18 (P9d do playground): GRUPO — seleção por grupo GENERALIZADA pro espaço
+       Modelar (`resolverAlvosV`/P8a já aceita `{grupo:'nome'}` no núcleo; a UI só tinha
+       isso dentro do espaço Animação, na lista de Partes). SÓ LEITURA/seleção — nomear
+       uma parte continua sendo ação do espaço Animação (D-96), este bloco não duplica
+       aquela autoria, só reusa `animCtl.selecionarParte` (a MESMA fonte que a lista de
+       Partes já usa) pra deixar selecionar pelo nome também em Modelar. SEMPRE visível
+       (como Adicionar forma — não depende de seleção nenhuma). -->
+  <section class="bloco" id="blocoGrupo">
+    <div class="rotulo">Grupo <span id="grpN" class="badge">0</span></div>
+    <div class="lista" id="grpLista"><span class="vazio-lista">nenhuma parte nomeada ainda</span></div>
+    <div class="dica">clique numa parte pra selecionar as faces dela (nomeie partes no espaço Animação)</div>
+  </section>
+
+  <!-- PASSO 18 (P9d do playground): REGIÃO — seleção por caixa delimitadora GENERALIZADA
+       pro espaço Modelar (`resolverAlvosV`/P8a já aceita `{regiao:{min,max}}`; não
+       existia UI nenhuma pra isso, nem em Animação). SÓ SELECIONA — nunca grava passo
+       (como clicar num vértice; `selecionarVarios` já é a fonte única da seleção de
+       vértice). `min`/`max` INCLUSIVOS, os dois OBRIGATÓRIOS (a mesma lei do núcleo —
+       sem sentinela infinita); "usar caixa do objeto" preenche com o bbox ATUAL (não
+       autopreenche sozinho — os campos são uma CONSULTA que o usuário compõe, não um
+       retrato ao vivo tipo o painel Vértice; sobrescrever sozinho apagaria o que a
+       pessoa digitou). SEMPRE visível. -->
+  <section class="bloco" id="blocoRegiao">
+    <div class="rotulo">Região <span id="regN" class="badge vazio">—</span></div>
+    <div class="linha2"><label>mín</label>
+      <input id="regMinX" type="number" step="0.01" value="-0.5" aria-label="mínimo x" title="x">
+      <input id="regMinY" type="number" step="0.01" value="-0.5" aria-label="mínimo y" title="y">
+      <input id="regMinZ" type="number" step="0.01" value="-0.5" aria-label="mínimo z" title="z">
+    </div>
+    <div class="linha2"><label>máx</label>
+      <input id="regMaxX" type="number" step="0.01" value="0.5" aria-label="máximo x" title="x">
+      <input id="regMaxY" type="number" step="0.01" value="0.5" aria-label="máximo y" title="y">
+      <input id="regMaxZ" type="number" step="0.01" value="0.5" aria-label="máximo z" title="z">
+    </div>
+    <button id="regBtCaixa" class="btmini sec" type="button">usar caixa do objeto</button>
+    <button id="regBt" class="btmini" type="button">Selecionar região</button>
+    <div class="dica" id="regDica">—</div>
+  </section>
+
   <!-- PASSO 13b: ESPAÇO ANIMAÇÃO — autoria da animação rígida por parte. Só aparece no
        espaço Animação. Nomear parte (a op ['parte',{nome,faces}] do 13a) a partir das
        faces selecionadas, a lista de partes (clicar seleciona as faces dela), criar/
@@ -1405,7 +1444,7 @@ try {
          espaço NÃO mexe em câmera/seleção/objeto — só em QUAIS painéis aparecem (D-73). */
       const modelar = !animLigado;
       const sub = $('propsSub'); if (sub) sub.textContent = modelar ? 'espaço Modelar · vértice e caixa' : 'espaço Animação · partes e linha do tempo';
-      for (const bid of ['blocoAdicionar', 'blocoVertice', 'blocoCaixa', 'blocoColisao']) { const el = $(bid); if (el) el.hidden = !modelar; }
+      for (const bid of ['blocoAdicionar', 'blocoVertice', 'blocoCaixa', 'blocoColisao', 'blocoGrupo', 'blocoRegiao']) { const el = $(bid); if (el) el.hidden = !modelar; }
       { const bt = $('afBtAdicionar'); if (bt) bt.disabled = !!arrasto; }   // PASSO 15: "um dono por vez" — sem clique novo com edição em voo
       // PASSO 14b: blocoEsqueleto/blocoPeso (rigging) vivem no MESMO espaço Animação (setup de animação)
       for (const bid of ['blocoAnim', 'blocoPartes', 'blocoEsqueleto', 'blocoPeso', 'blocoAnims']) { const el = $(bid); if (el) el.hidden = modelar; }
@@ -1488,6 +1527,23 @@ try {
               : `rotacionar gira ${nAlvo} ${tipoAlvo} em torno do centroide · espelhar exige face(s) selecionada(s)`;
           }
         }
+      }
+      // PASSO 18: bloco GRUPO — lista as partes nomeadas (fonte única: partesNomeadas(),
+      // a MESMA da lista de Partes em Animação); SEMPRE renderiza, o bloco é sempre visível.
+      // Os chips desabilitam no arrasto (o mesmo "um dono por vez" de todo outro botão,
+      // mesmo esta seleção não tocando PASSOS — troca de seleção em voo confundiria o
+      // arrasto ativo, que referencia um id/face específico).
+      {
+        const partes = partesNomeadas();
+        const elG = $('grpLista');
+        if (elG) {
+          elG.innerHTML = '';
+          if (!partes.length) elG.innerHTML = '<span class="vazio-lista">nenhuma parte nomeada ainda</span>';
+          else for (const p of partes) { const b = document.createElement('button'); b.type = 'button'; b.className = 'parteChip'; b.dataset.parte = p.nome; b.textContent = `${p.nome} · ${p.faces.length}f`; b.disabled = !!arrasto; elG.appendChild(b); }
+        }
+        const n = $('grpN'); if (n) { n.textContent = String(partes.length); n.classList.toggle('vazio', !partes.length); }
+        { const bt = $('regBt'); if (bt) bt.disabled = !!arrasto; }
+        { const bt = $('regBtCaixa'); if (bt) bt.disabled = !!arrasto; }
       }
       $('pvDica').textContent = temSel
         ? (arrasto ? 'arrastando — painel em leitura'
@@ -1641,6 +1697,25 @@ try {
         const graus = $('tfRotGraus');
         const passo = malhaCtl.rotacionar({ eixo: $('tfRotEixo').value, graus: +graus.value });
         if (passo && graus) graus.value = '0';
+      }); }
+    /* PASSO 18 — GRUPO: clicar um chip da lista reusa animCtl.selecionarParte (a MESMA
+       fonte que a lista de Partes do espaço Animação já usa — nenhuma lógica nova). */
+    { const el = $('grpLista'); if (el) el.addEventListener('click', (e) => { const b = e.target.closest('.parteChip'); if (b && animCtl) animCtl.selecionarParte(b.dataset.parte); }); }
+    /* PASSO 18 — REGIÃO: "usar caixa do objeto" preenche os 6 campos com o bbox ATUAL
+       (não sobrescreve sozinho — só neste clique); "Selecionar região" lê os campos e
+       chama malhaCtl.selecionarRegiao (só seleciona, nunca grava passo). */
+    { const bt = $('regBtCaixa'); if (bt) bt.addEventListener('click', () => {
+        if (!malhaCtl) return;
+        const bb = malhaCtl.bboxMinMax(); if (!bb) return;
+        const ids = ['regMinX', 'regMinY', 'regMinZ'], idx = ['regMaxX', 'regMaxY', 'regMaxZ'];
+        ids.forEach((id, k) => { const el = $(id); if (el) el.value = bb.min[k].toFixed(3); });
+        idx.forEach((id, k) => { const el = $(id); if (el) el.value = bb.max[k].toFixed(3); });
+      }); }
+    { const bt = $('regBt'); if (bt) bt.addEventListener('click', () => {
+        if (!malhaCtl) return;
+        const min = ['regMinX', 'regMinY', 'regMinZ'].map((id) => $(id).value);
+        const max = ['regMaxX', 'regMaxY', 'regMaxZ'].map((id) => $(id).value);
+        malhaCtl.selecionarRegiao(min, max);
       }); }
     /* PASSO 10 — o botão "Salvar peça" serializa o estado ATUAL (mod/PASSOS/PARAMS/
        TOPO) e POSTa pro servidor de dev; sem servidor, baixa o .js (fallback). */
@@ -2151,6 +2226,42 @@ try {
         atualizarPainel();
         console.log(`oficina passo 17 (rotaciona): ['rotaciona', ${JSON.stringify({ eixo, graus, sel })}] — PASSOS agora ${PASSOS.length}`);
         return JSON.parse(JSON.stringify(passo));
+      },
+
+      /* ---- PASSO 18 (P9d do playground): SELEÇÃO POR REGIÃO ------------------- */
+      /* bbox ATUAL [min,max] de neutro.V (a MESMA varredura do bboxNeutro do passo 6,
+         mas devolvendo os dois extremos crus em vez da dimensão) — só pro botão "usar
+         caixa do objeto" preencher os campos, nunca autopreenche sozinho. */
+      bboxMinMax() {
+        if (!neutro || !neutro.V.size) return null;
+        const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+        for (const p of neutro.V.values()) for (let k = 0; k < 3; k++) { if (p[k] < mn[k]) mn[k] = p[k]; if (p[k] > mx[k]) mx[k] = p[k]; }
+        return { min: mn, max: mx };
+      },
+      /* SELECIONAR REGIÃO: varre neutro.V com a MESMA regra INCLUSIVA do `resolverAlvosV`
+         do núcleo (`p >= min && p <= max` nos 3 eixos) e chama `selecionarVarios` — é
+         SÓ SELEÇÃO, nunca grava passo (a mesma classe de selecionarFace/selecionarVarios,
+         não de mover/pintar/marcar). min/max precisam ser [x,y,z] finitos, os dois
+         OBRIGATÓRIOS (sem sentinela infinita — a mesma lei do núcleo); guarda de arrasto
+         (consistente com todo outro botão, "um dono por vez", mesmo não tocando PASSOS).
+         Devolve os ids selecionados (ou null se guarda/entrada inválida). */
+      selecionarRegiao(min, max) {
+        if (arrasto) return null;
+        const mn = Array.isArray(min) ? min.map(Number) : [], mx = Array.isArray(max) ? max.map(Number) : [];
+        if (mn.length !== 3 || mx.length !== 3 || !mn.every(Number.isFinite) || !mx.every(Number.isFinite)) return null;
+        if (!neutro) return null;
+        const ids = [];
+        for (const [id, p] of neutro.V) {
+          if (p[0] >= mn[0] && p[0] <= mx[0] && p[1] >= mn[1] && p[1] <= mx[1] && p[2] >= mn[2] && p[2] <= mx[2]) ids.push(id);
+        }
+        ids.sort((a, b) => a - b);
+        this.selecionarVarios(ids);
+        const dica = $('regDica');
+        if (dica) dica.textContent = ids.length ? `${ids.length} vértice(s) dentro da região selecionado(s)` : 'nenhum vértice dentro dessa região';
+        const badge = $('regN');
+        if (badge) { badge.textContent = String(ids.length); badge.classList.toggle('vazio', !ids.length); }
+        console.log(`oficina passo 18 (região): min=[${mn.join(', ')}] max=[${mx.join(', ')}] — ${ids.length} vértice(s)`);
+        return ids;
       },
 
       /* ÍMÃ: id do vértice PROJETADO mais perto do cursor (≤ IMA_RAIO), EXCLUINDO o
@@ -3280,6 +3391,14 @@ try {
     rotacionar: (params) => (malhaCtl ? malhaCtl.rotacionar(params || {}) : null),
     painelRuido: () => ({ vis: !$('blocoRuido').hidden, alvo: $('rdAlvo').textContent, dica: $('rdDica').textContent }),
     painelTransformar: () => ({ vis: !$('blocoTransformar').hidden, alvo: $('tfAlvo').textContent, dica: $('tfDica').textContent, btEspDisabled: $('tfEspBt').disabled, btRotDisabled: $('tfRotBt').disabled }),
+    // PASSO 18: GRUPO (reusa animCtl.selecionarParte) + REGIÃO (malhaCtl.selecionarRegiao) — seleção generalizada pro Modelar
+    selecionarGrupo: (nome) => { if (arrasto) return; if (animCtl) animCtl.selecionarParte(nome); },   // guarda: "um dono por vez" como todo outro botão (o clique real já cobre pelo chip desabilitado; este hook cobre o mesmo caminho sem simular clique)
+    gruposDisponiveis: () => (animCtl ? animCtl.partes() : []),
+    selecionarRegiao: (min, max) => (malhaCtl ? malhaCtl.selecionarRegiao(min, max) : null),
+    bboxAtual: () => (malhaCtl ? malhaCtl.bboxMinMax() : null),
+    usarCaixaRegiao: () => { const bt = $('regBtCaixa'); if (bt) bt.click(); return ['regMinX', 'regMinY', 'regMinZ', 'regMaxX', 'regMaxY', 'regMaxZ'].map((id) => $(id).value); },
+    painelGrupo: () => ({ n: $('grpN').textContent, chips: [...document.querySelectorAll('#grpLista .parteChip')].map((b) => ({ nome: b.dataset.parte, texto: b.textContent })) }),
+    painelRegiao: () => ({ n: $('regN').textContent, dica: $('regDica').textContent, campos: ['regMinX', 'regMinY', 'regMinZ', 'regMaxX', 'regMaxY', 'regMaxZ'].map((id) => $(id).value) }),
     solidoDe: (id) => { const f = neutro && neutro.F.get(id); return f ? !!f.solido : false; },   // a face id é sólida no neutro?
     temSolido: () => { const F = neutro && neutro.F; return F ? [...F.values()].some((f) => f.solido) : false; },   // há ALGUMA face sólida?
     colisao: () => { try { return colisaoDe(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual); } catch { return null; } },   // {forma,raio,altura,base} do estado atual (a MESMA função que o arquivo salvo chama no load)

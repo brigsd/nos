@@ -3557,6 +3557,151 @@ else {
   await page17.close();
 }
 
+/* ==== PASSO 18: GRUPO + REGIÃO (P9d do playground) =============================
+   Seleção por GRUPO (reusa `animCtl.selecionarParte`, a MESMA fonte da lista de
+   Partes em Animação) e por REGIÃO (caixa delimitadora, `malhaCtl.selecionarRegiao`,
+   NOVA — nada parecido existia) generalizadas pro espaço Modelar. As duas são SÓ
+   SELEÇÃO — nunca gravam passo, populam `selVertices`/`selFaces` como qualquer
+   clique — então TODOS os botões dos passos 15-17 (Editar/Ruído/Transformar) já
+   funcionam de graça em cima do que elas selecionam, sem mudar uma linha lá. PURO
+   NÚCLEO POR CIMA (jóia + núcleo intactos, git diff à parte). Fixture: um cubo
+   (`_vazio` + adicionarForma) — 8V/6F, ids 0..7/0..5 conhecidos:
+   (18 fixture) o cubo nasce com 8V/6F/0 órfãos;
+   (18 grupo vazio) sem parte nomeada, gruposDisponiveis()=[] e #grpLista mostra o
+        placeholder "nenhuma parte nomeada ainda";
+   (18 grupo nomear) nomear 'topo' com as faces 0,1 pelo fluxo REAL do espaço
+        Animação (chip Animação → seleciona → nomeia → chip Modelar) — a PROVA de
+        que o bloco Grupo em Modelar reflete o que foi nomeado em Animação (D-96
+        não mudou: nomear continua sendo ação de Animação, Modelar só LÊ);
+   (18 grupo real) clique REAL no chip '#grpLista .parteChip' seleciona as faces
+        da parte (mesmo padrão do clique na lista de Partes);
+   (18 grupo inexistente) selecionarGrupo('nome que não existe') é no-op (a
+        seleção não muda) — animCtl.selecionarParte já garante isso, sem código
+        novo aqui;
+   (18 região real ★) "usar caixa do objeto" preenche os 6 campos com o bbox
+        REAL (derivado do canon, não hardcoded) e "Selecionar região" com esse
+        bbox pega TODOS os 8 vértices — clique REAL nos dois botões;
+   (18 região parcial ★) uma região MAIS ESTREITA (y≥0.4) pega só os 4 vértices do
+        topo — o conjunto é DERIVADO do canon (quais vértices têm y≥0.4), não
+        hardcoded pela geometria do cubo;
+   (18 região vazia) região fora do objeto → seleção vazia;
+   (18 região inválida) min com aridade errada → devolve null, seleção INTACTA;
+   (18 guarda) com um vértice em arrasto, os chips de grupo e os botões de região
+        ficam DESABILITADOS no DOM, e selecionarGrupo()/selecionarRegiao() por
+        hook são no-op (arrasto guard, "um dono por vez" como todo outro botão,
+        mesmo esta seleção não tocando PASSOS). */
+const OUT18 = resolve(REPO, 'scratchpad/passo18');
+mkdirSync(OUT18, { recursive: true });
+
+const page18 = await browser.newPage({ viewport: { width: 900, height: 620 } });
+page18.on('pageerror', (e) => console.error('PAGEERR(18):', e.message));
+await page18.goto(`${base}?peca=_vazio`, { waitUntil: 'load' });
+await page18.waitForFunction(() => window.__ready === true, { timeout: 15000 }).catch(() => {});
+const ready18 = await page18.evaluate(() => window.__ready === true);
+ok('(18 abre) _vazio abre no editor (window.__ready)', ready18);
+if (!ready18) { console.error('  _vazio não abriu — abortando o passo 18'); await page18.close(); }
+else {
+  const r18 = () => page18.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => res(0)))));
+  const canon18 = () => page18.evaluate(() => window.__oficina.canon());
+  const vRow18 = (c, vid) => c.V.find((row) => row[0] === vid);
+
+  // ---- (18 fixture) cubo conhecido (8V/6F, ids 0..7/0..5) pelo hook do passo 15 ----
+  await page18.evaluate(() => window.__oficina.adicionarForma('cubo', { lado: 1 })); await r18();
+  let c = await canon18();
+  ok('(18 fixture) o cubo nasce com 8 vértices / 6 faces / 0 órfãos', c.V.length === 8 && c.F.length === 6 && c.orfaos.length === 0, `V ${c.V.length} · F ${c.F.length} · órfãos ${c.orfaos.length}`);
+
+  // ---- (18 grupo vazio) sem parte nomeada ----
+  const gruposVazio = await page18.evaluate(() => window.__oficina.gruposDisponiveis());
+  const painelGrupoVazio = await page18.evaluate(() => window.__oficina.painelGrupo());
+  const listaTextoVazio = await page18.$eval('#grpLista', (el) => el.textContent);
+  ok('(18 grupo vazio) sem parte nomeada, gruposDisponiveis()=[] e #grpLista mostra o placeholder',
+     gruposVazio.length === 0 && painelGrupoVazio.chips.length === 0 && /nenhuma parte nomeada/.test(listaTextoVazio),
+     `grupos ${JSON.stringify(gruposVazio)} · lista '${listaTextoVazio}'`);
+
+  // ---- (18 grupo nomear) fluxo REAL: chip Animação -> seleciona -> nomeia -> chip Modelar ----
+  await page18.evaluate(() => window.__oficina.selecionarFaces([0, 1])); await r18();
+  await page18.click('#chipAnim'); await r18();
+  await page18.fill('#anNomeParte', 'topo');
+  await page18.click('#anBtParte'); await r18();
+  await page18.click('#chipModelar'); await r18();
+  const gruposPosNomear = await page18.evaluate(() => window.__oficina.gruposDisponiveis());
+  const painelGrupoPosNomear = await page18.evaluate(() => window.__oficina.painelGrupo());
+  ok('(18 grupo nomear) nomear \'topo\' (faces 0,1) pelo fluxo REAL de Animação aparece no bloco Grupo de Modelar (D-96: nomear continua em Animação, Modelar só LÊ)',
+     JSON.stringify(gruposPosNomear) === JSON.stringify([{ nome: 'topo', faces: [0, 1] }]) && painelGrupoPosNomear.chips.length === 1 && painelGrupoPosNomear.chips[0].texto === 'topo · 2f',
+     `grupos ${JSON.stringify(gruposPosNomear)} · painel ${JSON.stringify(painelGrupoPosNomear)}`);
+
+  // ---- (18 grupo real) clique REAL no chip seleciona as faces da parte ----
+  await page18.evaluate(() => window.__oficina.selecionarFaces([])); await r18();
+  await page18.click('#grpLista .parteChip'); await r18();
+  const selPosChip = await page18.evaluate(() => window.__oficina.selecaoFaces());
+  ok('(18 grupo real) clique REAL no chip \'topo\' seleciona as faces dela ([0,1])', JSON.stringify(selPosChip) === JSON.stringify([0, 1]), `${JSON.stringify(selPosChip)}`);
+
+  // ---- (18 grupo inexistente) no-op — a seleção não muda ----
+  const selAntesInexistente = await page18.evaluate(() => window.__oficina.selecaoFaces());
+  await page18.evaluate(() => window.__oficina.selecionarGrupo('nao-existe')); await r18();
+  const selPosInexistente = await page18.evaluate(() => window.__oficina.selecaoFaces());
+  ok('(18 grupo inexistente) selecionarGrupo(nome inexistente) não muda a seleção', JSON.stringify(selAntesInexistente) === JSON.stringify(selPosInexistente), `antes ${JSON.stringify(selAntesInexistente)} · depois ${JSON.stringify(selPosInexistente)}`);
+
+  // ---- (18 região real ★) "usar caixa do objeto" + "Selecionar região" REAIS pegam TODOS os vértices ----
+  const canonPreRegiao = await canon18();
+  const bboxIndep = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+  for (const row of canonPreRegiao.V) for (let k = 0; k < 3; k++) { if (row[k + 1] < bboxIndep.min[k]) bboxIndep.min[k] = row[k + 1]; if (row[k + 1] > bboxIndep.max[k]) bboxIndep.max[k] = row[k + 1]; }
+  await page18.click('#regBtCaixa'); await r18();
+  const camposPosCaixa = await Promise.all(['regMinX', 'regMinY', 'regMinZ', 'regMaxX', 'regMaxY', 'regMaxZ'].map((id) => page18.$eval('#' + id, (el) => +el.value)));
+  const bateCaixa = [0, 1, 2].every((k) => Math.abs(camposPosCaixa[k] - bboxIndep.min[k]) < 1e-3) && [0, 1, 2].every((k) => Math.abs(camposPosCaixa[k + 3] - bboxIndep.max[k]) < 1e-3);
+  ok('(18 região real ★) clique REAL em "usar caixa do objeto" preenche os 6 campos com o bbox DERIVADO do canon (não hardcoded)', bateCaixa, `campos ${JSON.stringify(camposPosCaixa)} · bbox ${JSON.stringify(bboxIndep)}`);
+  await page18.click('#regBt'); await r18();
+  const selPosRegiaoTudo = (await page18.evaluate(() => window.__oficina.selecao())).sort((a, b) => a - b);
+  const todosIds = canonPreRegiao.V.map((row) => row[0]).sort((a, b) => a - b);
+  ok('(18 região real ★) clique REAL em "Selecionar região" com o bbox inteiro pega TODOS os 8 vértices', JSON.stringify(selPosRegiaoTudo) === JSON.stringify(todosIds), `${JSON.stringify(selPosRegiaoTudo)}`);
+
+  // ---- (18 região parcial ★) região mais estreita (y≥0.4) pega só o subconjunto DERIVADO do canon ----
+  await page18.fill('#regMinY', '0.4');
+  const esperadoParcial = canonPreRegiao.V.filter((row) => row[2] >= 0.4).map((row) => row[0]).sort((a, b) => a - b);
+  await page18.click('#regBt'); await r18();
+  const selPosRegiaoParcial = (await page18.evaluate(() => window.__oficina.selecao())).sort((a, b) => a - b);
+  ok('(18 região parcial ★) uma região mais estreita (y≥0.4) pega EXATAMENTE o subconjunto derivado do canon (não hardcoded pela geometria do cubo)',
+     JSON.stringify(selPosRegiaoParcial) === JSON.stringify(esperadoParcial) && esperadoParcial.length > 0 && esperadoParcial.length < todosIds.length,
+     `esperado ${JSON.stringify(esperadoParcial)} · real ${JSON.stringify(selPosRegiaoParcial)}`);
+
+  // ---- (18 região vazia) região fora do objeto -> seleção vazia ----
+  const selVaziaRegiao = await page18.evaluate(() => window.__oficina.selecionarRegiao([100, 100, 100], [101, 101, 101]));
+  ok('(18 região vazia) uma região fora do objeto devolve [] (seleção vazia)', Array.isArray(selVaziaRegiao) && selVaziaRegiao.length === 0, `${JSON.stringify(selVaziaRegiao)}`);
+
+  // ---- (18 região inválida) min com aridade errada -> null, seleção INTACTA ----
+  await page18.evaluate(() => window.__oficina.selecionarVarios([1, 2])); await r18();
+  const selAntesInvalido = await page18.evaluate(() => window.__oficina.selecao());
+  const regiaoInvalida = await page18.evaluate(() => window.__oficina.selecionarRegiao([0, 0], [1, 1, 1]));
+  const selPosInvalido = await page18.evaluate(() => window.__oficina.selecao());
+  ok('(18 região inválida) min com 2 elementos (aridade errada) devolve null e NÃO muda a seleção',
+     regiaoInvalida === null && JSON.stringify(selAntesInvalido) === JSON.stringify(selPosInvalido), `devolveu ${JSON.stringify(regiaoInvalida)} · seleção ${JSON.stringify(selAntesInvalido)}->${JSON.stringify(selPosInvalido)}`);
+
+  // ---- (18 guarda) vértice em arrasto desabilita chips de grupo e botões de região no DOM; hooks no-op ----
+  const projV1_18 = await page18.evaluate(() => window.__oficina.projMalha()).then((ps) => ps.find((p) => p.id === 1));
+  ok('(18 guarda setup) o vértice #1 projeta na tela', !!projV1_18, `${JSON.stringify(projV1_18)}`);
+  if (projV1_18) {
+    await page18.mouse.move(projV1_18.x, projV1_18.y);
+    await page18.mouse.down();
+    await page18.mouse.move(projV1_18.x + 18, projV1_18.y + 14, { steps: 6 });
+    const emArr18 = await page18.evaluate(() => window.__oficina.emArrasto());
+    const chipDisabled = await page18.$eval('#grpLista .parteChip', (el) => el.disabled);
+    const regBtDisabled = await page18.$eval('#regBt', (el) => el.disabled);
+    const regBtCaixaDisabled = await page18.$eval('#regBtCaixa', (el) => el.disabled);
+    const grupoDurArr = await page18.evaluate(() => window.__oficina.selecionarGrupo('topo'));
+    const regiaoDurArr = await page18.evaluate((b) => window.__oficina.selecionarRegiao(b.min, b.max), bboxIndep);
+    await page18.mouse.move(projV1_18.x, projV1_18.y, { steps: 6 });
+    await page18.mouse.up(); await r18();
+    ok('(18 guarda) com um vértice em arrasto, os chips de grupo e os botões de região ficam DESABILITADOS no DOM',
+       !!emArr18 && chipDisabled === true && regBtDisabled === true && regBtCaixaDisabled === true,
+       `emArrasto ${JSON.stringify(emArr18)} · chip ${chipDisabled} · regBt ${regBtDisabled} · regBtCaixa ${regBtCaixaDisabled}`);
+    ok('(18 guarda ★) MESMO assim, selecionarGrupo()/selecionarRegiao() por hook são no-op durante o arrasto (a guarda `if (arrasto)` de cada um)',
+       grupoDurArr === undefined && regiaoDurArr === null, `grupo->${JSON.stringify(grupoDurArr)} · regiao->${JSON.stringify(regiaoDurArr)}`);
+  }
+
+  await page18.screenshot({ path: join(OUT18, 'oficina-grupo-regiao.png') });
+  await page18.close();
+}
+
 await browser.close();
 server.close();
 

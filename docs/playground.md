@@ -195,9 +195,20 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
         ruído não é garantido bit-exato entre engines, D-116) — não é bug,
         é limite de medição; a bancada compara estrutura EXATA + posição
         com epsilon 1e-9.
-  - [ ] **P9d** — seleção por REGIÃO (caixa) e por GRUPO generalizada pro
-        espaço Modelar (`resolverAlvosV`/P8a já aceita os dois no núcleo; a
-        UI só tem grupo, parcial, dentro do espaço Animação).
+  - [x] **P9d** (D-126) — blocos `#blocoGrupo` e `#blocoRegiao` (`oficina.html`,
+        "Passo 18"), sempre visíveis no Modelar. Grupo REUSA
+        `animCtl.selecionarParte` (a mesma fonte da lista de Partes em
+        Animação) — nomear parte continua sendo ação de Animação (D-96),
+        Modelar só LÊ. Região é seleção nova: min/max XYZ inclusivos + botão
+        "usar caixa do objeto"; a regra de dentro/fora é a MESMA do
+        `resolverAlvosV`. As duas são SÓ SELEÇÃO — nunca gravam passo,
+        populam `selVertices`/`selFaces` como um clique — então os botões
+        dos P9a-c já funcionam em cima do que elas selecionam, de graça.
+        2 achados reais ao rodar: um hook novo chamava `partesNomeadas()`
+        de um escopo que não a enxerga (só `animCtl.partes()` tinha o
+        closure certo); e os botões de Grupo/Região não desabilitavam no
+        arrasto, ao contrário de todo botão desde o P9a — os dois
+        consertados antes da bancada formal.
   - [ ] **Aba Desenho** — canvas 2D vetor (contorno pro `loft`/`inflate` +
         gabarito IoU AO VIVO) + o modo pintura livre (specs em
         docs/oficina.md "Aba Desenho"/"Desenho livre"). Epico à parte, maior

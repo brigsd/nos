@@ -756,6 +756,39 @@ página↔Node. A bancada compara estrutura EXATA (ids, contagem, winding) e
 posição de vértice com epsilon 1e-9 (~4 ordens de grandeza de folga sobre o
 ruído medido).
 
+### Grupo + Região (P9d do playground, D-126)
+
+Dois blocos SEMPRE visíveis no painel Modelar (não dependem de seleção
+nenhuma, como Adicionar forma) — os dois SÓ SELECIONAM, nunca gravam passo:
+populam `selVertices`/`selFaces` como um clique normal, então todo botão
+dos blocos Editar/Ruído/Transformar já funciona em cima do que eles
+selecionam, sem mudar nada ali.
+
+**Grupo** — lista as partes nomeadas (`f.parte`, a op `parte` do 13a) como
+chips clicáveis, igual à lista de Partes do espaço Animação — porque É a
+MESMA fonte (`animCtl.selecionarParte`, reusado, não duplicado). Nomear uma
+parte continua sendo ação do espaço Animação (D-96 não muda); Modelar só
+LÊ os nomes que já existem e seleciona as faces deles. Sem nenhuma parte
+nomeada, mostra o placeholder "nenhuma parte nomeada ainda".
+
+**Região** — seleção por caixa delimitadora, nova (não existia UI nem em
+Animação): 6 campos `mín`/`máx` × x/y/z (inclusivos, os dois OBRIGATÓRIOS —
+a mesma lei do `resolverAlvosV`, sem sentinela infinita) + o botão
+Selecionar região, que varre `neutro.V` com a MESMA regra do núcleo
+(`p >= min && p <= max` nos 3 eixos). O botão "usar caixa do objeto"
+preenche os 6 campos com o bbox ATUAL — só nesse clique, nunca sozinho (os
+campos são uma CONSULTA que a pessoa compõe, não um retrato ao vivo tipo o
+painel Vértice; sobrescrever sozinho apagaria o que foi digitado).
+
+Achados reais ao rodar (não hipotéticos): (1) um hook novo
+(`gruposDisponiveis`) chamava `partesNomeadas()` direto, mas essa função
+vive num escopo aninhado que o objeto `window.__oficina` não enxerga —
+`ReferenceError` só na hora de rodar, nunca na leitura do código; consertado
+reusando `animCtl.partes()` (que JÁ tem o closure certo, porque é chamado
+de dentro do mesmo escopo aninhado). (2) os botões de Grupo/Região não
+desabilitavam durante um arrasto, ao contrário de todo outro botão desde o
+P9a ("um dono por vez") — consertado antes da bancada formal, não depois.
+
 ## Editar objeto de dentro do jogo
 
 O caminho principal de uso, decidido pelo ideador.
