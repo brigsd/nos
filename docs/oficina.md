@@ -691,6 +691,34 @@ parâmetro inválido (ex.: `chanfro` fora da faixa do `chamferBox`) GRITA — o
 passo entra em PASSOS mas nasce sem face nenhuma — e a UI avisa em vez de
 falhar silenciosa; a geometria já existente fica intacta.
 
+### Editar (P9b do playground, D-124)
+
+`moveF`/`moveA`/`vira`/`apagaFace` existiam no núcleo desde o P8a (D-121) sem
+NENHUM botão — o bloco **Editar**, por último no painel Modelar, fecha essa
+lacuna. Três campos `dX`/`dY`/`dZ` (um delta RELATIVO somado à posição atual,
+diferente do painel Vértice acima — que edita um ALVO absoluto por eixo, só
+faz sentido pra 1 vértice) + o botão **Mover**, e dois botões só-de-face,
+**Inverter** (`vira`) e **Apagar** (`apagaFace`).
+
+Cada op do núcleo aqui é SINGULAR — toma UMA face ou UM par de vértices, nunca
+a multi-seleção inteira — então a UI decide o alvo pelo FORMATO da seleção
+atual, a mesma convenção do handle de extrude do passo 7 ("a seta extruda só a
+ativa" mesmo com várias faces marcadas):
+
+- **Face ativa** selecionada → **Mover** grava `moveF`, **Inverter**/**Apagar**
+  ficam disponíveis.
+- **Exatamente 2 vértices** selecionados → **Mover** grava `moveA` nas duas
+  pontas. Não existe hit-test de aresta novo: o par-de-2 que o Shift+clique do
+  passo 8 já monta SERVE de seleção de "aresta" porque o `moveA` do núcleo não
+  exige que as duas pontas estejam de fato ligadas por uma face (doc da op).
+- Qualquer outro formato (1 vértice, 3+, nada) — o bloco inteiro some.
+
+Guardas: um clique de Mover em voo (arrasto ativo) é ignorado; delta
+`[0,0,0]` não grava passo fantasma (D3); um componente além de ±100 é
+RECUSADO inteiro, não clampado (D4, o mesmo limite do valor exato do passo
+6). Depois de `apagaFace`, o id apagado não existe mais — a seleção zera e o
+bloco some, como qualquer edição que invalida o que estava selecionado.
+
 ## Editar objeto de dentro do jogo
 
 O caminho principal de uso, decidido pelo ideador.

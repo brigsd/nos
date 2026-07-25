@@ -322,6 +322,35 @@
     <button id="btSolido" class="btmescla" type="button" hidden>Marcar <span id="pSolidoN">2</span> faces como sólidas · colisão</button>
   </section>
 
+  <!-- PASSO 16 (P9b do playground): EDITAR — botões pras 4 ops de edição do P8a
+       (moveF/moveA/vira/apagaFace, motor/oficina.js, já provadas — não se toca no
+       núcleo aqui). Cada uma toma UM alvo, nunca a multi-seleção inteira: moveF/vira/
+       apagaFace agem na face ATIVA (mesma convenção do handle de extrude do passo 7 —
+       "a seta extruda a ativa"); moveA age no PAR de exatamente 2 vértices selecionados
+       — o núcleo não exige adjacência real (doc do moveA), então o par-de-2 já
+       existente do passo 8 (Shift+clique) SERVE de seleção de "aresta" sem hit-test
+       novo nenhum. dX/dY/dZ é um delta RELATIVO somado (['moveF',{face,d}] ou
+       ['moveA',{a,b,d}]), não um alvo absoluto — isso já é o painel Vértice acima, pra
+       1 vértice só. Aparece com face ativa OU par-de-2; oculto (nem face nem par de 2:
+       1 vértice, 3+, ou nada) some inteiro. FICA POR ÚLTIMO no painel Modelar (depois
+       de Colisão) DE PROPÓSITO: é a única posição onde ficar visível nunca empurra
+       outro bloco pra fora da viewport — pego rodando a bancada inteira, não por
+       leitura (D-116): entre Vértice e Cor, mostrar o bloco com uma face selecionada
+       empurrava #pcPresets (passo 9) pra baixo da área visível do painel rolável
+       (#props, overflow:auto), e o clique de COORDENADA CRUA do teste (não
+       page.click, que rola sozinho) errava o alvo — 2 falhas silenciosas e
+       determinísticas em "(9 várias)", nada a ver com pincel/cor em si. -->
+  <section class="bloco" id="blocoEditar" hidden>
+    <div class="rotulo">Editar <span id="edAlvo" class="badge vazio">—</span></div>
+    <label class="campo"><span class="eixo ex">dX</span><input id="edDx" type="number" step="0.01" value="0"></label>
+    <label class="campo"><span class="eixo ey">dY</span><input id="edDy" type="number" step="0.01" value="0"></label>
+    <label class="campo"><span class="eixo ez">dZ</span><input id="edDz" type="number" step="0.01" value="0"></label>
+    <button id="edBtMover" class="btmini" type="button">Mover</button>
+    <button id="edBtVira" class="btmini sec" type="button" hidden>Inverter face (vira)</button>
+    <button id="edBtApagar" class="btmini sec" type="button" hidden>Apagar face</button>
+    <div class="dica" id="edDica">—</div>
+  </section>
+
   <!-- PASSO 13b: ESPAÇO ANIMAÇÃO — autoria da animação rígida por parte. Só aparece no
        espaço Animação. Nomear parte (a op ['parte',{nome,faces}] do 13a) a partir das
        faces selecionadas, a lista de partes (clicar seleciona as faces dela), criar/
@@ -1370,6 +1399,28 @@ try {
         const n = $('pvMesclaN'); if (n && varios) n.textContent = String(selVertices.length);
       }
       const temFace = faceSelecionada != null && neutro && neutro.F.has(faceSelecionada);
+      // PASSO 16: bloco EDITAR — aparece com face ATIVA ou par de EXATAMENTE 2 vértices
+      // (o "par-aresta" do moveA, sem hit-test novo — Shift+clique já monta o par).
+      // Inverter/Apagar só fazem sentido pra face (moveA não tem os dois).
+      {
+        const bl = $('blocoEditar');
+        if (bl) {
+          const par = selVertices.length === 2;
+          const vis = modelar && (temFace || par);
+          bl.hidden = !vis;
+          if (vis) {
+            const badge = $('edAlvo');
+            if (badge) { badge.textContent = temFace ? ('#' + faceSelecionada) : `${selVertices[0]}↔${selVertices[1]}`; badge.classList.remove('vazio'); }
+            const btMover = $('edBtMover'); if (btMover) btMover.disabled = !!arrasto;
+            const btVira = $('edBtVira'); if (btVira) { btVira.hidden = !temFace; btVira.disabled = !temFace || !!arrasto; }
+            const btApagar = $('edBtApagar'); if (btApagar) { btApagar.hidden = !temFace; btApagar.disabled = !temFace || !!arrasto; }
+            const dica = $('edDica');
+            if (dica) dica.textContent = temFace
+              ? `face #${faceSelecionada} — dX/dY/dZ move (moveF) · inverter troca o lado de fora (vira) · apagar remove (apagaFace)`
+              : `aresta ${selVertices[0]}↔${selVertices[1]} — dX/dY/dZ move as duas pontas juntas (moveA)`;
+          }
+        }
+      }
       $('pvDica').textContent = temSel
         ? (arrasto ? 'arrastando — painel em leitura'
           : selVertices.length >= 2 ? `${selVertices.length} vértices — M mescla no ativo #${selecionado} (Ctrl no arrasto = ímã)`
@@ -1487,6 +1538,23 @@ try {
         for (const el of document.querySelectorAll('#afCampos [data-campo]')) campos[el.dataset.campo] = el.value;
         malhaCtl.adicionarForma(sel.value, campos);
       }); }
+    /* PASSO 16 — os botões do bloco EDITAR: mover lê dX/dY/dZ e chama malhaCtl.moverSelecao
+       (nome NÃO é "mover" de propósito — `malhaCtl.mover(cx,cy,ctrl)` já existe desde o
+       passo 4, o rastreio de arrasto de vértice; um `mover` duplicado na MESMA malhaCtl
+       silenciosamente vira o ÚLTIMO da chave no objeto — pego arrastando de verdade no
+       browser, não por leitura, D-116) que decide moveF vs moveA sozinho pela seleção
+       (o clique só lê os campos),
+       zerando-os de volta a '0' num sucesso (são DELTA, não posição — nada a manter
+       mostrado, ao contrário do painel Vértice). Inverter/apagar não têm campo.
+       malhaCtl já está montado quando o bloco fica visível (só aparece com seleção). */
+    { const bt = $('edBtMover'); if (bt) bt.addEventListener('click', () => {
+        if (!malhaCtl) return;
+        const dx = $('edDx'), dy = $('edDy'), dz = $('edDz');
+        const passo = malhaCtl.moverSelecao([dx ? dx.value : 0, dy ? dy.value : 0, dz ? dz.value : 0]);
+        if (passo) { if (dx) dx.value = '0'; if (dy) dy.value = '0'; if (dz) dz.value = '0'; }
+      }); }
+    { const bt = $('edBtVira'); if (bt) bt.addEventListener('click', () => { if (malhaCtl) malhaCtl.virarFace(); }); }
+    { const bt = $('edBtApagar'); if (bt) bt.addEventListener('click', () => { if (malhaCtl) malhaCtl.apagarFace(); }); }
     /* PASSO 10 — o botão "Salvar peça" serializa o estado ATUAL (mod/PASSOS/PARAMS/
        TOPO) e POSTa pro servidor de dev; sem servidor, baixa o .js (fallback). */
     { const bt = $('btSalvar'); if (bt) bt.addEventListener('click', async () => {
@@ -1823,6 +1891,83 @@ try {
         atualizarPassos();
         atualizarPainel();
         console.log(`oficina passo 15 (adicionar forma): [${JSON.stringify(tipo)}, ${JSON.stringify(args)}] — PASSOS agora ${PASSOS.length}${faces.length ? '' : ' — SEM face nova (órfão)'}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+
+      /* ---- PASSO 16 (P9b do playground): EDITAR A SELEÇÃO — moveF/moveA/vira/apagaFace -- */
+      /* MOVER: decide sozinho pelo ESTADO da seleção (face XOR par-de-2-vértices, o
+         mesmo XOR de sempre) — o clique do botão só lê os campos e chama isto. Face
+         ativa → ['moveF',{face,d}]; par de exatamente 2 vértices → ['moveA',{a,b,d}]
+         (o núcleo trata como "as duas pontas de uma aresta", sem exigir que estejam de
+         fato ligadas — doc do moveA em motor/oficina.js). Sem alvo válido → no-op.
+         `d` é sempre normalizado pra [x,y,z] finito (índice ausente/lixo vira 0 —
+         nunca chega [x,y] ou [x,y,NaN] no núcleo, que exigiria exatamente 3 e
+         lançaria). GUARDAS (espelham as outras edições): arrasto em voo → no-op;
+         delta [0,0,0] → no-op (sem passo fantasma, D3); |componente| > LIM_VALOR →
+         RECUSA inteira (mesmo limite de sanidade do "valor exato" do passo 6, D4 —
+         não clampa, recusa). Devolve o passo gravado (ou null). */
+      moverSelecao(d) {
+        if (arrasto) return null;
+        const raw = Array.isArray(d) ? d : [];
+        const dv = [0, 1, 2].map((k) => +raw[k] || 0);
+        if (!dv[0] && !dv[1] && !dv[2]) return null;
+        if (dv.some((n) => Math.abs(n) > LIM_VALOR)) return null;
+        if (faceSelecionada != null && neutro && neutro.F.has(faceSelecionada)) {
+          const passo = ['moveF', { face: faceSelecionada, d: dv }];
+          PASSOS.push(passo);
+          redo.length = 0;
+          reexec(PASSOS);
+          atualizarPassos();
+          atualizarPainel();
+          console.log(`oficina passo 16 (moveF): ['moveF', {face:${faceSelecionada}, d:[${dv.join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
+          return JSON.parse(JSON.stringify(passo));
+        }
+        if (selVertices.length === 2 && neutro && neutro.V.has(selVertices[0]) && neutro.V.has(selVertices[1])) {
+          const [a, b] = selVertices;
+          const passo = ['moveA', { a, b, d: dv }];
+          PASSOS.push(passo);
+          redo.length = 0;
+          reexec(PASSOS);
+          atualizarPassos();
+          atualizarPainel();
+          console.log(`oficina passo 16 (moveA): ['moveA', {a:${a}, b:${b}, d:[${dv.join(', ')}]}] — PASSOS agora ${PASSOS.length}`);
+          return JSON.parse(JSON.stringify(passo));
+        }
+        return null;
+      },
+      /* INVERTER (vira): reverte o winding da face ATIVA — não cria nem apaga
+         vértice/face, só a ORDEM dos cantos (a normal vira pro lado oposto). Sem
+         no-op de "já invertida" (não existe tal estado — inverter de novo INVERTE DE
+         VOLTA, um resultado real, não um passo fantasma). Guardas: arrasto, sem face. */
+      virarFace() {
+        if (arrasto) return null;
+        if (faceSelecionada == null || !neutro || !neutro.F.has(faceSelecionada)) return null;
+        const passo = ['vira', { face: faceSelecionada }];
+        PASSOS.push(passo);
+        redo.length = 0;
+        reexec(PASSOS);
+        atualizarPassos();
+        atualizarPainel();
+        console.log(`oficina passo 16 (vira): ['vira', {face:${faceSelecionada}}] — PASSOS agora ${PASSOS.length}`);
+        return JSON.parse(JSON.stringify(passo));
+      },
+      /* APAGAR FACE: remove a face ATIVA de st.F (os vértices ficam — podem servir
+         outra face, ou não: abrir um buraco de propósito é normal, doc do
+         apagaFace). O id apagado SOME do neutro — tira só ele de `selFaces` (mantém
+         as outras que ainda existirem selecionadas, se houver), via o MESMO
+         `selecionarFaces` que filtra ids inexistentes. Guardas: arrasto, sem face. */
+      apagarFace() {
+        if (arrasto) return null;
+        if (faceSelecionada == null || !neutro || !neutro.F.has(faceSelecionada)) return null;
+        const fid = faceSelecionada;
+        const passo = ['apagaFace', { face: fid }];
+        PASSOS.push(passo);
+        redo.length = 0;
+        reexec(PASSOS);
+        this.selecionarFaces(selFaces.filter((id) => id !== fid));
+        atualizarPassos();
+        atualizarPainel();
+        console.log(`oficina passo 16 (apagaFace): ['apagaFace', {face:${fid}}] — PASSOS agora ${PASSOS.length}`);
         return JSON.parse(JSON.stringify(passo));
       },
 
@@ -2942,6 +3087,11 @@ try {
     camposForma: (tipo) => (FORMAS[tipo] ? FORMAS[tipo].campos.map(([chave, rotulo, def]) => ({ chave, rotulo, def })) : null),
     adicionarForma: (tipo, campos) => (malhaCtl ? malhaCtl.adicionarForma(tipo, campos || {}) : null),
     dicaAdicionar: () => { const el = $('afDica'); return el ? el.textContent : null; },
+    // PASSO 16: EDITAR — mover (moveF/moveA, decidido pela seleção)/inverter/apagar a face ATIVA + leitura do painel
+    moverSelecao: (d) => (malhaCtl ? malhaCtl.moverSelecao(d) : null),
+    virarFace: () => (malhaCtl ? malhaCtl.virarFace() : null),
+    apagarFace: () => (malhaCtl ? malhaCtl.apagarFace() : null),
+    painelEditar: () => ({ vis: !$('blocoEditar').hidden, alvo: $('edAlvo').textContent, dica: $('edDica').textContent, btVira: !$('edBtVira').hidden, btApagar: !$('edBtApagar').hidden }),
     solidoDe: (id) => { const f = neutro && neutro.F.get(id); return f ? !!f.solido : false; },   // a face id é sólida no neutro?
     temSolido: () => { const F = neutro && neutro.F; return F ? [...F.values()].some((f) => f.solido) : false; },   // há ALGUMA face sólida?
     colisao: () => { try { return colisaoDe(mod.PASSOS, mod.PARAMS ?? {}, mod.TOPO ?? {}, materiaisAtual); } catch { return null; } },   // {forma,raio,altura,base} do estado atual (a MESMA função que o arquivo salvo chama no load)

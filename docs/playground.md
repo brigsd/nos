@@ -170,9 +170,19 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
         sempre — reposicionar é o vértice/gizmo já existentes, não uma
         feature nova. Parâmetro inválido (ex. chanfro fora da faixa) GRITA
         sem corromper a geometria já existente (provado).
-  - [ ] **P9b** — botões pras 4 ops de edição do P8a (`moveF`/`moveA`/`vira`/
-        `apagaFace`) sobre a seleção já existente. `moveA` precisa de seleção
-        de ARESTA, que não existe ainda na UI (só vértice/face) — nasce aqui.
+  - [x] **P9b** (D-124) — bloco `#blocoEditar` (`oficina.html`, "Passo 16"),
+        por ÚLTIMO no painel Modelar (achado ao rodar a bancada inteira, não
+        por leitura, D-116: entre Vértice e Cor empurrava `#pcPresets` do
+        passo 9 pra fora da área visível do painel rolável, e o clique de
+        coordenada crua do teste errava o alvo — 2 falhas silenciosas sem
+        nada a ver com pincel/cor). `moveF`/`vira`/`apagaFace` agem na FACE
+        ATIVA (a convenção do handle de extrude: "a seta extruda só a
+        ativa"); `moveA` no PAR de EXATAMENTE 2 vértices selecionados — sem
+        hit-test de aresta novo, o par-de-2 do Shift+clique (passo 8) já
+        SERVE porque o núcleo não exige adjacência real (doc do `moveA`). Um
+        delta `dX/dY/dZ` RELATIVO (não um alvo absoluto — isso é o painel
+        Vértice, só faz sentido pra 1 vértice), guardado como o valor exato
+        do passo 6 (D3 no-op de zero, D4 recusa além de ±100).
   - [ ] **P9c** — painel do `displace` (amplitude/frequência/semente + botão
         aplicar, o molde do painel de material) e botões pro `espelha`/
         `rotaciona` (P3, sem UI desde que existem).

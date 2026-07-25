@@ -3065,6 +3065,233 @@ else {
   await page15.close();
 }
 
+/* ==== PASSO 16: EDITAR (P9b do playground) ====================================
+   Os botões pras 4 ops de edição do P8a (moveF/moveA/vira/apagaFace,
+   motor/oficina.js, já provadas — não se toca no núcleo aqui). Cada uma age no
+   ALVO ATIVO, nunca a multi-seleção inteira: moveF/vira/apagaFace na face ATIVA
+   (mesma convenção do handle de extrude do passo 7); moveA no PAR de EXATAMENTE 2
+   vértices selecionados — o núcleo não exige adjacência real (doc do moveA), então
+   o par-de-2 do passo 8 (Shift+clique, ou selecionarVarios) JÁ é a seleção de
+   "aresta" que o playground.md apontava como faltando — nasce aqui sem hit-test
+   novo nenhum. PURO NÚCLEO POR CIMA (jóia + núcleo intactos, git diff à parte).
+   Roda numa peça FRESCA (`_vazio`) com um CUBO construído pelo próprio hook do
+   passo 15 (adicionarForma) — ids conhecidos (8 vértices 0..7, 6 faces 0..5,
+   fórmula do `cubo` em motor/oficina.js), e prova o dogfood P9a→P9b (criar uma
+   forma e editá-la é o fluxo real):
+   (16 fixture) o cubo nasce com 8V/6F/0 órfãos (a base conhecida dos testes);
+   (16 oculto) sem seleção nenhuma, #blocoEditar fica ESCONDIDO;
+   (16 face) selecionar a face 0 mostra o bloco com alvo '#0' e os 3 botões;
+   (16 mover real) fill+clique REAIS em dX/dY/dZ gravam ['moveF',{face:0,d}] com o
+        VALOR DIGITADO — e os 4 cantos da face 0 de fato SOMARAM d (lido do canon
+        ANTES + d, comparado ao canon DEPOIS — não hardcoded à mão, D-116); os
+        campos voltam a '0' (são DELTA, não posição);
+   (16 no-op) clicar Mover com os campos em 0 (o reset do teste anterior) NÃO grava
+        passo (D3); um delta gigante (9999) é RECUSADO inteiro (D4, LIM_VALOR);
+   (16 vira real) clique REAL em Inverter grava ['vira',{face:0}] — o `vs` da face
+        0 no canon DEPOIS é o REVERSO EXATO do de ANTES (.slice().reverse(), não
+        uma lista digitada à mão);
+   (16 apagaFace real) clique REAL em Apagar grava ['apagaFace',{face:0}] — a face
+        0 SOME do canon (F −1), os 8 VÉRTICES continuam (V igual — apagaFace só
+        tira a face, doc do núcleo), e a seleção zera (#blocoEditar some, faceSel
+        null) porque o id apagado não existe mais;
+   (16 aresta) selecionar EXATAMENTE 2 vértices (1,2 — sobreviventes da face
+        apagada) mostra o bloco como PAR ('1↔2'), SEM os botões vira/apagar (moveA
+        não tem os dois); com 3 vértices o bloco volta a sumir;
+   (16 moveA real) fill+clique REAIS gravam ['moveA',{a:1,b:2,d}] — as DUAS pontas
+        de fato SOMARAM d (mesma verificação canon-antes+d==canon-depois);
+   (16 guarda) arrastar um vértice do PAR o RESSELECIONA sozinho (clique normal
+        reseta pra 1, a lei do passo 8) — #blocoEditar já some por conta disso (nem
+        temFace nem par-de-2 seguram); a prova real do guard é que, MESMO ASSIM,
+        moverSelecao()/virarFace()/apagarFace() por hook devolvem null durante o
+        arrasto (a guarda `if (arrasto) return null` de cada um, cega a seleção) —
+        soltar de VOLTA na posição original (a mesma lição do passo 15, D-116)
+        garante que PASSOS não muda nem depois de soltar;
+   (16 undo/redo) Ctrl+Z tira o moveA (canônico volta bit-a-bit); Ctrl+Y devolve —
+        a MESMA máquina genérica do passo 5;
+   (16 serial ★) exporta com os 5 passos (cubo+moveF+vira+apagaFace+moveA), reabre
+        em Node: PASSOS e canônico idênticos (serializarPeca não mudou). */
+const OUT16 = resolve(REPO, 'scratchpad/passo16');
+mkdirSync(OUT16, { recursive: true });
+const T_MOTOR16 = join(OUT16, 'motor'), T_RT16 = join(OUT16, 'rt');
+for (const d of [T_MOTOR16, T_RT16]) { rmSync(d, { recursive: true, force: true }); mkdirSync(d, { recursive: true }); }
+writeFileSync(join(T_MOTOR16, 'oficina.js'), `export * from ${JSON.stringify(relative(T_MOTOR16, resolve(REPO, 'prototipos/fps/v3/motor/oficina.js')).split(pathSep).join('/'))};\n`);
+const reimportar16 = async (conteudo, nomeArq) => { const arq = join(T_RT16, nomeArq + '.js'); writeFileSync(arq, conteudo); return import(pathToFileURL(arq).href + '?v=' + Date.now()); };
+
+const page16 = await browser.newPage({ viewport: { width: 900, height: 620 } });
+page16.on('pageerror', (e) => console.error('PAGEERR(16):', e.message));
+await page16.goto(`${base}?peca=_vazio`, { waitUntil: 'load' });
+await page16.waitForFunction(() => window.__ready === true, { timeout: 15000 }).catch(() => {});
+const ready16 = await page16.evaluate(() => window.__ready === true);
+ok('(16 abre) _vazio abre no editor (window.__ready)', ready16);
+if (!ready16) { console.error('  _vazio não abriu — abortando o passo 16'); await page16.close(); }
+else {
+  const r16 = () => page16.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => res(0)))));
+  const nP16 = () => page16.evaluate(() => window.__oficina.nPassos());
+  const canon16 = () => page16.evaluate(() => JSON.stringify(window.__oficina.canon()));
+  const vRow = (canonStr, vid) => JSON.parse(canonStr).V.find((row) => row[0] === vid);
+  const fRow = (canonStr, fid) => JSON.parse(canonStr).F.find((row) => row[0] === fid);
+  const ctrlZ16 = async () => { await page16.keyboard.down('Control'); await page16.keyboard.press('KeyZ'); await page16.keyboard.up('Control'); await r16(); };
+  const ctrlY16 = async () => { await page16.keyboard.down('Control'); await page16.keyboard.press('KeyY'); await page16.keyboard.up('Control'); await r16(); };
+
+  // ---- (16 fixture) um cubo conhecido (8V/6F, ids 0..7/0..5) pelo hook do passo 15 ----
+  await page16.evaluate(() => window.__oficina.adicionarForma('cubo', { lado: 1 })); await r16();
+  const canonFixture = JSON.parse(await canon16());
+  ok('(16 fixture) o cubo nasce com 8 vértices / 6 faces / 0 órfãos — a base conhecida do resto do passo',
+     (await nP16()) === 1 && canonFixture.V.length === 8 && canonFixture.F.length === 6 && canonFixture.orfaos.length === 0,
+     `PASSOS ${await nP16()} · V ${canonFixture.V.length} · F ${canonFixture.F.length} · órfãos ${canonFixture.orfaos.length}`);
+
+  // ---- (16 oculto) sem seleção nenhuma (adicionarForma deixa as 6 faces selecionadas — limpa) ----
+  await page16.evaluate(() => window.__oficina.selecionarFaces([])); await r16();
+  let painel16 = await page16.evaluate(() => window.__oficina.painelEditar());
+  ok('(16 oculto) sem seleção nenhuma, #blocoEditar fica ESCONDIDO', painel16.vis === false, `${JSON.stringify(painel16)}`);
+
+  // ---- (16 face) selecionar a face 0 mostra o bloco com o alvo + os 3 botões ----
+  await page16.evaluate(() => window.__oficina.selecionarFace(0)); await r16();
+  painel16 = await page16.evaluate(() => window.__oficina.painelEditar());
+  ok('(16 face) face 0 ativa: bloco visível, alvo #0, Inverter/Apagar disponíveis',
+     painel16.vis === true && painel16.alvo === '#0' && painel16.btVira === true && painel16.btApagar === true && /face #0/.test(painel16.dica),
+     `${JSON.stringify(painel16)}`);
+
+  // ---- (16 mover real) fill+clique REAIS gravam moveF com o valor DIGITADO; os 4 cantos SOMARAM d ----
+  const canonAntesMoveF = await canon16();
+  const face0Vs = fRow(canonAntesMoveF, 0)[1].slice();
+  const dMoveF = [0.2, 0.1, -0.15];
+  await page16.fill('#edDx', String(dMoveF[0])); await page16.fill('#edDy', String(dMoveF[1])); await page16.fill('#edDz', String(dMoveF[2]));
+  const n16_antesMoveF = await nP16();
+  await page16.click('#edBtMover'); await r16();
+  const canonPosMoveF = await canon16();
+  const ultimoMoveF = await page16.evaluate(() => window.__oficina.ultimoPasso());
+  const cantosOk = face0Vs.every((vid) => {
+    const antes = vRow(canonAntesMoveF, vid), depois = vRow(canonPosMoveF, vid);
+    return [1, 2, 3].every((k) => Math.abs(depois[k] - (antes[k] + dMoveF[k - 1])) < 1e-9);
+  });
+  const camposPosMover = await page16.evaluate(() => ['edDx', 'edDy', 'edDz'].map((id) => document.getElementById(id).value));
+  ok('(16 mover real) select+fill+clique REAIS gravam [\'moveF\',{face:0,d:[0.2,0.1,-0.15]}] — o valor DIGITADO',
+     (await nP16()) === n16_antesMoveF + 1 && JSON.stringify(ultimoMoveF) === JSON.stringify(['moveF', { face: 0, d: dMoveF }]),
+     `${JSON.stringify(ultimoMoveF)}`);
+  ok('(16 mover real ★) os 4 cantos da face 0 de fato SOMARAM d (canon ANTES + d == canon DEPOIS, não hardcoded à mão)',
+     cantosOk, `face0Vs=${JSON.stringify(face0Vs)} d=${JSON.stringify(dMoveF)}`);
+  ok('(16 mover real) os campos dX/dY/dZ voltam a \'0\' depois do clique (delta, não posição)',
+     camposPosMover.every((v) => v === '0'), `${JSON.stringify(camposPosMover)}`);
+
+  // ---- (16 no-op) clicar Mover com os campos zerados não grava; delta gigante é RECUSADO ----
+  const n16_antesNoop = await nP16();
+  await page16.click('#edBtMover'); await r16();
+  ok('(16 no-op) Mover com dX/dY/dZ em 0 (o reset do clique anterior) não grava passo (D3)', (await nP16()) === n16_antesNoop, `PASSOS ${await nP16()}`);
+  const recusa16 = await page16.evaluate(() => window.__oficina.moverSelecao([9999, 0, 0]));
+  ok('(16 no-op) um delta de 9999 é RECUSADO inteiro (D4, mesmo LIM_VALOR do valor exato do passo 6), não clampado', recusa16 === null && (await nP16()) === n16_antesNoop, `devolveu ${JSON.stringify(recusa16)}`);
+
+  // ---- (16 vira real) clique REAL grava vira; o vs da face 0 é o REVERSO EXATO do de antes ----
+  const canonAntesVira = await canon16();
+  const vsAntesVira = fRow(canonAntesVira, 0)[1];
+  const n16_antesVira = await nP16();
+  await page16.click('#edBtVira'); await r16();
+  const canonPosVira = await canon16();
+  const vsPosVira = fRow(canonPosVira, 0)[1];
+  const ultimoVira = await page16.evaluate(() => window.__oficina.ultimoPasso());
+  ok('(16 vira real) clique REAL em Inverter grava [\'vira\',{face:0}]', (await nP16()) === n16_antesVira + 1 && JSON.stringify(ultimoVira) === JSON.stringify(['vira', { face: 0 }]), `${JSON.stringify(ultimoVira)}`);
+  ok('(16 vira real ★) o vs da face 0 DEPOIS é o REVERSO EXATO do de ANTES (.slice().reverse(), não digitado à mão)',
+     JSON.stringify(vsPosVira) === JSON.stringify(vsAntesVira.slice().reverse()), `antes ${JSON.stringify(vsAntesVira)} · depois ${JSON.stringify(vsPosVira)}`);
+
+  // ---- (16 apagaFace real) clique REAL grava apagaFace; F -1, V igual, seleção zera ----
+  const canonAntesApagar = await canon16();
+  const n16_antesApagar = await nP16();
+  await page16.click('#edBtApagar'); await r16();
+  const canonPosApagar = await canon16();
+  const ultimoApagar = await page16.evaluate(() => window.__oficina.ultimoPasso());
+  const faceSelPosApagar = await page16.evaluate(() => window.__oficina.faceSel());
+  painel16 = await page16.evaluate(() => window.__oficina.painelEditar());
+  ok('(16 apagaFace real) clique REAL em Apagar grava [\'apagaFace\',{face:0}]', (await nP16()) === n16_antesApagar + 1 && JSON.stringify(ultimoApagar) === JSON.stringify(['apagaFace', { face: 0 }]), `${JSON.stringify(ultimoApagar)}`);
+  ok('(16 apagaFace real ★) a face 0 SOME do canon (F −1) e os 8 VÉRTICES continuam (V igual — só a face vai)',
+     JSON.parse(canonPosApagar).F.length === JSON.parse(canonAntesApagar).F.length - 1 && JSON.parse(canonPosApagar).V.length === JSON.parse(canonAntesApagar).V.length && !fRow(canonPosApagar, 0),
+     `F ${JSON.parse(canonAntesApagar).F.length}->${JSON.parse(canonPosApagar).F.length} · V ${JSON.parse(canonAntesApagar).V.length}->${JSON.parse(canonPosApagar).V.length}`);
+  ok('(16 apagaFace real) a seleção zera (id apagado não existe mais): #blocoEditar some, faceSel() null',
+     painel16.vis === false && faceSelPosApagar === null, `${JSON.stringify(painel16)} · faceSel ${faceSelPosApagar}`);
+
+  // ---- (16 aresta) EXATAMENTE 2 vértices sobreviventes vira PAR; 3 vértices esconde de novo ----
+  await page16.evaluate(() => window.__oficina.selecionarVarios([1, 2])); await r16();
+  painel16 = await page16.evaluate(() => window.__oficina.painelEditar());
+  ok('(16 aresta) selecionar EXATAMENTE 2 vértices (1,2 — sobreviventes da face apagada) mostra o bloco como PAR, sem vira/apagar',
+     painel16.vis === true && painel16.alvo === '1↔2' && painel16.btVira === false && painel16.btApagar === false && /aresta 1↔2/.test(painel16.dica),
+     `${JSON.stringify(painel16)}`);
+  await page16.evaluate(() => window.__oficina.selecionarVarios([1, 2, 4])); await r16();
+  painel16 = await page16.evaluate(() => window.__oficina.painelEditar());
+  ok('(16 aresta) com 3 vértices selecionados (não é par) o bloco esconde de novo', painel16.vis === false, `${JSON.stringify(painel16)}`);
+
+  // ---- (16 moveA real) volta ao par (1,2); fill+clique REAIS gravam moveA; as DUAS pontas SOMARAM d ----
+  await page16.evaluate(() => window.__oficina.selecionarVarios([1, 2])); await r16();
+  const canonAntesMoveA = await canon16();
+  const dMoveA = [0, 0.05, 0.03];
+  await page16.fill('#edDx', String(dMoveA[0])); await page16.fill('#edDy', String(dMoveA[1])); await page16.fill('#edDz', String(dMoveA[2]));
+  const n16_antesMoveA = await nP16();
+  await page16.click('#edBtMover'); await r16();
+  const canonPosMoveA = await canon16();
+  const ultimoMoveA = await page16.evaluate(() => window.__oficina.ultimoPasso());
+  const pontasOk = [1, 2].every((vid) => {
+    const antes = vRow(canonAntesMoveA, vid), depois = vRow(canonPosMoveA, vid);
+    return [1, 2, 3].every((k) => Math.abs(depois[k] - (antes[k] + dMoveA[k - 1])) < 1e-9);
+  });
+  ok('(16 moveA real) fill+clique REAIS gravam [\'moveA\',{a:1,b:2,d:[0,0.05,0.03]}]', (await nP16()) === n16_antesMoveA + 1 && JSON.stringify(ultimoMoveA) === JSON.stringify(['moveA', { a: 1, b: 2, d: dMoveA }]), `${JSON.stringify(ultimoMoveA)}`);
+  ok('(16 moveA real ★) as DUAS pontas (1 e 2) de fato SOMARAM d (canon ANTES + d == canon DEPOIS)', pontasOk, `d=${JSON.stringify(dMoveA)}`);
+
+  // ---- (16 guarda) arrastar um vértice do PAR o resseleciona sozinho (clique normal reseta pra 1,
+  // a lei do passo 8) — #blocoEditar já some por conta disso; a prova real é que MESMO ASSIM os 3
+  // hooks devolvem null durante o arrasto (a guarda `if (arrasto)` de cada um, cega a seleção) ----
+  const canonAntesGuarda16 = await canon16();
+  const projV1_16 = await page16.evaluate(() => window.__oficina.projMalha()).then((ps) => ps.find((p) => p.id === 1));
+  ok('(16 guarda setup) o vértice #1 (do par selecionado) projeta na tela', !!projV1_16, `${JSON.stringify(projV1_16)}`);
+  if (projV1_16) {
+    await page16.mouse.move(projV1_16.x, projV1_16.y);
+    await page16.mouse.down();
+    await page16.mouse.move(projV1_16.x + 18, projV1_16.y + 14, { steps: 6 });
+    const emArr16 = await page16.evaluate(() => window.__oficina.emArrasto());
+    const painelDurArr16 = await page16.evaluate(() => window.__oficina.painelEditar());
+    const n16_durArr = await nP16();
+    const moverDurArr = await page16.evaluate(() => window.__oficina.moverSelecao([0.01, 0, 0]));
+    const viraDurArr = await page16.evaluate(() => window.__oficina.virarFace());
+    const apagarDurArr = await page16.evaluate(() => window.__oficina.apagarFace());
+    const n16_posOps = await nP16();   // capturado AINDA em arrasto — não depois de soltar
+    // solta de VOLTA na posição ORIGINAL (deslocamento líquido ~0, abaixo do LIMIAR_PX) — a
+    // mesma lição do passo 15 (D-116): soltar fora do ponto de partida gravaria um moveV de
+    // verdade e desalinharia a contagem de PASSOS dos testes seguintes (achado ao rodar, lá)
+    await page16.mouse.move(projV1_16.x, projV1_16.y, { steps: 6 });
+    await page16.mouse.up(); await r16();
+    const n16_posSolta = await nP16();
+    ok('(16 guarda) arrastar o vértice #1 RESSELECIONA sozinho (clique normal reseta pra 1) — #blocoEditar some por conta disso (nem temFace nem par-de-2 seguram)',
+       !!emArr16 && painelDurArr16.vis === false, `emArrasto ${JSON.stringify(emArr16)} · painel durante ${JSON.stringify(painelDurArr16)}`);
+    ok('(16 guarda ★) MESMO com o bloco escondido, moverSelecao()/virarFace()/apagarFace() por hook devolvem null durante o arrasto (a guarda `if (arrasto)` de cada um) — PASSOS não muda nem depois de soltar (de volta na origem)',
+       moverDurArr === null && viraDurArr === null && apagarDurArr === null && n16_posOps === n16_durArr && n16_posSolta === n16_durArr,
+       `PASSOS durante=${n16_durArr} pós-ops=${n16_posOps} pós-solta=${n16_posSolta}`);
+    const canonPosGuarda16 = await canon16();
+    ok('(16 guarda) o canônico depois de soltar de volta na origem bate BIT-A-BIT com o de ANTES do arrasto (soltar não gravou moveV)',
+       canonPosGuarda16 === canonAntesGuarda16, `${canonPosGuarda16 === canonAntesGuarda16 ? 'bate' : 'DIVERGE'}`);
+  }
+
+  // ---- (16 undo/redo) Ctrl+Z tira o moveA; Ctrl+Y devolve — a MESMA máquina genérica do passo 5 ----
+  await ctrlZ16();
+  const canonPosUndo16 = await canon16();
+  ok('(16 undo) Ctrl+Z tira o último passo (o moveA): PASSOS −1 e o canônico volta a bater com o de ANTES dele',
+     (await nP16()) === n16_antesMoveA && canonPosUndo16 === canonAntesMoveA, `PASSOS ${await nP16()} (esp ${n16_antesMoveA}) · canônico ${canonPosUndo16 === canonAntesMoveA ? 'bate' : 'DIVERGE'}`);
+  await ctrlY16();
+  const canonPosRedo16 = await canon16();
+  ok('(16 redo) Ctrl+Y devolve o moveA: PASSOS volta e o canônico bate BIT-A-BIT com o de DEPOIS dele',
+     (await nP16()) === n16_antesMoveA + 1 && canonPosRedo16 === canonPosMoveA, `PASSOS ${await nP16()} · canônico ${canonPosRedo16 === canonPosMoveA ? 'bate' : 'DIVERGE'}`);
+
+  // ---- (16 serial ★) exporta os 5 passos, reabre em Node: PASSOS + canônico idênticos ----
+  const strEditar = await page16.evaluate(() => window.__oficina.serializar());
+  const passosEditar = await page16.evaluate(() => window.__oficina.passos());
+  const canonEditar = await canon16();
+  const Mrt16 = await reimportar16(strEditar, 'rt_editar16');
+  const canonNode16 = JSON.stringify(neutroCanonico(nucleo(Mrt16.PASSOS, Mrt16.PARAMS ?? {}, Mrt16.TOPO ?? {})));
+  ok('(16 serial) PASSOS reabrem iguais (cubo+moveF+vira+apagaFace+moveA = 5 passos) — serializarPeca não precisou de NENHUMA mudança',
+     JSON.stringify(Mrt16.PASSOS) === JSON.stringify(passosEditar) && Mrt16.PASSOS.length === 5, `${Mrt16.PASSOS.length} passos`);
+  ok('(16 serial ★) o canônico BIT-A-BIT: a peça exportada REABRE IDÊNTICA (página == Node)',
+     canonNode16 === canonEditar, `${canonNode16 === canonEditar ? 'idêntico' : 'DIVERGE'}`);
+
+  await page16.screenshot({ path: join(OUT16, 'oficina-editar.png') });
+  await page16.close();
+}
+
 await browser.close();
 server.close();
 
