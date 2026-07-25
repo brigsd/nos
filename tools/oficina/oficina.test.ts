@@ -2058,3 +2058,181 @@ describe('P6 — inflate (dois contornos 2D -> volume por interseção de prisma
     }
   });
 });
+
+describe('P8 — edição restante (moveF/moveA/vira/apagaFace + seleção por região/grupo)', () => {
+  // cubo lado 1: 0..3 base (y=0), 4..7 topo (y=1); F0 fundo, F1 topo (0,1,2,3 / 4,5,6,7)
+  const newell = (V: any, vs: number[]) => {
+    let nx = 0, ny = 0, nz = 0;
+    for (let k = 0; k < vs.length; k++) {
+      const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]);
+      nx += (c[1] - n[1]) * (c[2] + n[2]); ny += (c[2] - n[2]) * (c[0] + n[0]); nz += (c[0] - n[0]) * (c[1] + n[1]);
+    }
+    return [nx, ny, nz];
+  };
+
+  describe('moveF', () => {
+    it('move TODOS os cantos da face (compartilhados com outras faces, movem junto) — ADITIVO', () => {
+      const { V, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }], ['moveF', { face: 1, d: [0, 0.5, 0] }]], {}, {});
+      expect(orfaos).toHaveLength(0);
+      for (const id of [4, 5, 6, 7]) expect(V.get(id)![1]).toBeCloseTo(1.5, 6);   // topo (y=1) + 0.5 -> y=1.5
+      for (const id of [0, 1, 2, 3]) expect(V.get(id)![1]).toBe(0);              // base intacta
+    });
+
+    it('face inexistente GRITA — nunca corrompe', () => {
+      const { V, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }], ['moveF', { face: 999, d: [1, 0, 0] }]], {}, {});
+      expect(orfaos).toHaveLength(1);
+      expect(orfaos[0]).toMatchObject({ op: 'moveF', ref: 999 });
+      expect(V.size).toBe(8);   // a peça segue intacta, só o passo do moveF que não fez nada
+    });
+
+    it('delta não-finito falha ALTO (throw) — a lei do st.vec (D-118)', () => {
+      expect(() => nucleo([['cubo', { id: 0, lado: 1 }], ['moveF', { face: 1, d: [NaN, 0, 0] }]], {}, {})).toThrow(/não-finito/);
+    });
+  });
+
+  describe('moveA', () => {
+    it('move as DUAS pontas pelo mesmo delta — açúcar sobre dois moveV', () => {
+      const { V, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }], ['moveA', { a: 0, b: 1, d: [0, 0.3, 0] }]], {}, {});
+      expect(orfaos).toHaveLength(0);
+      expect(V.get(0)![1]).toBeCloseTo(0.3, 6);
+      expect(V.get(1)![1]).toBeCloseTo(0.3, 6);
+      expect(V.get(2)![1]).toBe(0);   // vértice fora da aresta, intacto
+    });
+
+    it('uma ponta inexistente GRITA pra ela, mas a outra AINDA move (nunca aborta o passo inteiro)', () => {
+      const { V, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }], ['moveA', { a: 0, b: 999, d: [1, 0, 0] }]], {}, {});
+      expect(orfaos).toHaveLength(1);
+      expect(orfaos[0]).toMatchObject({ op: 'moveA', ref: 999 });
+      expect(V.get(0)![0]).toBeCloseTo(0.5, 6);   // v0 moveu mesmo com a outra ponta inválida
+    });
+  });
+
+  describe('vira', () => {
+    it('INVERTE o winding (a normal aponta pro lado oposto) sem mudar V/F', () => {
+      const antes = nucleo([['cubo', { id: 0, lado: 1 }]], {}, {});
+      const depois = nucleo([['cubo', { id: 0, lado: 1 }], ['vira', { face: 1 }]], {}, {});
+      const nAntes = newell(antes.V, antes.F.get(1)!.vs);
+      const nDepois = newell(depois.V, depois.F.get(1)!.vs);
+      expect(nAntes[1]).toBeGreaterThan(0);    // topo do cubo: normal +y antes
+      expect(nDepois[1]).toBeLessThan(0);      // e -y depois de virar
+      expect(depois.V.size).toBe(antes.V.size);
+      expect(depois.F.size).toBe(antes.F.size);
+    });
+
+    it('face inexistente GRITA', () => {
+      const { orfaos } = nucleo([['cubo', { id: 0, lado: 1 }], ['vira', { face: 999 }]], {}, {});
+      expect(orfaos).toHaveLength(1);
+      expect(orfaos[0]).toMatchObject({ op: 'vira', ref: 999 });
+    });
+
+    it('CARACTERÍSTICA (não bug, documentada no núcleo): virar uma face JÁ consistente desalinha o pareamento de aresta com as vizinhas — o uso responsável é o oposto (consertar face já de costas)', () => {
+      const manifoldRuim = (F: any) => {
+        const m = new Map<string, number>();
+        for (const f of F.values()) for (let k = 0; k < (f as any).vs.length; k++) { const a = (f as any).vs[k], b = (f as any).vs[(k + 1) % (f as any).vs.length]; m.set(`${a},${b}`, (m.get(`${a},${b}`) ?? 0) + 1); }
+        let ruim = 0; for (const [k, c] of m) { const [a, b] = k.split(','); if (c !== 1 || (m.get(`${b},${a}`) ?? 0) !== 1) ruim++; } return ruim;
+      };
+      const cuboLimpo = nucleo([['cubo', { id: 0, lado: 1 }]], {}, {});
+      expect(manifoldRuim(cuboLimpo.F)).toBe(0);   // baseline: o cubo sozinho é watertight
+
+      const viraFaceCorreta = nucleo([['cubo', { id: 0, lado: 1 }], ['vira', { face: 1 }]], {}, {});
+      expect(manifoldRuim(viraFaceCorreta.F)).toBe(4);   // virar o topo (já correto) quebra as 4 arestas com as paredes
+
+      const viraDeVoltaERestaura = nucleo([['cubo', { id: 0, lado: 1 }], ['vira', { face: 1 }], ['vira', { face: 1 }]], {}, {});
+      expect(manifoldRuim(viraDeVoltaERestaura.F)).toBe(0);   // virar de novo desfaz — prova que é sobre CONSISTÊNCIA local, não sobre `vira` ser destrutivo
+    });
+  });
+
+  describe('apagaFace', () => {
+    it('remove a face; os vértices dela CONTINUAM existindo (mesmo sem face nenhuma usando)', () => {
+      const { V, F, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }], ['apagaFace', { face: 1 }]], {}, {});
+      expect(orfaos).toHaveLength(0);
+      expect(F.size).toBe(5);
+      expect(V.size).toBe(8);   // 4,5,6,7 continuam vivos mesmo sem nenhuma face
+      expect(F.has(1)).toBe(false);
+    });
+
+    it('face inexistente GRITA', () => {
+      const { orfaos } = nucleo([['cubo', { id: 0, lado: 1 }], ['apagaFace', { face: 999 }]], {}, {});
+      expect(orfaos).toHaveLength(1);
+      expect(orfaos[0]).toMatchObject({ op: 'apagaFace', ref: 999 });
+    });
+  });
+
+  describe('resolverAlvosV — seleção por região/grupo (via rotaciona)', () => {
+    it('sel.regiao seleciona por caixa delimitadora INCLUSIVA (min/max, os dois obrigatórios)', () => {
+      // cubo lado 1: `ly` = `lado` DIRETO (não /2, ao contrário de lx/lz) -> topo em y=1 exato
+      const { V, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }],
+        ['rotaciona', { eixo: 'y', graus: 90, pivo: [0, 0, 0], sel: { regiao: { min: [-2, 0.9, -2], max: [2, 1.1, 2] } } }],
+      ], {}, {});
+      expect(orfaos).toHaveLength(0);
+      // só o topo (y=1) cai na faixa 0.9..1.1 -> só 4..7 giram; base (y=0) fica intacta (medido, não recontado no olho)
+      expect(V.get(0)).toEqual([-0.5, 0, -0.5]);
+      expect(V.get(4)![0]).toBeCloseTo(-0.5, 6);
+      expect(V.get(4)![2]).toBeCloseTo(0.5, 6);
+    });
+
+    it('sel.regiao SEM min OU sem max GRITA e não seleciona nada por essa região (mas ainda roda o resto normal)', () => {
+      const { orfaos, V } = nucleo([['cubo', { id: 0, lado: 1 }],
+        ['rotaciona', { eixo: 'y', graus: 90, sel: { regiao: { min: [0, -1, -1] } } }],   // sem max
+      ], {}, {});
+      expect(orfaos).toHaveLength(1);
+      expect(orfaos[0].motivo).toMatch(/min E max/);
+      expect(V.size).toBe(8);   // não corrompeu nada
+    });
+
+    it('sel.grupo seleciona as faces daquele f.parte (reusa a op `parte`, D-95)', () => {
+      const { V, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }],
+        ['parte', { nome: 'topo', faces: [1] }],
+        ['rotaciona', { eixo: 'y', graus: 45, pivo: [0, 0, 0], sel: { grupo: 'topo' } }],
+      ], {}, {});
+      expect(orfaos).toHaveLength(0);
+      expect(V.get(0)).toEqual([-0.5, 0, -0.5]);   // base fora do grupo, intacta
+      expect(V.get(4)).not.toEqual([-0.5, 1, -0.5]);   // topo girou
+    });
+
+    it('sel.grupo com nome que não tem NENHUMA face GRITA', () => {
+      const { orfaos, V } = nucleo([['cubo', { id: 0, lado: 1 }], ['rotaciona', { eixo: 'y', graus: 45, sel: { grupo: 'naoexiste' } }]], {}, {});
+      expect(orfaos).toHaveLength(1);
+      expect(orfaos[0].motivo).toMatch(/grupo 'naoexiste'/);
+      expect(V.size).toBe(8);
+    });
+
+    it('sel.v/sel.f (o formato do P3) seguem funcionando byte-idêntico depois do refactor pra resolverAlvosV', () => {
+      const { V, orfaos } = nucleo([['cubo', { id: 0, lado: 1 }], ['rotaciona', { eixo: 'y', graus: 90, pivo: [0, 0, 0], sel: { v: [0] } }]], {}, {});
+      expect(orfaos).toHaveLength(0);
+      expect(V.get(0)![0]).toBeCloseTo(-0.5, 6);
+      expect(V.get(1)).toEqual([0.5, 0, -0.5]);   // fora da seleção, intacto
+    });
+  });
+
+  it('composição: moveF/moveA/vira/apagaFace com extruda/mescla/espelha/rotaciona/pincel/liso/solido/parte — sem NaN nem órfão em nenhum caso; manifold intacto nos que continuam FECHADOS', () => {
+    const manifoldRuim = (F: any) => {
+      const m = new Map<string, number>();
+      for (const f of F.values()) for (let k = 0; k < (f as any).vs.length; k++) { const a = (f as any).vs[k], b = (f as any).vs[(k + 1) % (f as any).vs.length]; m.set(`${a},${b}`, (m.get(`${a},${b}`) ?? 0) + 1); }
+      let ruim = 0; for (const [k, c] of m) { const [a, b] = k.split(','); if (c !== 1 || (m.get(`${b},${a}`) ?? 0) !== 1) ruim++; } return ruim;
+    };
+    for (const [passos, fechado] of [
+      [[['cubo', { id: 0, lado: 1 }], ['extruda', { face: 1, dist: 0.3 }], ['moveF', { face: 1, d: [0.1, 0, 0] }]], true],
+      [[['cubo', { id: 0, lado: 1 }], ['moveA', { a: 0, b: 1, d: [0, 0.3, 0] }], ['rotaciona', { eixo: 'y', graus: 20 }]], true],
+      // vira numa face JÁ consistente desalinha o pareamento com as vizinhas (não é bug — ver o teste
+      // dedicado abaixo, que trava e explica); a checagem aqui é só "não corrompe" (sem NaN/órfão)
+      [[['cubo', { id: 0, lado: 1 }], ['vira', { face: 1 }], ['pincel', { modo: 'face', faces: [1], cor: '#7a3045' }], ['liso', { faces: [1] }], ['solido', { faces: [0, 1, 2, 3, 4, 5] }], ['parte', { nome: 'topo', faces: [1] }]], false],
+      // apagaFace abre o topo DE PROPÓSITO e o espelha (pos=0.5, não bate em nenhum vértice do cubo — nada
+      // solda) NÃO fecha o buraco por acidente — 2 bordas abertas sobrepostas, não uma peça watertight; a
+      // prova aqui é só "não corrompe" (sem NaN/órfão), não "ficou fechado" (medido antes de travar: 8 arestas soltas)
+      [[['cubo', { id: 0, lado: 1 }], ['apagaFace', { face: 1 }], ['espelha', { eixo: 'y', pos: 0.5 }]], false],
+      [[['cubo', { id: 0, lado: 1 }], ['moveF', { face: 0, d: [0.2, 0, 0] }], ['mescla', { de: [0], para: 1 }]], true],
+    ] as const) {
+      const { V, F, orfaos } = nucleo(passos as any, {}, {});
+      expect(orfaos).toHaveLength(0);
+      if (fechado) expect(manifoldRuim(F)).toBe(0);
+      expect([...V.values()].every((p: any) => p.every((c: number) => Number.isFinite(c)))).toBe(true);
+    }
+  });
+
+  it('determinismo: mesma entrada -> forma canônica bit-a-bit idêntica', () => {
+    const passos = [['cubo', { id: 0, lado: 1 }], ['moveF', { face: 1, d: [0.1, 0, 0] }], ['moveA', { a: 2, b: 3, d: [0, 0.1, 0] }], ['vira', { face: 2 }]];
+    const canon = () => { const n = nucleo(passos as any, {}, {}); return JSON.stringify([[...n.V.entries()].sort((a, b) => a[0] - b[0]), [...n.F.entries()].sort((a, b) => a[0] - b[0]).map(([k, f]) => [k, (f as any).vs])]); };
+    expect(canon()).toBe(canon());
+  });
+});

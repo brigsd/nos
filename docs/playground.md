@@ -111,8 +111,27 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
       pra porteiro+renders+gabarito (não relança a cada gate). Fecha o "83%"
       por construção: os quatro pilares (núcleo, crítico, render, forma) saem
       juntos sempre — nenhum fica de fora por esquecimento do operador.
-- [ ] **P8 · Edição restante** — `moveF`/`moveA`, `vira`, `apagaFace`,
-      seleção por região/grupo, `chamferBox`, `displace` (com semente).
+- **P8 · Edição restante** — seis peças, ficam soltas (não uma numeração
+      salva nova, cada uma é independente):
+  - [x] **P8a** (D-121) — `moveF` (move os cantos de uma face, ADITIVO,
+        compartilhado move junto), `moveA` (move as duas pontas de uma
+        aresta, açúcar sobre dois `moveV`), `vira` (inverte o winding de uma
+        face — CARACTERÍSTICA documentada: virar uma face já consistente
+        desalinha o pareamento com as vizinhas, o uso responsável é o
+        oposto), `apagaFace` (remove a face; os vértices ficam — buraco de
+        propósito). Nenhuma cria id novo — todas id-estável puro, como
+        `moveV`/`extruda`/`mescla`. **Seleção por região/grupo:**
+        `resolverAlvosV` (novo helper compartilhado) amplia o `sel` do
+        `rotaciona` (P3) com `{regiao:{min,max}}` (caixa delimitadora — os
+        dois lados OBRIGATÓRIOS, sem sentinela `Infinity`, que o `st.num`
+        já recusa por lei, D-118) e `{grupo:'nome'}` (as faces daquele
+        `f.parte`, reusa a nomeação do passo 13a) — refatorado sem mudar o
+        comportamento de `{v}`/`{f}` (141 testes preexistentes continuam
+        batendo byte-a-byte).
+  - [ ] **P8b** — `chamferBox` (primitiva nova: caixa com cantos/arestas
+        chanfrados).
+  - [ ] **P8c** — `displace` (deslocamento procedural ao longo da normal,
+        com semente — determinístico).
 - [ ] **P9 · Onda de interface** — os botões da Oficina pras ops novas + o
       canvas da Aba Desenho (specs no oficina.md).
 

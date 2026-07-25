@@ -120,6 +120,39 @@ function confereId(st, i, op, args) {
   return b;
 }
 
+/* resolverAlvosV (P8 do playground): resolve uma SELEÇÃO em vértices AFETADOS
+   — o formato de `sel` que o `rotaciona` já tinha desde o P3 (`{v:[ids]}`
+   e/ou `{f:[ids]}`, cantos da face), ampliado com DOIS jeitos novos de
+   apontar sem listar id: `regiao:{min:[x,y,z],max:[x,y,z]}` (caixa
+   delimitadora INCLUSIVA nos dois extremos, os dois `st.vec` — pode citar
+   PARAM; os DOIS lados são OBRIGATÓRIOS — `Infinity` como sentinela de "sem
+   limite" NÃO dá, o `st.num` já recusa não-finito por lei, D-118) e
+   `grupo:'nome'` (as faces com aquele `f.parte` — REUSA a nomeação que o
+   passo 13a já registra, não inventa um 2º jeito de agrupar). Os campos
+   presentes se UNEM (Set deduplicado); `sel==null` continua sendo a malha
+   INTEIRA (o default de sempre). Toda referência inválida (vértice/face
+   inexistente, `regiao` sem os dois lados, `grupo` sem nenhuma face) GRITA e
+   é ignorada — nunca corrompe (lei do envelope). */
+function resolverAlvosV(st, sel, op, i) {
+  if (sel == null) return new Set(st.V.keys());
+  const alvos = new Set();
+  for (const v of sel.v ?? []) { if (!st.V.has(v)) { grita(st, i, op, v, 'vértice inexistente na seleção'); continue; } alvos.add(v); }
+  for (const fid of sel.f ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, op, fid, 'face inexistente na seleção'); continue; } for (const v of f.vs) alvos.add(v); }
+  if (sel.regiao != null) {
+    if (!Array.isArray(sel.regiao.min) || !Array.isArray(sel.regiao.max)) grita(st, i, op, 'regiao', 'sel.regiao precisa de min E max, os dois [x,y,z] (sem sentinela infinita — os dois lados são obrigatórios)');
+    else {
+      const min = st.vec(sel.regiao.min), max = st.vec(sel.regiao.max);
+      for (const [v, p] of st.V) if (p[0] >= min[0] && p[0] <= max[0] && p[1] >= min[1] && p[1] <= max[1] && p[2] >= min[2] && p[2] <= max[2]) alvos.add(v);
+    }
+  }
+  if (sel.grupo != null) {
+    let achou = false;
+    for (const f of st.F.values()) if (f.parte === sel.grupo) { achou = true; for (const v of f.vs) alvos.add(v); }
+    if (!achou) grita(st, i, op, sel.grupo, `grupo '${sel.grupo}' não tem nenhuma face (nome errado, ou a op 'parte' daquele nome ainda não rodou neste passo)`);
+  }
+  return alvos;
+}
+
 /* ----------------------------------------------------------------------------
    Frame de TRANSPORTE PARALELO — usado só pela op `loft` abaixo. Reimplementado
    AQUI, byte-equivalente ao `quadro`/`transporta` de motor/arvore-cartoon.js (a
@@ -830,6 +863,75 @@ export const OPS = {
     st.merges.push({ de: [...rem].sort((x, y) => x - y), para });
   },
 
+  /* ---- P8 do playground: edição restante — moveF/moveA/vira/apagaFace são
+     id-estável puro (como moveV/extruda/mescla acima: nunca criam id, nunca
+     renumeram); nenhuma tem numeração própria pra documentar. ---- */
+
+  /* moveF: move TODOS os cantos de uma face pelo mesmo delta — ADITIVO
+     (`p+d`), a mesma lei do moveV. Um canto COMPARTILHADO com outra face
+     move JUNTO (não existe "vértice exclusivo da face" na malha — é o
+     comportamento normal de mover uma face num editor: desloca a geometria,
+     não desconecta nada; pra deslocar sem afetar vizinho, use `extruda`
+     antes). Face inexistente GRITA (órfão), nunca corrompe. */
+  moveF(st, a, i) {
+    const fid = a.face;
+    const f = st.F.get(fid);
+    if (!f) return grita(st, i, 'moveF', fid, 'face inexistente');
+    const d = st.vec(a.d ?? [0, 0, 0]);
+    for (const v of new Set(f.vs)) {   // Set: um canto REPETIDO na mesma face (não deveria existir — mescla já limpa bowtie) nunca aplica o delta 2×
+      const p = st.V.get(v);
+      if (!p) { grita(st, i, 'moveF', v, 'canto da face inexistente'); continue; }   // defensivo — nunca deveria faltar
+      st.V.set(v, [p[0] + d[0], p[1] + d[1], p[2] + d[2]]);
+    }
+  },
+
+  /* moveA: move as DUAS pontas de uma aresta (`a`,`b`) pelo mesmo delta —
+     açúcar sobre dois moveV (mesma lei ADITIVA), como UM passo só na lista
+     (uma aresta é uma ação, não duas). NÃO exige que `a`/`b` estejam de fato
+     ligados por alguma face — mover dois vértices juntos nunca corrompe
+     nada, então checar conectividade só atrapalharia um uso legítimo. Cada
+     ponta inexistente GRITA (órfão) e é ignorada — a outra ainda move. */
+  moveA(st, a, i) {
+    const d = st.vec(a.d ?? [0, 0, 0]);
+    for (const v of [a.a, a.b]) {
+      const p = st.V.get(v);
+      if (!p) { grita(st, i, 'moveA', v, 'ponta da aresta inexistente'); continue; }
+      st.V.set(v, [p[0] + d[0], p[1] + d[1], p[2] + d[2]]);
+    }
+  },
+
+  /* vira: INVERTE o winding de uma face — reverte a ORDEM dos cantos (`f.vs`),
+     o que vira a normal (Newell) pro lado oposto. Não cria nem apaga
+     vértice/face, só a ORDEM. Face inexistente GRITA. Conserta uma face que
+     nasceu de costas sem reconstruir o passo inteiro.
+
+     CARACTERÍSTICA (não é bug — é a natureza de uma ferramenta cirúrgica,
+     medida no teste): virar uma face que já estava CONSISTENTE com as
+     vizinhas QUEBRA o pareamento de arestas do teste de manifold — a
+     vizinha continua no sentido antigo, então a aresta compartilhada passa a
+     andar no MESMO sentido dos dois lados em vez de opostos (medido: 4
+     arestas soltas ao virar o topo já-correto de um cubo). O uso responsável
+     é o oposto: consertar uma face que JÁ estava de costas (aí virar
+     RESTAURA o pareamento, não quebra). `vira` não valida consistência com
+     vizinhas — é uma ferramenta pontual, não uma correção automática de
+     malha inteira. */
+  vira(st, a, i) {
+    const fid = a.face;
+    const f = st.F.get(fid);
+    if (!f) return grita(st, i, 'vira', fid, 'face inexistente');
+    f.vs = f.vs.slice().reverse();
+  },
+
+  /* apagaFace: remove uma face de `st.F`. Os VÉRTICES dela continuam
+     existindo (podem estar em uso por outra face, ou não — um vértice sem
+     face nenhuma não é erro, é normal ao abrir um buraco de propósito: porta,
+     janela, ou preparo pra composição manual). Face inexistente GRITA. */
+  apagaFace(st, a, i) {
+    const fid = a.face;
+    if (!st.F.has(fid)) return grita(st, i, 'apagaFace', fid, 'face inexistente');
+    st.F.delete(fid);
+  },
+
   /* ---- P3 do playground: espelha + rotaciona — as duas transformam uma SELEÇÃO,
      mas de jeitos opostos (docs/playground.md): `rotaciona` é SIMPLES (só move
      posição, nunca cria id); `espelha` é MEATY (duplica a seleção refletida,
@@ -841,11 +943,13 @@ export const OPS = {
      (`st.V.set` in-place) — NUNCA cria vértice/face nem renumera, o oposto do
      `espelha` abaixo. Determinístico (seno/cosseno de sempre, sem aleatório).
 
-     SELEÇÃO (`sel`, opcional): AUSENTE = a malha INTEIRA (todos os vértices
-     atuais de `st.V`). Presente = `{v:[ids]}` e/ou `{f:[ids]}` — uma face
-     contribui os ids dos seus PRÓPRIOS cantos; a união dos dois (`v` e `f`) é
-     DEDUPLICADA num Set. Um id de vértice ou de face que não existe GRITA
-     (órfão) e é ignorado — nunca corrompe (lei do envelope).
+     SELEÇÃO (`sel`, opcional, via `resolverAlvosV` — P8 do playground):
+     AUSENTE = a malha INTEIRA (todos os vértices atuais de `st.V`). Presente
+     = `{v:[ids]}` e/ou `{f:[ids]}` (cantos da face) e/ou `{regiao:{min,max}}`
+     (caixa delimitadora) e/ou `{grupo:'nome'}` (as faces daquele `f.parte`) —
+     os campos presentes se UNEM, DEDUPLICADOS num Set. Referência inválida
+     (vértice/face/grupo) GRITA (órfão) e é ignorada — nunca corrompe (lei do
+     envelope).
 
      PIVÔ (`pivo`, opcional `[x,y,z]`, via `st.vec` — pode citar PARAM):
      AUSENTE = o CENTROIDE dos vértices AFETADOS (a média das posições, medida
@@ -870,15 +974,8 @@ export const OPS = {
     if (eixo !== 'x' && eixo !== 'y' && eixo !== 'z') return grita(st, i, 'rotaciona', eixo, `eixo '${eixo}' desconhecido (só 'x'/'y'/'z')`);
     const graus = st.num(a.graus ?? 0);
 
-    // seleção -> conjunto de ids de vértice afetados (AUSENTE = malha inteira)
-    let alvos;
-    if (a.sel == null) {
-      alvos = new Set(st.V.keys());
-    } else {
-      alvos = new Set();
-      for (const v of a.sel.v ?? []) { if (!st.V.has(v)) { grita(st, i, 'rotaciona', v, 'vértice inexistente na seleção'); continue; } alvos.add(v); }
-      for (const fid of a.sel.f ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'rotaciona', fid, 'face inexistente na seleção'); continue; } for (const v of f.vs) alvos.add(v); }
-    }
+    // seleção -> conjunto de ids de vértice afetados (AUSENTE = malha inteira) — resolverAlvosV, P8
+    const alvos = resolverAlvosV(st, a.sel, 'rotaciona', i);
     if (!alvos.size) return;   // nada pra girar (seleção vazia, ou só ids órfãos) — no-op determinístico
 
     // pivô: explícito (st.vec — pode citar PARAM) OU o centroide dos afetados, medido ANTES de girar
