@@ -407,20 +407,34 @@ const OPS = {
      doc citava): `perfil` já é do `lathe` com outra FORMA (`[raio,y]` 2D);
      reusar o nome confundiria os dois.
 
-     RESERVA `secao` (contorno 2D explícito) — FAIL-CLOSED, formato salvo: se
-     QUALQUER seção tiver a chave `secao`, GRITA e ABORTA O PASSO INTEIRO (0
-     V/0 F) — o mesmo tratamento da alça de curva do `lathe` (D-115). O
-     formato do contorno fechado nasce no P5 (docs/playground.md); aceitar
-     "quase" hoje (ex.: ignorar `secao` e cair pro círculo) criaria peça que
-     RENDERIZA diferente no dia em que o contorno for implementado — reserva
-     de formato salvo é fail-closed, nunca fail-open (a mesma lei do lathe).
-     Seção malformada — não-objeto, sem `pos`, ou sem `raio` — GRITA e ABORTA
-     igual (não dá pra numerar uma seção que não sabe se é polo ou anel).
+     CONTORNO explícito (P5, docs/playground.md) — substitui `raio` por
+     `contorno: [[u,w], ...]` com EXATAMENTE `lados` pontos no plano LOCAL do
+     anel (os eixos `fr.u`/`fr.w` do transporte paralelo, o mesmo `ca,sa` que
+     o círculo calculava de `cos/sin·raio`) — destrava seção NÃO-circular
+     (estrela, hexágono, perfil de I) sem tocar em NADA da numeração/faces/
+     overflow, que só enxergam "polo ou anel de `lados` vértices", nunca a
+     ORIGEM das coordenadas. `raio` e `contorno` são MUTUAMENTE EXCLUSIVOS
+     numa seção (os dois juntos GRITA — ambíguo); nenhum dos dois GRITA
+     também. Cada ponto do contorno é `[u,w]` (2 elementos); a alça de curva
+     é RESERVADA no 3º elemento — GRITA e ABORTA, a mesma lei do ponto do
+     perfil no lathe (D-115). Contagem errada (≠ `lados`) GRITA e ABORTA.
+     Winding OBRIGATORIAMENTE CCW (ângulo crescente no círculo já É CCW em
+     u,w) — validado por ÁREA COM SINAL (shoelace): CW ou degenerado (área
+     ~0) GRITA e ABORTA, porque silenciosamente produziria normal invertida
+     ou nula (a classe do achado adversarial do P3, não pega pelo manifold).
+     Nunca vira polo (polo é só `raio:0` explícito). **Não confundir com
+     `MATERIAIS[nome].contorno`** (passo 12a) — homônimo só de nome; aquele é
+     um número (força do rim-light), este é uma lista de pontos, e os dois
+     nunca se tocam (objetos diferentes, chaves diferentes).
 
-     POLO vs ANEL (idêntico ao lathe): `raio` RESOLVIDO `=== 0` vira POLO (1
-     vértice, bem em cima de `pos` — a ponta); `> 0` vira ANEL de `lados`
-     vértices; `< 0` não dá pra classificar -> GRITA e ABORTA o passo inteiro
-     (0 V/0 F), o mesmo tratamento do `raio<0` do lathe. SEM tampas
+     Seção malformada — não-objeto, sem `pos`, ou `pos` com aridade ≠ 3 —
+     GRITA e ABORTA igual (não dá pra numerar uma seção que não sabe se é
+     polo ou anel).
+
+     POLO vs ANEL (idêntico ao lathe, só pra `raio`): RESOLVIDO `=== 0` vira
+     POLO (1 vértice, bem em cima de `pos` — a ponta); `> 0` vira ANEL de
+     `lados` vértices; `< 0` não dá pra classificar -> GRITA e ABORTA o passo
+     inteiro (0 V/0 F), o mesmo tratamento do `raio<0` do lathe. SEM tampas
      automáticas: fechar uma ponta é terminar a seção com `raio:0`.
 
      SEGMENTO DE COMPRIMENTO ZERO (formato salvo, fail-closed): duas seções
@@ -491,26 +505,54 @@ const OPS = {
     if (secoesArg.length < 2) return grita(st, i, 'loft', secoesArg.length, `secoes precisa de ao menos 2 (tem ${secoesArg.length})`);
     const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // TOPO (pra TODA seção): muda a CONTAGEM
 
-    /* resolve + valida CADA seção ANTES de criar qualquer vértice — a chave
-       `secao` (contorno reservado) e a forma (objeto com pos+raio) primeiro;
-       FAIL-CLOSED (a mesma lei da alça de curva do lathe, D-115): qualquer
-       problema ABORTA O PASSO INTEIRO (0 V/0 F), nunca constrói "quase". */
+    /* resolve + valida CADA seção ANTES de criar qualquer vértice — a forma
+       (objeto com pos + raio OU contorno) primeiro; FAIL-CLOSED (a mesma lei
+       da alça de curva do lathe, D-115): qualquer problema ABORTA O PASSO
+       INTEIRO (0 V/0 F), nunca constrói "quase". */
     let invalido = false;
     const secoes = secoesArg.map((s, j) => {
-      if (typeof s !== 'object' || s === null || Array.isArray(s)) { grita(st, i, 'loft', j, `seção ${j} precisa ser um objeto {pos,raio} (recebido ${Array.isArray(s) ? 'array' : typeof s})`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
-      if (Object.hasOwn(s, 'secao')) { grita(st, i, 'loft', j, `seção ${j} usa a chave 'secao' (contorno 2D) — RESERVADA pro P5, ainda não implementada; hoje só 'raio' (círculo)`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
-      if (s.pos == null) { grita(st, i, 'loft', j, `seção ${j} sem 'pos'`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
-      if (s.raio == null) { grita(st, i, 'loft', j, `seção ${j} sem 'raio'`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
+      if (typeof s !== 'object' || s === null || Array.isArray(s)) { grita(st, i, 'loft', j, `seção ${j} precisa ser um objeto {pos,raio} ou {pos,contorno} (recebido ${Array.isArray(s) ? 'array' : typeof s})`); invalido = true; return { pos: [0, 0, 0], raio: 0, contorno: null, polo: true }; }
+      if (s.pos == null) { grita(st, i, 'loft', j, `seção ${j} sem 'pos'`); invalido = true; return { pos: [0, 0, 0], raio: 0, contorno: null, polo: true }; }
       /* ARIDADE do pos (a mesma lei do ponto do perfil no lathe, D-115): sem
          isto, `pos: [0,1]` construía com z=undefined -> coordenada NaN e 0
          órfãos, e `pos: {x:0}` estourava throw cru. O `st.vec` também barra
          (rede central), mas só a checagem AQUI diz QUAL seção — e mantém a
          lei do fail-closed por PASSO em vez de matar a peça inteira. */
-      if (!Array.isArray(s.pos) || s.pos.length !== 3) { grita(st, i, 'loft', j, `pos da seção ${j} precisa ser [x,y,z] (3 elementos); recebido ${JSON.stringify(s.pos)}`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
+      if (!Array.isArray(s.pos) || s.pos.length !== 3) { grita(st, i, 'loft', j, `pos da seção ${j} precisa ser [x,y,z] (3 elementos); recebido ${JSON.stringify(s.pos)}`); invalido = true; return { pos: [0, 0, 0], raio: 0, contorno: null, polo: true }; }
       const pos = st.vec(s.pos);
-      const raio = st.num(s.raio);
-      if (raio < 0) { grita(st, i, 'loft', j, `raio negativo (${raio}) na seção ${j} — não dá pra classificar polo/anel`); invalido = true; }
-      return { pos, raio, polo: raio === 0 };
+      const temRaio = Object.hasOwn(s, 'raio'), temContorno = Object.hasOwn(s, 'contorno');
+      if (temRaio && temContorno) { grita(st, i, 'loft', j, `seção ${j} tem 'raio' E 'contorno' — ambíguo, escolha um (círculo OU contorno explícito)`); invalido = true; return { pos, raio: 0, contorno: null, polo: true }; }
+      if (!temRaio && !temContorno) { grita(st, i, 'loft', j, `seção ${j} sem 'raio' nem 'contorno'`); invalido = true; return { pos, raio: 0, contorno: null, polo: true }; }
+
+      if (temRaio) {
+        const raio = st.num(s.raio);
+        if (raio < 0) { grita(st, i, 'loft', j, `raio negativo (${raio}) na seção ${j} — não dá pra classificar polo/anel`); invalido = true; }
+        return { pos, raio, contorno: null, polo: raio === 0 };
+      }
+
+      /* CONTORNO explícito (P5): substitui o círculo por EXATAMENTE `lados`
+         pontos [u,w] no plano LOCAL do anel (os mesmos eixos fr.u/fr.w do
+         transporte paralelo) — a contagem/numeração/faces do anel não mudam
+         em NADA (só a origem das coordenadas de cada vértice), então toda a
+         guarda de overflow e o cursor de face seguem intactos. Nunca é polo
+         (polo é só raio:0 explícito). Ponto malformado (aridade ≠ 2 — a alça
+         de curva reservada seria o 3º elemento, mesma lei do lathe/D-115) e
+         contorno com contagem errada GRITAM e ABORTAM. */
+      if (!Array.isArray(s.contorno) || s.contorno.length !== L) { grita(st, i, 'loft', j, `contorno da seção ${j} precisa ter exatamente 'lados' (${L}) pontos [u,w] (tem ${Array.isArray(s.contorno) ? s.contorno.length : typeof s.contorno})`); invalido = true; return { pos, raio: 0, contorno: null, polo: true }; }
+      let pontoInvalido = false;
+      const pts = s.contorno.map((pt, k) => {
+        if (!Array.isArray(pt) || pt.length !== 2) { grita(st, i, 'loft', j, `ponto ${k} do contorno da seção ${j} precisa ser [u,w] (2 elementos); a alça de curva (3º elemento) está RESERVADA, ainda não implementada`); pontoInvalido = true; return [0, 0]; }
+        return [st.num(pt[0]), st.num(pt[1])];
+      });
+      if (pontoInvalido) { invalido = true; return { pos, raio: 0, contorno: null, polo: true }; }
+
+      /* winding CCW obrigatório (shoelace) — a MESMA convenção do círculo
+         (ângulo crescente = CCW em u,w): CW ou degenerado (área ~0) seria
+         normal invertida ou NULA silenciosa, a classe do achado do P3. */
+      let area2 = 0;
+      for (let k = 0; k < L; k++) { const p = pts[k], q = pts[(k + 1) % L]; area2 += p[0] * q[1] - q[0] * p[1]; }
+      if (area2 <= 1e-9) { grita(st, i, 'loft', j, `contorno da seção ${j} não é CCW ou é degenerado (área assinada ${(area2 / 2).toFixed(6)}) — normal ficaria invertida ou nula`); invalido = true; return { pos, raio: 0, contorno: null, polo: true }; }
+      return { pos, raio: 0, contorno: pts, polo: false };
     });
     if (invalido) return;   // alguma seção inválida -> nada construído neste passo (grita já registrado por seção)
 
@@ -563,7 +605,10 @@ const OPS = {
       const fr = frames[idx];
       const ids = [];
       for (let j = 0; j < L; j++) {
-        const ang = (j / L) * Math.PI * 2, ca = Math.cos(ang) * s.raio, sa = Math.sin(ang) * s.raio;
+        /* CONTORNO explícito (P5) usa o ponto [u,w] direto no lugar de
+           cos/sin·raio — a MESMA fórmula de posição abaixo, só a origem de
+           ca/sa muda; toda a estrutura de cursor/faces é cega a essa troca. */
+        const [ca, sa] = s.contorno ? s.contorno[j] : [Math.cos((j / L) * Math.PI * 2) * s.raio, Math.sin((j / L) * Math.PI * 2) * s.raio];
         const id = b + cursor + j;
         addV(st, id, [s.pos[0] + fr.u[0] * ca + fr.w[0] * sa, s.pos[1] + fr.u[1] * ca + fr.w[1] * sa, s.pos[2] + fr.u[2] * ca + fr.w[2] * sa]);
         ids.push(id);

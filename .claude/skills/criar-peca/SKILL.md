@@ -44,7 +44,7 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 | `cone` | `raio` (PARAM, 0.5), `altura` (PARAM, 1), `lados` (TOPO, 8, mín 3) | anel da base b+0..b+lados−1 (y=0), ápice b+lados; tampa −y como o fundo do cilindro |
 | `plano` | `largura` (PARAM, 1), `profundidade` (PARAM, 1), `seg` (TOPO, 1, mín 1) | grade XZ centrada na origem, y=0, linha a linha; seg² quads +y — o chão |
 | `lathe` | `perfil:[[raio,y],...]` (≥2 pontos, PARAM), `lados` (TOPO, mín 3) | perfil 2D girado no eixo Y — generaliza a esfera (polo↔anel↔polo). Ponto de 2 elementos = canto reto PRA SEMPRE; ponto ≠ 2 elementos (a alça de curva reservada num 3º elemento, ou malformado) GRITA e ABORTA o passo (fail-closed). `raio` resolvido `===0` vira polo (1 vértice), `>0` vira anel (`lados` vértices), `<0` GRITA e aborta. Sem tampas automáticas: fechar uma ponta é terminar no eixo (raio 0) |
-| `loft` | `secoes:[{pos:[x,y,z],raio},...]` (≥2 seções, PARAM), `lados` (TOPO, mín 3) | seções ao longo de um CAMINHO 3D arbitrário — generaliza o lathe (que é o caso degenerado de caminho reto no eixo Y). Cada anel é orientado por TRANSPORTE PARALELO (não torce numa curva — o mesmo `quadro`/`transporta` do `galhoSeca` de `arvore-cartoon.js`, reimplementado local ao núcleo). `raio` resolvido `===0` vira polo, `>0` vira anel, `<0` GRITA e aborta — igual ao lathe. A chave `secao` (contorno 2D) é RESERVADA: GRITA e ABORTA o passo (fail-closed, o formato do contorno ainda não existe). Também GRITAM e ABORTAM: seção malformada, `pos` com aridade ≠ 3, segmento de comprimento zero (duas seções na mesma posição) e CUSP (caminho dobrando ~180°) — nos dois últimos a tangente fica indefinida. Sem tampas automáticas: fechar uma ponta é terminar a seção com raio 0 |
+| `loft` | `secoes:[{pos:[x,y,z],raio} ou {pos,contorno:[[u,w],...]},...]` (≥2 seções, PARAM), `lados` (TOPO, mín 3) | seções ao longo de um CAMINHO 3D arbitrário — generaliza o lathe (que é o caso degenerado de caminho reto no eixo Y). Cada anel é orientado por TRANSPORTE PARALELO (não torce numa curva — o mesmo `quadro`/`transporta` do `galhoSeca` de `arvore-cartoon.js`, reimplementado local ao núcleo). `raio` resolvido `===0` vira polo, `>0` vira anel, `<0` GRITA e aborta — igual ao lathe. `contorno` (P5) troca o círculo por EXATAMENTE `lados` pontos `[u,w]` explícitos (estrela, hexágono, retângulo — não-circular) no plano local do anel; `raio` e `contorno` são mutuamente exclusivos (os dois juntos, ou nenhum, GRITA); ponto com aridade ≠ 2 (a alça de curva reservada) e winding CW/degenerado também GRITAM e ABORTAM. Também GRITAM e ABORTAM: seção malformada, `pos` com aridade ≠ 3, segmento de comprimento zero (duas seções na mesma posição) e CUSP (caminho dobrando ~180°) — nos dois últimos a tangente fica indefinida. Sem tampas automáticas: fechar uma ponta é terminar a seção com raio 0 |
 | `moveV` | `v`, `d:[x,y,z]` | ADITIVO (`p+d`), nunca posição absoluta |
 | `extruda` | `face`, `dist` | só face única; anel novo nasce no bloco do passo |
 | `mescla` | `de:[ids]`, `para:id` | solda; face de área zero some quieta |
@@ -67,14 +67,18 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 **Alcance honesto:** caixa+cilindro+esfera+cone+plano+lathe+loft+extruda+move
 cobrem arquitetura, móveis, props angulados, troncos, bolas, chão, perfil
 rotacionado (vaso, coluna, peão — lathe, só reto por enquanto) e forma
-orgânica composta ao longo de um caminho (tubo/casco/galho/membro — loft,
-seções `{pos,raio}` com frame por transporte paralelo, sem torcer numa
-curva). `espelha`+`rotaciona` destravam objeto BILATERAL — modele só metade
-(com a borda EXATA no plano do espelho pra soldar) e complete com `espelha`;
-incline uma parte com `rotaciona`. Contorno 2D fechado (inflate) ainda não
-tem gerador — não finja com mil moveV; reporte o limite (ou use o caminho
-JS-puro abaixo). Exemplo das primitivas novas: `_primitivas.js`; do loft:
-`_galho.js`.
+orgânica OU angular composta ao longo de um caminho (tubo/casco/galho/membro
+com seção `{pos,raio}`; viga/perfil-I/haste-de-estrela com seção `{pos,
+contorno}` — loft, frame por transporte paralelo, sem torcer numa curva).
+`espelha`+`rotaciona` destravam objeto BILATERAL — modele só metade (com a
+borda EXATA no plano do espelho pra soldar) e complete com `espelha`; incline
+uma parte com `rotaciona`. `inflate` (contorno de lado + de cima -> volume)
+ainda não tem gerador, mas o FORMATO do contorno já existe (P5, D-118 — a
+mesma lista `[[x,y],...]` que o `loft` usa em `contorno` e o `gabarito.mjs`
+usa em `CONTORNOS`) — não finja um volume fechado com mil moveV; reporte o
+limite (ou use o caminho JS-puro abaixo). Exemplo das primitivas novas:
+`_primitivas.js`; do loft com raio: `_galho.js`; do loft com contorno
+explícito (seção não-circular): `_viga.js`.
 
 ## O laço de VER (você tem olhos — use-os)
 
@@ -85,11 +89,16 @@ npm run peca -- minha-peca --res=1400 --geo=normais   # SEM textura: emenda/face
 npm run peca -- minha-peca --res=1400 --geo=flat      # silhueta/volume
 npm run auditar -- minha-peca && npm run porteiro -- minha-peca   # gates (exit≠0 = achado)
 npm run executar                                # replay/determinismo do núcleo
+npm run gabarito -- minha-peca                  # FORMA COMO NÚMERO (P5): IoU × gabaritos/minha-peca.js, veredito calibrado
 ```
 
-**LEIA os PNGs de verdade** (Read no arquivo). Regra de comportamento (skill
-`auditar-peca`): todo julgamento cita ≥1 número/gate; FORMA é do ideador — você
-aponta os defeitos que vê, entrega, e NUNCA conclui sozinho "ficou bom".
+**LEIA os PNGs de verdade** (Read no arquivo, incluindo a sobreposição do
+`gabarito`). Regra de comportamento (skill `auditar-peca`): todo julgamento
+cita ≥1 número/gate; FORMA é do ideador — você aponta os defeitos que vê,
+entrega, e NUNCA conclui sozinho "ficou bom". O `gabarito` FORÇA o número (IoU
+calibrado) mas ainda depende de um `CONTORNOS` desenhado à mão em
+`prototipos/fps/v3/gabaritos/<peça>.js` (0..1, olhando o PNG) — sem gabarito
+pra peça, a bancada falha alto (nada foi medido), nunca finge que passou.
 
 ## Som — o formato (copie de `pecas-som/_agua.js`)
 

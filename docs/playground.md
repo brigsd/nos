@@ -66,11 +66,21 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
       overflow do bloco. Peça-exemplo `pecas/_galho.js` (galho curvo em mais
       de um eixo, afinando, fechado nas duas pontas por polo — watertight e
       volume assinado positivo, provados por manifold).
-- [ ] **P5 · Contorno como DADO + gabarito IoU** — o formato do contorno
-      fechado (pontos, alça reservada) + a bancada que mede silhueta renderizada
-      × contorno de referência em N ângulos e devolve VEREDITO calibrado.
-      Forma vira número. (O canvas da Aba Desenho — a UI — fica pra onda de
-      interface.)
+- [x] **P5 · Contorno como DADO + gabarito IoU** — o formato do contorno
+      fechado (pontos `[x,y]`/`[u,w]`, alça reservada no 3º elemento — a lei
+      do lathe/D-115) tem DOIS consumidores: a chave `contorno` do `loft`
+      (seção NÃO-circular — estrela, hexágono, retângulo, sem tocar em nada
+      da numeração/faces/overflow) e `tools/bancadas/gabarito.mjs` (a
+      bancada: silhueta renderizada, extraída por diferença contra o fundo
+      vazio — a peça `_vazio` — e filtrada por componente conexo pequeno
+      contra o ruído de partículas/grama, × contorno de referência de
+      `prototipos/fps/v3/gabaritos/<peça>.js`, devolve IoU + VEREDITO
+      calibrado pelo método do bench/D-60 — `LIMIAR_IOU=0.55`, o vale entre 3
+      traçados bons (0,65–0,88) e 5 errados (0,00–0,44) — com evidência em
+      PNG). Forma vira número. Peça-exemplo `pecas/_viga.js`. (O canvas da
+      Aba Desenho — a UI — fica pra onda de interface, P9; hoje o `CONTORNOS`
+      é escrito à mão olhando o PNG, o mesmo formato que o canvas vai
+      preencher sem mudar nada rio abaixo.)
 - [ ] **P6 · `inflate`** (contorno de lado + de cima → volume; come o P5).
 - [ ] **P7 · A camada IA — laço único** — uma bancada `criar` que recebe a
       peça e devolve NUM comando: estado como dado (tabela de vértices/faces,

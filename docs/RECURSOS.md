@@ -29,6 +29,7 @@ o Chromium já vem no ambiente). Sem isso, as bancadas saem avisando.
 | `npm run oficina` | **A bancada da Oficina**: prova cada passo do editor (câmera, arrasto, undo, gizmo, extrude, mescla, pincel, exportar, materiais, animação, esqueleto) com NÚMERO — Playwright com eventos reais |
 | `npm run auditar -- <peca>` | **Gate de senso crítico [cpu]**: os 5 críticos (malha, paleta, costura, banding, órfãos) — exit≠0 em achado. Sem argumento roda em todas. Detalhe: skill `auditar-peca` |
 | `npm run porteiro -- <peca>` | **Gate de render**: pageerror / `__ready` / frame degenerado |
+| `npm run gabarito -- <peca>` | **FORMA COMO NÚMERO (P5)**: mede a silhueta renderizada × o contorno de referência de `prototipos/fps/v3/gabaritos/<peca>.js` — IoU + VEREDITO calibrado (exit≠0 = reprovado), evidência em PNG (`tools/bancadas/out/gabarito-*`). Sem gabarito pra peça, falha alto (nada medido) |
 | `npm run executar` | Replay headless do núcleo (`nucleo`/`neutroCanonico`) em Node — determinismo/replay |
 | `npm run jogar` | Screenshot do jogo (`jogo.html`): `-- --cam=x,y,alt,ang`, `-- --pausado --aba=graficos` |
 | `npm run bench` | Benchmark dos críticos (defeitos plantados → placar F1) — rode se mexer nos críticos |

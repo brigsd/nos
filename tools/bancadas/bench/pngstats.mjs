@@ -1,10 +1,11 @@
-/* pngstats.mjs — decodifica um PNG (8-bit, colortype 2/6) via zlib e devolve
-   estatística barata do frame: nº de cores distintas (amostradas), fração da
-   cor dominante, faixa de luma. Sem dependência externa. Usado pelo porteiro
-   pra flagrar frame DEGENERADO (tela chapada = render quebrado que "passou"). */
+/* pngstats.mjs — decodifica um PNG (8-bit, colortype 2/6) via zlib. Sem
+   dependência externa. `decodePng` devolve os pixels CRUS (usado pelo
+   porteiro via `pngStats`, e pela bancada de gabarito — tools/bancadas/
+   bench/gabarito-nucleo.mjs — que precisa do buffer inteiro, não só da
+   estatística, pra extrair silhueta por diferença de fundo). */
 import { inflateSync } from 'node:zlib';
 
-export function pngStats(buf) {
+export function decodePng(buf) {
   if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error('não é PNG');
   let p = 8, W = 0, H = 0, bd = 0, ct = 0; const idat = [];
   while (p < buf.length) {
@@ -30,6 +31,11 @@ export function pngStats(buf) {
       out[row + x] = v & 255;
     }
   }
+  return { W, H, ch, pixels: out };
+}
+
+export function pngStats(buf) {
+  const { W, H, ch, pixels: out } = decodePng(buf);
   // estatística amostrada
   const counts = new Map(); let lmin = 255, lmax = 0, n = 0;
   const step = Math.max(1, Math.floor((W * H) / 20000));

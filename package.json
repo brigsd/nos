@@ -23,6 +23,7 @@
     "jogar": "node tools/bancadas/jogar.mjs",
     "porteiro": "node tools/bancadas/porteiro.mjs",
     "auditar": "node tools/bancadas/auditar.mjs",
+    "gabarito": "node tools/bancadas/gabarito.mjs",
     "bench": "node tools/bancadas/bench/benchmark.mjs",
     "mapa": "node tools/mapa/mapa.mjs",
     "mapa:check": "node tools/mapa/mapa.mjs --check",

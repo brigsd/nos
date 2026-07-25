@@ -1645,21 +1645,84 @@ describe('P4 — loft (seções ao longo de um caminho 3D)', () => {
     expect(piorCurvo).toBeLessThan(0.99);    // e de fato ESTRESSOU (não é um caminho quase-reto disfarçado)
   });
 
-  it('reserva `secao` (contorno 2D) GRITA e ABORTA o passo inteiro (0 V/0 F) — fail-closed, o formato do contorno ainda não existe (P5)', () => {
+  /* P5 (docs/playground.md): a chave `secao` reservada virou `contorno` de
+     verdade — seção NÃO-circular no núcleo do loft. Geometria conferida por
+     MEDIÇÃO (harness, não recontada no olho — a lição do D-116): caminho reto
+     em Y, quadrado [[1,1],[-1,1],[-1,-1],[1,-1]] (CCW por shoelace) entre dois
+     polos, lados=4. u,w do frame reto = [0,0,1],[-1,0,0] (mesma conta do
+     lathe/P4); vértice = pos + u·ca + w·sa. */
+  it('CONTORNO explícito (P5): substitui o círculo por pontos [u,w] exatos — numeração e POSIÇÃO conferidas por medição', () => {
+    const quadrado = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
     const n = nucleo([['loft', { id: 0, lados: 4, secoes: [
       { pos: [0, 0, 0], raio: 0 },
-      { pos: [0, 1, 0], secao: [[0, 0], [1, 0], [1, 1]] },
+      { pos: [0, 1, 0], contorno: quadrado },
+      { pos: [0, 2, 0], raio: 0 },
+    ] }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.V.size).toBe(6);   // 1 polo + 4 anel + 1 polo — IDÊNTICO à contagem de um raio>0 (só a origem da coordenada muda)
+    expect(n.F.size).toBe(8);   // 4 leque sul + 4 leque norte
+    expect(n.V.get(0)).toEqual([0, 0, 0]);
+    expect(n.V.get(1)).toEqual([-1, 1, 1]);    // (ca,sa)=(1,1)  -> pos + u·1 + w·1  = [0,1,0]+[0,0,1]+[-1,0,0]
+    expect(n.V.get(2)).toEqual([-1, 1, -1]);   // (ca,sa)=(-1,1)
+    expect(n.V.get(3)).toEqual([1, 1, -1]);    // (ca,sa)=(-1,-1)
+    expect(n.V.get(4)).toEqual([1, 1, 1]);     // (ca,sa)=(1,-1)
+    expect(n.V.get(5)).toEqual([0, 2, 0]);
+    expect(n.F.get(0).vs).toEqual([0, 1, 2]);
+    expect(n.F.get(4).vs).toEqual([5, 2, 1]);
+  });
+
+  it('raio E contorno na mesma seção GRITA e ABORTA (ambíguo — nunca escolhe um dos dois em silêncio)', () => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [
+      { pos: [0, 0, 0], raio: 0 },
+      { pos: [0, 1, 0], raio: 1, contorno: [[1, 0], [0, 1], [-1, 0], [0, -1]] },
       { pos: [0, 2, 0], raio: 0 },
     ] }]], {}, {});
     expect(n.orfaos).toHaveLength(1);
-    expect(n.orfaos[0]).toMatchObject({ op: 'loft', ref: 1 });
-    expect(n.orfaos[0].motivo).toMatch(/reservad/i);
+    expect(n.orfaos[0].motivo).toMatch(/ambíguo/);
     expect(n.V.size).toBe(0);
-    expect(n.F.size).toBe(0);
-    // uma seção NORMAL ({pos,raio}) nunca dispara a reserva (sem falso-positivo) e constrói de verdade
-    const semReserva = nucleo([['loft', { id: 0, lados: 4, secoes: [{ pos: [0, 0, 0], raio: 0 }, { pos: [0, 1, 0], raio: 1 }, { pos: [0, 2, 0], raio: 0 }] }]], {}, {});
-    expect(semReserva.orfaos).toHaveLength(0);
-    expect(semReserva.V.size).toBeGreaterThan(0);
+  });
+
+  it('nem raio nem contorno GRITA e ABORTA (não dá pra classificar polo/anel)', () => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [{ pos: [0, 0, 0], raio: 0 }, { pos: [0, 1, 0] }, { pos: [0, 2, 0], raio: 0 }] }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0].motivo).toMatch(/sem 'raio' nem 'contorno'/);
+    expect(n.V.size).toBe(0);
+  });
+
+  it('contorno com contagem ≠ lados GRITA e ABORTA (a numeração exige EXATAMENTE `lados` pontos)', () => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [
+      { pos: [0, 0, 0], raio: 0 }, { pos: [0, 1, 0], contorno: [[1, 0], [0, 1], [-1, 0]] }, { pos: [0, 2, 0], raio: 0 },
+    ] }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0].motivo).toMatch(/exatamente 'lados' \(4\)/);
+    expect(n.V.size).toBe(0);
+  });
+
+  it.each([
+    ['3 elementos (alça de curva reservada)', [[1, 1], [-1, 1, 99], [-1, -1], [1, -1]]],
+    ['1 elemento', [[1, 1], [-1], [-1, -1], [1, -1]]],
+  ])('ponto do contorno malformado (%s) GRITA e ABORTA — a mesma lei do ponto do perfil no lathe (D-115)', (_nome, contorno) => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [{ pos: [0, 0, 0], raio: 0 }, { pos: [0, 1, 0], contorno }, { pos: [0, 2, 0], raio: 0 }] }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0].motivo).toMatch(/2 elementos/);
+    expect(n.V.size).toBe(0);
+  });
+
+  it.each([
+    ['CW (revertido)', [[1, 1], [1, -1], [-1, -1], [-1, 1]]],
+    ['degenerado (todos os pontos iguais)', [[0, 0], [0, 0], [0, 0], [0, 0]]],
+    ['degenerado (colinear)', [[0, 0], [1, 0], [2, 0], [3, 0]]],
+  ])('contorno com winding %s GRITA e ABORTA — produziria normal invertida ou nula SILENCIOSA (a classe do achado do P3, cega ao manifold)', (_nome, contorno) => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [{ pos: [0, 0, 0], raio: 0 }, { pos: [0, 1, 0], contorno }, { pos: [0, 2, 0], raio: 0 }] }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0].motivo).toMatch(/CCW ou é degenerado/);
+    expect(n.V.size).toBe(0);
+  });
+
+  it('uma seção NORMAL ({pos,raio}) segue construindo igual — o `contorno` não é fail-open pro círculo (sem falso-positivo)', () => {
+    const n = nucleo([['loft', { id: 0, lados: 4, secoes: [{ pos: [0, 0, 0], raio: 0 }, { pos: [0, 1, 0], raio: 1 }, { pos: [0, 2, 0], raio: 0 }] }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.V.size).toBeGreaterThan(0);
   });
 
   it('seção malformada — não-objeto, sem `pos`, sem `raio` — GRITA e ABORTA o passo inteiro (0 V/0 F)', () => {
