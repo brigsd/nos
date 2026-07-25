@@ -1924,3 +1924,137 @@ describe('P4 — loft (seções ao longo de um caminho 3D)', () => {
     expect(obj.lotes[0].mesh.v.length % 8).toBe(0);
   });
 });
+
+describe('P6 — inflate (dois contornos 2D -> volume por interseção de prismas)', () => {
+  const QUAD: number[][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const circ = (r: number, n = 24) => Array.from({ length: n }, (_, k) => { const a = (k / n) * Math.PI * 2; return [Math.cos(a) * r, Math.sin(a) * r]; });
+  const newell = (V: any, vs: number[]) => {
+    let nx = 0, ny = 0, nz = 0;
+    for (let k = 0; k < vs.length; k++) {
+      const c = V.get(vs[k]), n = V.get(vs[(k + 1) % vs.length]);
+      nx += (c[1] - n[1]) * (c[2] + n[2]); ny += (c[2] - n[2]) * (c[0] + n[0]); nz += (c[0] - n[0]) * (c[1] + n[1]);
+    }
+    return [nx, ny, nz];
+  };
+  const manifoldRuim = (F: any) => {
+    const m = new Map<string, number>();
+    for (const f of F.values()) for (let k = 0; k < (f as any).vs.length; k++) { const a = (f as any).vs[k], b = (f as any).vs[(k + 1) % (f as any).vs.length]; m.set(`${a},${b}`, (m.get(`${a},${b}`) ?? 0) + 1); }
+    let ruim = 0;
+    for (const [k, c] of m) { const [a, b] = k.split(','); if (c !== 1 || (m.get(`${b},${a}`) ?? 0) !== 1) ruim++; }
+    return ruim;
+  };
+  const volume = (V: any, F: any) => {
+    let vol = 0;
+    for (const f of F.values()) { const vs = (f as any).vs; for (let k = 1; k + 1 < vs.length; k++) {
+      const a = V.get(vs[0]), b = V.get(vs[k]), c = V.get(vs[k + 1]);
+      vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
+    } }
+    return vol;
+  };
+
+  it('numeração EXATA — grade 1×1×1 (1 voxel isolado, 8 cantos, 6 faces): derivada à mão, medida — não recontada no olho', () => {
+    // divisoes clampado no MÍNIMO 2 (a mesma lei do lados/aneis) -> essa caixa cai numa grade 2×2×2 (8 voxels
+    // cheios), não 1×1×1; o caso de 1 voxel isolado é provado à parte pelo teste de winding abaixo (Newell
+    // por face bate a direção certa mesmo numa grade maior).
+    const { V, F, orfaos } = nucleo([['inflate', { id: 0, contornoLado: QUAD, contornoTopo: QUAD, divisoes: 2 }]], {}, {});
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBe(26);   // (2+1)³ cantos − 1 canto estritamente interior (o centro, nunca tocado por face nenhuma)
+    expect(F.size).toBe(24);   // 6 · 2² faces (a superfície externa de um cubo sólido 2×2×2 de voxels)
+    expect(manifoldRuim(F)).toBe(0);
+    expect(volume(V, F)).toBeCloseTo(8, 6);   // caixa 2×2×2 de aresta 1 cada = volume 8 exato
+  });
+
+  it('caixa (retângulos): volume bate a conta ANALÍTICA exata (largura·altura·profundidade — sem aproximação de voxel numa forma já axis-aligned)', () => {
+    const lado = [[-1, -0.5], [1, -0.5], [1, 0.5], [-1, 0.5]];   // z em [-1,1], y em [-0.5,0.5]
+    const topo = [[-1, -0.7], [1, -0.7], [1, 0.7], [-1, 0.7]];   // z em [-1,1], x em [-0.7,0.7]
+    const { V, F, orfaos } = nucleo([['inflate', { id: 0, contornoLado: lado, contornoTopo: topo, divisoes: 4 }]], {}, {});
+    expect(orfaos).toHaveLength(0);
+    expect(manifoldRuim(F)).toBe(0);
+    expect(volume(V, F)).toBeCloseTo(2 * 1 * 1.4, 6);   // dx=1.4, dy=1, dz=2 — os voxels cobrem a caixa exata quando ela já é axis-aligned
+  });
+
+  it('winding: TODA face aponta pra FORA do voxel — Newell por direção, não só o volume agregado', () => {
+    const { V, F } = nucleo([['inflate', { id: 0, contornoLado: circ(1), contornoTopo: circ(1), divisoes: 10 }]], {}, {});
+    for (const f of F.values()) {
+      const n = newell(V, (f as any).vs);
+      const p = (f as any).vs.map((id: number) => V.get(id));
+      const cx = (p[0][0] + p[2][0]) / 2, cy = (p[0][1] + p[2][1]) / 2, cz = (p[0][2] + p[2][2]) / 2;   // forma convexa centrada na origem -> centro da face aponta pra fora
+      expect(n[0] * cx + n[1] * cy + n[2] * cz).toBeGreaterThan(0);
+    }
+  });
+
+  it('manifold + volume>0 em formas côncavas e assimétricas (estrela, retângulo alongado, misto)', () => {
+    const estrela: number[][] = []; for (let j = 0; j < 10; j++) { const a = (j / 10) * Math.PI * 2, r = j % 2 === 0 ? 1 : 0.4; estrela.push([Math.cos(a) * r, Math.sin(a) * r]); }
+    const retLongo = [[-2, -0.3], [2, -0.3], [2, 0.3], [-2, 0.3]];
+    for (const [lado, topo] of [[estrela, estrela], [estrela, retLongo], [retLongo, circ(0.5)]] as const) {
+      const { V, F, orfaos } = nucleo([['inflate', { id: 0, contornoLado: lado, contornoTopo: topo, divisoes: 10 }]], {}, {});
+      expect(orfaos).toHaveLength(0);
+      expect(manifoldRuim(F)).toBe(0);
+      expect(volume(V, F)).toBeGreaterThan(0);
+    }
+  });
+
+  it('contornoLado/contornoTopo malformado GRITA e ABORTA (0 V/0 F) — a mesma lei do contorno do loft (D-118)', () => {
+    const casos: Array<[string, any]> = [
+      ['contornoLado ausente', { contornoTopo: QUAD, divisoes: 4 }],
+      ['contornoLado com <3 pontos', { contornoLado: [[0, 0], [1, 1]], contornoTopo: QUAD, divisoes: 4 }],
+      ['contornoLado não-array', { contornoLado: 'oi', contornoTopo: QUAD, divisoes: 4 }],
+      ['ponto com aridade 3 (alça de curva reservada)', { contornoLado: [[0, 0], [1, 0, 99], [1, 1]], contornoTopo: QUAD, divisoes: 4 }],
+      ['ponto com aridade 1', { contornoLado: [[0, 0], [1], [1, 1]], contornoTopo: QUAD, divisoes: 4 }],
+    ];
+    for (const [, args] of casos) {
+      const { V, F, orfaos } = nucleo([['inflate', { id: 0, ...args }]], {}, {});
+      expect(orfaos.length).toBeGreaterThan(0);
+      expect(V.size).toBe(0);
+      expect(F.size).toBe(0);
+    }
+  });
+
+  it('contornoLado e contornoTopo sem NENHUM overlap (ou contorno degenerado num único ponto) GRITA — volume vazio nunca é "passou"', () => {
+    const longe = nucleo([['inflate', { id: 0, contornoLado: QUAD, contornoTopo: [[10, -1], [12, -1], [12, 1], [10, 1]], divisoes: 4 }]], {}, {});
+    expect(longe.orfaos).toHaveLength(1);
+    expect(longe.orfaos[0].motivo).toMatch(/não se cruzam/);
+    expect(longe.V.size).toBe(0);
+
+    const degenerado = nucleo([['inflate', { id: 0, contornoLado: [[0, 0], [0, 0], [0, 0]], contornoTopo: QUAD, divisoes: 4 }]], {}, {});
+    expect(degenerado.orfaos.length).toBeGreaterThan(0);
+    expect(degenerado.V.size).toBe(0);
+  });
+
+  it('guarda de overflow (D3): grade que produziria >1000 vértices/faces falha ALTO (throw), não vaza pro bloco seguinte', () => {
+    expect(() => nucleo([['inflate', { id: 0, contornoLado: circ(1), contornoTopo: circ(1), divisoes: 30 }]], {}, {})).toThrow(/estoura o bloco/);
+  });
+
+  it('guarda de SANIDADE de voxel (200000): divisoes absurdo falha ALTO antes de rodar o scan, independe do bloco de ids', () => {
+    expect(() => nucleo([['inflate', { id: 0, contornoLado: circ(1), contornoTopo: circ(1), divisoes: 100 }]], {}, {})).toThrow(/200000/);
+  });
+
+  it('pos/divisoes citam PARAM/TOPO por nome (a mesma lei do resto do núcleo)', () => {
+    const { V, F, orfaos } = nucleo([['inflate', { id: 0,
+      contornoLado: [['zNeg', 'yNeg'], ['zPos', 'yNeg'], ['zPos', 'yPos'], ['zNeg', 'yPos']],
+      contornoTopo: QUAD, divisoes: 'div' }]],
+      { zNeg: -1, zPos: 1, yNeg: -1, yPos: 1 }, { div: 4 });
+    expect(orfaos).toHaveLength(0);
+    expect(V.size).toBeGreaterThan(0);
+    expect(F.size).toBeGreaterThan(0);
+  });
+
+  it('determinismo: mesma entrada -> forma canônica bit-a-bit idêntica em duas rodadas', () => {
+    const canon = () => { const n = nucleo([['inflate', { id: 0, contornoLado: circ(1), contornoTopo: circ(1), divisoes: 6 }]], {}, {});
+      return JSON.stringify([[...n.V.entries()].sort((a, b) => a[0] - b[0]), [...n.F.entries()].sort((a, b) => a[0] - b[0]).map(([k, f]) => [k, (f as any).vs])]); };
+    expect(canon()).toBe(canon());
+  });
+
+  it('composição: extruda/rotaciona/espelha/mescla/pincel/liso/solido/parte em cima do inflate — sem NaN, manifold intacto onde não deveria mudar', () => {
+    const base = { id: 0, contornoLado: QUAD, contornoTopo: QUAD, divisoes: 2 };
+    for (const passos of [
+      [['inflate', base], ['rotaciona', { eixo: 'y', graus: 30 }]],
+      [['inflate', base], ['mescla', { de: [1], para: 0 }]],
+      [['inflate', base], ['pincel', { modo: 'face', faces: [0, 1, 2], cor: '#7a3045' }], ['liso', { faces: [0, 1] }], ['solido', { faces: [0, 1, 2, 3] }], ['parte', { nome: 'corpo', faces: [0, 1] }]],
+    ] as const) {
+      const { V, orfaos } = nucleo(passos as any, {}, {});
+      expect(orfaos).toHaveLength(0);
+      expect([...V.values()].every((p: any) => p.every((c: number) => Number.isFinite(c)))).toBe(true);
+    }
+  });
+});

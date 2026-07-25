@@ -81,7 +81,22 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
       Aba Desenho — a UI — fica pra onda de interface, P9; hoje o `CONTORNOS`
       é escrito à mão olhando o PNG, o mesmo formato que o canvas vai
       preencher sem mudar nada rio abaixo.)
-- [ ] **P6 · `inflate`** (contorno de lado + de cima → volume; come o P5).
+- [x] **P6 · `inflate`** (D-119) — dois contornos 2D (`contornoLado`, plano
+      z×y; `contornoTopo`, plano z×x — a convenção da Aba Desenho) viram
+      VOLUME 3D: a interseção dos dois prismas (extrusão do lado ao longo de
+      X ∩ extrusão do topo ao longo de Y). Sem fórmula fechada (ao contrário
+      de lathe/loft) — implementado por GRADE DE VOXEL (não CSG geral):
+      watertight POR CONSTRUÇÃO (só emite face entre um voxel dentro e um
+      vizinho fora — parede interna nunca aparece), numeração emerge de um
+      SCAN determinístico (cantos da grade ganham id na primeira vez que uma
+      face os referencia), guarda de overflow (D3) monta local antes de
+      commitar em `st`. Vale a largura/altura INDEPENDENTES (o corpo pode ser
+      mais largo que alto — nem lathe nem loft-com-raio conseguem, os dois só
+      fazem seção circular). LIMITAÇÃO HONESTA registrada: resultado BLOCKY
+      (facetado pelos voxels), não suave — a mesma classe do "lathe só reto
+      por enquanto"; suavizar (marching cubes ou parecido) fica pra quando o
+      caso real pedir. Peça-exemplo `pecas/_corpo.js` (corpo oval achatado,
+      watertight, provado por manifold + volume assinado).
 - [ ] **P7 · A camada IA — laço único** — uma bancada `criar` que recebe a
       peça e devolve NUM comando: estado como dado (tabela de vértices/faces,
       caixa, medidas), os renders (3 ângulos + geo), os gates

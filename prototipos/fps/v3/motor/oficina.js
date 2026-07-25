@@ -633,6 +633,145 @@ const OPS = {
     }
   },
 
+  /* inflate — P6 do playground: DOIS contornos 2D (`contornoLado`, plano z×y;
+     `contornoTopo`, plano z×x — a convenção do doc "Aba Desenho": y pra cima,
+     lado é z×y, cima é z×x) viram VOLUME 3D — a interseção dos dois PRISMAS
+     (extrusão do lado ao longo de X; extrusão do topo ao longo de Y). Ao
+     contrário do lathe/loft (fórmula fechada: cursor soma exatamente o que
+     cada seção precisa), NÃO existe fórmula fechada pro nº de vértices/faces
+     de uma interseção de silhuetas arbitrárias — a numeração aqui EMERGE de
+     um SCAN determinístico (o mesmo espírito não-fechado do `espelha`, que
+     numera por mapa determinístico em vez de fórmula), documentado abaixo e
+     travado por teste igual a tudo mais.
+
+     MÉTODO (robusto, watertight POR CONSTRUÇÃO — o motivo de não usar CSG
+     geral): GRADE DE VOXEL, não interseção exata de malha. Ponto (x,y,z) do
+     centro de um voxel está DENTRO se a projeção (z,y) cai dentro do
+     `contornoLado` E a projeção (z,x) cai dentro do `contornoTopo` (par-ímpar
+     por varredura — o mesmo teste ponto-em-polígono do `rasterizarContorno`
+     da bancada de gabarito, reimplementado local ao núcleo). Uma face só é
+     emitida entre um voxel DENTRO e um vizinho FORA (ou fora da grade) — toda
+     parede interna (dentro↔dentro) nunca aparece — por isso a superfície é
+     SEMPRE um 2-manifold fechado, por construção topológica, não por sorte.
+     LIMITAÇÃO HONESTA: o resultado é BLOCKY (facetado pelos voxels), não
+     suave — a mesma classe do "lathe só reto por enquanto" (D-115): útil hoje,
+     suavizar (ex. marching cubes) fica pra quando o caso real pedir.
+
+     ARGS: `contornoLado`/`contornoTopo`: `[[a,b],...]` (≥3 pontos cada, PARAM
+     via `st.num`) — a MESMA lei do `contorno` do loft (D-118): ponto com
+     aridade ≠ 2 é a alça de curva RESERVADA, GRITA e ABORTA o passo inteiro
+     (fail-closed, D-115). `divisoes` (TOPO, mín 2): subdivide o EIXO MAIS
+     LONGO da caixa combinada em `divisoes` voxels; os outros dois eixos ganham
+     a MESMA aresta de voxel (proporcional, não igual contagem) — um voxel
+     cúbico, não um grid distorcido.
+
+     CAIXA COMBINADA: `contornoLado` dá (zMinL,zMaxL,yMin,yMax);
+     `contornoTopo` dá (zMinT,zMaxT,xMin,xMax); Z tem que CASAR entre os dois
+     (é o mesmo eixo físico nas duas vistas) — a caixa usa a UNIÃO dos dois
+     intervalos de Z. Se os contornos não têm NENHUM Z em comum na prática (ou
+     não se cruzam de jeito nenhum), a grade inteira fica fora -> 0 faces ->
+     GRITA e ABORTA (resultado vazio nunca é o que o autor queria — a mesma
+     lei do `polo↔polo` do loft, mas aqui pro passo inteiro).
+
+     NUMERAÇÃO (formato salvo, travada por teste): SCAN em ix,iy,iz (ordem
+     fixa, aninhada); pra cada voxel DENTRO, as 6 direções de face em ORDEM
+     FIXA [-x,+x,-y,+y,-z,+z]; pra cada face emitida, os 4 CANTOS da grade em
+     ordem CCW vista de fora (tabela fixa abaixo). Cada CANTO ganha um id na
+     PRIMEIRA vez que uma face o referencia (Map local, não fórmula) — cantos
+     nunca tocados por nenhuma face NÃO ganham id (não desperdiça espaço de
+     bloco). Guarda de overflow (D3): a malha é montada numa estrutura LOCAL
+     (nunca toca `st.V`/`st.F`) até o scan terminar; só então os totais reais
+     são comparados a `BLOCO` e, se couber, tudo é commitado de uma vez — a
+     mesma disciplina "nunca constrói quase" do resto do núcleo, adaptada pra
+     um caso sem fórmula fechada. Guarda de SANIDADE separada (throw, antes
+     até de rodar o scan): grade com mais de 200.000 voxels — sanity contra
+     `divisoes` absurdo travar a sessão, independente do bloco de ids. */
+  inflate(st, a, i) {
+    const b = confereId(st, i, 'inflate', a);
+
+    const validaContorno = (pontos, nome) => {
+      if (!Array.isArray(pontos) || pontos.length < 3) { grita(st, i, 'inflate', nome, `${nome} precisa de ao menos 3 pontos (tem ${Array.isArray(pontos) ? pontos.length : typeof pontos})`); return null; }
+      let ruim = false;
+      const out = pontos.map((pt, k) => {
+        if (!Array.isArray(pt) || pt.length !== 2) { grita(st, i, 'inflate', `${nome}[${k}]`, `ponto ${k} de ${nome} precisa ser [a,b] (2 elementos); a alça de curva (3º elemento) está RESERVADA, ainda não implementada`); ruim = true; return [0, 0]; }
+        return [st.num(pt[0]), st.num(pt[1])];
+      });
+      return ruim ? null : out;
+    };
+    const lado = validaContorno(a.contornoLado, 'contornoLado');
+    const topo = validaContorno(a.contornoTopo, 'contornoTopo');
+    if (!lado || !topo) return;   // grita já registrado por contorno inválido
+
+    const divisoes = Math.max(2, st.num(a.divisoes ?? 8) | 0);   // TOPO: muda a CONTAGEM
+
+    const dentroPoligono = (px, py, pontos) => {
+      let dentro = false;
+      for (let k = 0, j = pontos.length - 1; k < pontos.length; j = k++) {
+        const [xk, yk] = pontos[k], [xj, yj] = pontos[j];
+        if ((yk > py) !== (yj > py) && px < (xj - xk) * (py - yk) / (yj - yk) + xk) dentro = !dentro;
+      }
+      return dentro;
+    };
+    const bboxDe = (pontos) => { let mnA = Infinity, mxA = -Infinity, mnB = Infinity, mxB = -Infinity; for (const [pA, pB] of pontos) { if (pA < mnA) mnA = pA; if (pA > mxA) mxA = pA; if (pB < mnB) mnB = pB; if (pB > mxB) mxB = pB; } return [mnA, mxA, mnB, mxB]; };
+
+    const [zMinL, zMaxL, yMin, yMax] = bboxDe(lado);
+    const [zMinT, zMaxT, xMin, xMax] = bboxDe(topo);
+    const zMin = Math.min(zMinL, zMinT), zMax = Math.max(zMaxL, zMaxT);
+    const dx = xMax - xMin, dy = yMax - yMin, dz = zMax - zMin;
+    const maior = Math.max(dx, dy, dz);
+    if (!(maior > 0)) { grita(st, i, 'inflate', null, 'contornoLado/contornoTopo degenerados — a caixa combinada tem extensão zero em todos os eixos'); return; }
+    const s = maior / divisoes;
+    const nx = Math.max(1, Math.round(dx / s)), ny = Math.max(1, Math.round(dy / s)), nz = Math.max(1, Math.round(dz / s));
+    if (nx * ny * nz > 200000) throw new Error(`oficina: inflate com divisoes=${divisoes} pede uma grade de ${nx}×${ny}×${nz} voxels (>200000) — sanidade de performance, independe do bloco de ids`);
+
+    const dentroDaGrade = (ix, iy, iz) => {
+      if (ix < 0 || iy < 0 || iz < 0 || ix >= nx || iy >= ny || iz >= nz) return false;
+      const x = xMin + (ix + 0.5) * dx / nx, y = yMin + (iy + 0.5) * dy / ny, z = zMin + (iz + 0.5) * dz / nz;
+      return dentroPoligono(z, y, lado) && dentroPoligono(z, x, topo);
+    };
+
+    /* 6 direções de face [normal] com os 4 cantos (offset 0/1 em x,y,z) EM
+       ORDEM CCW vista de fora — tabela fixa, verificada por Newell no teste. */
+    const FACES = [
+      { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]] },
+      { n: [1, 0, 0], c: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
+      { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] },
+      { n: [0, 1, 0], c: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]] },
+      { n: [0, 0, -1], c: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]] },
+      { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]] },
+    ];
+
+    /* MONTA LOCAL primeiro — nunca toca st.V/st.F até o overflow ser conferido
+       (D3): sem fórmula fechada, só dá pra saber o total rodando o scan. */
+    const cornerId = new Map();   // "cx,cy,cz" -> id LOCAL (0-based)
+    const posLocal = [];          // id LOCAL -> [x,y,z]
+    const facesLocais = [];       // cada uma: [id,id,id,id] em ids LOCAIS
+    const cornerPos = (cx, cy, cz) => [xMin + cx * dx / nx, yMin + cy * dy / ny, zMin + cz * dz / nz];
+    const getCorner = (cx, cy, cz) => {
+      const k = `${cx},${cy},${cz}`;
+      let id = cornerId.get(k);
+      if (id === undefined) { id = posLocal.length; cornerId.set(k, id); posLocal.push(cornerPos(cx, cy, cz)); }
+      return id;
+    };
+    for (let ix = 0; ix < nx; ix++) for (let iy = 0; iy < ny; iy++) for (let iz = 0; iz < nz; iz++) {
+      if (!dentroDaGrade(ix, iy, iz)) continue;
+      for (const face of FACES) {
+        const [dxn, dyn, dzn] = face.n;
+        if (dentroDaGrade(ix + dxn, iy + dyn, iz + dzn)) continue;   // vizinho dentro -> parede interna, não emite
+        facesLocais.push(face.c.map(([ox, oy, oz]) => getCorner(ix + ox, iy + oy, iz + oz)));
+      }
+    }
+
+    if (facesLocais.length === 0) { grita(st, i, 'inflate', null, 'contornoLado e contornoTopo não se cruzam em NENHUM voxel — volume vazio (revise as posições/tamanhos dos dois contornos)'); return; }
+
+    const nV = posLocal.length, nF = facesLocais.length;
+    if (nV > BLOCO || nF > BLOCO) throw new Error(`oficina: inflate (${nx}×${ny}×${nz} voxels) estoura o bloco de ids (${BLOCO}): ${nV} vértices / ${nF} faces`);
+
+    // COMMIT: ids LOCAIS -> ids GLOBAIS (b + local), só agora toca st.V/st.F
+    posLocal.forEach((p, id) => addV(st, b + id, p));
+    facesLocais.forEach((ids, fid) => addF(st, b + fid, ids.map((id) => b + id)));
+  },
+
   /* ---- edição por id estável ---- */
   moveV(st, a, i) {
     const v = a.v;

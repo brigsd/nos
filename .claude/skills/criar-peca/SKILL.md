@@ -39,7 +39,7 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 
 | op | args | nota |
 |---|---|---|
-| `cubo` / `cilindro` | `id`, medidas, `lados` (cilindro) | geradores originais — inflate ainda não existe |
+| `cubo` / `cilindro` | `id`, medidas, `lados` (cilindro) | geradores originais |
 | `esfera` | `raio` (PARAM, 0.5), `aneis` (TOPO, 6, mín 2), `lados` (TOPO, 8, mín 3) | UV-sphere apoiada no chão (polo sul y=0, norte y=2·raio); numeração no comentário da op |
 | `cone` | `raio` (PARAM, 0.5), `altura` (PARAM, 1), `lados` (TOPO, 8, mín 3) | anel da base b+0..b+lados−1 (y=0), ápice b+lados; tampa −y como o fundo do cilindro |
 | `plano` | `largura` (PARAM, 1), `profundidade` (PARAM, 1), `seg` (TOPO, 1, mín 1) | grade XZ centrada na origem, y=0, linha a linha; seg² quads +y — o chão |
@@ -56,6 +56,7 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 | `parte` | `nome`, `faces:[ids]` | nomeia pra animação/material |
 | `pesar` | `osso`, `faces:[ids]`, `peso` | skinning (acumula por vértice, normaliza top-4) |
 | `solido` | `faces:[ids]` | o que entra na colisão |
+| `inflate` | `contornoLado:[[z,y],...]` (≥3 pontos, PARAM), `contornoTopo:[[z,x],...]` (idem), `divisoes` (TOPO, mín 2) | dois contornos 2D (plano z×y e z×x) viram VOLUME por interseção de dois prismas — não é malha booleana geral, é uma GRADE DE VOXEL (watertight por construção, mas o resultado sai BLOCKY/facetado — não suave). Ponto com aridade ≠ 2 (alça de curva reservada) GRITA e aborta, igual ao `contorno` do loft; <3 pontos idem; contornos que não se cruzam em nenhum voxel GRITA (volume vazio nunca é o que você queria). Vale largura≠altura — o único gerador sem seção circular. Peça-exemplo `_corpo.js` |
 
 **Animação/esqueleto** (exportados junto, opcionais): `ANIMACOES =
 {nome:{duracao,repete,trilhas:[{parte|osso,canal,chaves:[[t,v],...]}]}}` (canais
@@ -72,13 +73,12 @@ com seção `{pos,raio}`; viga/perfil-I/haste-de-estrela com seção `{pos,
 contorno}` — loft, frame por transporte paralelo, sem torcer numa curva).
 `espelha`+`rotaciona` destravam objeto BILATERAL — modele só metade (com a
 borda EXATA no plano do espelho pra soldar) e complete com `espelha`; incline
-uma parte com `rotaciona`. `inflate` (contorno de lado + de cima -> volume)
-ainda não tem gerador, mas o FORMATO do contorno já existe (P5, D-118 — a
-mesma lista `[[x,y],...]` que o `loft` usa em `contorno` e o `gabarito.mjs`
-usa em `CONTORNOS`) — não finja um volume fechado com mil moveV; reporte o
-limite (ou use o caminho JS-puro abaixo). Exemplo das primitivas novas:
-`_primitivas.js`; do loft com raio: `_galho.js`; do loft com contorno
-explícito (seção não-circular): `_viga.js`.
+uma parte com `rotaciona`. `inflate` destrava corpo com largura≠altura (torso,
+pedra, casco achatado) a partir de dois perfis 2D — mas sai BLOCKY (voxel, não
+suave); se o caso pedir superfície lisa e orgânica, `inflate` ainda não serve,
+reporte o limite (ou use o caminho JS-puro abaixo). Exemplo das primitivas
+novas: `_primitivas.js`; do loft com raio: `_galho.js`; do loft com contorno
+explícito (seção não-circular): `_viga.js`; do inflate: `_corpo.js`.
 
 ## O laço de VER (você tem olhos — use-os)
 
