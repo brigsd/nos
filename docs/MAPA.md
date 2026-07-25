@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-116 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+117 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -120,6 +120,7 @@
 - `arvore3d.js` — PEÇA: arvore3d — experimento "3D-ish" da árvore (D-59→): tronco de verdade (prisma afunilado com casca) + copa feita de VÁRIOS cartões de folhagem agrupados …
 - `casa-toras.js` — PEÇA: casa-toras — a cabana de toras aprovada pelo ideador (D-54f). Toras VERTICAIS castanho-mel (tons reais, D-54f), janelas-ABERTURA com moldura+cruzeta+du…
 - `ilha-chao.js` — PEÇA: ilha-chao — o primeiro retalho de CHÃO do v3 (port da natureza v2). Ilha flutuante NA ESCALA DA V2 (o mundo é uma grade 64×64 tiles; a ilha tem ~56 uni…
+- `moto.js` — moto — MOTOCICLETA FUTURISTA ESTILIZADA, criada 100% em PASSOS (nenhuma linha de geometria em JS: `construir` é só `executar`). Baixa e alongada (2.82 de com…
 - `vegetacao-cartoon.js` — PEÇA: vegetacao-cartoon — a PROVA da vegetação plantável (D-64). Planta um PRADO cartoon: tufos de grama (assados numa malha por variante -> poucos draws), f…
 
 ## prototipos/fps/v3/pecas-som/
