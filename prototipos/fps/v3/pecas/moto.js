@@ -1,331 +1,862 @@
-/* moto — MOTOCICLETA FUTURISTA ESTILIZADA, criada 100% em PASSOS (nenhuma linha
-   de geometria em JS: `construir` é só `executar`). Baixa e alongada (2.82 de
-   comprimento por 1.12 de altura), duas rodas grandes, carenagem envolvendo o
-   miolo e detalhes que ACENDEM (faixa do flanco, cubo das rodas, farol e
-   lanterna). SIMETRIA em x=0, MEDIDA e não suposta: 480 dos 492 vértices têm par
-   espelhado EXATO; os 12 que não têm são os anéis do guidão (passo 10, desvio máx
-   4.45e-3) — o porquê está no comentário daquele passo, e é uma armadilha do `loft`
-   que não está escrita em lugar nenhum.
+/* moto — MOTOCICLETA FUTURISTA ESTILIZADA, 100% em PASSOS (nenhuma linha de
+   geometria em JS: `construir` é só `executar`). É a peça da 1ª corrida do
+   experimento do TETO (docs/TETO.md) REFINADA na 2ª, a partir das 6 críticas do
+   ideador — o que deu e o que não deu está em docs/teto-moto-refino-relatorio.md.
 
-   COMO ELA É FEITA — 12 passos de geometria, todos `loft`/`espelha`:
-     0  roda dianteira   loft com caminho em +X (o eixo da roda) — o pneu inteiro
-     1  roda traseira    idem, mais larga
-     2  carenagem        loft com `contorno` em +Z — rabeta, banco, tanque, bico
-     3  garfo (direito)  loft-tubo    4  espelha em x=0
-     5  braço (direito)  loft-tubo    6  espelha em x=0
-     7  faixa (direita)  loft-tubo    8  espelha em x=0
-     9  farol            loft curto em +Z
-    10  guidão           loft com caminho em +X (simétrico por construção)
-    11  cúpula           lâmina fina transparente sobre o deck
-   Depois vêm só atributos (pincel/liso/material/parte/solido) — nenhum cria
-   vértice, então mexer numa cor NÃO renumera nada.
+   O QUE MUDOU NO REFINO (antes: 51 passos, 492 V / 558 F, 7 ops)
+     1 RODAS — o perfil deixou de ser um domo liso. Agora tem CUBO saliente,
+       5 BRAÇOS em relevo (um `contorno` em ESTRELA: 5 raios de 4 pontos, picos
+       no raio do aro e vales 45% mais dentro), ARO em banda cilíndrica, SULCO
+       (o raio DESCE 0,018 — é o que separa aro de pneu) e o pneu com talão,
+       flanco e OMBRO arredondados até a banda de rodagem. 20 lados, 20 estações.
+     2 GARFO/BRAÇO — tubos redondos e finos (0,019..0,033 de raio) no lugar das
+       lâminas retangulares, em 3 estágios (cilindro, haste, punho do eixo) e com
+       as duas pontas ENTERRADAS: a de cima na mesa, a de baixo abraçando o cubo.
+       O braço traseiro ganhou AMORTECEDOR — o poste de baixo dele nasce DENTRO
+       do próprio braço e o de cima dentro do corpo, então não há junta solta.
+     3 GUIDÃO — modelado METADE e fechado com `espelha` (exato por construção).
+       Antes era um `loft` de caminho simétrico, o que NÃO garante malha
+       simétrica (D-128) e era o defeito que reprovava o crítico `simetria`.
+       Tem barra, PUNHO mais grosso e flange de ponta, e nasce dentro da
+       carenagem de cockpit que fica sobre a mesa.
+     4 FAROL — a nacela é UM loft que cresce de dentro do cockpit, com DEGRAU de
+       aro (o raio cai 0,016 num passo) e a lente na ponta: integrada, não
+       colada. Mais um par de SUPORTES visíveis, da ponta da mesa ao flanco da
+       nacela.
+     5 CORPO — 13 estações: a quilha desce a 0,548 no meio e sobe seguindo o ARCO
+       das duas rodas nas pontas — MEDIDO: 0 vértices dentro do envelope dos
+       pneus, folga mínima 0,0077 atrás e 0,0163 na frente (a 1ª corrida tinha
+       interpenetração assumida) —, o assento é uma `chamferBox` de verdade (era troca de
+       COR) e o ombro fica CHAPADO entre duas faixas lisas, o que desenha um
+       vinco na carenagem. Para-lama dianteiro em arco sobre o pneu.
+     6 ENCAIXES — todo par lateral sai de `espelha`; toda caixa nasce na origem
+       e vai pro lugar com `transladar` (D-128); a mesa é girada 25° com
+       `rotaciona` pro mesmo eixo do garfo.
 
-   POR QUE TUDO É `loft`: das 9 primitivas, só `loft` (e `inflate`) aceita
-   POSIÇÃO livre — `cubo`/`cilindro`/`esfera`/`cone`/`chamferBox`/`plano` nascem
-   centrados na origem com a base em y=0, e `lathe` gira sempre em torno do eixo
-   Y. Não existe op de TRANSLADAR uma seleção, então usar um cilindro pra uma
-   roda que não está na origem custaria um `moveV` POR VÉRTICE (32+ passos por
-   peça). O `loft` resolve porque cada seção traz o `pos` dela.
+   SIMETRIA em x=0, MEDIDA (crítico `simetria` do `auditar`, opt-in por
+   `meta.simetria`): 0 de 1376 posições sem par. Como ela é garantida — tudo que
+   é lateral vem de `espelha`; os lofts centrais têm o caminho no plano x=0 (aí
+   o frame do transporte paralelo fica exatamente u=(1,0,0), então contorno
+   simétrico em u dá malha simétrica) e `lados` PAR; as rodas têm tangente
+   (1,0,0) constante com as estações espelhadas em x.
 
-   POR QUE O CONTORNO DA CARENAGEM É LITERAL: `contorno` aceita literal ou NOME
-   de PARAM, nunca expressão — não há como dizer "o mesmo 10-gon, 0,8×". Como
-   cada estação da carenagem tem largura e altura próprias, os 8×10 pontos são
-   números escritos um a um (o `_viga.js` contorna o mesmo limite reusando UM
-   retângulo em todas as seções; aqui a forma precisa variar). As POSIÇÕES das
-   estações (`carY*`/`carZ*`) são PARAMS de verdade: mexer nelas remodela a
-   carenagem sem tocar em passo nenhum.
+   LIMITES DO VOCABULÁRIO QUE APARECERAM AQUI (detalhe no relatório):
+     · `contorno` não aceita conta nem escala — cada estrela/seção/retângulo vai
+       escrito por extenso (266 pontos = 532 números literais neste arquivo), e
+       por isso a roda traseira repete a estrela da dianteira só que maior;
+     · `pincel`/`liso`/`material`/`parte`/`solido`/`espelha` só aceitam
+       `faces:[ids]` literal (nem `grupo`, nem `regiao`, embora `rotaciona` e
+       `transladar` aceitem) — daí as listas enormes abaixo: 6.374 ids;
+     · não existe op de ESCALA nem TORO nem booleano. O pneu é um sólido de
+       revolução de perfil monótono no eixo, nunca um anel com furo.
 
-   Cores da PALETA Resurrect64 (motor/tex.js), sempre em 2 tons alternando por
-   PARIDADE de id dentro de cada zona — a manha do `_torno.js` contra o
-   `detector-de-banding`. `liso` no que é redondo; os leques de polo ficam
-   chapados, a convenção das tampas do cilindro.
+   Cores da PALETA Resurrect64 (motor/tex.js), 2 tons alternando por PARIDADE de
+   id dentro de cada zona (a manha do `_torno.js` contra o `detector-de-banding`).
+   Os `pincel` são agrupados por PAR DE TONS, não por zona — foi assim que a
+   pintura coube em 22 passos em vez de 70.
 
    Teste: visor.html?peca=moto · npm run criar -- moto */
 import { executar, colisaoDe } from '../motor/oficina.js';
 
-/* dimensionais: mudar à vontade NÃO altera a contagem de vértices/faces nem a
-   numeração. `rodaFR`/`rodaTR` são o raio EXTERNO do pneu; `flanco*`/`aro*`/
-   `cubo*` são os anéis internos da mesma roda (mexer só no externo engorda o
-   pneu sem mexer no aro — o comportamento certo). `carY*`/`carZ*` são o centro
-   de cada estação da carenagem. */
+/* dimensionais: mudar NÃO altera a contagem de vértice/face nem a numeração. */
 export const PARAMS = {
-  rodaFR: 0.44,
-  flancoFR: 0.41,
-  aroFR: 0.3,
-  cuboFR: 0.1,
-  rodaFY: 0.44,
+  rodaFCubo: 0.09,
+  rodaFAroI: 0.302,
+  rodaFAroL: 0.306,
+  rodaFSulco: 0.288,
+  rodaFTalao: 0.352,
+  rodaFFlanco: 0.416,
+  rodaFOmbro: 0.444,
+  rodaFR: 0.452,
+  rodaFY: 0.452,
   rodaFZ: 0.95,
-  rodaTR: 0.46,
-  flancoTR: 0.43,
-  aroTR: 0.32,
-  cuboTR: 0.11,
-  rodaTY: 0.46,
+  rodaTCubo: 0.094,
+  rodaTAroI: 0.3153,
+  rodaTAroL: 0.3195,
+  rodaTSulco: 0.3007,
+  rodaTTalao: 0.3676,
+  rodaTFlanco: 0.4344,
+  rodaTOmbro: 0.4636,
+  rodaTR: 0.472,
+  rodaTY: 0.472,
   rodaTZ: -0.97,
-  carY0: 1.01,
-  carZ0: -1.17,
-  carY1: 0.99,
-  carZ1: -1.08,
-  carY2: 1,
-  carZ2: -0.92,
-  carY3: 0.87,
-  carZ3: -0.66,
-  carY4: 0.78,
-  carZ4: -0.34,
-  carY5: 0.73,
-  carZ5: 0,
-  carY6: 0.76,
-  carZ6: 0.34,
-  carY7: 0.89,
-  carZ7: 0.66,
-  carY8: 0.925,
-  carZ8: 0.98,
-  carY9: 0.84,
-  carZ9: 1.18,
-  faixaR: 0.022,
-  guidaoR: 0.028,
-  farolR1: 0.05,
-  farolR2: 0.062,
+  corpoY0: 0.996,
+  corpoZ0: -1.19,
+  corpoY1: 0.991,
+  corpoZ1: -1.13,
+  corpoY2: 1.001,
+  corpoZ2: -1.02,
+  corpoY3: 0.9925,
+  corpoZ3: -0.88,
+  corpoY4: 0.9435,
+  corpoZ4: -0.755,
+  corpoY5: 0.8875,
+  corpoZ5: -0.645,
+  corpoY6: 0.816,
+  corpoZ6: -0.52,
+  corpoY7: 0.7685,
+  corpoZ7: -0.33,
+  corpoY8: 0.773,
+  corpoZ8: -0.04,
+  corpoY9: 0.7805,
+  corpoZ9: 0.23,
+  corpoY10: 0.812,
+  corpoZ10: 0.45,
+  corpoY11: 0.87,
+  corpoZ11: 0.62,
+  corpoY12: 0.9,
+  corpoZ12: 0.74,
+  cowlY0: 0.905,
+  cowlZ0: 0.655,
+  cowlY1: 0.93,
+  cowlZ1: 0.7,
+  cowlY2: 0.958,
+  cowlZ2: 0.752,
+  cowlY3: 0.982,
+  cowlZ3: 0.802,
+  cowlY4: 0.998,
+  cowlZ4: 0.838,
+  garfoRa: 0.026,
+  garfoRb: 0.019,
+  garfoRc: 0.033,
+  bracoRa: 0.03,
+  bracoRb: 0.021,
+  bracoRc: 0.036,
+  amortRa: 0.02,
+  amortRb: 0.032,
+  guidaoR: 0.021,
+  punhoR: 0.028,
+  flangeR: 0.034,
+  suporteR: 0.014,
+  farolY0: 1.005,
+  farolZ0: 0.74,
+  farolY1: 1.006,
+  farolZ1: 0.78,
+  farolR1: 0.06,
+  farolY2: 1.008,
+  farolZ2: 0.832,
+  farolR2: 0.078,
+  farolY3: 1.006,
+  farolZ3: 0.87,
+  farolR3: 0.074,
+  farolY4: 1.004,
+  farolZ4: 0.88,
+  farolR4: 0.058,
+  farolY5: 1.002,
+  farolZ5: 0.89,
+  farolR5: 0.054,
+  farolY6: 0.998,
+  farolZ6: 0.914,
+  faixaR: 0.02,
 };
 
-/* topológicos: mudar RECONSTRÓI e pode deixar passo órfão. `ladosCar` é o número
-   de pontos do contorno da carenagem — mudar exige reescrever os 8 contornos. */
-export const TOPO = {ladosRoda: 16, ladosCar: 10, ladosTubo: 6, ladosFarol: 10, ladosChapa: 4};
+/* topológicos: mudar RECONSTRÓI e pode deixar passo órfão. `ladosRoda` tem que
+   ser MÚLTIPLO DE 4 (a estrela dos braços é um padrão de 4 pontos), `ladosCorpo`
+   tem que ser 12 (os pontos da seção do corpo) e `ladosFarol` 10 (nacela e
+   cockpit). Todos PARES — ímpar quebraria a simetria dos lofts centrais. */
+export const TOPO = {ladosRoda: 20, ladosCorpo: 12, ladosTubo: 6, ladosFarol: 10, ladosChapa: 4};
 
 /* MATERIAIS por NOME. `cor` MULTIPLICA a textura, então aqui é branco (neutro):
-   quem manda na cor é o `pincel`, e o material só acrescenta brilho/emissão. */
+   quem manda na cor é o `pincel`; o material só acrescenta brilho/emissão. */
 export const MATERIAIS = {
-  laca:     { cor: '#ffffff', aspereza: 0.35 },
-  cromo:    { cor: '#ffffff', aspereza: 0.12 },
-  neon:     { cor: '#ffffff', emissivo: 1.7, semLuz: true },
-  farol:    { cor: '#ffffff', emissivo: 1.3, semLuz: true },
+  laca: { cor: '#ffffff', aspereza: 0.34 },
+  cromo: { cor: '#ffffff', aspereza: 0.12 },
+  borracha: { cor: '#ffffff', aspereza: 0.85 },
+  neon: { cor: '#ffffff', emissivo: 1.7, semLuz: true },
+  farol: { cor: '#ffffff', emissivo: 1.5, semLuz: true },
   lanterna: { cor: '#ffffff', emissivo: 1.5, semLuz: true },
-  vidro:    { cor: '#ffffff', mistura: 'transparente', opacidade: 0.45 },
 };
 
 /* exportado (não `const` privado): sem isto a Oficina não relê a lista e o
-   arquivo nunca mais reabre pra edição.
-   NUMERAÇÃO (a documentada no comentário da op `loft` em motor/oficina.js —
-   o passo i possui os ids [i*1000, i*1000+1000)):
-     passo  0  rodaDianteira  F 0..143 (144 faces, 9 segmentos × 16)
-     passo  1  rodaTraseira   F 1000..1143 (144 faces, 9 segmentos × 16)
-     passo  2  carenagem      F 2000..2089 (90 faces, 9 segmentos × 10)
-     passo  3  garfoDir       F 3000..3011 (12 faces, 3 segmentos × 4)
-     passo  4  garfoEsq       F 4000..4011 (12 faces, 3 segmentos × 4)
-     passo  5  bracoDir       F 5000..5011 (12 faces, 3 segmentos × 4)
-     passo  6  bracoEsq       F 6000..6011 (12 faces, 3 segmentos × 4)
-     passo  7  faixaDir       F 7000..7035 (36 faces, 6 segmentos × 6)
-     passo  8  faixaEsq       F 8000..8035 (36 faces, 6 segmentos × 6)
-     passo  9  farol          F 9000..9029 (30 faces, 3 segmentos × 10)
-     passo 10  guidao         F 10000..10017 (18 faces, 3 segmentos × 6)
-     passo 11  cupula         F 11000..11011 (12 faces, 3 segmentos × 4) */
+   arquivo nunca mais reabre pra edição. GEOMETRIA nos 23 primeiros passos,
+   ATRIBUTO depois — assim mexer numa cor não renumera face nenhuma. */
 export const PASSOS = [
-  // roda DIANTEIRA — um pneu inteiro num passo: loft com o caminho em +X (o eixo da roda),
-  //     polo->cubo->aro->flanco->banda->flanco->aro->cubo->polo. Fechado nos dois polos = watertight.
+  // RODA DIANTEIRA — 20 estações ao longo de +X: cubo, BRAÇOS (contorno em estrela), aro, sulco, talão, flanco e banda de rodagem. Como todas as seções têm o mesmo y/z, a tangente é (1,0,0) CONSTANTE e a simetria em x sai EXATA.
   ['loft', {
     id: 0, lados: 'ladosRoda',
     secoes: [
-        { pos: [-0.105, 'rodaFY', 'rodaFZ'], raio: 0 },
-        { pos: [-0.098, 'rodaFY', 'rodaFZ'], raio: 'cuboFR' },
-        { pos: [-0.086, 'rodaFY', 'rodaFZ'], raio: 'aroFR' },
-        { pos: [-0.062, 'rodaFY', 'rodaFZ'], raio: 'flancoFR' },
-        { pos: [-0.042, 'rodaFY', 'rodaFZ'], raio: 'rodaFR' },
-        { pos: [0.042, 'rodaFY', 'rodaFZ'], raio: 'rodaFR' },
-        { pos: [0.062, 'rodaFY', 'rodaFZ'], raio: 'flancoFR' },
-        { pos: [0.086, 'rodaFY', 'rodaFZ'], raio: 'aroFR' },
-        { pos: [0.098, 'rodaFY', 'rodaFZ'], raio: 'cuboFR' },
-        { pos: [0.105, 'rodaFY', 'rodaFZ'], raio: 0 },
+      { pos: [-0.056, 'rodaFY', 'rodaFZ'], raio: 0 },
+      { pos: [-0.054, 'rodaFY', 'rodaFZ'], raio: 'rodaFCubo' },
+      { pos: [-0.051, 'rodaFY', 'rodaFZ'], contorno: [[0.16, 0], [0.2777, 0.0902], [0.2362, 0.1716], [0.094, 0.1294], [0.0494, 0.1522], [0, 0.292], [-0.0902, 0.2777], [-0.094, 0.1294], [-0.1294, 0.094], [-0.2777, 0.0902], [-0.292, 0], [-0.1522, -0.0494], [-0.1294, -0.094], [-0.1716, -0.2362], [-0.0902, -0.2777], [0, -0.16], [0.0494, -0.1522], [0.1716, -0.2362], [0.2362, -0.1716], [0.1522, -0.0494]] },
+      { pos: [-0.042, 'rodaFY', 'rodaFZ'], raio: 'rodaFAroI' },
+      { pos: [-0.039, 'rodaFY', 'rodaFZ'], raio: 'rodaFAroL' },
+      { pos: [-0.036, 'rodaFY', 'rodaFZ'], raio: 'rodaFSulco' },
+      { pos: [-0.033, 'rodaFY', 'rodaFZ'], raio: 'rodaFTalao' },
+      { pos: [-0.027, 'rodaFY', 'rodaFZ'], raio: 'rodaFFlanco' },
+      { pos: [-0.019, 'rodaFY', 'rodaFZ'], raio: 'rodaFOmbro' },
+      { pos: [-0.009, 'rodaFY', 'rodaFZ'], raio: 'rodaFR' },
+      { pos: [0.009, 'rodaFY', 'rodaFZ'], raio: 'rodaFR' },
+      { pos: [0.019, 'rodaFY', 'rodaFZ'], raio: 'rodaFOmbro' },
+      { pos: [0.027, 'rodaFY', 'rodaFZ'], raio: 'rodaFFlanco' },
+      { pos: [0.033, 'rodaFY', 'rodaFZ'], raio: 'rodaFTalao' },
+      { pos: [0.036, 'rodaFY', 'rodaFZ'], raio: 'rodaFSulco' },
+      { pos: [0.039, 'rodaFY', 'rodaFZ'], raio: 'rodaFAroL' },
+      { pos: [0.042, 'rodaFY', 'rodaFZ'], raio: 'rodaFAroI' },
+      { pos: [0.051, 'rodaFY', 'rodaFZ'], contorno: [[0.16, 0], [0.2777, 0.0902], [0.2362, 0.1716], [0.094, 0.1294], [0.0494, 0.1522], [0, 0.292], [-0.0902, 0.2777], [-0.094, 0.1294], [-0.1294, 0.094], [-0.2777, 0.0902], [-0.292, 0], [-0.1522, -0.0494], [-0.1294, -0.094], [-0.1716, -0.2362], [-0.0902, -0.2777], [0, -0.16], [0.0494, -0.1522], [0.1716, -0.2362], [0.2362, -0.1716], [0.1522, -0.0494]] },
+      { pos: [0.054, 'rodaFY', 'rodaFZ'], raio: 'rodaFCubo' },
+      { pos: [0.056, 'rodaFY', 'rodaFZ'], raio: 0 },
     ],
   }],
-  // roda TRASEIRA — mesmo desenho, mais larga e um pouco maior (a de tração)
+  // RODA TRASEIRA — mesmo perfil, 4,4% maior e 34% mais larga (a de tração). O `contorno` não aceita conta nem escala, então a estrela vai escrita de novo, maior.
   ['loft', {
     id: 1000, lados: 'ladosRoda',
     secoes: [
-        { pos: [-0.14, 'rodaTY', 'rodaTZ'], raio: 0 },
-        { pos: [-0.13, 'rodaTY', 'rodaTZ'], raio: 'cuboTR' },
-        { pos: [-0.115, 'rodaTY', 'rodaTZ'], raio: 'aroTR' },
-        { pos: [-0.082, 'rodaTY', 'rodaTZ'], raio: 'flancoTR' },
-        { pos: [-0.056, 'rodaTY', 'rodaTZ'], raio: 'rodaTR' },
-        { pos: [0.056, 'rodaTY', 'rodaTZ'], raio: 'rodaTR' },
-        { pos: [0.082, 'rodaTY', 'rodaTZ'], raio: 'flancoTR' },
-        { pos: [0.115, 'rodaTY', 'rodaTZ'], raio: 'aroTR' },
-        { pos: [0.13, 'rodaTY', 'rodaTZ'], raio: 'cuboTR' },
-        { pos: [0.14, 'rodaTY', 'rodaTZ'], raio: 0 },
+      { pos: [-0.075, 'rodaTY', 'rodaTZ'], raio: 0 },
+      { pos: [-0.0723, 'rodaTY', 'rodaTZ'], raio: 'rodaTCubo' },
+      { pos: [-0.0683, 'rodaTY', 'rodaTZ'], contorno: [[0.1671, 0], [0.29, 0.0942], [0.2467, 0.1792], [0.0982, 0.1352], [0.0516, 0.1589], [0, 0.3049], [-0.0942, 0.29], [-0.0982, 0.1352], [-0.1352, 0.0982], [-0.29, 0.0942], [-0.3049, 0], [-0.1589, -0.0516], [-0.1352, -0.0982], [-0.1792, -0.2467], [-0.0942, -0.29], [0, -0.1671], [0.0516, -0.1589], [0.1792, -0.2467], [0.2467, -0.1792], [0.1589, -0.0516]] },
+      { pos: [-0.0562, 'rodaTY', 'rodaTZ'], raio: 'rodaTAroI' },
+      { pos: [-0.0522, 'rodaTY', 'rodaTZ'], raio: 'rodaTAroL' },
+      { pos: [-0.0482, 'rodaTY', 'rodaTZ'], raio: 'rodaTSulco' },
+      { pos: [-0.0442, 'rodaTY', 'rodaTZ'], raio: 'rodaTTalao' },
+      { pos: [-0.0362, 'rodaTY', 'rodaTZ'], raio: 'rodaTFlanco' },
+      { pos: [-0.0254, 'rodaTY', 'rodaTZ'], raio: 'rodaTOmbro' },
+      { pos: [-0.0121, 'rodaTY', 'rodaTZ'], raio: 'rodaTR' },
+      { pos: [0.0121, 'rodaTY', 'rodaTZ'], raio: 'rodaTR' },
+      { pos: [0.0254, 'rodaTY', 'rodaTZ'], raio: 'rodaTOmbro' },
+      { pos: [0.0362, 'rodaTY', 'rodaTZ'], raio: 'rodaTFlanco' },
+      { pos: [0.0442, 'rodaTY', 'rodaTZ'], raio: 'rodaTTalao' },
+      { pos: [0.0482, 'rodaTY', 'rodaTZ'], raio: 'rodaTSulco' },
+      { pos: [0.0522, 'rodaTY', 'rodaTZ'], raio: 'rodaTAroL' },
+      { pos: [0.0562, 'rodaTY', 'rodaTZ'], raio: 'rodaTAroI' },
+      { pos: [0.0683, 'rodaTY', 'rodaTZ'], contorno: [[0.1671, 0], [0.29, 0.0942], [0.2467, 0.1792], [0.0982, 0.1352], [0.0516, 0.1589], [0, 0.3049], [-0.0942, 0.29], [-0.0982, 0.1352], [-0.1352, 0.0982], [-0.29, 0.0942], [-0.3049, 0], [-0.1589, -0.0516], [-0.1352, -0.0982], [-0.1792, -0.2467], [-0.0942, -0.29], [0, -0.1671], [0.0516, -0.1589], [0.1792, -0.2467], [0.2467, -0.1792], [0.1589, -0.0516]] },
+      { pos: [0.0723, 'rodaTY', 'rodaTZ'], raio: 'rodaTCubo' },
+      { pos: [0.075, 'rodaTY', 'rodaTZ'], raio: 0 },
     ],
   }],
-  // CARENAGEM — loft com CONTORNO ao longo de +Z (rabeta -> bico): 8 estações-anel entre dois polos.
-  //   O contorno é o mesmo 10-gon em todas, reescalado estação a estação (números LITERAIS — ver cabeçalho)
+  // CORPO — loft em +Z com o caminho no plano x=0: rabeta alta, degrau do assento, tanque largo e bico. A QUILHA acompanha o arco das duas rodas — MEDIDO: 0 vértices dentro do envelope dos pneus, folga mínima 0,0077.
   ['loft', {
-    id: 2000, lados: 'ladosCar',
+    id: 2000, lados: 'ladosCorpo',
     secoes: [
-        { pos: [0, 'carY0', 'carZ0'], raio: 0 },
-        { pos: [0, 'carY1', 'carZ1'], contorno: [[0, -0.07], [0.0462, -0.063], [0.07, -0.021], [0.0644, 0.0245], [0.0294, 0.0616], [0, 0.07], [-0.0294, 0.0616], [-0.0644, 0.0245], [-0.07, -0.021], [-0.0462, -0.063]] },
-        { pos: [0, 'carY2', 'carZ2'], contorno: [[0, -0.1], [0.0858, -0.09], [0.13, -0.03], [0.1196, 0.035], [0.0546, 0.088], [0, 0.1], [-0.0546, 0.088], [-0.1196, 0.035], [-0.13, -0.03], [-0.0858, -0.09]] },
-        { pos: [0, 'carY3', 'carZ3'], contorno: [[0, -0.085], [0.1089, -0.0765], [0.165, -0.0255], [0.1518, 0.0297], [0.0693, 0.0748], [0, 0.085], [-0.0693, 0.0748], [-0.1518, 0.0297], [-0.165, -0.0255], [-0.1089, -0.0765]] },
-        { pos: [0, 'carY4', 'carZ4'], contorno: [[0, -0.25], [0.1419, -0.225], [0.215, -0.075], [0.1978, 0.0875], [0.0903, 0.22], [0, 0.25], [-0.0903, 0.22], [-0.1978, 0.0875], [-0.215, -0.075], [-0.1419, -0.225]] },
-        { pos: [0, 'carY5', 'carZ5'], contorno: [[0, -0.3], [0.165, -0.27], [0.25, -0.09], [0.23, 0.105], [0.105, 0.264], [0, 0.3], [-0.105, 0.264], [-0.23, 0.105], [-0.25, -0.09], [-0.165, -0.27]] },
-        { pos: [0, 'carY6', 'carZ6'], contorno: [[0, -0.27], [0.1551, -0.243], [0.235, -0.081], [0.2162, 0.0945], [0.0987, 0.2376], [0, 0.27], [-0.0987, 0.2376], [-0.2162, 0.0945], [-0.235, -0.081], [-0.1551, -0.243]] },
-        { pos: [0, 'carY7', 'carZ7'], contorno: [[0, -0.13], [0.1188, -0.117], [0.18, -0.039], [0.1656, 0.0455], [0.0756, 0.1144], [0, 0.13], [-0.0756, 0.1144], [-0.1656, 0.0455], [-0.18, -0.039], [-0.1188, -0.117]] },
-        { pos: [0, 'carY8', 'carZ8'], contorno: [[0, -0.065], [0.0759, -0.0585], [0.115, -0.0195], [0.1058, 0.0227], [0.0483, 0.0572], [0, 0.065], [-0.0483, 0.0572], [-0.1058, 0.0227], [-0.115, -0.0195], [-0.0759, -0.0585]] },
-        { pos: [0, 'carY9', 'carZ9'], raio: 0 },
+      { pos: [0, 'corpoY0', 'corpoZ0'], raio: 0 },
+      { pos: [0, 'corpoY1', 'corpoZ1'], contorno: [[0, -0.039], [0.0281, -0.0367], [0.0577, -0.0242], [0.0749, -0.0078], [0.078, 0.007], [0.0515, 0.0257], [0, 0.039], [-0.0515, 0.0257], [-0.078, 0.007], [-0.0749, -0.0078], [-0.0577, -0.0242], [-0.0281, -0.0367]] },
+      { pos: [0, 'corpoY2', 'corpoZ2'], contorno: [[0, -0.051], [0.0439, -0.0479], [0.0903, -0.0316], [0.1171, -0.0102], [0.122, 0.0092], [0.0805, 0.0337], [0, 0.051], [-0.0805, 0.0337], [-0.122, 0.0092], [-0.1171, -0.0102], [-0.0903, -0.0316], [-0.0439, -0.0479]] },
+      { pos: [0, 'corpoY3', 'corpoZ3'], contorno: [[0, -0.0475], [0.0533, -0.0447], [0.1095, -0.0295], [0.1421, -0.0095], [0.148, 0.0086], [0.0977, 0.0314], [0, 0.0475], [-0.0977, 0.0314], [-0.148, 0.0086], [-0.1421, -0.0095], [-0.1095, -0.0295], [-0.0533, -0.0447]] },
+      { pos: [0, 'corpoY4', 'corpoZ4'], contorno: [[0, -0.0385], [0.0569, -0.0362], [0.1169, -0.0239], [0.1517, -0.0077], [0.158, 0.0069], [0.1043, 0.0254], [0, 0.0385], [-0.1043, 0.0254], [-0.158, 0.0069], [-0.1517, -0.0077], [-0.1169, -0.0239], [-0.0569, -0.0362]] },
+      { pos: [0, 'corpoY5', 'corpoZ5'], contorno: [[0, -0.0425], [0.0619, -0.04], [0.1273, -0.0264], [0.1651, -0.0085], [0.172, 0.0077], [0.1135, 0.0281], [0, 0.0425], [-0.1135, 0.0281], [-0.172, 0.0077], [-0.1651, -0.0085], [-0.1273, -0.0264], [-0.0619, -0.04]] },
+      { pos: [0, 'corpoY6', 'corpoZ6'], contorno: [[0, -0.1], [0.072, -0.094], [0.148, -0.062], [0.192, -0.02], [0.2, 0.018], [0.132, 0.066], [0, 0.1], [-0.132, 0.066], [-0.2, 0.018], [-0.192, -0.02], [-0.148, -0.062], [-0.072, -0.094]] },
+      { pos: [0, 'corpoY7', 'corpoZ7'], contorno: [[0, -0.1835], [0.0835, -0.1725], [0.1717, -0.1138], [0.2227, -0.0367], [0.232, 0.033], [0.1531, 0.1211], [0, 0.1835], [-0.1531, 0.1211], [-0.232, 0.033], [-0.2227, -0.0367], [-0.1717, -0.1138], [-0.0835, -0.1725]] },
+      { pos: [0, 'corpoY8', 'corpoZ8'], contorno: [[0, -0.225], [0.0907, -0.2115], [0.1865, -0.1395], [0.2419, -0.045], [0.252, 0.0405], [0.1663, 0.1485], [0, 0.225], [-0.1663, 0.1485], [-0.252, 0.0405], [-0.2419, -0.045], [-0.1865, -0.1395], [-0.0907, -0.2115]] },
+      { pos: [0, 'corpoY9', 'corpoZ9'], contorno: [[0, -0.2055], [0.0871, -0.1932], [0.1791, -0.1274], [0.2323, -0.0411], [0.242, 0.037], [0.1597, 0.1356], [0, 0.2055], [-0.1597, 0.1356], [-0.242, 0.037], [-0.2323, -0.0411], [-0.1791, -0.1274], [-0.0871, -0.1932]] },
+      { pos: [0, 'corpoY10', 'corpoZ10'], contorno: [[0, -0.15], [0.0706, -0.141], [0.145, -0.093], [0.1882, -0.03], [0.196, 0.027], [0.1294, 0.099], [0, 0.15], [-0.1294, 0.099], [-0.196, 0.027], [-0.1882, -0.03], [-0.145, -0.093], [-0.0706, -0.141]] },
+      { pos: [0, 'corpoY11', 'corpoZ11'], contorno: [[0, -0.07], [0.0504, -0.0658], [0.1036, -0.0434], [0.1344, -0.014], [0.14, 0.0126], [0.0924, 0.0462], [0, 0.07], [-0.0924, 0.0462], [-0.14, 0.0126], [-0.1344, -0.014], [-0.1036, -0.0434], [-0.0504, -0.0658]] },
+      { pos: [0, 'corpoY12', 'corpoZ12'], raio: 0 },
     ],
   }],
-  // GARFO dianteiro em LÂMINA (contorno retangular), metade DIREITA — a esquerda sai do espelho abaixo.
-  //   As duas pontas (polos) ficam ENTERRADAS no casco e no cubo da roda: polo à mostra vira espeto.
+  ['chamferBox', { id: 3000, larg: 0.23, alt: 0.075, prof: 0.36, chanfro: 0.024 }],
+  ['transladar', { sel: { v: [
+      3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011, 3012, 3013, 3014, 3015,
+      3016, 3017, 3018, 3019, 3020, 3021, 3022, 3023,
+    ] }, d: [0, 0.89, -0.545] }],
+  ['chamferBox', { id: 5000, larg: 0.2, alt: 0.045, prof: 0.085, chanfro: 0.014 }],
+  ['transladar', { sel: { v: [
+      5000, 5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009, 5010, 5011, 5012, 5013, 5014, 5015,
+      5016, 5017, 5018, 5019, 5020, 5021, 5022, 5023,
+    ] }, d: [0, 0.885, 0.742] }],
+  ['rotaciona', { eixo: 'x', graus: 25, pivo: [0, 0.9075, 0.742], sel: { v: [
+      5000, 5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009, 5010, 5011, 5012, 5013, 5014, 5015,
+      5016, 5017, 5018, 5019, 5020, 5021, 5022, 5023,
+    ] } }],
   ['loft', {
-    id: 3000, lados: 'ladosChapa',
+    id: 8000, lados: 'ladosFarol',
     secoes: [
-        { pos: [0.15, 0.86, 0.5], raio: 0 },
-        { pos: [0.146, 0.79, 0.6], contorno: [[0.026, 0.062], [-0.026, 0.062], [-0.026, -0.062], [0.026, -0.062]] },
-        { pos: [0.128, 0.53, 0.9], contorno: [[0.026, 0.062], [-0.026, 0.062], [-0.026, -0.062], [0.026, -0.062]] },
-        { pos: [0.118, 0.44, 0.96], raio: 0 },
+      { pos: [0, 'cowlY0', 'cowlZ0'], raio: 0 },
+      { pos: [0, 'cowlY1', 'cowlZ1'], contorno: [[0, -0.048], [0.0328, -0.0432], [0.0663, -0.0216], [0.0764, 0.012], [0.0429, 0.0384], [0, 0.048], [-0.0429, 0.0384], [-0.0764, 0.012], [-0.0663, -0.0216], [-0.0328, -0.0432]] },
+      { pos: [0, 'cowlY2', 'cowlZ2'], contorno: [[0, -0.058], [0.0361, -0.0522], [0.0731, -0.0261], [0.0843, 0.013], [0.0473, 0.0416], [0, 0.052], [-0.0473, 0.0416], [-0.0843, 0.013], [-0.0731, -0.0261], [-0.0361, -0.0522]] },
+      { pos: [0, 'cowlY3', 'cowlZ3'], contorno: [[0, -0.048], [0.0277, -0.0432], [0.0561, -0.0216], [0.0647, 0.011], [0.0363, 0.0352], [0, 0.044], [-0.0363, 0.0352], [-0.0647, 0.011], [-0.0561, -0.0216], [-0.0277, -0.0432]] },
+      { pos: [0, 'cowlY4', 'cowlZ4'], raio: 0 },
     ],
   }],
-  // espelho do garfo em x=0 — nenhum vértice está no plano, então nada solda: 14 vértices e 18 faces novas
-  ['espelha', { eixo: 'x', pos: 0, sel: { f: [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011] } }],
-  // BRAÇO traseiro, mesma lâmina, metade DIREITA
   ['loft', {
-    id: 5000, lados: 'ladosChapa',
+    id: 9000, lados: 'ladosTubo',
     secoes: [
-        { pos: [0.165, 0.7, -0.22], raio: 0 },
-        { pos: [0.168, 0.66, -0.34], contorno: [[0.03, 0.07], [-0.03, 0.07], [-0.03, -0.07], [0.03, -0.07]] },
-        { pos: [0.158, 0.49, -0.88], contorno: [[0.03, 0.07], [-0.03, 0.07], [-0.03, -0.07], [0.03, -0.07]] },
-        { pos: [0.15, 0.46, -0.98], raio: 0 },
+      { pos: [0.069, 0.945, 0.708], raio: 0 },
+      { pos: [0.069, 0.9, 0.729], raio: 'garfoRa' },
+      { pos: [0.0688, 0.72, 0.813], raio: 'garfoRa' },
+      { pos: [0.0686, 0.69, 0.827], raio: 'garfoRb' },
+      { pos: [0.0682, 0.54, 0.898], raio: 'garfoRb' },
+      { pos: [0.068, 0.51, 0.912], raio: 'garfoRc' },
+      { pos: [0.0678, 0.42, 0.954], raio: 'garfoRc' },
+      { pos: [0.0677, 0.395, 0.966], raio: 0 },
     ],
   }],
-  // espelho do braço
-  ['espelha', { eixo: 'x', pos: 0, sel: { f: [5000, 5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009, 5010, 5011] } }],
-  // FAIXA emissiva do flanco, metade DIREITA — segue a linha mais larga da carenagem
+  ['espelha', { eixo: 'x', pos: 0, sel: { f: [
+      9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008, 9009, 9010, 9011, 9012, 9013, 9014, 9015,
+      9016, 9017, 9018, 9019, 9020, 9021, 9022, 9023, 9024, 9025, 9026, 9027, 9028, 9029, 9030, 9031,
+      9032, 9033, 9034, 9035, 9036, 9037, 9038, 9039, 9040, 9041,
+    ] } }],
   ['loft', {
-    id: 7000, lados: 'ladosTubo',
+    id: 11000, lados: 'ladosTubo',
     secoes: [
-        { pos: [0.1, 1.01, -0.88], raio: 0 },
-        { pos: [0.165, 0.896, -0.66], raio: 'faixaR' },
-        { pos: [0.215, 0.855, -0.34], raio: 'faixaR' },
-        { pos: [0.25, 0.82, 0], raio: 'faixaR' },
-        { pos: [0.235, 0.841, 0.34], raio: 'faixaR' },
-        { pos: [0.18, 0.929, 0.66], raio: 'faixaR' },
-        { pos: [0.095, 0.945, 0.92], raio: 0 },
+      { pos: [0.105, 0.7, -0.25], raio: 0 },
+      { pos: [0.105, 0.672, -0.31], raio: 'bracoRa' },
+      { pos: [0.1048, 0.64, -0.4], raio: 'bracoRb' },
+      { pos: [0.104, 0.5, -0.86], raio: 'bracoRb' },
+      { pos: [0.1035, 0.478, -0.93], raio: 'bracoRc' },
+      { pos: [0.103, 0.462, -1.01], raio: 'bracoRc' },
+      { pos: [0.1028, 0.452, -1.045], raio: 0 },
     ],
   }],
-  // espelho da faixa
-  ['espelha', { eixo: 'x', pos: 0, sel: { f: [7000, 7001, 7002, 7003, 7004, 7005, 7006, 7007, 7008, 7009, 7010, 7011, 7012, 7013, 7014, 7015, 7016, 7017, 7018, 7019, 7020, 7021, 7022, 7023, 7024, 7025, 7026, 7027, 7028, 7029, 7030, 7031, 7032, 7033, 7034, 7035] } }],
-  // FAROL — lente no bico (loft curto em +Z)
+  ['espelha', { eixo: 'x', pos: 0, sel: { f: [
+      11000, 11001, 11002, 11003, 11004, 11005, 11006, 11007, 11008, 11009, 11010, 11011, 11012, 11013,
+      11014, 11015, 11016, 11017, 11018, 11019, 11020, 11021, 11022, 11023, 11024, 11025, 11026, 11027,
+      11028, 11029, 11030, 11031, 11032, 11033, 11034, 11035,
+    ] } }],
   ['loft', {
-    id: 9000, lados: 'ladosFarol',
+    id: 13000, lados: 'ladosTubo',
     secoes: [
-        { pos: [0, 0.905, 1.055], raio: 0 },
-        { pos: [0, 0.893, 1.105], raio: 'farolR1' },
-        { pos: [0, 0.878, 1.15], raio: 'farolR2' },
-        { pos: [0, 0.866, 1.185], raio: 0 },
+      { pos: [0.118, 0.61, -0.52], raio: 0 },
+      { pos: [0.117, 0.638, -0.534], raio: 'amortRa' },
+      { pos: [0.112, 0.73, -0.58], raio: 'amortRb' },
+      { pos: [0.098, 0.85, -0.64], raio: 'amortRb' },
+      { pos: [0.093, 0.882, -0.656], raio: 'amortRa' },
+      { pos: [0.091, 0.898, -0.664], raio: 0 },
     ],
   }],
-  // GUIDÃO — loft com caminho em +X, SEM espelho. ATENÇÃO (medido, não suposto): isto NÃO
-  //   garante simetria. O frame do loft vem de TRANSPORTE PARALELO propagado a partir da
-  //   PRIMEIRA seção, então ele depende do HISTÓRICO do caminho — e aqui os polos estão mais
-  //   baixos/atrás que os anéis, logo a tangente das pontas não é ±X puro e as duas metades
-  //   saem giradas uma em relação à outra. Medido: os 12 vértices de anel deste passo (10001..
-  //   10012) são os ÚNICOS 12 da peça inteira sem par espelhado exato — desvio máx 4.45e-3.
-  //   As rodas (passos 0/1) escapam porque TODAS as seções delas têm o mesmo y/z, então a
-  //   tangente é (1,0,0) constante. A saída certa seria modelar meio guidão e usar `espelha`.
+  ['espelha', { eixo: 'x', pos: 0, sel: { f: [
+      13000, 13001, 13002, 13003, 13004, 13005, 13006, 13007, 13008, 13009, 13010, 13011, 13012, 13013,
+      13014, 13015, 13016, 13017, 13018, 13019, 13020, 13021, 13022, 13023, 13024, 13025, 13026, 13027,
+      13028, 13029,
+    ] } }],
   ['loft', {
-    id: 10000, lados: 'ladosTubo',
+    id: 15000, lados: 'ladosTubo',
     secoes: [
-        { pos: [-0.28, 0.995, 0.38], raio: 0 },
-        { pos: [-0.23, 1.055, 0.4], raio: 'guidaoR' },
-        { pos: [0.23, 1.055, 0.4], raio: 'guidaoR' },
-        { pos: [0.28, 0.995, 0.38], raio: 0 },
+      { pos: [0.028, 0.985, 0.748], raio: 0 },
+      { pos: [0.055, 0.988, 0.745], raio: 'guidaoR' },
+      { pos: [0.14, 0.994, 0.732], raio: 'guidaoR' },
+      { pos: [0.216, 0.997, 0.706], raio: 'guidaoR' },
+      { pos: [0.252, 0.998, 0.676], raio: 'punhoR' },
+      { pos: [0.29, 0.999, 0.628], raio: 'punhoR' },
+      { pos: [0.302, 0.999, 0.612], raio: 'flangeR' },
+      { pos: [0.309, 0.999, 0.603], raio: 0 },
     ],
   }],
-  // CÚPULA (para-brisa) — lâmina fina subindo do deck; material transparente
+  ['espelha', { eixo: 'x', pos: 0, sel: { f: [
+      15000, 15001, 15002, 15003, 15004, 15005, 15006, 15007, 15008, 15009, 15010, 15011, 15012, 15013,
+      15014, 15015, 15016, 15017, 15018, 15019, 15020, 15021, 15022, 15023, 15024, 15025, 15026, 15027,
+      15028, 15029, 15030, 15031, 15032, 15033, 15034, 15035, 15036, 15037, 15038, 15039, 15040, 15041,
+    ] } }],
   ['loft', {
-    id: 11000, lados: 'ladosChapa',
+    id: 17000, lados: 'ladosTubo',
     secoes: [
-        { pos: [0, 1, 0.46], raio: 0 },
-        { pos: [0, 1.06, 0.56], contorno: [[0.115, 0.018], [-0.115, 0.018], [-0.115, -0.018], [0.115, -0.018]] },
-        { pos: [0, 1.1, 0.68], contorno: [[0.085, 0.016], [-0.085, 0.016], [-0.085, -0.016], [0.085, -0.016]] },
-        { pos: [0, 1.08, 0.76], raio: 0 },
+      { pos: [0.092, 0.905, 0.735], raio: 0 },
+      { pos: [0.09, 0.93, 0.76], raio: 'suporteR' },
+      { pos: [0.082, 0.978, 0.812], raio: 'suporteR' },
+      { pos: [0.075, 0.995, 0.836], raio: 0 },
     ],
   }],
-
-  /* ───── atributos: cor, sombreado, material, partes e colisão. Vêm todos DEPOIS
-     da geometria de propósito — assim mexer numa cor não renumera face nenhuma. ───── */
-  // borracha dos dois pneus (2 tons por paridade — o detector-de-banding cobra)
-  ['pincel', { modo: 'face', faces: [32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100, 102, 104, 106, 108, 110, 1032, 1034, 1036, 1038, 1040, 1042, 1044, 1046, 1048, 1050, 1052, 1054, 1056, 1058, 1060, 1062, 1064, 1066, 1068, 1070, 1072, 1074, 1076, 1078, 1080, 1082, 1084, 1086, 1088, 1090, 1092, 1094, 1096, 1098, 1100, 1102, 1104, 1106, 1108, 1110], cor: '#2e222f' }],
-  ['pincel', { modo: 'face', faces: [33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63, 65, 67, 69, 71, 73, 75, 77, 79, 81, 83, 85, 87, 89, 91, 93, 95, 97, 99, 101, 103, 105, 107, 109, 111, 1033, 1035, 1037, 1039, 1041, 1043, 1045, 1047, 1049, 1051, 1053, 1055, 1057, 1059, 1061, 1063, 1065, 1067, 1069, 1071, 1073, 1075, 1077, 1079, 1081, 1083, 1085, 1087, 1089, 1091, 1093, 1095, 1097, 1099, 1101, 1103, 1105, 1107, 1109, 1111], cor: '#3e3546' }],
-  // disco do aro
-  ['pincel', { modo: 'face', faces: [16, 18, 20, 22, 24, 26, 28, 30, 112, 114, 116, 118, 120, 122, 124, 126, 1016, 1018, 1020, 1022, 1024, 1026, 1028, 1030, 1112, 1114, 1116, 1118, 1120, 1122, 1124, 1126], cor: '#625565' }],
-  ['pincel', { modo: 'face', faces: [17, 19, 21, 23, 25, 27, 29, 31, 113, 115, 117, 119, 121, 123, 125, 127, 1017, 1019, 1021, 1023, 1025, 1027, 1029, 1031, 1113, 1115, 1117, 1119, 1121, 1123, 1125, 1127], cor: '#7f708a' }],
-  // cubo da roda — acende (material neon)
-  ['pincel', { modo: 'face', faces: [0, 2, 4, 6, 8, 10, 12, 14, 128, 130, 132, 134, 136, 138, 140, 142, 1000, 1002, 1004, 1006, 1008, 1010, 1012, 1014, 1128, 1130, 1132, 1134, 1136, 1138, 1140, 1142], cor: '#30e1b9' }],
-  ['pincel', { modo: 'face', faces: [1, 3, 5, 7, 9, 11, 13, 15, 129, 131, 133, 135, 137, 139, 141, 143, 1001, 1003, 1005, 1007, 1009, 1011, 1013, 1015, 1129, 1131, 1133, 1135, 1137, 1139, 1141, 1143], cor: '#8ff8e2' }],
-  // DECK do capô (faixa de cima do contorno) — azul de acento
-  ['pincel', { modo: 'face', faces: [2010, 2040, 2050, 2060, 2070], cor: '#4d65b4' }],
-  ['pincel', { modo: 'face', faces: [2011, 2019, 2041, 2049, 2051, 2059, 2061, 2069, 2071, 2079], cor: '#4d9be6' }],
-  // BANCO — a mesma faixa de cima, mas escura nos dois segmentos do assento
-  ['pincel', { modo: 'face', faces: [2020, 2030], cor: '#2e222f' }],
-  ['pincel', { modo: 'face', faces: [2021, 2029, 2031, 2039], cor: '#3e3546' }],
-  // FLANCO
-  ['pincel', { modo: 'face', faces: [2012, 2018, 2022, 2028, 2032, 2038, 2042, 2048, 2052, 2058, 2062, 2068, 2072, 2078], cor: '#323353' }],
-  ['pincel', { modo: 'face', faces: [2013, 2017, 2023, 2027, 2033, 2037, 2043, 2047, 2053, 2057, 2063, 2067, 2073, 2077], cor: '#484a77' }],
-  // VENTRE (escuro — faz a moto parecer mais baixa)
-  ['pincel', { modo: 'face', faces: [2014, 2016, 2024, 2026, 2034, 2036, 2044, 2046, 2054, 2056, 2064, 2066, 2074, 2076], cor: '#2e222f' }],
-  ['pincel', { modo: 'face', faces: [2015, 2025, 2035, 2045, 2055, 2065, 2075], cor: '#3e3546' }],
-  // leque do bico
-  ['pincel', { modo: 'face', faces: [2080, 2082, 2084, 2086, 2088], cor: '#4d9be6' }],
-  ['pincel', { modo: 'face', faces: [2081, 2083, 2085, 2087, 2089], cor: '#8fd3ff' }],
-  // lanterna traseira (leque do polo da rabeta)
-  ['pincel', { modo: 'face', faces: [2000, 2002, 2004, 2006, 2008], cor: '#c32454' }],
-  ['pincel', { modo: 'face', faces: [2001, 2003, 2005, 2007, 2009], cor: '#f04f78' }],
-  // garfo, braço e guidão — metal
-  ['pincel', { modo: 'face', faces: [3000, 3002, 3004, 3006, 3008, 3010, 4000, 4002, 4004, 4006, 4008, 4010, 5000, 5002, 5004, 5006, 5008, 5010, 6000, 6002, 6004, 6006, 6008, 6010, 10000, 10002, 10004, 10006, 10008, 10010, 10012, 10014, 10016], cor: '#7f708a' }],
-  ['pincel', { modo: 'face', faces: [3001, 3003, 3005, 3007, 3009, 3011, 4001, 4003, 4005, 4007, 4009, 4011, 5001, 5003, 5005, 5007, 5009, 5011, 6001, 6003, 6005, 6007, 6009, 6011, 10001, 10003, 10005, 10007, 10009, 10011, 10013, 10015, 10017], cor: '#9babb2' }],
-  // faixa emissiva do flanco
-  ['pincel', { modo: 'face', faces: [7000, 7002, 7004, 7006, 7008, 7010, 7012, 7014, 7016, 7018, 7020, 7022, 7024, 7026, 7028, 7030, 7032, 7034, 8000, 8002, 8004, 8006, 8008, 8010, 8012, 8014, 8016, 8018, 8020, 8022, 8024, 8026, 8028, 8030, 8032, 8034], cor: '#30e1b9' }],
-  ['pincel', { modo: 'face', faces: [7001, 7003, 7005, 7007, 7009, 7011, 7013, 7015, 7017, 7019, 7021, 7023, 7025, 7027, 7029, 7031, 7033, 7035, 8001, 8003, 8005, 8007, 8009, 8011, 8013, 8015, 8017, 8019, 8021, 8023, 8025, 8027, 8029, 8031, 8033, 8035], cor: '#8ff8e2' }],
-  // lente do farol (âmbar — contrasta com o neon ciano)
-  ['pincel', { modo: 'face', faces: [9000, 9002, 9004, 9006, 9008, 9010, 9012, 9014, 9016, 9018, 9020, 9022, 9024, 9026, 9028], cor: '#f9c22b' }],
-  ['pincel', { modo: 'face', faces: [9001, 9003, 9005, 9007, 9009, 9011, 9013, 9015, 9017, 9019, 9021, 9023, 9025, 9027, 9029], cor: '#fbb954' }],
-  // cúpula (para-brisa) — vidro
-  ['pincel', { modo: 'face', faces: [11000, 11002, 11004, 11006, 11008, 11010], cor: '#8fd3ff' }],
-  ['pincel', { modo: 'face', faces: [11001, 11003, 11005, 11007, 11009, 11011], cor: '#c7dcd0' }],
-  // macio no que é redondo (pneu, casco, tubos); os leques de polo ficam CHAPADOS, como as tampas do cilindro
-  ['liso', { faces: [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 1032, 1033, 1034, 1035, 1036, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059, 1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071, 1072, 1073, 1074, 1075, 1076, 1077, 1078, 1079, 1080, 1081, 1082, 1083, 1084, 1085, 1086, 1087, 1088, 1089, 1090, 1091, 1092, 1093, 1094, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 7006, 7007, 7008, 7009, 7010, 7011, 7012, 7013, 7014, 7015, 7016, 7017, 7018, 7019, 7020, 7021, 7022, 7023, 7024, 7025, 7026, 7027, 7028, 7029, 8006, 8007, 8008, 8009, 8010, 8011, 8012, 8013, 8014, 8015, 8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023, 8024, 8025, 8026, 8027, 8028, 8029, 9010, 9011, 9012, 9013, 9014, 9015, 9016, 9017, 9018, 9019, 10006, 10007, 10008, 10009, 10010, 10011] }],
-  // casco lacado (especular espalhado)
-  ['material', { faces: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089], usa: 'laca' }],
-  // metal polido
-  ['material', { faces: [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011, 4000, 4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008, 4009, 4010, 4011, 5000, 5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009, 5010, 5011, 6000, 6001, 6002, 6003, 6004, 6005, 6006, 6007, 6008, 6009, 6010, 6011, 10000, 10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012, 10013, 10014, 10015, 10016, 10017], usa: 'cromo' }],
-  // faixas do flanco + cubos das rodas ACENDEM
-  ['material', { faces: [7000, 7001, 7002, 7003, 7004, 7005, 7006, 7007, 7008, 7009, 7010, 7011, 7012, 7013, 7014, 7015, 7016, 7017, 7018, 7019, 7020, 7021, 7022, 7023, 7024, 7025, 7026, 7027, 7028, 7029, 7030, 7031, 7032, 7033, 7034, 7035, 8000, 8001, 8002, 8003, 8004, 8005, 8006, 8007, 8008, 8009, 8010, 8011, 8012, 8013, 8014, 8015, 8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023, 8024, 8025, 8026, 8027, 8028, 8029, 8030, 8031, 8032, 8033, 8034, 8035, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1136, 1137, 1138, 1139, 1140, 1141, 1142, 1143], usa: 'neon' }],
-  // farol
-  ['material', { faces: [9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008, 9009, 9010, 9011, 9012, 9013, 9014, 9015, 9016, 9017, 9018, 9019, 9020, 9021, 9022, 9023, 9024, 9025, 9026, 9027, 9028, 9029], usa: 'farol' }],
-  // lanterna traseira
-  ['material', { faces: [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009], usa: 'lanterna' }],
-  // cúpula transparente (passada extra de mistura)
-  ['material', { faces: [11000, 11001, 11002, 11003, 11004, 11005, 11006, 11007, 11008, 11009, 11010, 11011], usa: 'vidro' }],
-  // pivô no eixo — pronta pra girar
-  ['parte', { nome: 'rodaDianteira', faces: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143], pivo: [0, 'rodaFY', 'rodaFZ'] }],
-  ['parte', { nome: 'rodaTraseira', faces: [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030, 1031, 1032, 1033, 1034, 1035, 1036, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059, 1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071, 1072, 1073, 1074, 1075, 1076, 1077, 1078, 1079, 1080, 1081, 1082, 1083, 1084, 1085, 1086, 1087, 1088, 1089, 1090, 1091, 1092, 1093, 1094, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120, 1121, 1122, 1123, 1124, 1125, 1126, 1127, 1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1136, 1137, 1138, 1139, 1140, 1141, 1142, 1143], pivo: [0, 'rodaTY', 'rodaTZ'] }],
-  ['parte', { nome: 'carenagem', faces: [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 11000, 11001, 11002, 11003, 11004, 11005, 11006, 11007, 11008, 11009, 11010, 11011] }],
-  ['parte', { nome: 'suspensao', faces: [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011, 4000, 4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008, 4009, 4010, 4011, 5000, 5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009, 5010, 5011, 6000, 6001, 6002, 6003, 6004, 6005, 6006, 6007, 6008, 6009, 6010, 6011] }],
-  ['parte', { nome: 'luzes', faces: [7000, 7001, 7002, 7003, 7004, 7005, 7006, 7007, 7008, 7009, 7010, 7011, 7012, 7013, 7014, 7015, 7016, 7017, 7018, 7019, 7020, 7021, 7022, 7023, 7024, 7025, 7026, 7027, 7028, 7029, 7030, 7031, 7032, 7033, 7034, 7035, 8000, 8001, 8002, 8003, 8004, 8005, 8006, 8007, 8008, 8009, 8010, 8011, 8012, 8013, 8014, 8015, 8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023, 8024, 8025, 8026, 8027, 8028, 8029, 8030, 8031, 8032, 8033, 8034, 8035, 9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008, 9009, 9010, 9011, 9012, 9013, 9014, 9015, 9016, 9017, 9018, 9019, 9020, 9021, 9022, 9023, 9024, 9025, 9026, 9027, 9028, 9029] }],
-  // rodas + carenagem entram na colisão
-  ['solido', { faces: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030, 1031, 1032, 1033, 1034, 1035, 1036, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059, 1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071, 1072, 1073, 1074, 1075, 1076, 1077, 1078, 1079, 1080, 1081, 1082, 1083, 1084, 1085, 1086, 1087, 1088, 1089, 1090, 1091, 1092, 1093, 1094, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120, 1121, 1122, 1123, 1124, 1125, 1126, 1127, 1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1136, 1137, 1138, 1139, 1140, 1141, 1142, 1143, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089] }],
+  ['espelha', { eixo: 'x', pos: 0, sel: { f: [
+      17000, 17001, 17002, 17003, 17004, 17005, 17006, 17007, 17008, 17009, 17010, 17011, 17012, 17013,
+      17014, 17015, 17016, 17017,
+    ] } }],
+  ['loft', {
+    id: 19000, lados: 'ladosFarol',
+    secoes: [
+      { pos: [0, 'farolY0', 'farolZ0'], raio: 0 },
+      { pos: [0, 'farolY1', 'farolZ1'], raio: 'farolR1' },
+      { pos: [0, 'farolY2', 'farolZ2'], raio: 'farolR2' },
+      { pos: [0, 'farolY3', 'farolZ3'], raio: 'farolR3' },
+      { pos: [0, 'farolY4', 'farolZ4'], raio: 'farolR4' },
+      { pos: [0, 'farolY5', 'farolZ5'], raio: 'farolR5' },
+      { pos: [0, 'farolY6', 'farolZ6'], raio: 0 },
+    ],
+  }],
+  ['loft', {
+    id: 20000, lados: 'ladosChapa',
+    secoes: [
+      { pos: [0, 0.7772, 0.5888], raio: 0 },
+      { pos: [0, 0.8132, 0.6248], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
+      { pos: [0, 0.8729, 0.707], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
+      { pos: [0, 0.9274, 0.849], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
+      { pos: [0, 0.9333, 1.0176], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
+      { pos: [0, 0.8888, 1.163], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
+      { pos: [0, 0.8243, 1.2624], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
+      { pos: [0, 0.7896, 1.2996], raio: 0 },
+    ],
+  }],
+  ['loft', {
+    id: 21000, lados: 'ladosTubo',
+    secoes: [
+      { pos: [0.1354, 1.0026, -0.98], raio: 0 },
+      { pos: [0.1735, 0.9086, -0.68], raio: 'faixaR' },
+      { pos: [0.2329, 0.7896, -0.36], raio: 'faixaR' },
+      { pos: [0.2566, 0.7905, -0.06], raio: 'faixaR' },
+      { pos: [0.2484, 0.7967, 0.22], raio: 'faixaR' },
+      { pos: [0.1855, 0.8392, 0.5], raio: 'faixaR' },
+      { pos: [0.116, 0.8837, 0.66], raio: 0 },
+    ],
+  }],
+  ['espelha', { eixo: 'x', pos: 0, sel: { f: [
+      21000, 21001, 21002, 21003, 21004, 21005, 21006, 21007, 21008, 21009, 21010, 21011, 21012, 21013,
+      21014, 21015, 21016, 21017, 21018, 21019, 21020, 21021, 21022, 21023, 21024, 21025, 21026, 21027,
+      21028, 21029, 21030, 21031, 21032, 21033, 21034, 21035,
+    ] } }],
+  ['pincel', { modo: 'face', faces: [
+    80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100, 102, 104, 106, 108, 110, 112, 114, 116, 118, 120,
+    122, 124, 126, 128, 130, 132, 134, 136, 138, 140, 142, 144, 146, 148, 150, 152, 154, 156, 158,
+    160, 162, 164, 166, 168, 170, 172, 174, 176, 178, 180, 182, 184, 186, 188, 190, 192, 194, 196,
+    198, 200, 202, 204, 206, 208, 210, 212, 214, 216, 218, 220, 222, 224, 226, 228, 230, 232, 234,
+    236, 238, 240, 242, 244, 246, 248, 250, 252, 254, 256, 258, 260, 262, 264, 266, 268, 270, 272,
+    274, 276, 278, 280, 282, 284, 286, 288, 290, 292, 294, 296, 298, 1080, 1082, 1084, 1086, 1088,
+    1090, 1092, 1094, 1096, 1098, 1100, 1102, 1104, 1106, 1108, 1110, 1112, 1114, 1116, 1118, 1120,
+    1122, 1124, 1126, 1128, 1130, 1132, 1134, 1136, 1138, 1140, 1142, 1144, 1146, 1148, 1150, 1152,
+    1154, 1156, 1158, 1160, 1162, 1164, 1166, 1168, 1170, 1172, 1174, 1176, 1178, 1180, 1182, 1184,
+    1186, 1188, 1190, 1192, 1194, 1196, 1198, 1200, 1202, 1204, 1206, 1208, 1210, 1212, 1214, 1216,
+    1218, 1220, 1222, 1224, 1226, 1228, 1230, 1232, 1234, 1236, 1238, 1240, 1242, 1244, 1246, 1248,
+    1250, 1252, 1254, 1256, 1258, 1260, 1262, 1264, 1266, 1268, 1270, 1272, 1274, 1276, 1278, 1280,
+    1282, 1284, 1286, 1288, 1290, 1292, 1294, 1296, 1298, 2018, 2030, 2042, 2054, 2066, 2078, 2090,
+    2102, 2114, 2126, 3000, 3002, 3004, 3006, 3008, 3010, 3012, 3014, 3016, 3018, 3020, 3022, 3024,
+    15018, 15020, 15022, 15024, 15026, 15028, 16018, 16020, 16022, 16024, 16026, 16028, 19000, 19002,
+    19004, 19006, 19008, 19010, 19012, 19014, 19016, 19018, 19020, 19022, 19024, 19026, 19028,
+  ], cor: '#2e222f' }],
+  ['pincel', { modo: 'face', faces: [
+    23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 81, 83, 85, 87, 89, 91, 93, 95, 97, 99, 101, 103, 105,
+    107, 109, 111, 113, 115, 117, 119, 121, 123, 125, 127, 129, 131, 133, 135, 137, 139, 141, 143,
+    145, 147, 149, 151, 153, 155, 157, 159, 161, 163, 165, 167, 169, 171, 173, 175, 177, 179, 181,
+    183, 185, 187, 189, 191, 193, 195, 197, 199, 201, 203, 205, 207, 209, 211, 213, 215, 217, 219,
+    221, 223, 225, 227, 229, 231, 233, 235, 237, 239, 241, 243, 245, 247, 249, 251, 253, 255, 257,
+    259, 261, 263, 265, 267, 269, 271, 273, 275, 277, 279, 281, 283, 285, 287, 289, 291, 293, 295,
+    297, 299, 323, 327, 331, 335, 339, 343, 347, 351, 355, 359, 1023, 1027, 1031, 1035, 1039, 1043,
+    1047, 1051, 1055, 1059, 1081, 1083, 1085, 1087, 1089, 1091, 1093, 1095, 1097, 1099, 1101, 1103,
+    1105, 1107, 1109, 1111, 1113, 1115, 1117, 1119, 1121, 1123, 1125, 1127, 1129, 1131, 1133, 1135,
+    1137, 1139, 1141, 1143, 1145, 1147, 1149, 1151, 1153, 1155, 1157, 1159, 1161, 1163, 1165, 1167,
+    1169, 1171, 1173, 1175, 1177, 1179, 1181, 1183, 1185, 1187, 1189, 1191, 1193, 1195, 1197, 1199,
+    1201, 1203, 1205, 1207, 1209, 1211, 1213, 1215, 1217, 1219, 1221, 1223, 1225, 1227, 1229, 1231,
+    1233, 1235, 1237, 1239, 1241, 1243, 1245, 1247, 1249, 1251, 1253, 1255, 1257, 1259, 1261, 1263,
+    1265, 1267, 1269, 1271, 1273, 1275, 1277, 1279, 1281, 1283, 1285, 1287, 1289, 1291, 1293, 1295,
+    1297, 1299, 1323, 1327, 1331, 1335, 1339, 1343, 1347, 1351, 1355, 1359, 2017, 2019, 2029, 2031,
+    2041, 2043, 2053, 2055, 2065, 2067, 2077, 2079, 2089, 2091, 2101, 2103, 2113, 2115, 2125, 2127,
+    3001, 3003, 3005, 3007, 3009, 3011, 3013, 3015, 3017, 3019, 3021, 3023, 3025, 15019, 15021,
+    15023, 15025, 15027, 15029, 16019, 16021, 16023, 16025, 16027, 16029, 19001, 19003, 19005, 19007,
+    19009, 19011, 19013, 19015, 19017, 19019, 19021, 19023, 19025, 19027, 19029,
+  ], cor: '#3e3546' }],
+  ['pincel', { modo: 'face', faces: [
+    60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 300, 302, 304, 306, 308, 310, 312, 314, 316, 318, 1060,
+    1062, 1064, 1066, 1068, 1070, 1072, 1074, 1076, 1078, 1300, 1302, 1304, 1306, 1308, 1310, 1312,
+    1314, 1316, 1318, 9012, 9014, 9016, 9018, 9020, 9022, 10012, 10014, 10016, 10018, 10020, 10022,
+    13000, 13002, 13004, 13006, 13008, 13010, 14000, 14002, 14004, 14006, 14008, 14010, 19030, 19032,
+    19034, 19036, 19038,
+  ], cor: '#9babb2' }],
+  ['pincel', { modo: 'face', faces: [
+    21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 63, 65, 67, 69, 71, 73, 75, 77, 79, 301, 303, 305,
+    307, 309, 311, 313, 315, 317, 319, 321, 325, 329, 333, 337, 341, 345, 349, 353, 357, 1021, 1025,
+    1029, 1033, 1037, 1041, 1045, 1049, 1053, 1057, 1061, 1063, 1065, 1067, 1069, 1071, 1073, 1075,
+    1077, 1079, 1301, 1303, 1305, 1307, 1309, 1311, 1313, 1315, 1317, 1319, 1321, 1325, 1329, 1333,
+    1337, 1341, 1345, 1349, 1353, 1357, 9013, 9015, 9017, 9019, 9021, 9023, 10013, 10015, 10017,
+    10019, 10021, 10023, 13001, 13003, 13005, 13007, 13009, 13011, 14001, 14003, 14005, 14007, 14009,
+    14011, 19031, 19033, 19035, 19037, 19039,
+  ], cor: '#c7dcd0' }],
+  ['pincel', { modo: 'face', faces: [
+    20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 320, 324, 328, 332, 336, 340, 344, 348, 352, 356, 1020,
+    1024, 1028, 1032, 1036, 1040, 1044, 1048, 1052, 1056, 1320, 1324, 1328, 1332, 1336, 1340, 1344,
+    1348, 1352, 1356,
+  ], cor: '#3e3546' }],
+  ['pincel', { modo: 'face', faces: [
+    22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 322, 326, 330, 334, 338, 342, 346, 350, 354, 358, 1022,
+    1026, 1030, 1034, 1038, 1042, 1046, 1050, 1054, 1058, 1322, 1326, 1330, 1334, 1338, 1342, 1346,
+    1350, 1354, 1358,
+  ], cor: '#625565' }],
+  ['pincel', { modo: 'face', faces: [
+    0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 360, 362, 364, 366, 368, 370, 372, 374, 376, 378, 1000, 1002,
+    1004, 1006, 1008, 1010, 1012, 1014, 1016, 1018, 1360, 1362, 1364, 1366, 1368, 1370, 1372, 1374,
+    1376, 1378, 15030, 15032, 15034, 15036, 15038, 15040, 16030, 16032, 16034, 16036, 16038, 16040,
+    21000, 21002, 21004, 21006, 21008, 21010, 21012, 21014, 21016, 21018, 21020, 21022, 21024, 21026,
+    21028, 21030, 21032, 21034, 22000, 22002, 22004, 22006, 22008, 22010, 22012, 22014, 22016, 22018,
+    22020, 22022, 22024, 22026, 22028, 22030, 22032, 22034,
+  ], cor: '#30e1b9' }],
+  ['pincel', { modo: 'face', faces: [
+    1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 361, 363, 365, 367, 369, 371, 373, 375, 377, 379, 1001, 1003,
+    1005, 1007, 1009, 1011, 1013, 1015, 1017, 1019, 1361, 1363, 1365, 1367, 1369, 1371, 1373, 1375,
+    1377, 1379, 15031, 15033, 15035, 15037, 15039, 15041, 16031, 16033, 16035, 16037, 16039, 16041,
+    21001, 21003, 21005, 21007, 21009, 21011, 21013, 21015, 21017, 21019, 21021, 21023, 21025, 21027,
+    21029, 21031, 21033, 21035, 22001, 22003, 22005, 22007, 22009, 22011, 22013, 22015, 22017, 22019,
+    22021, 22023, 22025, 22027, 22029, 22031, 22033, 22035,
+  ], cor: '#8ff8e2' }],
+  ['pincel', { modo: 'face', faces: [
+    2012, 2024, 2036, 2048, 2060, 2072, 2084, 2096, 2108, 2120, 8000, 8010, 8020, 8030, 20000, 20002,
+    20004, 20006, 20008, 20010, 20012, 20014, 20016, 20018, 20020, 20022, 20024, 20026,
+  ], cor: '#4d65b4' }],
+  ['pincel', { modo: 'face', faces: [
+    2013, 2023, 2025, 2035, 2037, 2047, 2049, 2059, 2061, 2071, 2073, 2083, 2085, 2095, 2097, 2107,
+    2109, 2119, 2121, 2131, 8001, 8009, 8011, 8019, 8021, 8029, 8031, 8039,
+  ], cor: '#4d9be6' }],
+  ['pincel', { modo: 'face', faces: [
+    2014, 2016, 2020, 2022, 2026, 2028, 2032, 2034, 2038, 2040, 2044, 2046, 2050, 2052, 2056, 2058,
+    2062, 2064, 2068, 2070, 2074, 2076, 2080, 2082, 2086, 2088, 2092, 2094, 2098, 2100, 2104, 2106,
+    2110, 2112, 2116, 2118, 2122, 2124, 2128, 2130, 8002, 8004, 8006, 8008, 8012, 8014, 8016, 8018,
+    8022, 8024, 8026, 8028, 8032, 8034, 8036, 8038,
+  ], cor: '#323353' }],
+  ['pincel', { modo: 'face', faces: [
+    2015, 2021, 2027, 2033, 2039, 2045, 2051, 2057, 2063, 2069, 2075, 2081, 2087, 2093, 2099, 2105,
+    2111, 2117, 2123, 2129, 8003, 8005, 8007, 8013, 8015, 8017, 8023, 8025, 8027, 8033, 8035, 8037,
+  ], cor: '#484a77' }],
+  ['pincel', { modo: 'face', faces: [
+    2000, 2002, 2004, 2006, 2008, 2010, 13012, 13014, 13016, 13018, 13020, 13022, 13024, 13026,
+    13028, 14012, 14014, 14016, 14018, 14020, 14022, 14024, 14026, 14028,
+  ], cor: '#c32454' }],
+  ['pincel', { modo: 'face', faces: [
+    2001, 2003, 2005, 2007, 2009, 2011, 13013, 13015, 13017, 13019, 13021, 13023, 13025, 13027,
+    13029, 14013, 14015, 14017, 14019, 14021, 14023, 14025, 14027, 14029,
+  ], cor: '#f04f78' }],
+  ['pincel', { modo: 'face', faces: [2132, 2134, 2136, 2138, 2140, 2142], cor: '#4d9be6' }],
+  ['pincel', { modo: 'face', faces: [2133, 2135, 2137, 2139, 2141, 2143], cor: '#8fd3ff' }],
+  ['pincel', { modo: 'face', faces: [
+    5000, 5002, 5004, 5006, 5008, 5010, 5012, 5014, 5016, 5018, 5020, 5022, 5024, 9000, 9002, 9004,
+    9006, 9008, 9010, 10000, 10002, 10004, 10006, 10008, 10010, 11012, 11014, 11016, 11018, 11020,
+    11022, 12012, 12014, 12016, 12018, 12020, 12022, 15000, 15002, 15004, 15006, 15008, 15010, 15012,
+    15014, 15016, 16000, 16002, 16004, 16006, 16008, 16010, 16012, 16014, 16016, 17000, 17002, 17004,
+    17006, 17008, 17010, 17012, 17014, 17016, 18000, 18002, 18004, 18006, 18008, 18010, 18012, 18014,
+    18016,
+  ], cor: '#7f708a' }],
+  ['pincel', { modo: 'face', faces: [
+    5001, 5003, 5005, 5007, 5009, 5011, 5013, 5015, 5017, 5019, 5021, 5023, 5025, 9001, 9003, 9005,
+    9007, 9009, 9011, 10001, 10003, 10005, 10007, 10009, 10011, 11013, 11015, 11017, 11019, 11021,
+    11023, 12013, 12015, 12017, 12019, 12021, 12023, 15001, 15003, 15005, 15007, 15009, 15011, 15013,
+    15015, 15017, 16001, 16003, 16005, 16007, 16009, 16011, 16013, 16015, 16017, 17001, 17003, 17005,
+    17007, 17009, 17011, 17013, 17015, 17017, 18001, 18003, 18005, 18007, 18009, 18011, 18013, 18015,
+    18017, 20001, 20003, 20005, 20007, 20009, 20011, 20013, 20015, 20017, 20019, 20021, 20023, 20025,
+    20027,
+  ], cor: '#9babb2' }],
+  ['pincel', { modo: 'face', faces: [
+    9024, 9026, 9028, 9030, 9032, 9034, 9036, 9038, 9040, 10024, 10026, 10028, 10030, 10032, 10034,
+    10036, 10038, 10040, 11000, 11002, 11004, 11006, 11008, 11010, 11024, 11026, 11028, 11030, 11032,
+    11034, 12000, 12002, 12004, 12006, 12008, 12010, 12024, 12026, 12028, 12030, 12032, 12034,
+  ], cor: '#7f708a' }],
+  ['pincel', { modo: 'face', faces: [
+    9025, 9027, 9029, 9031, 9033, 9035, 9037, 9039, 9041, 10025, 10027, 10029, 10031, 10033, 10035,
+    10037, 10039, 10041, 11001, 11003, 11005, 11007, 11009, 11011, 11025, 11027, 11029, 11031, 11033,
+    11035, 12001, 12003, 12005, 12007, 12009, 12011, 12025, 12027, 12029, 12031, 12033, 12035,
+  ], cor: '#625565' }],
+  ['pincel', { modo: 'face', faces: [19040, 19042, 19044, 19046, 19048, 19050, 19052, 19054, 19056, 19058], cor: '#f9c22b' }],
+  ['pincel', { modo: 'face', faces: [19041, 19043, 19045, 19047, 19049, 19051, 19053, 19055, 19057, 19059], cor: '#fbb954' }],
+  ['liso', { faces: [
+    60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 100, 101, 102,
+    103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121,
+    122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140,
+    141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+    160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178,
+    179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197,
+    198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216,
+    217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235,
+    236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254,
+    255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273,
+    274, 275, 276, 277, 278, 279, 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312,
+    313, 314, 315, 316, 317, 318, 319, 1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069,
+    1070, 1071, 1072, 1073, 1074, 1075, 1076, 1077, 1078, 1079, 1100, 1101, 1102, 1103, 1104, 1105,
+    1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120, 1121,
+    1122, 1123, 1124, 1125, 1126, 1127, 1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1136, 1137,
+    1138, 1139, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1148, 1149, 1150, 1151, 1152, 1153,
+    1154, 1155, 1156, 1157, 1158, 1159, 1160, 1161, 1162, 1163, 1164, 1165, 1166, 1167, 1168, 1169,
+    1170, 1171, 1172, 1173, 1174, 1175, 1176, 1177, 1178, 1179, 1180, 1181, 1182, 1183, 1184, 1185,
+    1186, 1187, 1188, 1189, 1190, 1191, 1192, 1193, 1194, 1195, 1196, 1197, 1198, 1199, 1200, 1201,
+    1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211, 1212, 1213, 1214, 1215, 1216, 1217,
+    1218, 1219, 1220, 1221, 1222, 1223, 1224, 1225, 1226, 1227, 1228, 1229, 1230, 1231, 1232, 1233,
+    1234, 1235, 1236, 1237, 1238, 1239, 1240, 1241, 1242, 1243, 1244, 1245, 1246, 1247, 1248, 1249,
+    1250, 1251, 1252, 1253, 1254, 1255, 1256, 1257, 1258, 1259, 1260, 1261, 1262, 1263, 1264, 1265,
+    1266, 1267, 1268, 1269, 1270, 1271, 1272, 1273, 1274, 1275, 1276, 1277, 1278, 1279, 1300, 1301,
+    1302, 1303, 1304, 1305, 1306, 1307, 1308, 1309, 1310, 1311, 1312, 1313, 1314, 1315, 1316, 1317,
+    1318, 1319, 2012, 2013, 2016, 2017, 2018, 2019, 2020, 2023, 2024, 2025, 2028, 2029, 2030, 2031,
+    2032, 2035, 2036, 2037, 2040, 2041, 2042, 2043, 2044, 2047, 2048, 2049, 2052, 2053, 2054, 2055,
+    2056, 2059, 2060, 2061, 2064, 2065, 2066, 2067, 2068, 2071, 2072, 2073, 2076, 2077, 2078, 2079,
+    2080, 2083, 2084, 2085, 2088, 2089, 2090, 2091, 2092, 2095, 2096, 2097, 2100, 2101, 2102, 2103,
+    2104, 2107, 2108, 2109, 2112, 2113, 2114, 2115, 2116, 2119, 2120, 2121, 2124, 2125, 2126, 2127,
+    2128, 2131, 8010, 8011, 8012, 8013, 8014, 8015, 8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023,
+    8024, 8025, 8026, 8027, 8028, 8029, 9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008, 9009,
+    9010, 9011, 9012, 9013, 9014, 9015, 9016, 9017, 9018, 9019, 9020, 9021, 9022, 9023, 10000, 10001,
+    10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012, 10013, 10014, 10015,
+    10016, 10017, 10018, 10019, 10020, 10021, 10022, 10023, 11012, 11013, 11014, 11015, 11016, 11017,
+    11018, 11019, 11020, 11021, 11022, 11023, 12012, 12013, 12014, 12015, 12016, 12017, 12018, 12019,
+    12020, 12021, 12022, 12023, 13012, 13013, 13014, 13015, 13016, 13017, 13018, 13019, 13020, 13021,
+    13022, 13023, 13024, 13025, 13026, 13027, 13028, 13029, 14012, 14013, 14014, 14015, 14016, 14017,
+    14018, 14019, 14020, 14021, 14022, 14023, 14024, 14025, 14026, 14027, 14028, 14029, 15000, 15001,
+    15002, 15003, 15004, 15005, 15006, 15007, 15008, 15009, 15010, 15011, 15012, 15013, 15014, 15015,
+    15016, 15017, 15018, 15019, 15020, 15021, 15022, 15023, 15024, 15025, 15026, 15027, 15028, 15029,
+    16000, 16001, 16002, 16003, 16004, 16005, 16006, 16007, 16008, 16009, 16010, 16011, 16012, 16013,
+    16014, 16015, 16016, 16017, 16018, 16019, 16020, 16021, 16022, 16023, 16024, 16025, 16026, 16027,
+    16028, 16029, 19010, 19011, 19012, 19013, 19014, 19015, 19016, 19017, 19018, 19019, 19020, 19021,
+    19022, 19023, 19024, 19025, 19026, 19027, 19028, 19029, 20004, 20005, 20006, 20007, 20008, 20009,
+    20010, 20011, 20012, 20013, 20014, 20015, 20016, 20017, 20018, 20019, 20020, 20021, 20022, 20023,
+    21000, 21001, 21002, 21003, 21004, 21005, 21006, 21007, 21008, 21009, 21010, 21011, 21012, 21013,
+    21014, 21015, 21016, 21017, 21018, 21019, 21020, 21021, 21022, 21023, 21024, 21025, 21026, 21027,
+    21028, 21029, 21030, 21031, 21032, 21033, 21034, 21035, 22000, 22001, 22002, 22003, 22004, 22005,
+    22006, 22007, 22008, 22009, 22010, 22011, 22012, 22013, 22014, 22015, 22016, 22017, 22018, 22019,
+    22020, 22021, 22022, 22023, 22024, 22025, 22026, 22027, 22028, 22029, 22030, 22031, 22032, 22033,
+    22034, 22035,
+  ] }],
+  ['material', { faces: [
+    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015,
+    2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031,
+    2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047,
+    2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063,
+    2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079,
+    2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2093, 2094, 2095,
+    2096, 2097, 2098, 2099, 2100, 2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108, 2109, 2110, 2111,
+    2112, 2113, 2114, 2115, 2116, 2117, 2118, 2119, 2120, 2121, 2122, 2123, 2124, 2125, 2126, 2127,
+    2128, 2129, 2130, 2131, 2132, 2133, 2134, 2135, 2136, 2137, 2138, 2139, 2140, 2141, 2142, 2143,
+    3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011, 3012, 3013, 3014, 3015,
+    3016, 3017, 3018, 3019, 3020, 3021, 3022, 3023, 3024, 3025, 8000, 8001, 8002, 8003, 8004, 8005,
+    8006, 8007, 8008, 8009, 8010, 8011, 8012, 8013, 8014, 8015, 8016, 8017, 8018, 8019, 8020, 8021,
+    8022, 8023, 8024, 8025, 8026, 8027, 8028, 8029, 8030, 8031, 8032, 8033, 8034, 8035, 8036, 8037,
+    8038, 8039, 19000, 19001, 19002, 19003, 19004, 19005, 19006, 19007, 19008, 19009, 19010, 19011,
+    19012, 19013, 19014, 19015, 19016, 19017, 19018, 19019, 19020, 19021, 19022, 19023, 19024, 19025,
+    19026, 19027, 19028, 19029, 19030, 19031, 19032, 19033, 19034, 19035, 19036, 19037, 19038, 19039,
+    19040, 19041, 19042, 19043, 19044, 19045, 19046, 19047, 19048, 19049, 19050, 19051, 19052, 19053,
+    19054, 19055, 19056, 19057, 19058, 19059, 20000, 20001, 20002, 20003, 20004, 20005, 20006, 20007,
+    20008, 20009, 20010, 20011, 20012, 20013, 20014, 20015, 20016, 20017, 20018, 20019, 20020, 20021,
+    20022, 20023, 20024, 20025, 20026, 20027,
+  ], usa: 'laca' }],
+  ['material', { faces: [
+    80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102,
+    103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121,
+    122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140,
+    141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+    160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178,
+    179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197,
+    198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216,
+    217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235,
+    236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254,
+    255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273,
+    274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292,
+    293, 294, 295, 296, 297, 298, 299, 1080, 1081, 1082, 1083, 1084, 1085, 1086, 1087, 1088, 1089,
+    1090, 1091, 1092, 1093, 1094, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1105,
+    1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120, 1121,
+    1122, 1123, 1124, 1125, 1126, 1127, 1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1136, 1137,
+    1138, 1139, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1148, 1149, 1150, 1151, 1152, 1153,
+    1154, 1155, 1156, 1157, 1158, 1159, 1160, 1161, 1162, 1163, 1164, 1165, 1166, 1167, 1168, 1169,
+    1170, 1171, 1172, 1173, 1174, 1175, 1176, 1177, 1178, 1179, 1180, 1181, 1182, 1183, 1184, 1185,
+    1186, 1187, 1188, 1189, 1190, 1191, 1192, 1193, 1194, 1195, 1196, 1197, 1198, 1199, 1200, 1201,
+    1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211, 1212, 1213, 1214, 1215, 1216, 1217,
+    1218, 1219, 1220, 1221, 1222, 1223, 1224, 1225, 1226, 1227, 1228, 1229, 1230, 1231, 1232, 1233,
+    1234, 1235, 1236, 1237, 1238, 1239, 1240, 1241, 1242, 1243, 1244, 1245, 1246, 1247, 1248, 1249,
+    1250, 1251, 1252, 1253, 1254, 1255, 1256, 1257, 1258, 1259, 1260, 1261, 1262, 1263, 1264, 1265,
+    1266, 1267, 1268, 1269, 1270, 1271, 1272, 1273, 1274, 1275, 1276, 1277, 1278, 1279, 1280, 1281,
+    1282, 1283, 1284, 1285, 1286, 1287, 1288, 1289, 1290, 1291, 1292, 1293, 1294, 1295, 1296, 1297,
+    1298, 1299,
+  ], usa: 'borracha' }],
+  ['material', { faces: [
+    21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+    74, 75, 76, 77, 78, 79, 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313,
+    314, 315, 316, 317, 318, 319, 321, 325, 329, 333, 337, 341, 345, 349, 353, 357, 1021, 1025, 1029,
+    1033, 1037, 1041, 1045, 1049, 1053, 1057, 1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068,
+    1069, 1070, 1071, 1072, 1073, 1074, 1075, 1076, 1077, 1078, 1079, 1300, 1301, 1302, 1303, 1304,
+    1305, 1306, 1307, 1308, 1309, 1310, 1311, 1312, 1313, 1314, 1315, 1316, 1317, 1318, 1319, 1321,
+    1325, 1329, 1333, 1337, 1341, 1345, 1349, 1353, 1357, 5000, 5001, 5002, 5003, 5004, 5005, 5006,
+    5007, 5008, 5009, 5010, 5011, 5012, 5013, 5014, 5015, 5016, 5017, 5018, 5019, 5020, 5021, 5022,
+    5023, 5024, 5025, 9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008, 9009, 9010, 9011, 9012,
+    9013, 9014, 9015, 9016, 9017, 9018, 9019, 9020, 9021, 9022, 9023, 9024, 9025, 9026, 9027, 9028,
+    9029, 9030, 9031, 9032, 9033, 9034, 9035, 9036, 9037, 9038, 9039, 9040, 9041, 10000, 10001,
+    10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012, 10013, 10014, 10015,
+    10016, 10017, 10018, 10019, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029,
+    10030, 10031, 10032, 10033, 10034, 10035, 10036, 10037, 10038, 10039, 10040, 10041, 11000, 11001,
+    11002, 11003, 11004, 11005, 11006, 11007, 11008, 11009, 11010, 11011, 11012, 11013, 11014, 11015,
+    11016, 11017, 11018, 11019, 11020, 11021, 11022, 11023, 11024, 11025, 11026, 11027, 11028, 11029,
+    11030, 11031, 11032, 11033, 11034, 11035, 12000, 12001, 12002, 12003, 12004, 12005, 12006, 12007,
+    12008, 12009, 12010, 12011, 12012, 12013, 12014, 12015, 12016, 12017, 12018, 12019, 12020, 12021,
+    12022, 12023, 12024, 12025, 12026, 12027, 12028, 12029, 12030, 12031, 12032, 12033, 12034, 12035,
+    13000, 13001, 13002, 13003, 13004, 13005, 13006, 13007, 13008, 13009, 13010, 13011, 13012, 13013,
+    13014, 13015, 13016, 13017, 13018, 13019, 13020, 13021, 13022, 13023, 13024, 13025, 13026, 13027,
+    13028, 13029, 14000, 14001, 14002, 14003, 14004, 14005, 14006, 14007, 14008, 14009, 14010, 14011,
+    14012, 14013, 14014, 14015, 14016, 14017, 14018, 14019, 14020, 14021, 14022, 14023, 14024, 14025,
+    14026, 14027, 14028, 14029, 15000, 15001, 15002, 15003, 15004, 15005, 15006, 15007, 15008, 15009,
+    15010, 15011, 15012, 15013, 15014, 15015, 15016, 15017, 15018, 15019, 15020, 15021, 15022, 15023,
+    15024, 15025, 15026, 15027, 15028, 15029, 15030, 15031, 15032, 15033, 15034, 15035, 15036, 15037,
+    15038, 15039, 15040, 15041, 16000, 16001, 16002, 16003, 16004, 16005, 16006, 16007, 16008, 16009,
+    16010, 16011, 16012, 16013, 16014, 16015, 16016, 16017, 16018, 16019, 16020, 16021, 16022, 16023,
+    16024, 16025, 16026, 16027, 16028, 16029, 16030, 16031, 16032, 16033, 16034, 16035, 16036, 16037,
+    16038, 16039, 16040, 16041, 17000, 17001, 17002, 17003, 17004, 17005, 17006, 17007, 17008, 17009,
+    17010, 17011, 17012, 17013, 17014, 17015, 17016, 17017, 18000, 18001, 18002, 18003, 18004, 18005,
+    18006, 18007, 18008, 18009, 18010, 18011, 18012, 18013, 18014, 18015, 18016, 18017, 19030, 19031,
+    19032, 19033, 19034, 19035, 19036, 19037, 19038, 19039,
+  ], usa: 'cromo' }],
+  ['material', { faces: [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 360, 361, 362, 363, 364,
+    365, 366, 367, 368, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 379, 1000, 1001, 1002,
+    1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018,
+    1019, 1360, 1361, 1362, 1363, 1364, 1365, 1366, 1367, 1368, 1369, 1370, 1371, 1372, 1373, 1374,
+    1375, 1376, 1377, 1378, 1379, 15030, 15031, 15032, 15033, 15034, 15035, 15036, 15037, 15038,
+    15039, 15040, 15041, 16030, 16031, 16032, 16033, 16034, 16035, 16036, 16037, 16038, 16039, 16040,
+    16041, 21000, 21001, 21002, 21003, 21004, 21005, 21006, 21007, 21008, 21009, 21010, 21011, 21012,
+    21013, 21014, 21015, 21016, 21017, 21018, 21019, 21020, 21021, 21022, 21023, 21024, 21025, 21026,
+    21027, 21028, 21029, 21030, 21031, 21032, 21033, 21034, 21035, 22000, 22001, 22002, 22003, 22004,
+    22005, 22006, 22007, 22008, 22009, 22010, 22011, 22012, 22013, 22014, 22015, 22016, 22017, 22018,
+    22019, 22020, 22021, 22022, 22023, 22024, 22025, 22026, 22027, 22028, 22029, 22030, 22031, 22032,
+    22033, 22034, 22035,
+  ], usa: 'neon' }],
+  ['material', { faces: [
+    19040, 19041, 19042, 19043, 19044, 19045, 19046, 19047, 19048, 19049, 19050, 19051, 19052, 19053,
+    19054, 19055, 19056, 19057, 19058, 19059,
+  ], usa: 'farol' }],
+  ['material', { faces: [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011], usa: 'lanterna' }],
+  ['parte', { nome: 'rodaDianteira', faces: [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+    27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+    51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74,
+    75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98,
+    99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117,
+    118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
+    137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155,
+    156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174,
+    175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193,
+    194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212,
+    213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231,
+    232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250,
+    251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269,
+    270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288,
+    289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 307,
+    308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 322, 323, 324, 325, 326,
+    327, 328, 329, 330, 331, 332, 333, 334, 335, 336, 337, 338, 339, 340, 341, 342, 343, 344, 345,
+    346, 347, 348, 349, 350, 351, 352, 353, 354, 355, 356, 357, 358, 359, 360, 361, 362, 363, 364,
+    365, 366, 367, 368, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 379,
+  ], pivo: [0, 'rodaFY', 'rodaFZ'] }],
+  ['parte', { nome: 'rodaTraseira', faces: [
+    1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015,
+    1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030, 1031,
+    1032, 1033, 1034, 1035, 1036, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047,
+    1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059, 1060, 1061, 1062, 1063,
+    1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071, 1072, 1073, 1074, 1075, 1076, 1077, 1078, 1079,
+    1080, 1081, 1082, 1083, 1084, 1085, 1086, 1087, 1088, 1089, 1090, 1091, 1092, 1093, 1094, 1095,
+    1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111,
+    1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120, 1121, 1122, 1123, 1124, 1125, 1126, 1127,
+    1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1136, 1137, 1138, 1139, 1140, 1141, 1142, 1143,
+    1144, 1145, 1146, 1147, 1148, 1149, 1150, 1151, 1152, 1153, 1154, 1155, 1156, 1157, 1158, 1159,
+    1160, 1161, 1162, 1163, 1164, 1165, 1166, 1167, 1168, 1169, 1170, 1171, 1172, 1173, 1174, 1175,
+    1176, 1177, 1178, 1179, 1180, 1181, 1182, 1183, 1184, 1185, 1186, 1187, 1188, 1189, 1190, 1191,
+    1192, 1193, 1194, 1195, 1196, 1197, 1198, 1199, 1200, 1201, 1202, 1203, 1204, 1205, 1206, 1207,
+    1208, 1209, 1210, 1211, 1212, 1213, 1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223,
+    1224, 1225, 1226, 1227, 1228, 1229, 1230, 1231, 1232, 1233, 1234, 1235, 1236, 1237, 1238, 1239,
+    1240, 1241, 1242, 1243, 1244, 1245, 1246, 1247, 1248, 1249, 1250, 1251, 1252, 1253, 1254, 1255,
+    1256, 1257, 1258, 1259, 1260, 1261, 1262, 1263, 1264, 1265, 1266, 1267, 1268, 1269, 1270, 1271,
+    1272, 1273, 1274, 1275, 1276, 1277, 1278, 1279, 1280, 1281, 1282, 1283, 1284, 1285, 1286, 1287,
+    1288, 1289, 1290, 1291, 1292, 1293, 1294, 1295, 1296, 1297, 1298, 1299, 1300, 1301, 1302, 1303,
+    1304, 1305, 1306, 1307, 1308, 1309, 1310, 1311, 1312, 1313, 1314, 1315, 1316, 1317, 1318, 1319,
+    1320, 1321, 1322, 1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333, 1334, 1335,
+    1336, 1337, 1338, 1339, 1340, 1341, 1342, 1343, 1344, 1345, 1346, 1347, 1348, 1349, 1350, 1351,
+    1352, 1353, 1354, 1355, 1356, 1357, 1358, 1359, 1360, 1361, 1362, 1363, 1364, 1365, 1366, 1367,
+    1368, 1369, 1370, 1371, 1372, 1373, 1374, 1375, 1376, 1377, 1378, 1379,
+  ], pivo: [0, 'rodaTY', 'rodaTZ'] }],
+  ['parte', { nome: 'corpo', faces: [
+    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015,
+    2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031,
+    2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047,
+    2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063,
+    2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079,
+    2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2093, 2094, 2095,
+    2096, 2097, 2098, 2099, 2100, 2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108, 2109, 2110, 2111,
+    2112, 2113, 2114, 2115, 2116, 2117, 2118, 2119, 2120, 2121, 2122, 2123, 2124, 2125, 2126, 2127,
+    2128, 2129, 2130, 2131, 2132, 2133, 2134, 2135, 2136, 2137, 2138, 2139, 2140, 2141, 2142, 2143,
+    3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011, 3012, 3013, 3014, 3015,
+    3016, 3017, 3018, 3019, 3020, 3021, 3022, 3023, 3024, 3025, 21000, 21001, 21002, 21003, 21004,
+    21005, 21006, 21007, 21008, 21009, 21010, 21011, 21012, 21013, 21014, 21015, 21016, 21017, 21018,
+    21019, 21020, 21021, 21022, 21023, 21024, 21025, 21026, 21027, 21028, 21029, 21030, 21031, 21032,
+    21033, 21034, 21035, 22000, 22001, 22002, 22003, 22004, 22005, 22006, 22007, 22008, 22009, 22010,
+    22011, 22012, 22013, 22014, 22015, 22016, 22017, 22018, 22019, 22020, 22021, 22022, 22023, 22024,
+    22025, 22026, 22027, 22028, 22029, 22030, 22031, 22032, 22033, 22034, 22035,
+  ] }],
+  ['parte', { nome: 'dianteira', faces: [
+    5000, 5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009, 5010, 5011, 5012, 5013, 5014, 5015,
+    5016, 5017, 5018, 5019, 5020, 5021, 5022, 5023, 5024, 5025, 8000, 8001, 8002, 8003, 8004, 8005,
+    8006, 8007, 8008, 8009, 8010, 8011, 8012, 8013, 8014, 8015, 8016, 8017, 8018, 8019, 8020, 8021,
+    8022, 8023, 8024, 8025, 8026, 8027, 8028, 8029, 8030, 8031, 8032, 8033, 8034, 8035, 8036, 8037,
+    8038, 8039, 9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008, 9009, 9010, 9011, 9012, 9013,
+    9014, 9015, 9016, 9017, 9018, 9019, 9020, 9021, 9022, 9023, 9024, 9025, 9026, 9027, 9028, 9029,
+    9030, 9031, 9032, 9033, 9034, 9035, 9036, 9037, 9038, 9039, 9040, 9041, 10000, 10001, 10002,
+    10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012, 10013, 10014, 10015, 10016,
+    10017, 10018, 10019, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029, 10030,
+    10031, 10032, 10033, 10034, 10035, 10036, 10037, 10038, 10039, 10040, 10041, 15000, 15001, 15002,
+    15003, 15004, 15005, 15006, 15007, 15008, 15009, 15010, 15011, 15012, 15013, 15014, 15015, 15016,
+    15017, 15018, 15019, 15020, 15021, 15022, 15023, 15024, 15025, 15026, 15027, 15028, 15029, 15030,
+    15031, 15032, 15033, 15034, 15035, 15036, 15037, 15038, 15039, 15040, 15041, 16000, 16001, 16002,
+    16003, 16004, 16005, 16006, 16007, 16008, 16009, 16010, 16011, 16012, 16013, 16014, 16015, 16016,
+    16017, 16018, 16019, 16020, 16021, 16022, 16023, 16024, 16025, 16026, 16027, 16028, 16029, 16030,
+    16031, 16032, 16033, 16034, 16035, 16036, 16037, 16038, 16039, 16040, 16041, 17000, 17001, 17002,
+    17003, 17004, 17005, 17006, 17007, 17008, 17009, 17010, 17011, 17012, 17013, 17014, 17015, 17016,
+    17017, 18000, 18001, 18002, 18003, 18004, 18005, 18006, 18007, 18008, 18009, 18010, 18011, 18012,
+    18013, 18014, 18015, 18016, 18017, 19000, 19001, 19002, 19003, 19004, 19005, 19006, 19007, 19008,
+    19009, 19010, 19011, 19012, 19013, 19014, 19015, 19016, 19017, 19018, 19019, 19020, 19021, 19022,
+    19023, 19024, 19025, 19026, 19027, 19028, 19029, 19030, 19031, 19032, 19033, 19034, 19035, 19036,
+    19037, 19038, 19039, 19040, 19041, 19042, 19043, 19044, 19045, 19046, 19047, 19048, 19049, 19050,
+    19051, 19052, 19053, 19054, 19055, 19056, 19057, 19058, 19059, 20000, 20001, 20002, 20003, 20004,
+    20005, 20006, 20007, 20008, 20009, 20010, 20011, 20012, 20013, 20014, 20015, 20016, 20017, 20018,
+    20019, 20020, 20021, 20022, 20023, 20024, 20025, 20026, 20027,
+  ], pivo: [0, 0.9075, 0.742] }],
+  ['parte', { nome: 'traseira', faces: [
+    11000, 11001, 11002, 11003, 11004, 11005, 11006, 11007, 11008, 11009, 11010, 11011, 11012, 11013,
+    11014, 11015, 11016, 11017, 11018, 11019, 11020, 11021, 11022, 11023, 11024, 11025, 11026, 11027,
+    11028, 11029, 11030, 11031, 11032, 11033, 11034, 11035, 12000, 12001, 12002, 12003, 12004, 12005,
+    12006, 12007, 12008, 12009, 12010, 12011, 12012, 12013, 12014, 12015, 12016, 12017, 12018, 12019,
+    12020, 12021, 12022, 12023, 12024, 12025, 12026, 12027, 12028, 12029, 12030, 12031, 12032, 12033,
+    12034, 12035, 13000, 13001, 13002, 13003, 13004, 13005, 13006, 13007, 13008, 13009, 13010, 13011,
+    13012, 13013, 13014, 13015, 13016, 13017, 13018, 13019, 13020, 13021, 13022, 13023, 13024, 13025,
+    13026, 13027, 13028, 13029, 14000, 14001, 14002, 14003, 14004, 14005, 14006, 14007, 14008, 14009,
+    14010, 14011, 14012, 14013, 14014, 14015, 14016, 14017, 14018, 14019, 14020, 14021, 14022, 14023,
+    14024, 14025, 14026, 14027, 14028, 14029,
+  ], pivo: [0, 0.672, -0.31] }],
+  ['solido', { faces: [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+    27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+    51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74,
+    75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98,
+    99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117,
+    118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
+    137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155,
+    156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174,
+    175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193,
+    194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212,
+    213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231,
+    232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250,
+    251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269,
+    270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288,
+    289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 307,
+    308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 322, 323, 324, 325, 326,
+    327, 328, 329, 330, 331, 332, 333, 334, 335, 336, 337, 338, 339, 340, 341, 342, 343, 344, 345,
+    346, 347, 348, 349, 350, 351, 352, 353, 354, 355, 356, 357, 358, 359, 360, 361, 362, 363, 364,
+    365, 366, 367, 368, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 379, 1000, 1001, 1002,
+    1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018,
+    1019, 1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030, 1031, 1032, 1033, 1034,
+    1035, 1036, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050,
+    1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059, 1060, 1061, 1062, 1063, 1064, 1065, 1066,
+    1067, 1068, 1069, 1070, 1071, 1072, 1073, 1074, 1075, 1076, 1077, 1078, 1079, 1080, 1081, 1082,
+    1083, 1084, 1085, 1086, 1087, 1088, 1089, 1090, 1091, 1092, 1093, 1094, 1095, 1096, 1097, 1098,
+    1099, 1100, 1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114,
+    1115, 1116, 1117, 1118, 1119, 1120, 1121, 1122, 1123, 1124, 1125, 1126, 1127, 1128, 1129, 1130,
+    1131, 1132, 1133, 1134, 1135, 1136, 1137, 1138, 1139, 1140, 1141, 1142, 1143, 1144, 1145, 1146,
+    1147, 1148, 1149, 1150, 1151, 1152, 1153, 1154, 1155, 1156, 1157, 1158, 1159, 1160, 1161, 1162,
+    1163, 1164, 1165, 1166, 1167, 1168, 1169, 1170, 1171, 1172, 1173, 1174, 1175, 1176, 1177, 1178,
+    1179, 1180, 1181, 1182, 1183, 1184, 1185, 1186, 1187, 1188, 1189, 1190, 1191, 1192, 1193, 1194,
+    1195, 1196, 1197, 1198, 1199, 1200, 1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210,
+    1211, 1212, 1213, 1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1224, 1225, 1226,
+    1227, 1228, 1229, 1230, 1231, 1232, 1233, 1234, 1235, 1236, 1237, 1238, 1239, 1240, 1241, 1242,
+    1243, 1244, 1245, 1246, 1247, 1248, 1249, 1250, 1251, 1252, 1253, 1254, 1255, 1256, 1257, 1258,
+    1259, 1260, 1261, 1262, 1263, 1264, 1265, 1266, 1267, 1268, 1269, 1270, 1271, 1272, 1273, 1274,
+    1275, 1276, 1277, 1278, 1279, 1280, 1281, 1282, 1283, 1284, 1285, 1286, 1287, 1288, 1289, 1290,
+    1291, 1292, 1293, 1294, 1295, 1296, 1297, 1298, 1299, 1300, 1301, 1302, 1303, 1304, 1305, 1306,
+    1307, 1308, 1309, 1310, 1311, 1312, 1313, 1314, 1315, 1316, 1317, 1318, 1319, 1320, 1321, 1322,
+    1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333, 1334, 1335, 1336, 1337, 1338,
+    1339, 1340, 1341, 1342, 1343, 1344, 1345, 1346, 1347, 1348, 1349, 1350, 1351, 1352, 1353, 1354,
+    1355, 1356, 1357, 1358, 1359, 1360, 1361, 1362, 1363, 1364, 1365, 1366, 1367, 1368, 1369, 1370,
+    1371, 1372, 1373, 1374, 1375, 1376, 1377, 1378, 1379, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
+    2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022,
+    2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038,
+    2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054,
+    2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070,
+    2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086,
+    2087, 2088, 2089, 2090, 2091, 2092, 2093, 2094, 2095, 2096, 2097, 2098, 2099, 2100, 2101, 2102,
+    2103, 2104, 2105, 2106, 2107, 2108, 2109, 2110, 2111, 2112, 2113, 2114, 2115, 2116, 2117, 2118,
+    2119, 2120, 2121, 2122, 2123, 2124, 2125, 2126, 2127, 2128, 2129, 2130, 2131, 2132, 2133, 2134,
+    2135, 2136, 2137, 2138, 2139, 2140, 2141, 2142, 2143, 3000, 3001, 3002, 3003, 3004, 3005, 3006,
+    3007, 3008, 3009, 3010, 3011, 3012, 3013, 3014, 3015, 3016, 3017, 3018, 3019, 3020, 3021, 3022,
+    3023, 3024, 3025,
+  ] }],
 ];
 
 export const meta = {
   nome: 'moto',
   tipo: 'objeto',
-  desc: 'motocicleta futurista estilizada — baixa, alongada, duas rodas grandes, carenagem e detalhes emissivos; 100% em PASSOS',
-  /* SIMETRIA DECLARADA em x (D-128): o enunciado do TETO pediu peça simétrica, então
-     ela passa a ser COBRADA pelo crítico `simetria` do `auditar`. HOJE ELA FALHA, de
-     propósito — os 12 anéis do guidão (passo 10) não têm par espelhado (desvio máx
-     4.45e-3), pela armadilha de frame do `loft` que está documentada no cabeçalho da
-     op. Declarar e falhar é honesto; NÃO declarar esconderia o defeito atrás de um
-     veredito verde. Consertar isto é o primeiro alvo OBJETIVO do desafio de refino —
-     o modo certo é modelar meia peça e usar `espelha`. */
+  desc: 'motocicleta futurista estilizada — rodas com aro/braços/pneu, garfo e braço tubulares, guidão espelhado, farol integrado; 100% em PASSOS',
+  /* SIMETRIA DECLARADA em x (D-128): cobrada pelo crítico `simetria` do
+     `auditar`. Na 1ª corrida REPROVAVA (12 de 492 posições sem par — os anéis do
+     guidão, que era um `loft` de caminho simétrico); aqui o guidão virou metade
+     + `espelha` e a medida é 0 de 1376. */
   simetria: 'x',
-  /* CALCULADA, não guardada: colisaoDe roda só a geometria (sem textura/pincel)
-     e encaixa o cilindro nas faces `solido` (rodas + carenagem). */
   colisao: colisaoDe(PASSOS, PARAMS, TOPO, MATERIAIS),
 };
 
