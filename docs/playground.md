@@ -225,6 +225,18 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
         docs/oficina.md "Aba Desenho"/"Desenho livre"). Epico à parte, maior
         que o resto do P9 somado — não teto de uma rodada só.
 
+## Antes da próxima capacidade: medir o teto
+
+O épico provou 25 ops **isoladamente** e ninguém nunca autorou conteúdo de
+verdade com elas — medido: as 13 peças em `PASSOS` são todas fixtures `_`, e o
+`construir(ctx)` JS-puro (o "fallback que encolhe" da regra 1) ainda guarda
+**100% do conteúdo real do jogo**, sem ter encolhido um caso. Então o próximo
+passo não é op nem tela: é **a moto, por um agente limpo**, pra que a evolução
+seguinte seja escolhida por falha observada. O desafio, as regras de
+não-contaminação e o formato de relatório (APROVADO/REPROVADO onde há régua ·
+BLOQUEADO onde falta vocabulário · JULGAMENTO DO IDEADOR na estética) estão em
+**[`docs/TETO.md`](./TETO.md)**.
+
 ## A régua de pronto
 
 - **P1–P4 prontos:** uma moto estilizada sai por PASSOS (espelho + lathe/loft +
