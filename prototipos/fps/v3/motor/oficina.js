@@ -145,7 +145,12 @@ function transportaLoft(uPrev, t) {
   return norm3(u[0], u[1], u[2]);
 }
 
-const OPS = {
+/* exportado (P7 do playground, D-120): o MANIFESTO de capacidades da Oficina
+   sai daqui — `Object.keys(OPS)` é a lista de ops IMPLEMENTADAS de verdade,
+   nunca precisa ser copiada à mão num doc que pode desatualizar. A bancada
+   `criar.mjs` cruza isso contra a tabela da skill `criar-peca` e avisa se
+   divergir (op no núcleo sem doc, ou doc citando op que não existe mais). */
+export const OPS = {
   /* ---- primitivas: criam vértices únicos + faces a partir da base do passo ---- */
   cubo(st, a, i) {
     const b = confereId(st, i, 'cubo', a);

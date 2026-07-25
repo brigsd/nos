@@ -30,6 +30,7 @@ o Chromium já vem no ambiente). Sem isso, as bancadas saem avisando.
 | `npm run auditar -- <peca>` | **Gate de senso crítico [cpu]**: os 5 críticos (malha, paleta, costura, banding, órfãos) — exit≠0 em achado. Sem argumento roda em todas. Detalhe: skill `auditar-peca` |
 | `npm run porteiro -- <peca>` | **Gate de render**: pageerror / `__ready` / frame degenerado |
 | `npm run gabarito -- <peca>` | **FORMA COMO NÚMERO (P5)**: mede a silhueta renderizada × o contorno de referência de `prototipos/fps/v3/gabaritos/<peca>.js` — IoU + VEREDITO calibrado (exit≠0 = reprovado), evidência em PNG (`tools/bancadas/out/gabarito-*`). Sem gabarito pra peça, falha alto (nada medido) |
+| `npm run criar -- <peca>` | **O LAÇO ÚNICO (P7)**: um comando só — estado do núcleo (vértices/faces/caixa/colisão), o manifesto de capacidades (`OPS` do núcleo × a skill `criar-peca`, aponta deriva), `auditar`+`porteiro`+`gabarito` (se houver) e um VEREDITO AGREGADO (exit≠0 = reprovado). Renders em `tools/bancadas/out/criar-*` — LEIA-os. Prefira este comando a rodar peca/auditar/porteiro/gabarito em separado |
 | `npm run executar` | Replay headless do núcleo (`nucleo`/`neutroCanonico`) em Node — determinismo/replay |
 | `npm run jogar` | Screenshot do jogo (`jogo.html`): `-- --cam=x,y,alt,ang`, `-- --pausado --aba=graficos` |
 | `npm run bench` | Benchmark dos críticos (defeitos plantados → placar F1) — rode se mexer nos críticos |

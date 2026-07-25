@@ -82,14 +82,24 @@ explícito (seção não-circular): `_viga.js`; do inflate: `_corpo.js`.
 
 ## O laço de VER (você tem olhos — use-os)
 
+**`npm run criar -- minha-peca`** é o COMANDO PADRÃO (P7, D-120) — um laço
+único: estado do núcleo + manifesto de capacidades (cruzado contra a tabela
+acima — avisa se ela ficou pra trás) + `auditar` + `porteiro` + `gabarito`
+(se houver referência) + VEREDITO AGREGADO, com os renders (3 ângulos + 3
+`geo=normais`) salvos em `tools/bancadas/out/criar-*` pra você LER. Prefira
+ele a rodar os comandos abaixo em separado — existe justamente pra nenhum
+gate ficar de fora por esquecimento.
+
+Comandos individuais (pra investigar um achado específico do `criar`, ou pra
+ângulo/resolução fora do padrão):
+
 ```bash
-npm run peca -- minha-peca                      # 3 ângulos → tools/bancadas/out/*.png
 npm run peca -- minha-peca --giro=8             # 8 ângulos (defeito de um lado só)
 npm run peca -- minha-peca --res=1400 --geo=normais   # SEM textura: emenda/faceta SALTAM
 npm run peca -- minha-peca --res=1400 --geo=flat      # silhueta/volume
-npm run auditar -- minha-peca && npm run porteiro -- minha-peca   # gates (exit≠0 = achado)
+npm run auditar -- minha-peca && npm run porteiro -- minha-peca   # os mesmos gates do criar, isolados
 npm run executar                                # replay/determinismo do núcleo
-npm run gabarito -- minha-peca                  # FORMA COMO NÚMERO (P5): IoU × gabaritos/minha-peca.js, veredito calibrado
+npm run gabarito -- minha-peca                  # o mesmo IoU do criar, isolado — mais ângulos que o CONTORNOS cobrir
 ```
 
 **LEIA os PNGs de verdade** (Read no arquivo, incluindo a sobreposição do

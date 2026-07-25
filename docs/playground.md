@@ -97,11 +97,20 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
       por enquanto"; suavizar (marching cubes ou parecido) fica pra quando o
       caso real pedir. Peça-exemplo `pecas/_corpo.js` (corpo oval achatado,
       watertight, provado por manifold + volume assinado).
-- [ ] **P7 · A camada IA — laço único** — uma bancada `criar` que recebe a
-      peça e devolve NUM comando: estado como dado (tabela de vértices/faces,
-      caixa, medidas), os renders (3 ângulos + geo), os gates
-      (auditar/porteiro/IoU se houver gabarito) e o VEREDITO agregado. O
-      manifesto de capacidades (ops + limites) sai do próprio núcleo.
+- [x] **P7 · A camada IA — laço único** (D-120) — `tools/bancadas/criar.mjs`
+      (`npm run criar -- <peça>`) recebe a peça e devolve NUM comando: estado
+      como dado (vértices/faces/caixa/colisão, direto do núcleo, sem browser),
+      os renders (3 ângulos texturizados + 3 `geo=normais` — a evidência
+      forçada), os gates (`auditar` + `porteiro` + `gabarito` SE houver
+      referência em `gabaritos/`) e um VEREDITO AGREGADO (exit≠0 = reprovado).
+      O manifesto de capacidades sai do PRÓPRIO núcleo — `Object.keys(OPS)`
+      (exportado, D-120), nunca copiado à mão — e é CRUZADO contra a tabela
+      da skill `criar-peca`: op no núcleo sem doc, ou doc citando op que não
+      existe mais, vira achado (provado plantando os dois tipos de deriva e
+      medindo que a bancada realmente aponta). Um único browser é reaproveitado
+      pra porteiro+renders+gabarito (não relança a cada gate). Fecha o "83%"
+      por construção: os quatro pilares (núcleo, crítico, render, forma) saem
+      juntos sempre — nenhum fica de fora por esquecimento do operador.
 - [ ] **P8 · Edição restante** — `moveF`/`moveA`, `vira`, `apagaFace`,
       seleção por região/grupo, `chamferBox`, `displace` (com semente).
 - [ ] **P9 · Onda de interface** — os botões da Oficina pras ops novas + o
