@@ -624,6 +624,28 @@ export const OPS = {
        ponto), mas a FORMA/ORIENTAÇÃO é a mesma — o lathe é o caso degenerado
        de caminho reto; o loft generaliza pro caminho curvo.
 
+     ⚠ CAMINHO SIMÉTRICO **NÃO** GERA MALHA SIMÉTRICA (D-128, achado pelo
+     experimento do TETO — docs/TETO.md). Consequência direta do transporte
+     paralelo descrito acima: o frame de cada anel é PROPAGADO a partir da
+     PRIMEIRA seção, então ele depende do HISTÓRICO do caminho, não só da
+     posição da seção. Um caminho cujos `pos` são simétricos em torno de um
+     plano (ex.: x = −0.28 → −0.23 → +0.23 → +0.28) produz anéis com fases
+     DIFERENTES nas duas metades, porque a tangente das pontas não é o eixo
+     puro e as duas metades herdam frames girados um em relação ao outro.
+     O `loft` só preserva simetria quando a tangente é CONSTANTE ao longo de
+     todo o caminho (todas as seções no mesmo plano perpendicular).
+       Medido: o guidão da `pecas/moto.js` (caminho simétrico em x, 12 anéis)
+       tem os 12 vértices SEM par espelhado da peça — desvio máx 4.45e-3, e a
+       peça inteira tem 480/492 com par EXATO. As rodas da mesma peça escapam
+       porque todas as seções delas têm o mesmo y e o mesmo z (tangente
+       (1,0,0) constante).
+       O desvio é pequeno demais pra aparecer no render (4,5 mm numa moto de
+       2,8 m) — então PRECISA de régua: o `auditar` tem um crítico de simetria
+       (D-128) justamente porque nenhum gate pegava isso.
+     PRA GARANTIR SIMETRIA: modele UMA metade e use `espelha` (que é exato por
+     construção — reflete coordenada e solda no plano), em vez de confiar num
+     caminho simétrico.
+
      NUMERAÇÃO DE VÉRTICE (formato salvo, travada por teste) — cursor IDÊNTICO
      ao lathe: seção POLO consome 1 id (`b+cursor`), seção ANEL consome
      `lados` ids (`b+cursor+j`); o cursor soma o que acabou de consumir a cada
@@ -1097,6 +1119,50 @@ export const OPS = {
      posição, nunca cria id); `espelha` é MEATY (duplica a seleção refletida,
      ids NOVOS — formato salvo). Juntas destravam objeto bilateral (metade
      modelada + espelho vira o todo; uma parte pode nascer torta/rodada). ---- */
+
+  /* transladar — SOMA um deslocamento `d` a uma SELEÇÃO. O IRMÃO EXATO do
+     `rotaciona` abaixo: mesma semântica de seleção, mesma promessa de só mexer
+     em POSIÇÃO (`st.V.set` in-place) — NUNCA cria vértice/face, NUNCA renumera,
+     NÃO consome o bloco de ids do passo. Determinístico (só soma).
+
+     POR QUE ELA EXISTE (D-128, o achado do experimento do TETO — docs/TETO.md):
+     o vocabulário sabia GIRAR a malha inteira (`rotaciona` com `sel` ausente)
+     mas não sabia TRANSLADAR nada maior que UMA face — `moveV` move 1 vértice,
+     `moveF` 1 face, `moveA` 1 aresta. E das 9 primitivas, 7 nascem PRESAS à
+     origem (`cubo`/`cilindro`/`esfera`/`cone`/`plano`/`chamferBox` centrados com
+     a base em y=0; `lathe` sempre em torno de Y) — nenhuma aceita posição. Sem
+     esta op, pôr um cilindro fora da origem custava um `moveV` POR VÉRTICE (32+
+     passos pra uma roda de `lados:16`), então compor com primitiva era
+     proibitivo na prática: a moto do TETO usou 7 das 25 ops e virou tudo `loft`,
+     o único gerador que aceita `pos` por seção. Esta op devolve as outras 7 ao
+     vocabulário — é a assimetria que faltava fechar, não uma conveniência.
+
+     SELEÇÃO (`sel`, opcional, via `resolverAlvosV` — P8 do playground): AUSENTE
+     = a malha INTEIRA (todos os vértices atuais de `st.V`) — é ESTE o caso que
+     posiciona uma primitiva recém-criada. Presente = `{v:[ids]}` e/ou
+     `{f:[ids]}` (cantos da face) e/ou `{regiao:{min,max}}` e/ou
+     `{grupo:'nome'}` (as faces daquele `f.parte`) — os campos presentes se
+     UNEM, DEDUPLICADOS num Set. Referência inválida GRITA (órfão) e é ignorada
+     — nunca corrompe (lei do envelope). Seleção vazia é no-op determinístico.
+
+     DESLOCAMENTO (`d`, `[x,y,z]`, via `st.vec` — pode citar PARAM, como todo
+     ponto dimensional): `p' = p + d`, ADITIVO como o `moveV` (acompanha a base
+     — mexer no PARAM remodela sem tocar em passo nenhum). Ausente = `[0,0,0]`,
+     que é no-op silencioso, a mesma lei do `moveV`/`moveF`/`moveA`. Não tem
+     PIVÔ de propósito: translação não depende de pivô. */
+  transladar(st, a, i) {
+    const d = st.vec(a.d ?? [0, 0, 0]);
+
+    // seleção -> conjunto de ids de vértice afetados (AUSENTE = malha inteira) — o MESMO resolverAlvosV do rotaciona
+    const alvos = resolverAlvosV(st, a.sel, 'transladar', i);
+    if (!alvos.size) return;   // nada pra mover (seleção vazia, ou só ids órfãos) — no-op determinístico
+
+    for (const v of alvos) {
+      const p = st.V.get(v);
+      if (!p) continue;   // defensivo (nunca deveria faltar — veio de st.V.keys() ou de um canto de face já validado)
+      st.V.set(v, [p[0] + d[0], p[1] + d[1], p[2] + d[2]]);   // in-place — NUNCA cria vértice novo
+    }
+  },
 
   /* rotaciona — gira uma SELEÇÃO em torno de um EIXO (x/y/z) por `graus`, ao
      redor de um PIVÔ. SIMPLES: só desloca as posições dos vértices AFETADOS

@@ -998,6 +998,12 @@ function serializarPeca(meta, PARAMS, TOPO, PASSOS, MATERIAIS, ANIMACOES, ESQUEL
   const nome = (meta && meta.nome) || 'peca';
   const tipo = (meta && meta.tipo) || 'objeto';
   const desc = (meta && meta.desc) || '';
+  /* D-128 — `meta.simetria` ('x'/'y'/'z') é DECLARAÇÃO do autor (o crítico `simetria` do
+     `auditar` é opt-in por ela), então PRECISA sobreviver ao round-trip: sem esta linha o
+     export reescreveria um meta fixo e a declaração sumiria CALADA — a peça deixaria de
+     ser cobrada sem ninguém notar, que é a classe de defeito silencioso que este projeto
+     caça. Ausente = a chave nem aparece no arquivo (não inventa declaração). */
+  const simetria = meta && meta.simetria;
   const passosTxt = (PASSOS || []).map((p) => '  ' + jsPasso(p) + ',').join('\n');
   const temMat = MATERIAIS && Object.keys(MATERIAIS).length > 0;
   const temAnim = ANIMACOES && Object.keys(ANIMACOES).length > 0;
@@ -1054,7 +1060,10 @@ ${passosTxt}
 export const meta = {
   nome: ${jsStr(nome)},
   tipo: ${jsStr(tipo)},
-  desc: ${jsStr(desc)},
+  desc: ${jsStr(desc)},${simetria ? `
+  /* DECLARAÇÃO do autor (D-128): a peça se propõe simétrica neste eixo, e o crítico
+     \`simetria\` do \`auditar\` a COBRA por isso. Tirar a linha = deixar de ser cobrada. */
+  simetria: ${jsStr(simetria)},` : ''}
   /* CALCULADA, não guardada: o jogo lê isto no carregamento do módulo, antes de
      construir(). colisaoDe roda só a geometria e encaixa a colisão na malha FINAL. */
   colisao: colisaoDe(PASSOS, PARAMS, TOPO${argMat}),

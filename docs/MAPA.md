@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-118 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+119 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -169,6 +169,7 @@
 - `detector-de-seam.mjs` — detector-de-seam [seam] — numa textura que LADRILHA, a borda oposta deve casar (wrap): direita↔esquerda, topo↔base. O defeito plantado troca uma LINHA/COLUNA…
 - `distancia-paleta.mjs` — distancia-paleta [paleta] — conformidade de cor à Resurrect64 em espaço perceptual (CIEDE2000 offline, sem libs). Cada pixel deve estar perto de alguma cor d…
 - `lint-malha.mjs` — lint-de-malha [malha] — checagem-CPU da geometria antes do render: triângulo degenerado, vértice NaN/Inf/gigante, normal zero/não-unitária, stride/contagem e…
+- `simetria.mjs` — simetria [malha] — a peça que DECLARA simetria de fato é simétrica? Opt-in pelo envelope: só roda se `meta.simetria` estiver declarado ('x', 'y' ou 'z' — o e…
 
 ## tools/mapa/
 

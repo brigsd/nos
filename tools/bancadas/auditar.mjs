@@ -24,11 +24,13 @@ tools.sort((a, b) => a.id.localeCompare(b.id));
 
 let falhas = 0;
 for (const nome of alvos) {
-  const { built, erro } = await construirPeca(nome);
+  const { built, meta, erro } = await construirPeca(nome);
   if (erro) { falhas++; console.log(`✗ ${nome}: construir lançou — ${erro.message}`); continue; }
   let total = 0; const linhas = [];
   for (const t of tools) {
-    let fnd = []; try { fnd = t.analisar(built, { pixels }) || []; } catch (e) { fnd = [{ sev: 'erro', msg: 'ferramenta quebrou: ' + e.message }]; }
+    // `meta` vai no ctx (D-128): o crítico de simetria é OPT-IN por `meta.simetria` —
+    // crítico que não usa meta simplesmente ignora a chave (aditivo, nada quebra)
+    let fnd = []; try { fnd = t.analisar(built, { pixels, meta }) || []; } catch (e) { fnd = [{ sev: 'erro', msg: 'ferramenta quebrou: ' + e.message }]; }
     if (fnd.length) { total += fnd.length; linhas.push(`    ⚠ ${t.id}: ${fnd.map((x) => `[${x.sev}] ${x.msg}`).join(' | ')}`); }
   }
   if (total) { falhas++; console.log(`✗ ${nome}: ${total} achado(s)\n${linhas.join('\n')}`); }

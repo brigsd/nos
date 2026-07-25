@@ -95,7 +95,7 @@ else {
 /* 3 · AUDITAR (headless — os críticos de senso crítico [cpu]) */
 log('\n── auditar (crítico [cpu]) ──');
 {
-  const { built, erro } = await construirPeca(nome);
+  const { built, meta: metaAud, erro } = await construirPeca(nome);
   if (erro) falha(`construir() lançou: ${erro.message}`);
   else {
     const tools = [];
@@ -105,7 +105,8 @@ log('\n── auditar (crítico [cpu]) ──');
     }
     let total = 0;
     for (const t of tools) {
-      let fnd = []; try { fnd = t.analisar(built, { pixels }) || []; } catch (e) { fnd = [{ sev: 'erro', msg: 'ferramenta quebrou: ' + e.message }]; }
+      // D-128: `meta` no ctx — o crítico de simetria é OPT-IN por `meta.simetria`
+      let fnd = []; try { fnd = t.analisar(built, { pixels, meta: metaAud }) || []; } catch (e) { fnd = [{ sev: 'erro', msg: 'ferramenta quebrou: ' + e.message }]; }
       if (fnd.length) { total += fnd.length; falha(`${t.id}: ${fnd.map((x) => `[${x.sev}] ${x.msg}`).join(' | ')}`); }
     }
     if (total === 0) ok(`limpo nos ${tools.length} críticos`);

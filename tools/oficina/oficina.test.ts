@@ -2438,3 +2438,149 @@ describe('P8c — displace (deslocamento por ruído seedado ao longo da normal)'
     expect(peca.meta.colisao.raio).toBeGreaterThan(0);
   });
 });
+
+/* D-128 — `transladar` (soma um deslocamento a uma seleção). O IRMÃO do
+   `rotaciona`: mesma semântica de `sel`, e igualmente SIMPLES (NUNCA cria id).
+   Nasceu do experimento do TETO (docs/TETO.md): o vocabulário girava a malha
+   inteira mas não transladava nada maior que UMA face, e as 7 primitivas presas
+   à origem ficavam inutilizáveis em composição.
+
+   Prova por MEDIÇÃO: posições EXATAS (o delta somado, não "mudou"), seleção
+   ausente = malha inteira, seleção por v/f/regiao/grupo, fora da seleção
+   INTOCADO, NUNCA cria vértice/face, `d` por NOME de PARAM, aditividade
+   (transladar 2× == transladar pela soma), órfão grita sem corromper, e o caso
+   que MOTIVOU a op: posicionar uma primitiva inteira num passo só, com manifold
+   preservado (transladar não pode rasgar malha — é rígido). */
+describe('D-128 — transladar (posiciona uma seleção; o que faltava pra compor com primitiva)', () => {
+  // manifold local: a convenção deste arquivo é redefinir por bloco (o do P6/P8 vive
+  // no escopo DELES, não no do módulo — um `describe` novo não o alcança)
+  const manifoldRuim = (F: any) => {
+    const m = new Map<string, number>();
+    for (const f of F.values()) for (let k = 0; k < (f as any).vs.length; k++) { const a = (f as any).vs[k], b = (f as any).vs[(k + 1) % (f as any).vs.length]; m.set(`${a},${b}`, (m.get(`${a},${b}`) ?? 0) + 1); }
+    let ruim = 0;
+    for (const [k, c] of m) { const [a, b] = k.split(','); if (c !== 1 || (m.get(`${b},${a}`) ?? 0) !== 1) ruim++; }
+    return ruim;
+  };
+
+  it('soma o delta EXATO em cada vértice da malha (sel AUSENTE = malha inteira)', () => {
+    const base = nucleo([['cubo', { id: 0, lado: 2 }]], {}, {});
+    const d: [number, number, number] = [1.5, -0.25, 3];
+    const mov = nucleo([['cubo', { id: 0, lado: 2 }], ['transladar', { d }]], {}, {});
+    expect(mov.V.size).toBe(base.V.size);
+    for (const [id, p] of base.V) {
+      const q = mov.V.get(id)!;
+      // valor esperado DERIVADO da base (não hardcoded à mão — a lição D-116)
+      expect(q[0]).toBeCloseTo(p[0] + d[0], 12);
+      expect(q[1]).toBeCloseTo(p[1] + d[1], 12);
+      expect(q[2]).toBeCloseTo(p[2] + d[2], 12);
+    }
+  });
+
+  it('seleção por v e por f: só os alvos movem, o resto fica INTOCADO (bit-a-bit)', () => {
+    const base = nucleo([['cubo', { id: 0, lado: 2 }]], {}, {});
+    const porV = nucleo([['cubo', { id: 0, lado: 2 }], ['transladar', { d: [0, 5, 0], sel: { v: [1] } }]], {}, {});
+    expect(porV.V.get(1)![1]).toBeCloseTo(base.V.get(1)![1] + 5, 12);
+    for (const id of [...base.V.keys()].filter((k) => k !== 1)) expect(porV.V.get(id)).toEqual(base.V.get(id));   // intocados EXATOS
+
+    // face 3 (+x do cubo, cantos [2,1,5,6]) move os 4 cantos DELA
+    const porF = nucleo([['cubo', { id: 0, lado: 2 }], ['transladar', { d: [0, 0, 7], sel: { f: [3] } }]], {}, {});
+    const cantos = new Set(base.F.get(3)!.vs);
+    for (const id of base.V.keys()) {
+      const esperado = cantos.has(id) ? base.V.get(id)![2] + 7 : base.V.get(id)![2];
+      expect(porF.V.get(id)![2]).toBeCloseTo(esperado, 12);
+    }
+  });
+
+  it('seleção por REGIÃO e por GRUPO (a mesma lei do resolverAlvosV que o rotaciona usa)', () => {
+    // região: só o topo do cubo (y >= 0.5) — o conjunto é DERIVADO da base, não assumido
+    const base = nucleo([['cubo', { id: 0, lado: 2 }]], {}, {});
+    const noTopo = [...base.V.entries()].filter(([, p]) => p[1] >= 0.5).map(([id]) => id);
+    expect(noTopo.length).toBeGreaterThan(0);   // a fixture tem que ter alvo, senão o teste não prova nada
+    const reg = nucleo([['cubo', { id: 0, lado: 2 }],
+      ['transladar', { d: [0, 2, 0], sel: { regiao: { min: [-9, 0.5, -9], max: [9, 9, 9] } } }]], {}, {});
+    for (const id of base.V.keys()) {
+      const esperado = noTopo.includes(id) ? base.V.get(id)![1] + 2 : base.V.get(id)![1];
+      expect(reg.V.get(id)![1]).toBeCloseTo(esperado, 12);
+    }
+
+    // grupo: nomeia uma parte e translada por nome
+    const grp = nucleo([['cubo', { id: 0, lado: 2 }], ['parte', { nome: 'tampa', faces: [4] }],
+      ['transladar', { d: [0, 0, -3], sel: { grupo: 'tampa' } }]], {}, {});
+    const cantosTampa = new Set(base.F.get(4)!.vs);
+    for (const id of base.V.keys()) {
+      const esperado = cantosTampa.has(id) ? base.V.get(id)![2] - 3 : base.V.get(id)![2];
+      expect(grp.V.get(id)![2]).toBeCloseTo(esperado, 12);
+    }
+  });
+
+  it('NUNCA cria vértice/face — mesmos ids e mesmas contagens antes/depois', () => {
+    const antes = nucleo([['cubo', { id: 0, lado: 2 }]], {}, {});
+    const depois = nucleo([['cubo', { id: 0, lado: 2 }], ['transladar', { d: [3, 3, 3] }]], {}, {});
+    expect(depois.V.size).toBe(antes.V.size);
+    expect(depois.F.size).toBe(antes.F.size);
+    expect([...depois.V.keys()].sort((a, b) => a - b)).toEqual([...antes.V.keys()].sort((a, b) => a - b));
+    expect([...depois.F.keys()].sort((a, b) => a - b)).toEqual([...antes.F.keys()].sort((a, b) => a - b));
+  });
+
+  it('`d` por NOME de PARAM (mexer no PARAM remodela sem tocar em passo); nome inexistente grita ALTO', () => {
+    const { V } = nucleo([['cubo', { id: 0, lado: 2 }], ['transladar', { d: ['dx', 0, 0] }]], { dx: 4 }, {});
+    const base = nucleo([['cubo', { id: 0, lado: 2 }]], {}, {});
+    expect(V.get(1)![0]).toBeCloseTo(base.V.get(1)![0] + 4, 12);
+    expect(() => nucleo([['cubo', { id: 0, lado: 1 }], ['transladar', { d: ['fantasma', 0, 0] }]], {}, {})).toThrow(/fantasma/);
+  });
+
+  it('ADITIVO: transladar 2× == transladar 1× pela soma (acompanha a base, como o moveV)', () => {
+    const duas = nucleo([['cubo', { id: 0, lado: 2 }], ['transladar', { d: [1, 2, 3] }], ['transladar', { d: [10, 20, 30] }]], {}, {});
+    const uma = nucleo([['cubo', { id: 0, lado: 2 }], ['transladar', { d: [11, 22, 33] }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(duas))).toBe(JSON.stringify(neutroCanonico(uma)));
+  });
+
+  it('`d` ausente/zero é NO-OP silencioso (a lei do moveV/moveF/moveA) — canônico bit-a-bit', () => {
+    const base = JSON.stringify(neutroCanonico(nucleo([['cubo', { id: 0, lado: 2 }]], {}, {})));
+    for (const passo of [['transladar', {}], ['transladar', { d: [0, 0, 0] }]] as any[]) {
+      expect(JSON.stringify(neutroCanonico(nucleo([['cubo', { id: 0, lado: 2 }], passo], {}, {})))).toBe(base);
+    }
+  });
+
+  it('id/face/grupo inexistente GRITA (órfão) e é IGNORADO — malha intacta, alvo válido move normalmente', () => {
+    const base = nucleo([['cubo', { id: 0, lado: 2 }]], {}, {});
+    const { orfaos, V } = nucleo([['cubo', { id: 0, lado: 2 }], ['transladar', { d: [0, 1, 0], sel: { v: [1, 999] } }]], {}, {});
+    expect(orfaos).toHaveLength(1);
+    expect(orfaos[0]).toMatchObject({ passo: 1, op: 'transladar', ref: 999 });
+    expect(V.size).toBe(8);                                              // malha intacta
+    expect(V.get(1)![1]).toBeCloseTo(base.V.get(1)![1] + 1, 12);         // o id válido moveu
+
+    const f = nucleo([['cubo', { id: 0, lado: 1 }], ['transladar', { d: [1, 0, 0], sel: { f: [999] } }]], {}, {});
+    expect(f.orfaos.some((o: any) => o.op === 'transladar' && o.ref === 999)).toBe(true);
+    expect(f.V.size).toBe(8);
+
+    const g = nucleo([['cubo', { id: 0, lado: 1 }], ['transladar', { d: [1, 0, 0], sel: { grupo: 'nao-existe' } }]], {}, {});
+    expect(g.orfaos.some((o: any) => o.op === 'transladar')).toBe(true);
+    // GEOMETRIA intacta (V/F apenas — o canônico COMPLETO difere de propósito: o órfão ENTRA nele, é o registro do grito)
+    const soGeo = (n: any) => { const c: any = neutroCanonico(n); return JSON.stringify({ V: c.V, F: c.F }); };
+    expect(soGeo(g)).toBe(soGeo(nucleo([['cubo', { id: 0, lado: 1 }]], {}, {})));   // seleção vazia = no-op geométrico
+  });
+
+  it('★ O CASO QUE MOTIVOU A OP: duas primitivas iguais em posições DIFERENTES, um passo de transladar cada — manifold preservado nas duas', () => {
+    // era isto que custava 32 moveV por peça e fez a moto do TETO virar 100% loft
+    const n = nucleo([
+      ['cilindro', { id: 0, raio: 0.4, altura: 0.2, lados: 12 }],
+      ['transladar', { d: [0, 0, -1] }],                              // sel ausente = a malha TODA (só o cilindro existe)
+      ['cilindro', { id: 2000, raio: 0.4, altura: 0.2, lados: 12 }],   // `id` = a BASE do bloco da posição (posição 2 × BLOCO 1000), não um contador próprio
+      ['transladar', { d: [0, 0, 1], sel: { regiao: { min: [-9, -9, -0.5], max: [9, 9, 0.5] } } }],   // só a 2ª (a 1ª já saiu da caixa)
+    ], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(manifoldRuim(n.F)).toBe(0);                                // rígido: não rasga malha
+    const zs = [...n.V.values()].map((p: any) => p[2]);
+    expect(Math.min(...zs)).toBeLessThan(-0.5);                       // uma roda atrás
+    expect(Math.max(...zs)).toBeGreaterThan(0.5);                     // outra na frente
+    expect([...n.V.values()].every((p: any) => p.every((c: number) => Number.isFinite(c)))).toBe(true);
+  });
+
+  it('determinismo + round-trip: mesma lista 2× dá canônico idêntico, e o JSON da lista sobrevive', () => {
+    const passos: any[] = [['cubo', { id: 0, lado: 1 }], ['transladar', { d: [0.3, -0.7, 1.1], sel: { f: [0, 1] } }]];
+    const a = JSON.stringify(neutroCanonico(nucleo(passos, {}, {})));
+    const b = JSON.stringify(neutroCanonico(nucleo(JSON.parse(JSON.stringify(passos)), {}, {})));
+    expect(a).toBe(b);
+  });
+});

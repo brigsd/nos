@@ -159,3 +159,40 @@ categoria dele já diz o remédio:
 dois primeiros são candidatos fortes e já estão escritos como dívida
 reconhecida; se forem eleitos, será por falha observada. Pré-agendar é o vício
 que este documento existe pra corrigir.
+
+---
+
+## 1ª corrida — o resultado (D-128)
+
+Relatório completo: [`teto-moto-relatorio.md`](./teto-moto-relatorio.md) ·
+artefato: `prototipos/fps/v3/pecas/moto.js`.
+
+**A peça saiu**, e passou em todos os eixos objetivos (0 órfãos, manifold
+2052/2052, determinismo, round-trip, reabre na Oficina). **O achado foi o
+tamanho do vocabulário usado: 7 das 25 ops** — `loft`×9, `espelha`×3 e o resto
+atributo. As 18 nunca usadas incluem TODAS as outras 8 primitivas, e não por
+escolha estética: **nenhuma primitiva aceita posição**, e não havia como
+transladar uma seleção. Dava pra GIRAR a malha inteira (`rotaciona`) e não dava
+pra TRANSLADAR nada maior que uma face.
+
+O que a corrida elegeu, e foi feito (D-128):
+
+| Categoria (tabela acima) | O que a corrida mostrou | Feito |
+|---|---|---|
+| faltou como expressar | posicionar primitiva custava 1 `moveV` por vértice | op **`transladar(sel, d)`** |
+| criou mas não percebeu | 12 de 492 vértices sem par espelhado, nenhum gate pegava | crítico **`simetria`** (opt-in por `meta.simetria`) |
+| contrato com furo | caminho simétrico no `loft` ≠ malha simétrica | documentado no cabeçalho da op |
+| contrato com furo | a exceção de 1 ULP do D-125 estava escrita como se fosse do `displace`; é de `cos`/`sin` em qualquer op | corrigido |
+
+**Descartado por análise, não por preguiça:** `tuboEntre` — é o `loft`, que a
+corrida usou 9× com sucesso; verbosidade, não capacidade ausente. **Adiados até
+serem eleitos:** `toro` (gap real — o `lathe` só liga pontos consecutivos, então
+perfil circular não fecha), `chanfrar seleção`, `escala`, Aba Desenho.
+
+**A 2ª corrida é de REFINO, não de criação nova** — a mesma moto, outro agente
+limpo, com as críticas do ideador como enunciado. Refinar é capacidade diferente
+de criar, e é a 4ª categoria da tabela acima ("ficou enorme e difícil de
+editar") — onde esta peça foi pior: 2.164 ids de face escritos à mão, 42% do
+arquivo, 26 dos 51 passos só de pintura. Ela também é a primeira corrida com uma
+**régua objetiva de forma**: a moto declara `meta.simetria:'x'` e hoje FALHA o
+`auditar` de propósito; consertar isso é alvo medido, não julgamento.

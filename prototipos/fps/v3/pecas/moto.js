@@ -316,6 +316,14 @@ export const meta = {
   nome: 'moto',
   tipo: 'objeto',
   desc: 'motocicleta futurista estilizada — baixa, alongada, duas rodas grandes, carenagem e detalhes emissivos; 100% em PASSOS',
+  /* SIMETRIA DECLARADA em x (D-128): o enunciado do TETO pediu peça simétrica, então
+     ela passa a ser COBRADA pelo crítico `simetria` do `auditar`. HOJE ELA FALHA, de
+     propósito — os 12 anéis do guidão (passo 10) não têm par espelhado (desvio máx
+     4.45e-3), pela armadilha de frame do `loft` que está documentada no cabeçalho da
+     op. Declarar e falhar é honesto; NÃO declarar esconderia o defeito atrás de um
+     veredito verde. Consertar isto é o primeiro alvo OBJETIVO do desafio de refino —
+     o modo certo é modelar meia peça e usar `espelha`. */
+  simetria: 'x',
   /* CALCULADA, não guardada: colisaoDe roda só a geometria (sem textura/pincel)
      e encaixa o cilindro nas faces `solido` (rodas + carenagem). */
   colisao: colisaoDe(PASSOS, PARAMS, TOPO, MATERIAIS),
