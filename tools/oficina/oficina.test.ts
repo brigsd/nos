@@ -218,6 +218,36 @@ describe('regressões do revisor adversarial (D1/D2/D3)', () => {
   it('D3: cilindro com lados demais pro bloco de ids falha ALTO (throw), não vaza pro bloco seguinte', () => {
     expect(() => nucleo([['cilindro', { id: 0, raio: 'r', altura: 'h', lados: 'l' }]], { r: 1, h: 1 }, { l: 600 })).toThrow(/estoura o bloco/);
   });
+
+  /* 2º achado adversarial do P4, mas a rede é do NÚCLEO INTEIRO (todo `st.num`/
+     `st.vec`): NaN/Infinity vazava por TODA op. O caso (b) — TOPO não-finito —
+     é o pior porque NENHUM gate pega: a malha sai LIMPA, só com contagem
+     DIFERENTE (`NaN|0` = 0 -> `Math.max(3,0)` = 3), e todo id de face dos
+     passos seguintes passa a apontar pra outra face. */
+  it.each([
+    ['cubo (larg dimensional)', [['cubo', { id: 0, larg: NaN, alt: 1, prof: 1 }]]],
+    ['cilindro (raio dimensional)', [['cilindro', { id: 0, raio: NaN, altura: 1, lados: 6 }]]],
+    ['esfera (raio Infinity)', [['esfera', { id: 0, raio: Infinity, aneis: 3, lados: 6 }]]],
+    ['cone (altura)', [['cone', { id: 0, raio: 0.5, altura: NaN, lados: 6 }]]],
+    ['plano (largura)', [['plano', { id: 0, largura: NaN, seg: 2 }]]],
+    ['lathe (raio do perfil)', [['lathe', { id: 0, lados: 6, perfil: [[0, 0], [NaN, 1], [0, 2]] }]]],
+    ['loft (raio da seção)', [['loft', { id: 0, lados: 6, secoes: [{ pos: [0, 0, 0], raio: 0 }, { pos: [0, 1, 0], raio: NaN }] }]]],
+    ['moveV (deslocamento)', [['cubo', { id: 0, lado: 1 }], ['moveV', { v: 0, d: [NaN, 0, 0] }]]],
+    ['cilindro (lados = TOPO!)', [['cilindro', { id: 0, raio: 0.5, altura: 1, lados: NaN }]]],
+  ])('valor não-finito falha ALTO (throw) em %s — nunca coordenada NaN nem contagem degradada em silêncio', (_nome, passos) => {
+    expect(() => nucleo(passos as any, {}, {})).toThrow(/não-finito/);
+  });
+
+  it('TOPO não-finito NÃO degrada a contagem em silêncio (o caso que nenhum gate pegava: V=16/F=10 virava V=6/F=5 com malha limpa)', () => {
+    const bom = nucleo([['cilindro', { id: 0, raio: 0.5, altura: 1, lados: 'L' }]], {}, { L: 8 });
+    expect([bom.V.size, bom.F.size]).toEqual([16, 10]);
+    expect(() => nucleo([['cilindro', { id: 0, raio: 0.5, altura: 1, lados: 'L' }]], {}, { L: NaN })).toThrow(/não-finito/);
+  });
+
+  it('ponto com aridade ≠ 3 falha ALTO no st.vec (rede central) — sem isso o z virava undefined -> NaN calado', () => {
+    expect(() => nucleo([['cubo', { id: 0, lado: 1 }], ['moveV', { v: 0, d: [1, 2] as any }]], {}, {})).toThrow(/3 elementos/);
+    expect(() => nucleo([['cubo', { id: 0, lado: 1 }], ['moveV', { v: 0, d: { x: 1 } as any }]], {}, {})).toThrow(/3 elementos/);
+  });
 });
 
 /* PASSO 11b — PINCEL MACIO no NÚCLEO (só o MOTOR: a op + a rasterização, sem
@@ -1679,6 +1709,45 @@ describe('P4 — loft (seções ao longo de um caminho 3D)', () => {
     expect(n.orfaos[0]).toMatchObject({ op: 'loft', ref: 0 });
     expect(n.orfaos[0].motivo).toMatch(/comprimento zero/i);
     expect(n.V.size).toBe(0);
+    expect(n.F.size).toBe(0);
+  });
+
+  it('CUSP (o caminho dobra ~180°) GRITA e ABORTA — o anel colapsaria numa linha (achado adversarial do P4, fail-closed)', () => {
+    // vai pra +x e VOLTA: na seção do meio a tangente = média de [1,0,0] e [-1,0,0] = [0,0,0];
+    // sem a guarda, w = cross(u,0) = 0 e o anel do meio vira uma reta (degenerado silencioso, não-NaN)
+    const n = nucleo([['loft', { id: 0, lados: 6, secoes: [
+      { pos: [0, 0, 0], raio: 0.3 },
+      { pos: [1, 0, 0], raio: 0.3 },
+      { pos: [0, 0, 0], raio: 0.3 },
+    ] }]], {}, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0]).toMatchObject({ op: 'loft', ref: 1 });
+    expect(n.orfaos[0].motivo).toMatch(/cusp/i);
+    expect(n.V.size).toBe(0);   // fail-closed: nada construído (nem o anel colapsado)
+    expect(n.F.size).toBe(0);
+  });
+
+  /* 2º achado adversarial do P4: a ARIDADE do `pos` não era validada — a mesma
+     lei que o lathe já aplica no ponto do perfil (NIT-3 do P2). Sem ela,
+     `pos:[0,1]` construía com z=undefined -> 12 coordenadas NaN e ZERO órfãos
+     (o `lint-de-malha` do auditar pegava a jusante, mas sem dizer qual seção),
+     e `pos:{x:0}` estourava `a.map is not a function` (throw cru). */
+  it.each([
+    ['2 elementos', [0, 1]],
+    ['4 elementos', [0, 1, 0, 99]],
+    ['1 elemento', [1]],
+    ['vazio', []],
+    ['não-array (objeto)', { x: 0 } as unknown as number[]],
+    ['não-array (string)', 'alt' as unknown as number[]],
+  ])('pos com aridade errada (%s) GRITA e ABORTA o passo (0 V/0 F) — nunca coordenada NaN calada nem throw cru', (_nome, pos) => {
+    const n = nucleo([['loft', { id: 0, lados: 6, secoes: [
+      { pos: [0, 0, 0], raio: 0.3 },
+      { pos, raio: 0.3 },
+    ] }]], { alt: 1 }, {});
+    expect(n.orfaos).toHaveLength(1);
+    expect(n.orfaos[0]).toMatchObject({ op: 'loft', ref: 1 });
+    expect(n.orfaos[0].motivo).toMatch(/3 elementos/);
+    expect(n.V.size).toBe(0);   // fail-closed: 0 V/0 F — antes eram 12 vértices, todos com coordenada NaN
     expect(n.F.size).toBe(0);
   });
 

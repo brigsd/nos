@@ -26,6 +26,13 @@ polígonos) e faces 0..9 (laterais 0..7, fundo 8, topo 9); um `extruda` no passo
 1 cria a partir de 1000. A numeração depende só da POSIÇÃO do passo — id que
 aponta pro nada GRITA (órfão), nunca corrompe.
 
+**Lei que vale pra TODA op:** número tem que ser FINITO e ponto tem que ser
+`[x,y,z]`. `NaN`/`Infinity` ou aridade errada = **throw** (a peça inteira morre,
+de propósito). Não é preciosismo: num TOPO o estrago é invisível a todos os
+gates — `lados: NaN` vira `lados: 3` calado (`NaN|0` = 0), o cilindro cai de
+V=16/F=10 pra V=6/F=5 com malha limpa, e todo id de face dos passos seguintes
+passa a apontar pra outra face.
+
 **Vocabulário IMPLEMENTADO hoje** (o resto da tabela do `docs/oficina.md` é
 roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épico
 `docs/playground.md`, e esta tabela DEVE ser atualizada a cada op entregue):
@@ -37,7 +44,7 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 | `cone` | `raio` (PARAM, 0.5), `altura` (PARAM, 1), `lados` (TOPO, 8, mín 3) | anel da base b+0..b+lados−1 (y=0), ápice b+lados; tampa −y como o fundo do cilindro |
 | `plano` | `largura` (PARAM, 1), `profundidade` (PARAM, 1), `seg` (TOPO, 1, mín 1) | grade XZ centrada na origem, y=0, linha a linha; seg² quads +y — o chão |
 | `lathe` | `perfil:[[raio,y],...]` (≥2 pontos, PARAM), `lados` (TOPO, mín 3) | perfil 2D girado no eixo Y — generaliza a esfera (polo↔anel↔polo). Ponto de 2 elementos = canto reto PRA SEMPRE; ponto ≠ 2 elementos (a alça de curva reservada num 3º elemento, ou malformado) GRITA e ABORTA o passo (fail-closed). `raio` resolvido `===0` vira polo (1 vértice), `>0` vira anel (`lados` vértices), `<0` GRITA e aborta. Sem tampas automáticas: fechar uma ponta é terminar no eixo (raio 0) |
-| `loft` | `secoes:[{pos:[x,y,z],raio},...]` (≥2 seções, PARAM), `lados` (TOPO, mín 3) | seções ao longo de um CAMINHO 3D arbitrário — generaliza o lathe (que é o caso degenerado de caminho reto no eixo Y). Cada anel é orientado por TRANSPORTE PARALELO (não torce numa curva — o mesmo `quadro`/`transporta` do `galhoSeca` de `arvore-cartoon.js`, reimplementado local ao núcleo). `raio` resolvido `===0` vira polo, `>0` vira anel, `<0` GRITA e aborta — igual ao lathe. A chave `secao` (contorno 2D) é RESERVADA: GRITA e ABORTA o passo (fail-closed, o formato do contorno ainda não existe). Seção malformada ou segmento de comprimento zero (duas seções na mesma posição — tangente indefinida) GRITAM e ABORTAM igual. Sem tampas automáticas: fechar uma ponta é terminar a seção com raio 0 |
+| `loft` | `secoes:[{pos:[x,y,z],raio},...]` (≥2 seções, PARAM), `lados` (TOPO, mín 3) | seções ao longo de um CAMINHO 3D arbitrário — generaliza o lathe (que é o caso degenerado de caminho reto no eixo Y). Cada anel é orientado por TRANSPORTE PARALELO (não torce numa curva — o mesmo `quadro`/`transporta` do `galhoSeca` de `arvore-cartoon.js`, reimplementado local ao núcleo). `raio` resolvido `===0` vira polo, `>0` vira anel, `<0` GRITA e aborta — igual ao lathe. A chave `secao` (contorno 2D) é RESERVADA: GRITA e ABORTA o passo (fail-closed, o formato do contorno ainda não existe). Também GRITAM e ABORTAM: seção malformada, `pos` com aridade ≠ 3, segmento de comprimento zero (duas seções na mesma posição) e CUSP (caminho dobrando ~180°) — nos dois últimos a tangente fica indefinida. Sem tampas automáticas: fechar uma ponta é terminar a seção com raio 0 |
 | `moveV` | `v`, `d:[x,y,z]` | ADITIVO (`p+d`), nunca posição absoluta |
 | `extruda` | `face`, `dist` | só face única; anel novo nasce no bloco do passo |
 | `mescla` | `de:[ids]`, `para:id` | solda; face de área zero some quieta |

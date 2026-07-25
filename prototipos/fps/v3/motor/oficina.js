@@ -501,6 +501,12 @@ const OPS = {
       if (Object.hasOwn(s, 'secao')) { grita(st, i, 'loft', j, `seção ${j} usa a chave 'secao' (contorno 2D) — RESERVADA pro P5, ainda não implementada; hoje só 'raio' (círculo)`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
       if (s.pos == null) { grita(st, i, 'loft', j, `seção ${j} sem 'pos'`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
       if (s.raio == null) { grita(st, i, 'loft', j, `seção ${j} sem 'raio'`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
+      /* ARIDADE do pos (a mesma lei do ponto do perfil no lathe, D-115): sem
+         isto, `pos: [0,1]` construía com z=undefined -> coordenada NaN e 0
+         órfãos, e `pos: {x:0}` estourava throw cru. O `st.vec` também barra
+         (rede central), mas só a checagem AQUI diz QUAL seção — e mantém a
+         lei do fail-closed por PASSO em vez de matar a peça inteira. */
+      if (!Array.isArray(s.pos) || s.pos.length !== 3) { grita(st, i, 'loft', j, `pos da seção ${j} precisa ser [x,y,z] (3 elementos); recebido ${JSON.stringify(s.pos)}`); invalido = true; return { pos: [0, 0, 0], raio: 0, polo: true }; }
       const pos = st.vec(s.pos);
       const raio = st.num(s.raio);
       if (raio < 0) { grita(st, i, 'loft', j, `raio negativo (${raio}) na seção ${j} — não dá pra classificar polo/anel`); invalido = true; }
@@ -526,6 +532,19 @@ const OPS = {
     const dirSeg = [];
     for (let idx = 0; idx < ultimo; idx++) { const A = secoes[idx].pos, B = secoes[idx + 1].pos; dirSeg.push(norm3(B[0] - A[0], B[1] - A[1], B[2] - A[2])); }
     const tangente = (idx) => (idx === 0 ? dirSeg[0] : idx === ultimo ? dirSeg[ultimo - 1] : norm3(dirSeg[idx - 1][0] + dirSeg[idx][0], dirSeg[idx - 1][1] + dirSeg[idx][1], dirSeg[idx - 1][2] + dirSeg[idx][2]));
+
+    // CUSP (dobra ~180°): num interior, a soma dos dois segmentos vizinhos é ~zero -> a tangente
+    // fica indefinida (norm3 devolve [0,0,0] pelo guarda `||1`) e w = cross(u,0) = 0 -> o anel
+    // COLAPSA numa linha (degenerado SILENCIOSO, não-NaN). GRITA e ABORTA (fail-closed), como o
+    // comprimento-zero acima. (O `galhoSeca` de arvore-cartoon.js nunca cai aqui: o `desviar` dele
+    // só faz desvios PEQUENOS, jamais antiparalelos; o loft aceita caminho arbitrário e precisa da
+    // guarda explícita — foi o achado adversarial do P4.)
+    let cusp = false;
+    for (let idx = 1; idx < ultimo; idx++) {
+      const p = dirSeg[idx - 1], q = dirSeg[idx];
+      if (Math.hypot(p[0] + q[0], p[1] + q[1], p[2] + q[2]) < 1e-6) { grita(st, i, 'loft', idx, `seção ${idx} é um cusp (o caminho dobra ~180°) — tangente indefinida, o anel colapsaria numa linha`); cusp = true; }
+    }
+    if (cusp) return;
 
     // FRAME por TRANSPORTE PARALELO: semente em quadroLoft(tangente(0)), propaga com transportaLoft (a fórmula documentada acima)
     let u = quadroLoft(tangente(0))[0];
@@ -893,11 +912,33 @@ const OPS = {
 export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO = null) {
   const dict = { ...PARAMS, ...TOPO };
   const num = (v) => {
-    if (typeof v === 'number') return v;
+    /* NaN/Infinity é LIXO, não número — e sem esta guarda vazava por TODA op
+       (achado adversarial do P4). Dois estragos, o segundo pior:
+       (a) num DIMENSIONAL vira coordenada NaN na malha com 0 órfãos (o
+           `lint-de-malha` do auditar ainda pega a jusante, mas sem dizer QUAL
+           passo errou);
+       (b) num TOPO degrada CALADO e NENHUM gate pega: `lados: NaN` -> `NaN|0`
+           = 0 -> `Math.max(3, 0)` = 3, então um cilindro de V=16/F=10 vira
+           V=6/F=5 com malha LIMPA — a peça salva muda de CONTAGEM (e todo id
+           de face dos passos seguintes passa a apontar pra outra face) sem
+           nada reclamar. Mesma classe do fail-open do D-115.
+       Throw (não grita) porque é a lei que o `num` já aplica pro resto do
+       lixo: valor que não é número não constrói "quase". */
+    if (typeof v === 'number') {
+      if (!Number.isFinite(v)) throw new Error(`oficina: valor numérico não-finito: ${v}`);
+      return v;
+    }
     if (typeof v === 'string') { if (!(v in dict)) throw new Error(`oficina: parâmetro '${v}' não existe em PARAMS/TOPO`); return num(dict[v]); }
     throw new Error(`oficina: valor numérico inválido: ${JSON.stringify(v)}`);
   };
-  const vec = (a) => a.map(num);
+  /* ponto 3D SEMPRE: sem a guarda de aridade, `[0,1]` passava e o z virava
+     `undefined` -> NaN calado; não-array estourava `a.map is not a function`
+     (throw cru, sem diagnóstico). Rede CENTRAL — a op ainda valida por conta
+     pra GRITAR dizendo QUAL seção/ponto errou (a lei do lathe, D-115). */
+  const vec = (a) => {
+    if (!Array.isArray(a) || a.length !== 3) throw new Error(`oficina: ponto precisa ser [x,y,z] (3 elementos); recebido ${JSON.stringify(a)}`);
+    return a.map(num);
+  };
   /* materiais: o dicionário POR NOME (a peça declara em MATERIAIS) que a op
      `material` valida contra e o adaptarV3 lê pra montar os params por lote. Como
      PARAMS/TOPO, é dado da peça — o padrão {} deixa toda peça sem material intacta. */
