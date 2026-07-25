@@ -30,10 +30,25 @@ existem é avançar sem saber onde se pisa.
 
 ## O desafio (um só, de propósito)
 
-**A moto.** Escolhida porque a régua de pronto do `docs/playground.md` já a
-nomeia — "uma moto estilizada sai por PASSOS (espelho + lathe/loft + emissivo,
-que já existe)" — e porque P1–P4 foram construídos pensando nela. É a promessa
-mais explícita que o épico fez; testá-la é cobrar o que já foi prometido.
+**A moto.** Escolhida porque a régua de pronto do `docs/playground.md` já a nomeia
+e porque P1–P4 foram construídos pensando nela. É a promessa mais explícita que o
+épico fez; testá-la é cobrar o que já foi prometido.
+
+### O enunciado (palavras do ideador, 2026-07-25)
+
+> Crie uma motocicleta futurista estilizada, baixa e alongada, com duas rodas
+> grandes, carenagem envolvendo boa parte da estrutura e detalhes emissivos. A
+> silhueta precisa ser claramente reconhecível como uma moto e as proporções
+> devem parecer funcionais, mesmo sendo estilizadas. A peça deve ser simétrica,
+> visualmente coerente com o Atelier e totalmente criada por PASSOS, pronta para
+> ser reaberta e modificada na Oficina.
+
+### O orçamento: 3 ciclos
+
+**No máximo 3 ciclos completos de criar → medir → corrigir.** O limite é parte do
+experimento, não uma restrição administrativa: uma capacidade que precisa de 20
+ciclos pra sair do chão é, ela mesma, um achado sobre o teto. Ao fim do 3º ciclo
+o resultado é o que é — melhor ou pior, entra no relatório.
 
 **Um, não três.** Se a moto sozinha revelar três bloqueios, uma criatura e uma
 cena não acrescentam informação — só custo. E uma criatura misturaria
@@ -43,9 +58,16 @@ específico.
 ## Quem executa: um agente LIMPO (a regra que faz a medição valer)
 
 A execução **não** pode ser feita por quem construiu as ferramentas. Quem
-implementou as ops sabe que `espelha` só aceita `sel.f`, que o `loft` valida CCW
-por shoelace, onde cada armadilha mora — e produziria uma moto que prova pouco
-sobre o vocabulário e muito sobre a própria memória.
+implementou as ops carrega, de cabeça, as restrições de cada uma e o jeito certo
+de contorná-las — e produziria uma moto que prova pouco sobre o vocabulário e
+muito sobre a própria memória.
+
+**Este documento é lido pelo agente executor, então ele não enumera armadilha
+nenhuma de propósito.** Se uma restrição de op só é conhecível implementando (não
+está no cabeçalho da op, na tabela de `docs/oficina.md` nem na skill
+`criar-peca`), ela **tem** que ser descoberta pelo agente batendo nela — é assim
+que o furo no contrato formal aparece. Escrever a armadilha aqui destruiria a
+medição que este documento existe pra fazer.
 
 O agente executor recebe **só**: o repositório, as skills (`oficina`,
 `criar-peca`, `auditar-peca`, `nos-fluxo`), os documentos e a descrição do
