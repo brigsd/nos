@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-126 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+127 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -46,6 +46,7 @@
 - `RECURSOS.md` — Recursos do coder — o índice único
 - `TETO.md` — O TETO — medir o que a Oficina de fato cria
 - `VISION.md` — Visão — NÓS
+- `arquitetura-identidade-estavel.md` — Arquitetura — identidade estável de objetos e subpartes
 - `diagnostico-subpartes-semanticas.md` — Diagnóstico — subpartes semânticas da moto
 - `oficina-referencia.md` — Oficina — referência de como cada coisa funciona
 - `oficina.md` — A Oficina — editor de objetos dentro do jogo
