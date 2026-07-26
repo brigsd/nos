@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-125 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+126 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -42,6 +42,7 @@
 - `FERRAMENTAS.md` — FERRAMENTAS — o plano da potência (D-56)
 - `LORE.md` — Lore — a bíblia do NÓS
 - `NORTE.md` — NORTE — objetivo e método do NÓS
+- `PLANO.md` — PLANO — evolução da linguagem de criação do NÓS
 - `RECURSOS.md` — Recursos do coder — o índice único
 - `TETO.md` — O TETO — medir o que a Oficina de fato cria
 - `VISION.md` — Visão — NÓS
