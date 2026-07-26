@@ -139,14 +139,9 @@ Não misturar várias capacidades novas na mesma rodada, salvo quando forem inse
 
 ## Estado atual
 
-As duas corridas da moto provaram:
+A moto provou criação nativa em `PASSOS` e revelou que o teto de refinamento continua inferior ao teto de criação. Seleção semântica e proveniência local foram provadas em escala mínima, mas a sintaxe mínima de proveniência resolveu apenas 12 IDs e não cobriu as outras listas da moto.
 
-1. O vocabulário atual consegue criar uma peça real em `PASSOS`.
-2. `transladar` resolveu um bloqueio geral de composição.
-3. O teto de refinamento continua inferior ao teto de criação.
-4. Seleção e atribuição semânticas são o gargalo atual comprovado.
-5. Gates técnicos ainda não medem qualidade estética suficiente.
-6. A próxima capacidade deve ser escolhida depois de repetir o refino com o gargalo atual corrigido.
+A moto atual está congelada como espécime histórico e teste de regressão. Não haverá nova migração nem refinamento nela. O próximo passo é desenhar a arquitetura de identidade estável antes de implementar, conforme [`PLANO.md`](PLANO.md).
 
 ## Não negociáveis
 
