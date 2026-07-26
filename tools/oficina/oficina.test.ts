@@ -2399,6 +2399,34 @@ describe('D-130 — seleção por origem local de loft', () => {
   });
 });
 
+describe('Fase 2 — fixture de aliases estáveis de loft', () => {
+  const secoes = [0, 1, 2, 3].map((y) => ({ pos: [0, y, 0], raio: 1 }));
+  const loft = (id: number, origemId: number): any => ['loft', { id, origemId, lados: 4, secoes }];
+  const aliases: any = [
+    ['faixaA', { origem: { op: 'loft', id: 10, faixa: 1 } }],
+    ['duasFaixas', { unir: [{ origem: { op: 'loft', id: 10, faixa: 1 } }, { origem: { op: 'loft', id: 20, faixa: 2 } }] }],
+  ];
+  it('alias direto e união sobrevivem inserção anterior e transformação, sem IDs globais', () => {
+    const base: any[] = [loft(0, 10), loft(BLOCO, 20), ['pincel', { modo: 'face', sel: { alias: 'duasFaixas' }, cor: '#123456' }], ['transladar', { d: [1, 0, 0], sel: { alias: 'faixaA' } }]];
+    const antes = nucleo(base, {}, {}, {}, null, aliases);
+    const depois = nucleo([['cubo', { id: 0, lado: 1 }], loft(BLOCO, 10), loft(BLOCO * 2, 20), ...base.slice(2)], {}, {}, {}, null, aliases);
+    expect(antes.orfaos).toHaveLength(0); expect(depois.orfaos).toHaveLength(0);
+    expect([...antes.F.values()].filter((f: any) => f.cor === '#123456')).toHaveLength(8);
+    expect([...depois.F.values()].filter((f: any) => f.cor === '#123456')).toHaveLength(8);
+    expect(JSON.stringify(aliases)).not.toMatch(/\b1000\b|\b1004\b/);
+    expect(JSON.stringify(neutroCanonico(nucleo(base, {}, {}, {}, null, JSON.parse(JSON.stringify(aliases)))))).toBe(JSON.stringify(neutroCanonico(antes)));
+  });
+  it('duplicatas, cadeia, origem/faixa inválida gritam e alias não aplica parcialmente', () => {
+    expect(() => nucleo([], {}, {}, {}, null, [['x', {}], ['x', {}]])).toThrow(/duplicado/);
+    const casos: any[] = [
+      [['x', { alias: 'faixaA' }]],
+      [['x', { origem: { op: 'loft', id: 99, faixa: 1 } }]],
+      [['x', { origem: { op: 'loft', id: 10, faixa: 99 } }]],
+    ];
+    for (const a of casos) { const n = nucleo([loft(0, 10), loft(BLOCO, 10), ['pincel', { modo: 'face', sel: { alias: 'x' }, cor: '#f00' }]], {}, {}, {}, null, a); expect(n.orfaos.length).toBeGreaterThan(0); expect([...n.F.values()].some((f: any) => f.cor === '#f00')).toBe(false); }
+  });
+});
+
 /* P8b do playground — chamferBox. */
 describe('P8b — chamferBox (caixa cantelada: cantos e arestas chanfrados)', () => {
   const newell = (V: any, vs: number[]) => {

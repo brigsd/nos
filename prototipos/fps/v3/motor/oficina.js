@@ -163,7 +163,7 @@ function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
     grita(st, i, op, 'sel', 'seleção inválida: sel precisa ser um objeto com v, f, grupo, regiao e/ou origem');
     return { vertices: new Set(), faces: new Set() };
   }
-  const conhecidas = new Set(['v', 'f', 'grupo', 'regiao', 'origem']);
+  const conhecidas = new Set(['v', 'f', 'grupo', 'regiao', 'origem', 'alias']);
   for (const chave of Object.keys(sel)) if (!conhecidas.has(chave)) grita(st, i, op, `sel.${chave}`, `seleção desconhecida '${chave}' (só v, f, grupo, regiao e origem)`);
 
   const vertices = new Set(), faces = new Set();
@@ -239,6 +239,25 @@ function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
         else if (!faixa.length) grita(st, i, op, 'sel.origem.faixa', `faixa ${origem.faixa} da origem loft:${origem.id} não tem faces laterais`);
         else if (origem.lado != null && origem.lado >= faixa.length) grita(st, i, op, 'sel.origem.lado', `lado ${origem.lado} fora do limite da faixa ${origem.faixa} (0..${faixa.length - 1})`);
         else for (const fid of origem.lado == null ? faixa : [faixa[origem.lado]]) adicionaFace(fid);
+      }
+    }
+  }
+  if (sel.alias != null) {
+    teveChave = true;
+    const nome = sel.alias;
+    const def = st.aliases.get(nome);
+    if (typeof nome !== 'string' || !def) grita(st, i, op, 'sel.alias', `alias '${nome}' inexistente`);
+    else {
+      const termos = def.unir ?? [def];
+      if (!Array.isArray(termos) || !termos.length) grita(st, i, op, 'sel.alias', `alias '${nome}' inválido: precisa apontar para origem ou unir`);
+      else {
+        const antes = st.orfaos.length;
+        for (const termo of termos) {
+          if (!termo || typeof termo !== 'object' || Array.isArray(termo) || termo.alias != null || termo.origem == null || Object.keys(termo).some((k) => k !== 'origem')) { grita(st, i, op, 'sel.alias', `alias '${nome}' inválido: aliases não encadeiam e só aceitam origem`); continue; }
+          const r = resolverSelecao(st, termo, op, i);
+          for (const v of r.vertices) vertices.add(v); for (const f of r.faces) faces.add(f);
+        }
+        if (st.orfaos.length > antes) { vertices.clear(); faces.clear(); }
       }
     }
   }
@@ -1528,7 +1547,7 @@ export const OPS = {
    `dict` funde PARAMS e TOPO — os passos citam o NOME (raio: 'troncoR'), então
    trocar o valor reconstrói sem tocar em número nenhum da lista.
 ---------------------------------------------------------------------------- */
-export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO = null) {
+export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO = null, ALIASES = []) {
   const dict = { ...PARAMS, ...TOPO };
   const num = (v) => {
     /* NaN/Infinity é LIXO, não número — e sem esta guarda vazava por TODA op
@@ -1568,7 +1587,14 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO
      pesos vazio -> canon e mesh byte-idênticos ao de antes (compat inegociável). */
   const esqueleto = ESQUELETO ? resolverEsqueleto(ESQUELETO, vec) : null;
   const ossoSet = esqueleto ? new Set(esqueleto.ossos.map((o) => o.nome)) : null;
-  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], partes: {}, origens: new Map(), num, vec, materiais: MATERIAIS, esqueleto, ossoSet, pesos: new Map() };
+  const aliases = new Map();
+  if (!Array.isArray(ALIASES)) throw new Error('oficina: ALIASES precisa ser uma lista');
+  for (const ent of ALIASES) {
+    if (!Array.isArray(ent) || ent.length !== 2 || typeof ent[0] !== 'string' || !ent[0]) throw new Error('oficina: alias inválido');
+    if (aliases.has(ent[0])) throw new Error(`oficina: alias duplicado '${ent[0]}'`);
+    aliases.set(ent[0], ent[1]);
+  }
+  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], partes: {}, origens: new Map(), aliases, num, vec, materiais: MATERIAIS, esqueleto, ossoSet, pesos: new Map() };
 
   PASSOS.forEach((passo, i) => {
     const [op, args = {}] = passo;
