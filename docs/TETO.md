@@ -196,3 +196,16 @@ editar") — onde esta peça foi pior: 2.164 ids de face escritos à mão, 42% d
 arquivo, 26 dos 51 passos só de pintura. Ela também é a primeira corrida com uma
 **régua objetiva de forma**: a moto declara `meta.simetria:'x'` e hoje FALHA o
 `auditar` de propósito; consertar isso é alvo medido, não julgamento.
+
+## 3ª corrida — refino por significado (D-130)
+
+Relatório: [`teto-moto-refino-3-relatorio.md`](./teto-moto-refino-3-relatorio.md).
+
+A terceira corrida preserva os 58 passos da segunda e acrescenta 11 passos
+localizados: para-lama com seção maior, encaixes tubulares mais finos, painel
+lateral entre garfo e corpo e crista contínua de rabeta–tanque. A prova de
+semântica é deliberadamente restrita: duas partes novas são nomeadas uma vez e
+recebem seis atributos por `sel.grupo`; uma região que capturava 10 faces
+antigas além das 30 do painel foi medida e rejeitada em favor da seleção literal
+exata. O resultado é 1470 V / 1600 F, 0 órfãos e os gates objetivos limpos;
+forma segue em JULGAMENTO DO IDEADOR, sem gabarito.

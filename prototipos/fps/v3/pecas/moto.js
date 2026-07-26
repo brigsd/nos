@@ -1,7 +1,8 @@
 /* moto — MOTOCICLETA FUTURISTA ESTILIZADA, 100% em PASSOS (nenhuma linha de
    geometria em JS: `construir` é só `executar`). É a peça da 1ª corrida do
-   experimento do TETO (docs/TETO.md) REFINADA na 2ª, a partir das 6 críticas do
-   ideador — o que deu e o que não deu está em docs/teto-moto-refino-relatorio.md.
+   experimento do TETO (docs/TETO.md) REFINADA na 2ª e na 3ª, a partir das
+   críticas do ideador — os relatórios estão em docs/teto-moto-refino-relatorio.md
+   e docs/teto-moto-refino-3-relatorio.md.
 
    O QUE MUDOU NO REFINO (antes: 51 passos, 492 V / 558 F, 7 ops)
      1 RODAS — o perfil deixou de ser um domo liso. Agora tem CUBO saliente,
@@ -44,9 +45,10 @@
      · `contorno` não aceita conta nem escala — cada estrela/seção/retângulo vai
        escrito por extenso (266 pontos = 532 números literais neste arquivo), e
        por isso a roda traseira repete a estrela da dianteira só que maior;
-     · `pincel`/`liso`/`material`/`parte`/`solido`/`espelha` só aceitam
-       `faces:[ids]` literal (nem `grupo`, nem `regiao`, embora `rotaciona` e
-       `transladar` aceitem) — daí as listas enormes abaixo: 6.374 ids;
+     · seleção semântica agora existe, mas não substitui toda lista: `grupo` e
+       `regiao` só entram quando descrevem exatamente a intenção. Nesta 3ª
+       corrida, uma região do espelho capturava 10 faces antigas e foi mantida
+       literal; os atributos dos dois volumes novos seguem seus grupos;
      · não existe op de ESCALA nem TORO nem booleano. O pneu é um sólido de
        revolução de perfil monótono no eixo, nunca um anel com furo.
 
@@ -118,10 +120,10 @@ export const PARAMS = {
   cowlZ4: 0.838,
   garfoRa: 0.026,
   garfoRb: 0.019,
-  garfoRc: 0.033,
-  bracoRa: 0.03,
+  garfoRc: 0.027,
+  bracoRa: 0.027,
   bracoRb: 0.021,
-  bracoRc: 0.036,
+  bracoRc: 0.029,
   amortRa: 0.02,
   amortRb: 0.032,
   guidaoR: 0.021,
@@ -168,8 +170,9 @@ export const MATERIAIS = {
 };
 
 /* exportado (não `const` privado): sem isto a Oficina não relê a lista e o
-   arquivo nunca mais reabre pra edição. GEOMETRIA nos 23 primeiros passos,
-   ATRIBUTO depois — assim mexer numa cor não renumera face nenhuma. */
+   arquivo nunca mais reabre pra edição. A geometria original vem antes dos
+   atributos; o refino 3 só anexa volumes e seus atributos, sem renumerar nada
+   do corpo existente. */
 export const PASSOS = [
   // RODA DIANTEIRA — 20 estações ao longo de +X: cubo, BRAÇOS (contorno em estrela), aro, sulco, talão, flanco e banda de rodagem. Como todas as seções têm o mesmo y/z, a tangente é (1,0,0) CONSTANTE e a simetria em x sai EXATA.
   ['loft', {
@@ -364,12 +367,12 @@ export const PASSOS = [
     id: 20000, lados: 'ladosChapa',
     secoes: [
       { pos: [0, 0.7772, 0.5888], raio: 0 },
-      { pos: [0, 0.8132, 0.6248], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
-      { pos: [0, 0.8729, 0.707], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
-      { pos: [0, 0.9274, 0.849], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
-      { pos: [0, 0.9333, 1.0176], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
-      { pos: [0, 0.8888, 1.163], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
-      { pos: [0, 0.8243, 1.2624], contorno: [[0.086, 0.014], [-0.086, 0.014], [-0.086, -0.014], [0.086, -0.014]] },
+      { pos: [0, 0.8132, 0.6248], contorno: [[0.112, 0.034], [-0.112, 0.034], [-0.112, -0.034], [0.112, -0.034]] },
+      { pos: [0, 0.8729, 0.707], contorno: [[0.112, 0.034], [-0.112, 0.034], [-0.112, -0.034], [0.112, -0.034]] },
+      { pos: [0, 0.9274, 0.849], contorno: [[0.112, 0.034], [-0.112, 0.034], [-0.112, -0.034], [0.112, -0.034]] },
+      { pos: [0, 0.9333, 1.0176], contorno: [[0.112, 0.034], [-0.112, 0.034], [-0.112, -0.034], [0.112, -0.034]] },
+      { pos: [0, 0.8888, 1.163], contorno: [[0.112, 0.034], [-0.112, 0.034], [-0.112, -0.034], [0.112, -0.034]] },
+      { pos: [0, 0.8243, 1.2624], contorno: [[0.112, 0.034], [-0.112, 0.034], [-0.112, -0.034], [0.112, -0.034]] },
       { pos: [0, 0.7896, 1.2996], raio: 0 },
     ],
   }],
@@ -846,6 +849,60 @@ export const PASSOS = [
     3007, 3008, 3009, 3010, 3011, 3012, 3013, 3014, 3015, 3016, 3017, 3018, 3019, 3020, 3021, 3022,
     3023, 3024, 3025,
   ] }],
+  // REFINO 3: carenagem lateral no vazio entre garfo e corpo. A região natural
+  // também contém 10 faces antigas, então o espelho conserva a seleção literal
+  // exata em vez de fingir que a caixa representa só a peça nova.
+  ['loft', {
+    id: 58000, lados: 'ladosTubo',
+    secoes: [
+      { pos: [0.17, 0.78, 0.34], raio: 0 },
+      { pos: [0.17, 0.792, 0.39], raio: 0.046 },
+      { pos: [0.17, 0.838, 0.53], raio: 0.07 },
+      { pos: [0.17, 0.858, 0.665], raio: 0.064 },
+      { pos: [0.17, 0.842, 0.755], raio: 0.04 },
+      { pos: [0.17, 0.824, 0.79], raio: 0 },
+    ],
+  }],
+  ['espelha', { eixo: 'x', pos: 0, sel: { f: [
+    58000, 58001, 58002, 58003, 58004, 58005, 58006, 58007, 58008, 58009,
+    58010, 58011, 58012, 58013, 58014, 58015, 58016, 58017, 58018, 58019,
+    58020, 58021, 58022, 58023, 58024, 58025, 58026, 58027, 58028, 58029,
+  ] } }],
+  // Uma crista contínua faz rabeta, assento e tanque lerem como um só gesto.
+  ['loft', {
+    id: 60000, lados: 8,
+    secoes: [
+      { pos: [0, 0.992, -1.1], raio: 0 },
+      { pos: [0, 0.994, -0.985], contorno: [[0, -0.025], [0.05, -0.02], [0.07, 0], [0.05, 0.03], [0, 0.04], [-0.05, 0.03], [-0.07, 0], [-0.05, -0.02]] },
+      { pos: [0, 0.972, -0.72], contorno: [[0, -0.04], [0.078, -0.032], [0.11, 0], [0.078, 0.045], [0, 0.06], [-0.078, 0.045], [-0.11, 0], [-0.078, -0.032]] },
+      { pos: [0, 0.942, -0.42], contorno: [[0, -0.05], [0.092, -0.04], [0.13, 0], [0.092, 0.06], [0, 0.08], [-0.092, 0.06], [-0.13, 0], [-0.092, -0.04]] },
+      { pos: [0, 0.958, -0.08], contorno: [[0, -0.065], [0.12, -0.055], [0.17, 0], [0.12, 0.08], [0, 0.105], [-0.12, 0.08], [-0.17, 0], [-0.12, -0.055]] },
+      { pos: [0, 0.944, 0.19], contorno: [[0, -0.05], [0.092, -0.04], [0.13, 0], [0.092, 0.06], [0, 0.075], [-0.092, 0.06], [-0.13, 0], [-0.092, -0.04]] },
+      { pos: [0, 0.91, 0.38], raio: 0 },
+    ],
+  }],
+  // As listas abaixo nomeiam os novos lotes uma única vez. Atribuição e liso
+  // passam a seguir o significado estável da peça, por `sel.grupo`.
+  ['parte', { nome: 'painelDianteiro', faces: [
+    58000, 58001, 58002, 58003, 58004, 58005, 58006, 58007, 58008, 58009, 58010, 58011,
+    58012, 58013, 58014, 58015, 58016, 58017, 58018, 58019, 58020, 58021, 58022, 58023,
+    58024, 58025, 58026, 58027, 58028, 58029,
+    59000, 59001, 59002, 59003, 59004, 59005, 59006, 59007, 59008, 59009, 59010, 59011,
+    59012, 59013, 59014, 59015, 59016, 59017, 59018, 59019, 59020, 59021, 59022, 59023,
+    59024, 59025, 59026, 59027, 59028, 59029,
+  ] }],
+  ['material', { sel: { grupo: 'painelDianteiro' }, usa: 'laca' }],
+  ['pincel', { modo: 'face', sel: { grupo: 'painelDianteiro' }, cor: '#323353' }],
+  ['liso', { sel: { grupo: 'painelDianteiro' } }],
+  ['parte', { nome: 'cristaTanqueRabeta', faces: [
+    60000, 60001, 60002, 60003, 60004, 60005, 60006, 60007, 60008, 60009, 60010, 60011,
+    60012, 60013, 60014, 60015, 60016, 60017, 60018, 60019, 60020, 60021, 60022, 60023,
+    60024, 60025, 60026, 60027, 60028, 60029, 60030, 60031, 60032, 60033, 60034, 60035,
+    60036, 60037, 60038, 60039, 60040, 60041, 60042, 60043, 60044, 60045, 60046, 60047,
+  ] }],
+  ['material', { sel: { grupo: 'cristaTanqueRabeta' }, usa: 'laca' }],
+  ['pincel', { modo: 'face', sel: { grupo: 'cristaTanqueRabeta' }, cor: '#4d9be6' }],
+  ['liso', { sel: { grupo: 'cristaTanqueRabeta' } }],
 ];
 
 export const meta = {
