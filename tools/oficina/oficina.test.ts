@@ -2330,6 +2330,76 @@ describe('D-129 — seleção semântica uniforme (atributos + espelha)', () => 
    face ("cantelação" — cada FACE encolhe, não cada canto vira 1 corte). Os testes
    abaixo travam a numeração EXATA, o manifold+winding nas 26 faces (não numa
    amostra) e a fronteira exata do `chanfro` válido — a mesma disciplina do P1/P6. */
+/* D-130 — proveniência local de loft. `origemId` é identidade declarada do
+   gerador; o índice `st.origens` só existe durante nucleo e nunca entra no
+   canônico. Faixa é zero-based: 2 liga as seções 2 e 3. */
+describe('D-130 — seleção por origem local de loft', () => {
+  const secoes = [0, 1, 2, 3].map((y) => ({ pos: [0, y, 0], raio: 1 }));
+  const loft = (id: number, origemId = 1000): any => ['loft', { id, origemId, lados: 4, secoes }];
+  const pintaOrigem = (extra: any = {}): any => ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 1000, faixa: 2, ...extra } }, cor: '#123456' }];
+  const canon = (passos: any[]) => JSON.stringify(neutroCanonico(nucleo(passos, {}, {})));
+
+  it('fixture: faces:[ids] e sel.origem selecionam a mesma faixa, byte a byte', () => {
+    const legado = [loft(0), ['pincel', { modo: 'face', faces: [8, 9, 10, 11], cor: '#123456' }]];
+    const origem = [loft(0), pintaOrigem()];
+    expect(canon(origem)).toBe(canon(legado));
+    expect(canon([loft(0)])).toBe(canon([['loft', { id: 0, lados: 4, secoes }]])); // índice não entra no canônico
+    expect(nucleo(origem, {}, {}).orfaos).toHaveLength(0);
+  });
+
+  it('faixa+lado resolve uma só face lateral local', () => {
+    const n = nucleo([loft(0), pintaOrigem({ lado: 2 })], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect([...n.F.values()].filter((f: any) => f.cor === '#123456').map((f: any) => f.id)).toEqual([10]);
+  });
+
+  it('sobrevive à geometria não relacionada antes do loft; literal antigo é posicional e precisa ser recalculado', () => {
+    const comAntes = [['cubo', { id: 0, lado: 1 }], loft(BLOCO), pintaOrigem()];
+    const semRecalcular = [['cubo', { id: 0, lado: 1 }], loft(BLOCO), ['pincel', { modo: 'face', faces: [8, 9, 10, 11], cor: '#123456' }]];
+    const recalculado = [['cubo', { id: 0, lado: 1 }], loft(BLOCO), ['pincel', { modo: 'face', faces: [1008, 1009, 1010, 1011], cor: '#123456' }]];
+    const porOrigem = nucleo(comAntes, {}, {}), literalVelho = nucleo(semRecalcular, {}, {});
+    expect(porOrigem.orfaos).toHaveLength(0);
+    expect([...porOrigem.F.values()].filter((f: any) => f.cor === '#123456').map((f: any) => f.id)).toEqual([1008, 1009, 1010, 1011]);
+    expect(literalVelho.orfaos.some((o: any) => o.op === 'pincel' && /inexistente|vazia/.test(o.motivo))).toBe(true);
+    expect(canon(comAntes)).toBe(canon(recalculado));
+  });
+
+  it('replay, round-trip e seleção literal legada continuam determinísticos', () => {
+    const passos = [loft(0), pintaOrigem()];
+    expect(canon(passos)).toBe(canon(JSON.parse(JSON.stringify(passos))));
+    expect(canon(passos)).toBe(canon(passos));
+    const legado = [loft(0), ['pincel', { modo: 'face', faces: [8, 9, 10, 11], cor: '#123456' }]];
+    expect(canon(legado)).toBe(canon(passos));
+  });
+
+  it('origem inválida, vazia, desconhecida ou ambígua GRITA e não pinta por acidente', () => {
+    const casos: any[] = [
+      { op: 'loft', id: 999, faixa: 2 },
+      { op: 'cone', id: 1000, faixa: 2 },
+      { op: 'loft', id: 1000, faixa: 9 },
+      { op: 'loft', id: 1000, faixa: 2, lado: 9 },
+      { op: 'loft', id: 1000, faixa: 2, surpresa: true },
+      {},
+    ];
+    for (const origem of casos) {
+      const n = nucleo([loft(0), ['pincel', { modo: 'face', sel: { origem }, cor: '#123456' }]], {}, {});
+      expect(n.orfaos.some((o: any) => o.op === 'pincel')).toBe(true);
+      expect([...n.F.values()].some((f: any) => f.cor === '#123456')).toBe(false);
+    }
+    const ambiguo = nucleo([loft(0), loft(BLOCO), pintaOrigem()], {}, {});
+    expect(ambiguo.orfaos.some((o: any) => o.op === 'pincel' && /ambígua/.test(o.motivo))).toBe(true);
+  });
+
+  it('rotaciona, transladar e seleção semântica atual não regressam ao usar o mesmo resolvedor', () => {
+    const n = nucleo([loft(0), ['transladar', { d: [1, 0, 0], sel: { origem: { op: 'loft', id: 1000, faixa: 2 } } }], ['rotaciona', { eixo: 'y', graus: 0, sel: { origem: { op: 'loft', id: 1000, faixa: 2 } } }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.V.get(8)![0]).toBe(nucleo([loft(0)], {}, {}).V.get(8)![0] + 1);
+    const grupo = nucleo([['cubo', { id: 0, lado: 1 }], ['parte', { nome: 'topo', faces: [1] }], ['pincel', { modo: 'face', sel: { grupo: 'topo' }, cor: '#123456' }]], {}, {});
+    expect(grupo.orfaos).toHaveLength(0);
+  });
+});
+
+/* P8b do playground — chamferBox. */
 describe('P8b — chamferBox (caixa cantelada: cantos e arestas chanfrados)', () => {
   const newell = (V: any, vs: number[]) => {
     let nx = 0, ny = 0, nz = 0;

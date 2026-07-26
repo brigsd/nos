@@ -361,7 +361,7 @@ Sem o servidor no ar, cai pro download comum — funciona, mas você move o arqu
 | `material` | `faces:[ids]` (legado) ou `sel`, `usa` | Aplica um material declarado em `MATERIAIS`. |
 | `solido` | `faces:[ids]` (legado) ou `sel` | Marca as faces resolvidas que entram na colisão. |
 
-### Seleção uniforme (`sel`) — D-129
+### Seleção uniforme (`sel`) — D-129 / D-131
 
 `rotaciona`, `transladar`, `displace`, `espelha` e os atributos por face
 (`pincel` no modo `face`, `liso`, `material`, `solido`, `parte`) usam a MESMA
@@ -372,6 +372,7 @@ sel: { f: [ids] }                         // faces literais
 sel: { v: [ids] }                         // vértices literais
 sel: { grupo: 'nome-da-parte' }           // faces já nomeadas por `parte`
 sel: { regiao: { min:[x,y,z], max:[x,y,z] } }
+sel: { origem: { op:'loft', id:1000, faixa:2, lado?:1 } }
 ```
 
 Para uma op de VÉRTICE, `f`/`grupo` adicionam os cantos das faces e `regiao`
@@ -379,6 +380,13 @@ adiciona cada vértice dentro da caixa inclusiva — é o comportamento históri
 `rotaciona`/`transladar`. Para uma op de FACE, `v` alcança toda face incidente a
 algum vértice citado; `regiao` alcança somente a face cujos **todos** os cantos
 estão dentro da caixa. Isso evita pintar/materializar meia face por acidente.
+
+`origem` é, nesta rodada, exclusivo de `loft`: o gerador declara
+`origemId:1000`, e `op:'loft'` + `id:1000` encontra-o no índice interno
+reconstruído a cada `nucleo` (nunca no canônico). `faixa` é zero-based: `2`
+liga as seções 2 e 3; `lado`, se presente, é o lado zero-based daquela faixa.
+Não há tampas. A identidade posicional `id` do PASSO permanece como sempre;
+`origemId` é a identidade estável aditiva exigida por esta seleção.
 
 `faces:[ids]` permanece para todas as peças salvas e não pode aparecer junto de
 `sel` na mesma op: a mistura é ambígua e GRITA. Toda chave de seleção

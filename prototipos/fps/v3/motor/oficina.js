@@ -160,11 +160,11 @@ function confereId(st, i, op, args) {
 function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
   if (sel == null) return { vertices: new Set(st.V.keys()), faces: new Set(st.F.keys()) };
   if (typeof sel !== 'object' || Array.isArray(sel)) {
-    grita(st, i, op, 'sel', 'seleção inválida: sel precisa ser um objeto com v, f, grupo e/ou regiao');
+    grita(st, i, op, 'sel', 'seleção inválida: sel precisa ser um objeto com v, f, grupo, regiao e/ou origem');
     return { vertices: new Set(), faces: new Set() };
   }
-  const conhecidas = new Set(['v', 'f', 'grupo', 'regiao']);
-  for (const chave of Object.keys(sel)) if (!conhecidas.has(chave)) grita(st, i, op, `sel.${chave}`, `seleção desconhecida '${chave}' (só v, f, grupo e regiao)`);
+  const conhecidas = new Set(['v', 'f', 'grupo', 'regiao', 'origem']);
+  for (const chave of Object.keys(sel)) if (!conhecidas.has(chave)) grita(st, i, op, `sel.${chave}`, `seleção desconhecida '${chave}' (só v, f, grupo, regiao e origem)`);
 
   const vertices = new Set(), faces = new Set();
   const adicionaFace = (fid) => {
@@ -215,7 +215,34 @@ function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
       }
     }
   }
-  if (!teveChave) grita(st, i, op, 'sel', 'seleção vazia: informe v, f, grupo ou regiao');
+  if (sel.origem != null) {
+    teveChave = true;
+    const origem = sel.origem;
+    const chaves = ['op', 'id', 'faixa', 'lado'];
+    if (typeof origem !== 'object' || Array.isArray(origem) || origem == null || Object.keys(origem).some((k) => !chaves.includes(k)) || !Object.hasOwn(origem, 'op') || !Object.hasOwn(origem, 'id') || !Object.hasOwn(origem, 'faixa')) {
+      grita(st, i, op, 'sel.origem', 'seleção origem inválida: precisa ter op, id e faixa; lado é opcional');
+    } else if (origem.op !== 'loft') {
+      grita(st, i, op, 'sel.origem.op', `origem desconhecida: op '${origem.op}' (só loft nesta rodada)`);
+    } else if (!Number.isSafeInteger(origem.id) || origem.id < 0) {
+      grita(st, i, op, 'sel.origem.id', 'origem inválida: id precisa ser inteiro não-negativo');
+    } else if (!Number.isSafeInteger(origem.faixa) || origem.faixa < 0) {
+      grita(st, i, op, 'sel.origem.faixa', 'origem inválida: faixa precisa ser inteiro não-negativo');
+    } else if (origem.lado != null && (!Number.isSafeInteger(origem.lado) || origem.lado < 0)) {
+      grita(st, i, op, 'sel.origem.lado', 'origem inválida: lado precisa ser inteiro não-negativo');
+    } else {
+      const registros = st.origens.get(`loft:${origem.id}`) ?? [];
+      if (!registros.length) grita(st, i, op, 'sel.origem', `origem loft:${origem.id} inexistente ou ainda não criada`);
+      else if (registros.length !== 1) grita(st, i, op, 'sel.origem', `origem loft:${origem.id} ambígua: ${registros.length} geradores declararam esta identidade`);
+      else {
+        const faixa = registros[0].faixas[origem.faixa];
+        if (!faixa) grita(st, i, op, 'sel.origem.faixa', `faixa ${origem.faixa} fora do limite da origem loft:${origem.id}`);
+        else if (!faixa.length) grita(st, i, op, 'sel.origem.faixa', `faixa ${origem.faixa} da origem loft:${origem.id} não tem faces laterais`);
+        else if (origem.lado != null && origem.lado >= faixa.length) grita(st, i, op, 'sel.origem.lado', `lado ${origem.lado} fora do limite da faixa ${origem.faixa} (0..${faixa.length - 1})`);
+        else for (const fid of origem.lado == null ? faixa : [faixa[origem.lado]]) adicionaFace(fid);
+      }
+    }
+  }
+  if (!teveChave) grita(st, i, op, 'sel', 'seleção vazia: informe v, f, grupo, regiao ou origem');
   if (!vertices.size && !faces.size && !vazioNoop) grita(st, i, op, 'sel', 'seleção vazia: nenhum alvo válido foi encontrado');
   return { vertices, faces };
 }
@@ -747,6 +774,7 @@ export const OPS = {
      inserir qualquer vértice — throw como o lathe. */
   loft(st, a, i) {
     const b = confereId(st, i, 'loft', a);
+    if (a.origemId != null && (!Number.isSafeInteger(a.origemId) || a.origemId < 0)) return grita(st, i, 'loft', 'origemId', 'origemId precisa ser inteiro não-negativo');
     const secoesArg = a.secoes ?? [];
     if (secoesArg.length < 2) return grita(st, i, 'loft', secoesArg.length, `secoes precisa de ao menos 2 (tem ${secoesArg.length})`);
     const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // TOPO (pra TODA seção): muda a CONTAGEM
@@ -865,17 +893,24 @@ export const OPS = {
 
     // FACES — cursor de face análogo, por segmento consecutivo (i,i+1) — idêntico ao lathe
     let fCursor = 0;
+    const faixas = Array.from({ length: info.length - 1 }, () => []);
     for (let idx = 0; idx < info.length - 1; idx++) {
       const A = info[idx], B = info[idx + 1];
       if (A.polo && B.polo) { grita(st, i, 'loft', idx, 'polo↔polo adjacente — seção degenerada, sem face neste segmento'); continue; }   // 0 faces, cursor não avança
       if (!A.polo && !B.polo) {
-        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [A.ids[j], B.ids[j], B.ids[n], A.ids[n]]); }   // anel<->anel: quads (a faixa da esfera)
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L, fid = b + fCursor + j; addF(st, fid, [A.ids[j], B.ids[j], B.ids[n], A.ids[n]]); faixas[idx].push(fid); }   // anel<->anel: quads (a faixa da esfera)
       } else if (A.polo) {
-        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [A.id, B.ids[j], B.ids[n]]); }   // polo atrás -> anel na frente: leque SUL
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L, fid = b + fCursor + j; addF(st, fid, [A.id, B.ids[j], B.ids[n]]); faixas[idx].push(fid); }   // polo atrás -> anel na frente: leque SUL
       } else {
-        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [B.id, A.ids[n], A.ids[j]]); }   // anel atrás -> polo na frente: leque NORTE (invertido)
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L, fid = b + fCursor + j; addF(st, fid, [B.id, A.ids[n], A.ids[j]]); faixas[idx].push(fid); }   // anel atrás -> polo na frente: leque NORTE (invertido)
       }
       fCursor += L;
+    }
+    if (a.origemId != null) {
+      const chave = `loft:${a.origemId}`;
+      const registros = st.origens.get(chave) ?? [];
+      registros.push({ faixas });
+      st.origens.set(chave, registros);
     }
   },
 
@@ -1533,7 +1568,7 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO
      pesos vazio -> canon e mesh byte-idênticos ao de antes (compat inegociável). */
   const esqueleto = ESQUELETO ? resolverEsqueleto(ESQUELETO, vec) : null;
   const ossoSet = esqueleto ? new Set(esqueleto.ossos.map((o) => o.nome)) : null;
-  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], partes: {}, num, vec, materiais: MATERIAIS, esqueleto, ossoSet, pesos: new Map() };
+  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], partes: {}, origens: new Map(), num, vec, materiais: MATERIAIS, esqueleto, ossoSet, pesos: new Map() };
 
   PASSOS.forEach((passo, i) => {
     const [op, args = {}] = passo;
