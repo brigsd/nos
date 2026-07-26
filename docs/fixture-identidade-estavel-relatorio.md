@@ -22,7 +22,7 @@ ALIASES = [
 
 ## Resultado
 
-A primeira versão provava somente `nucleo(...)` direto. A versão corrigida passa `ALIASES` como último argumento opcional de `executar(...)` e `colisaoDe(...)`, que o encaminham para `nucleo(...)`; chamadas antigas sem aliases permanecem inalteradas.
+A primeira versão provava somente `nucleo(...)` direto. A versão corrigida passa `ALIASES` como último argumento opcional de `executar(...)` e `colisaoDe(...)`, que o encaminham para `nucleo(...)`; chamadas antigas sem aliases permanecem inalteradas. A API pública agora prova o **efeito** do alias: `executar(...)` recebe `parte` por alias e devolve um lote nomeado com somente as quatro faces da faixa, idêntico ao lote da seleção literal; `colisaoDe(...)` marca sólida a mesma faixa por alias e devolve o mesmo cilindro da seleção literal, sem incluir o segundo `loft` a 100 unidades de distância.
 
 Dois lofts com `origemId` 10 e 20 foram selecionados por alias direto e composto. A união pintou oito faces. Ao inserir um cubo antes dos lofts, as mesmas oito faces locais foram selecionadas, apesar de os IDs posicionais mudarem. `transladar` aplicado ao alias direto não invalidou nem os aliases nem a proveniência; o mesmo alias foi usado novamente por `liso` e atingiu exatamente as quatro faces já movidas. JSON round-trip e duas execuções mantiveram canônico idêntico.
 
@@ -36,7 +36,7 @@ Não existem IDs globais escondidos: `ALIASES` guarda somente origem estável e 
 - faixa inexistente: órfão e nenhuma pintura;
 - origem duplicada: o segundo `loft` torna a identidade ambígua; a resolução grita e a operação não aplica resultado parcial.
 
-Validação prévia rejeita estruturalmente tentativas de esconder IDs por `v`, `f`, `faces`, chaves extras, `unir` vazio, termos que não sejam `origem` e cadeia de alias.
+Antes de qualquer `PASSO`, a validação estrutural aceita em cada `origem` somente `op:'loft'`, `id` e `faixa` inteiros não-negativos, com `lado` opcional também inteiro não-negativo. Ela rejeita origem nula ou incompleta, outra operação, chaves extras e tentativas de esconder IDs por `v`, `f` ou `faces`, tanto em alias direto quanto dentro de `unir`; também rejeita `unir` vazio, termos que não sejam `origem` e cadeia de alias.
 
 ## Revisão adversarial
 

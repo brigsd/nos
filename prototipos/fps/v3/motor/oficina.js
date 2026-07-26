@@ -1588,11 +1588,23 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO
   const esqueleto = ESQUELETO ? resolverEsqueleto(ESQUELETO, vec) : null;
   const ossoSet = esqueleto ? new Set(esqueleto.ossos.map((o) => o.nome)) : null;
   const aliases = new Map();
+  /* Fase 2: ALIASES entra antes dos PASSOS para que uma definição malformada
+     nunca deixe a peça executar parcialmente. Nesta prova a coordenada local
+     aceita só o contrato reexecutável do loft; não há IDs globais escondidos. */
+  const origemAliasValida = (origem) => {
+    const chaves = ['op', 'id', 'faixa', 'lado'];
+    return origem && typeof origem === 'object' && !Array.isArray(origem)
+      && Object.keys(origem).every((k) => chaves.includes(k))
+      && Object.hasOwn(origem, 'op') && Object.hasOwn(origem, 'id') && Object.hasOwn(origem, 'faixa')
+      && origem.op === 'loft' && Number.isSafeInteger(origem.id) && origem.id >= 0
+      && Number.isSafeInteger(origem.faixa) && origem.faixa >= 0
+      && (origem.lado == null || (Number.isSafeInteger(origem.lado) && origem.lado >= 0));
+  };
   if (!Array.isArray(ALIASES)) throw new Error('oficina: ALIASES precisa ser uma lista');
   for (const ent of ALIASES) {
     if (!Array.isArray(ent) || ent.length !== 2 || typeof ent[0] !== 'string' || !ent[0]) throw new Error('oficina: alias inválido');
     if (aliases.has(ent[0])) throw new Error(`oficina: alias duplicado '${ent[0]}'`);
-    const direto = (x) => x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).length === 1 && x.origem && typeof x.origem === 'object' && !Array.isArray(x.origem);
+    const direto = (x) => x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).length === 1 && origemAliasValida(x.origem);
     const composto = ent[1] && typeof ent[1] === 'object' && !Array.isArray(ent[1]) && Object.keys(ent[1]).length === 1 && Array.isArray(ent[1].unir) && ent[1].unir.length && ent[1].unir.every(direto);
     if (!direto(ent[1]) && !composto) throw new Error(`oficina: alias '${ent[0]}' inválido: só origem ou unir de origens`);
     aliases.set(ent[0], ent[1]);

@@ -2402,7 +2402,7 @@ describe('D-130 — seleção por origem local de loft', () => {
 describe('Fase 2 — fixture de aliases estáveis de loft', () => {
   const ctx = { tex: { texCanvas: (w: number, h: number) => ({ width: w, height: h }) }, m4: { ident: () => new Float32Array(16) } };
   const secoes = [0, 1, 2, 3].map((y) => ({ pos: [0, y, 0], raio: 1 }));
-  const loft = (id: number, origemId: number): any => ['loft', { id, origemId, lados: 4, secoes }];
+  const loft = (id: number, origemId: number, x = 0): any => ['loft', { id, origemId, lados: 4, secoes: secoes.map((s) => ({ ...s, pos: [x, s.pos[1], s.pos[2]] })) }];
   const aliases: any = [
     ['faixaA', { origem: { op: 'loft', id: 10, faixa: 1 } }],
     ['duasFaixas', { unir: [{ origem: { op: 'loft', id: 10, faixa: 1 } }, { origem: { op: 'loft', id: 20, faixa: 2 } }] }],
@@ -2418,13 +2418,25 @@ describe('Fase 2 — fixture de aliases estáveis de loft', () => {
     expect(JSON.stringify(aliases)).not.toMatch(/\b1000\b|\b1004\b/);
     expect(JSON.stringify(neutroCanonico(nucleo(base, {}, {}, {}, null, JSON.parse(JSON.stringify(aliases)))))).toBe(JSON.stringify(neutroCanonico(antes)));
   });
-  it('executar e colisaoDe recebem ALIASES pela API pública', () => {
-    const passos: any[] = [loft(0, 10), loft(BLOCO, 20), ['solido', { sel: { alias: 'duasFaixas' } }]];
-    const obj: any = executar(passos, {}, {}, ctx, {}, {}, null, aliases);
-    const col = colisaoDe(passos, {}, {}, {}, aliases);
-    expect(obj.lotes.length).toBeGreaterThan(0);
-    expect(col.altura).toBeGreaterThan(0);
-    expect(JSON.stringify(neutroCanonico(nucleo(passos, {}, {}, {}, null, aliases)))).toBe(JSON.stringify(neutroCanonico(nucleo(JSON.parse(JSON.stringify(passos)), {}, {}, {}, null, JSON.parse(JSON.stringify(aliases))))));
+  it('executar encaminha ALIASES: parte retorna lote nomeado só com a faixa do alias', () => {
+    const porAlias: any[] = [loft(0, 10), loft(BLOCO, 20), ['parte', { nome: 'faixa-da-alias', sel: { alias: 'faixaA' } }]];
+    const porFaces: any[] = [loft(0, 10), loft(BLOCO, 20), ['parte', { nome: 'faixa-da-alias', faces: [4, 5, 6, 7] }]];
+    const obj: any = executar(porAlias, {}, {}, ctx, {}, {}, null, aliases);
+    const literal: any = executar(porFaces, {}, {}, ctx);
+    const lote = obj.lotes.find((L: any) => L.parte === 'faixa-da-alias');
+    const loteLiteral = literal.lotes.find((L: any) => L.parte === 'faixa-da-alias');
+    expect(lote).toBeDefined(); // sem encaminhar ALIASES, `parte` não cria este lote
+    expect(lote.mesh.v.length).toBe(4 * 6 * 8); // quatro quads da faixa, triangulados no adaptador
+    expect(Array.from(lote.mesh.v)).toEqual(Array.from(loteLiteral.mesh.v));
+    expect(obj.lotes.filter((L: any) => L.parte === 'faixa-da-alias')).toHaveLength(1);
+  });
+  it('colisaoDe encaminha ALIASES: sólido da faixa ignora o loft distante e iguala seleção literal', () => {
+    const porAlias: any[] = [loft(0, 10), loft(BLOCO, 20, 100), ['solido', { sel: { alias: 'faixaA' } }]];
+    const porFaces: any[] = [loft(0, 10), loft(BLOCO, 20, 100), ['solido', { faces: [4, 5, 6, 7] }]];
+    const viaAlias = colisaoDe(porAlias, {}, {}, {}, aliases);
+    const literal = colisaoDe(porFaces, {}, {});
+    expect(viaAlias).toEqual(literal);
+    expect(viaAlias).toEqual({ forma: 'cilindro', raio: 1, altura: 1, base: 1 });
   });
   it('duplicatas, cadeia, origem/faixa inválida gritam e alias não aplica parcialmente', () => {
     const valido = { origem: { op: 'loft', id: 10, faixa: 1 } };
@@ -2435,7 +2447,12 @@ describe('Fase 2 — fixture de aliases estáveis de loft', () => {
       [['x', { origem: { op: 'loft', id: 10, faixa: 99 } }]],
     ];
     for (const a of casos) { const n = nucleo([loft(0, 10), loft(BLOCO, 10), ['pincel', { modo: 'face', sel: { alias: 'x' }, cor: '#f00' }]], {}, {}, {}, null, a); expect(n.orfaos.length).toBeGreaterThan(0); expect([...n.F.values()].some((f: any) => f.cor === '#f00')).toBe(false); }
-    for (const escondido of [{ v: [0] }, { f: [0] }, { faces: [0] }, { origem: { op: 'loft', id: 10, faixa: 1 }, extra: true }, { unir: [] }]) expect(() => nucleo([], {}, {}, {}, null, [['x', escondido]])).toThrow(/inválido/);
+    for (const escondido of [
+      { v: [0] }, { f: [0] }, { faces: [0] }, { origem: { op: 'loft', id: 10, faixa: 1 }, extra: true }, { unir: [] },
+      { origem: { op: 'loft', id: 10, faixa: 1, v: [0] } }, { origem: { op: 'loft', id: 10, faixa: 1, f: [0] } }, { origem: { op: 'loft', id: 10, faixa: 1, faces: [0] } },
+      { origem: null }, { origem: { op: 'loft', id: 10 } }, { origem: { op: 'cilindro', id: 10, faixa: 1 } },
+      { unir: [{ origem: { op: 'loft', id: 10, faixa: 1, faces: [0] } }] }, { unir: [{ alias: 'faixaA' }] },
+    ]) expect(() => nucleo([['cubo', { id: 0, lado: Infinity }]], {}, {}, {}, null, [['x', escondido]])).toThrow(/alias.*inválido/);
   });
 });
 
