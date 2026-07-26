@@ -2456,6 +2456,79 @@ describe('Fase 2 — fixture de aliases estáveis de loft', () => {
   });
 });
 
+describe('Fase 2 — fixture de aliases estáveis de cubo', () => {
+  const ctx = { tex: { texCanvas: (w: number, h: number) => ({ width: w, height: h }) }, m4: { ident: () => new Float32Array(16) } };
+  const secoes = [0, 1, 2, 3].map((y) => ({ pos: [0, y, 0], raio: 1 }));
+  const cubo = (id: number, origemId: number, extra: any = {}): any => ['cubo', { id, origemId, ...extra }];
+  const loft = (id: number, origemId: number, x = 0): any => ['loft', { id, origemId, lados: 4, secoes: secoes.map((s) => ({ ...s, pos: [x, s.pos[1], s.pos[2]] })) }];
+  const aliases: any = [
+    ['topoCubo', { origem: { op: 'cubo', id: 30, face: 'topo' } }],
+    ['frenteCubo', { origem: { op: 'cubo', id: 30, face: 'frente' } }],
+    ['topoEFaixa', { unir: [{ origem: { op: 'cubo', id: 30, face: 'topo' } }, { origem: { op: 'loft', id: 40, faixa: 1 } }] }],
+  ];
+  const facesCom = (n: any, chave: string, valor: any) => [...n.F.values()].filter((f: any) => f[chave] === valor);
+
+  it('topo do cubo seleciona uma única face e sobrevive inserção anterior e dimensões', () => {
+    const passos: any[] = [cubo(0, 30), ['pincel', { modo: 'face', sel: { alias: 'topoCubo' }, cor: '#123456' }]];
+    const base = nucleo(passos, {}, {}, {}, null, aliases);
+    const inserido = nucleo([['cubo', { id: 0, lado: 2 }], cubo(BLOCO, 30), ...passos.slice(1)], {}, {}, {}, null, aliases);
+    expect(base.orfaos).toHaveLength(0); expect(facesCom(base, 'cor', '#123456').map((f: any) => f.id)).toEqual([1]);
+    expect(inserido.orfaos).toHaveLength(0); expect(facesCom(inserido, 'cor', '#123456').map((f: any) => f.id)).toEqual([BLOCO + 1]);
+    expect(JSON.stringify(neutroCanonico(base))).toBe(JSON.stringify(neutroCanonico(nucleo(JSON.parse(JSON.stringify(passos)), {}, {}, {}, null, JSON.parse(JSON.stringify(aliases))))));
+    for (const extra of [{ larg: 3, alt: 2, prof: 0.5 }, { larg: 0.25, alt: 4, prof: 5 }]) {
+      const n = nucleo([cubo(0, 30, extra), ['parte', { nome: 'topo', sel: { alias: 'topoCubo' } }]], {}, {}, {}, null, aliases);
+      expect(n.orfaos).toHaveLength(0); expect(facesCom(n, 'parte', 'topo').map((f: any) => f.id)).toEqual([1]);
+    }
+  });
+
+  it('frente é local: rotação preserva o nome e o alias pinta a antiga face +z', () => {
+    const n = nucleo([cubo(0, 30), ['rotaciona', { eixo: 'y', graus: 180 }], ['pincel', { modo: 'face', sel: { alias: 'frenteCubo' }, cor: '#f00' }]], {}, {}, {}, null, aliases);
+    const frente = n.F.get(4)!;
+    const zMedio = frente.vs.reduce((s: number, v: number) => s + n.V.get(v)![2], 0) / frente.vs.length;
+    expect(n.orfaos).toHaveLength(0); expect(frente.cor).toBe('#f00'); expect(n.F.get(2)!.cor).toBeNull();
+    expect(zMedio).toBeLessThan(0); // depois de girar, a frente estrutural não é a direção +z do mundo
+  });
+
+  it('compõe topo do cubo e faixa de loft sem uma origem artificial', () => {
+    const n = nucleo([cubo(0, 30), loft(BLOCO, 40), ['pincel', { modo: 'face', sel: { alias: 'topoEFaixa' }, cor: '#0f0' }]], {}, {}, {}, null, aliases);
+    expect(n.orfaos).toHaveLength(0); expect(facesCom(n, 'cor', '#0f0').map((f: any) => f.id)).toEqual([1, BLOCO + 4, BLOCO + 5, BLOCO + 6, BLOCO + 7]);
+  });
+
+  it('executar e colisaoDe reutilizam o alias do cubo pela API pública', () => {
+    const porAlias: any[] = [cubo(0, 30), loft(BLOCO, 40, 100), ['parte', { nome: 'tampo', sel: { alias: 'topoCubo' } }], ['solido', { sel: { alias: 'topoCubo' } }]];
+    const porFaces: any[] = [cubo(0, 30), loft(BLOCO, 40, 100), ['parte', { nome: 'tampo', faces: [1] }], ['solido', { faces: [1] }]];
+    const obj: any = executar(porAlias, {}, {}, ctx, {}, {}, null, aliases);
+    const literal: any = executar(porFaces, {}, {}, ctx);
+    const lote = obj.lotes.find((L: any) => L.parte === 'tampo');
+    const loteLiteral = literal.lotes.find((L: any) => L.parte === 'tampo');
+    expect(lote.mesh.v.length).toBe(6 * 8); expect(Array.from(lote.mesh.v)).toEqual(Array.from(loteLiteral.mesh.v));
+    expect(colisaoDe(porAlias, {}, {}, {}, aliases)).toEqual(colisaoDe(porFaces, {}, {}));
+    expect(colisaoDe(porAlias, {}, {}, {}, aliases).raio).toBeLessThan(2); // não inclui o loft distante
+  });
+
+  it('duplicatas e origem errada gritam; alias inválido não pinta, nomeia ou transforma parcialmente', () => {
+    const duplicadoCubo = nucleo([cubo(0, 30), cubo(BLOCO, 30), ['pincel', { modo: 'face', sel: { alias: 'topoCubo' }, cor: '#f00' }]], {}, {}, {}, null, aliases);
+    const duplicadoMisto = nucleo([cubo(0, 30), loft(BLOCO, 30), ['pincel', { modo: 'face', sel: { alias: 'topoCubo' }, cor: '#f00' }]], {}, {}, {}, null, aliases);
+    for (const n of [duplicadoCubo, duplicadoMisto]) {
+      expect(n.orfaos.some((o: any) => /duplicado/.test(o.motivo))).toBe(true);
+      expect(n.orfaos.some((o: any) => /ambígua/.test(o.motivo))).toBe(true);
+      expect(facesCom(n, 'cor', '#f00')).toHaveLength(0);
+    }
+    expect(() => nucleo([], {}, {}, {}, null, [['x', { origem: { op: 'cubo', id: 30, face: 'inexistente' } }]])).toThrow(/inválido/);
+    expect(() => nucleo([], {}, {}, {}, null, [['x', { origem: { op: 'cubo', id: 30, face: 'topo', faces: [1] } }]])).toThrow(/inválido/);
+    const nomeRuim = nucleo([cubo(0, 30), ['pincel', { modo: 'face', sel: { origem: { op: 'cubo', id: 30, face: 'inexistente' } }, cor: '#f00' }]], {}, {});
+    expect(nomeRuim.orfaos.some((o: any) => o.op === 'pincel' && /origem inválida/.test(o.motivo))).toBe(true); expect(facesCom(nomeRuim, 'cor', '#f00')).toHaveLength(0);
+    const quebrado: any = [['misto', { unir: [{ origem: { op: 'cubo', id: 30, face: 'topo' } }, { origem: { op: 'loft', id: 99, faixa: 1 } }] }]];
+    const passos: any[] = [cubo(0, 30), ['pincel', { modo: 'face', sel: { alias: 'misto' }, cor: '#f00' }], ['parte', { nome: 'nao-aplica', sel: { alias: 'misto' } }], ['transladar', { d: [3, 0, 0], sel: { alias: 'misto' } }]];
+    const n = nucleo(passos, {}, {}, {}, null, quebrado), puro = nucleo([cubo(0, 30)], {}, {});
+    for (const op of ['pincel', 'parte', 'transladar']) expect(n.orfaos.some((o: any) => o.op === op)).toBe(true);
+    expect(facesCom(n, 'cor', '#f00')).toHaveLength(0); expect(facesCom(n, 'parte', 'nao-aplica')).toHaveLength(0);
+    expect(JSON.stringify(neutroCanonico(n).V)).toBe(JSON.stringify(neutroCanonico(puro).V));
+    const errada = nucleo([loft(0, 30), ['pincel', { modo: 'face', sel: { alias: 'topoCubo' }, cor: '#f00' }]], {}, {}, {}, null, aliases);
+    expect(errada.orfaos.some((o: any) => /foi declarada por 'loft'/.test(o.motivo))).toBe(true); expect(facesCom(errada, 'cor', '#f00')).toHaveLength(0);
+  });
+});
+
 /* P8b do playground — chamferBox. */
 describe('P8b — chamferBox (caixa cantelada: cantos e arestas chanfrados)', () => {
   const newell = (V: any, vs: number[]) => {

@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-128 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+129 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -48,6 +48,7 @@
 - `VISION.md` — Visão — NÓS
 - `arquitetura-identidade-estavel.md` — Arquitetura — identidade estável de objetos e subpartes
 - `diagnostico-subpartes-semanticas.md` — Diagnóstico — subpartes semânticas da moto
+- `fixture-identidade-cubo-relatorio.md` — Fixture — identidade estável de cubo
 - `fixture-identidade-estavel-relatorio.md` — Fixture — identidade estável de loft
 - `oficina-referencia.md` — Oficina — referência de como cada coisa funciona
 - `oficina.md` — A Oficina — editor de objetos dentro do jogo
