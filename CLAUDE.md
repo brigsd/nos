@@ -1,5 +1,7 @@
 # NÓS — Harness do Projeto
 
+**Leitura obrigatória:** [`docs/NORTE.md`](docs/NORTE.md) define o objetivo maior do NÓS e o método para decidir sua evolução. Leia antes de propor, planejar ou executar uma rodada.
+
 Você está trabalhando no **NÓS**: um metaverso que roda 100% dentro do GitHub (o código é o jogo, o Pages é o cliente). A frente ATIVA — e hoje a única deste repositório — é o **Atelier (v3)**.
 
 ## O Atelier (v3) — a frente de desenvolvimento

@@ -76,6 +76,7 @@ aposentados — vivem no histórico do git.
 
 ## Docs de orientação
 
+- **`docs/NORTE.md`** — leitura obrigatória: objetivo maior, método experimental e não negociáveis do NÓS.
 - **`CLAUDE.md`** — o acordo de trabalho + as regras (jóias, determinismo, pt-BR).
 - **`docs/oficina.md`** — o roteiro da Oficina (Ordem de construção + specs). `docs/oficina-referencia.md` — o manual de como cada elemento funciona.
 - **`docs/playground.md`** — o ÉPICO ativo (D-113): fechar o vocabulário + forma-como-número + a camada IA de laço único. O que construir em seguida mora aqui.

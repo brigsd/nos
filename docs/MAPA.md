@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-120 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+122 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -41,6 +41,7 @@
 - `DECISIONS.md` — Registro de Decisões — NÓS
 - `FERRAMENTAS.md` — FERRAMENTAS — o plano da potência (D-56)
 - `LORE.md` — Lore — a bíblia do NÓS
+- `NORTE.md` — NORTE — objetivo e método do NÓS
 - `RECURSOS.md` — Recursos do coder — o índice único
 - `TETO.md` — O TETO — medir o que a Oficina de fato cria
 - `VISION.md` — Visão — NÓS
@@ -49,6 +50,7 @@
 - `playground.md` — O Playground — o épico da criação por IA
 - `teto-moto-refino-relatorio.md` — TETO — relatório do REFINO da moto (2ª corrida)
 - `teto-moto-relatorio.md` — TETO — relatório da moto
+- `teto-selecao-semantica-relatorio.md` — TETO — medição da seleção semântica na moto
 - `walkthrough_colaborador4.md` — Resumo de Alterações — Colaborador 4 (branch `colaborador4`)
 
 ## docs/legado/
