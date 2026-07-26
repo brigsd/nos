@@ -141,7 +141,7 @@ Não misturar várias capacidades novas na mesma rodada, salvo quando forem inse
 
 A moto provou criação nativa em `PASSOS` e revelou que o teto de refinamento continua inferior ao teto de criação. Seleção semântica e proveniência local foram provadas em escala mínima, mas a sintaxe mínima de proveniência resolveu apenas 12 IDs e não cobriu as outras listas da moto.
 
-A moto atual está congelada como espécime histórico e teste de regressão. Não haverá nova migração nem refinamento nela. O próximo passo é desenhar a arquitetura de identidade estável antes de implementar, conforme [`PLANO.md`](PLANO.md).
+A moto atual está congelada como espécime histórico e teste de regressão. Não haverá nova migração nem refinamento nela. A Fase 1 foi concluída: a arquitetura híbrida de origem estável, coordenada local, aliases no objeto e composição foi escolhida como hipótese para prova. O próximo passo é somente a fixture mínima da Fase 2 definida em [`arquitetura-identidade-estavel.md`](arquitetura-identidade-estavel.md), conforme [`PLANO.md`](PLANO.md).
 
 ## Não negociáveis
 

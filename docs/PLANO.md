@@ -27,7 +27,7 @@ Não desenvolver várias capacidades de uma vez. Não criar ferramentas específ
 
 **Saída desta fase:** moto congelada e foco de volta ao motor.
 
-## Fase 1 — Desenhar a nova identidade dos objetos
+## Fase 1 — Desenhar a nova identidade dos objetos — concluída
 
 **Objetivo:** definir como objetos, partes e subpartes mantêm identidade estável.
 
@@ -43,9 +43,9 @@ O desenho deve responder:
 
 **Direção provável:** identidade estável da origem; coordenadas locais do gerador; nomes semânticos por cima; IDs globais apenas como escape legado.
 
-**Prova de saída:** documento arquitetural e decisão formal, sem implementar tudo ainda.
+**Prova de saída:** documento arquitetural e decisão formal, sem implementar tudo ainda. **Concluída:** a hipótese híbrida está registrada em [`arquitetura-identidade-estavel.md`](arquitetura-identidade-estavel.md); a sintaxe ilustrativa não está aprovada.
 
-## Fase 2 — Provar a arquitetura em fixtures pequenas
+## Fase 2 — Provar a arquitetura em fixtures pequenas — próxima
 
 Não usar a moto. Criar peças mínimas para testar:
 
@@ -167,4 +167,4 @@ Parar e redesenhar caso:
 
 ## Próximo passo imediato
 
-Não criar mais funcionalidades agora. O próximo passo é **desenho arquitetural, não implementação**: o Terra deve produzir um documento arquitetural sobre objetos, origens, partes, subpartes, nomes e composição de seleções estáveis. Depois revisamos esse desenho antes de qualquer nova implementação.
+Executar somente a fixture mínima da Fase 2: dois `loft`s, alias direto, alias multi-origem, inserção de geometria anterior, transformação sem topologia, duplicatas e invalidação explícita. Ela deve reprovar a hipótese se precisar de IDs globais escondidos, atribuir composição a uma origem artificial ou não conseguir declarar preservação/invalidação. Não criar outras funcionalidades nem ampliar a sintaxe antes dessa prova.
