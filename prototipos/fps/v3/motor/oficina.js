@@ -160,11 +160,11 @@ function confereId(st, i, op, args) {
 function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
   if (sel == null) return { vertices: new Set(st.V.keys()), faces: new Set(st.F.keys()) };
   if (typeof sel !== 'object' || Array.isArray(sel)) {
-    grita(st, i, op, 'sel', 'seleção inválida: sel precisa ser um objeto com v, f, grupo, regiao e/ou origem');
+    grita(st, i, op, 'sel', 'seleção inválida: sel precisa ser um objeto com v, f, grupo, regiao, origem e/ou alias');
     return { vertices: new Set(), faces: new Set() };
   }
   const conhecidas = new Set(['v', 'f', 'grupo', 'regiao', 'origem', 'alias']);
-  for (const chave of Object.keys(sel)) if (!conhecidas.has(chave)) grita(st, i, op, `sel.${chave}`, `seleção desconhecida '${chave}' (só v, f, grupo, regiao e origem)`);
+  for (const chave of Object.keys(sel)) if (!conhecidas.has(chave)) grita(st, i, op, `sel.${chave}`, `seleção desconhecida '${chave}' (só v, f, grupo, regiao, origem e alias)`);
 
   const vertices = new Set(), faces = new Set();
   const adicionaFace = (fid) => {
@@ -1592,6 +1592,9 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO
   for (const ent of ALIASES) {
     if (!Array.isArray(ent) || ent.length !== 2 || typeof ent[0] !== 'string' || !ent[0]) throw new Error('oficina: alias inválido');
     if (aliases.has(ent[0])) throw new Error(`oficina: alias duplicado '${ent[0]}'`);
+    const direto = (x) => x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).length === 1 && x.origem && typeof x.origem === 'object' && !Array.isArray(x.origem);
+    const composto = ent[1] && typeof ent[1] === 'object' && !Array.isArray(ent[1]) && Object.keys(ent[1]).length === 1 && Array.isArray(ent[1].unir) && ent[1].unir.length && ent[1].unir.every(direto);
+    if (!direto(ent[1]) && !composto) throw new Error(`oficina: alias '${ent[0]}' inválido: só origem ou unir de origens`);
     aliases.set(ent[0], ent[1]);
   }
   const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], partes: {}, origens: new Map(), aliases, num, vec, materiais: MATERIAIS, esqueleto, ossoSet, pesos: new Map() };
@@ -2091,8 +2094,8 @@ export function montarAnimar(ANIMACOES = {}, infoPorLote = [], partes = {}, esqu
    -> byte-idêntico (nenhuma peça de hoje anima). Cada lote ganha a SUA identidade (não uma
    compartilhada) pra a animação sobrescrever o lote certo sem alias; `animar` casa
    parte<->lote por ÍNDICE via `infoPorLote`, PARALELO aos lotes que o render vai mapear. */
-export function executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = {}, ESQUELETO = null) {
-  const neutro = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS, ESQUELETO);   // 14a: ESQUELETO por ÚLTIMO + opcional (compat: sem ele, tudo byte-idêntico)
+export function executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = {}, ESQUELETO = null, ALIASES = []) {
+  const neutro = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS, ESQUELETO, ALIASES);
   if (!ctx || !ctx.tex || !ctx.tex.texCanvas) throw new Error('oficina.executar precisa de ctx {tex,...} do motor v3');
   if (neutro.orfaos.length && typeof console !== 'undefined') console.warn(`oficina: ${neutro.orfaos.length} órfão(s) —`, neutro.orfaos);
   const { lotes, tex, partes, esqueleto } = adaptarV3(neutro, ctx, MATERIAIS);
@@ -2109,8 +2112,8 @@ export function executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = 
    colisão encaixado na malha FINAL (depois das extrusões). Roda no CARREGAMENTO
    do módulo, então é barato e tem um dono só (nada de número medido e guardado).
    Encaixa nas faces `solido` se houver; senão, na malha toda. */
-export function colisaoDe(PASSOS, PARAMS, TOPO, MATERIAIS = {}) {
-  const { V, F } = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS);
+export function colisaoDe(PASSOS, PARAMS, TOPO, MATERIAIS = {}, ALIASES = []) {
+  const { V, F } = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS, null, ALIASES);
   let ids = new Set();
   for (const f of F.values()) if (f.solido) for (const v of f.vs) ids.add(v);
   if (!ids.size) ids = new Set(V.keys());

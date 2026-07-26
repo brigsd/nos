@@ -22,7 +22,9 @@ ALIASES = [
 
 ## Resultado
 
-Dois lofts com `origemId` 10 e 20 foram selecionados por alias direto e composto. A união pintou oito faces. Ao inserir um cubo antes dos lofts, as mesmas oito faces locais foram selecionadas, apesar de os IDs posicionais mudarem. `transladar` aplicado ao alias direto não invalidou nem os aliases nem a proveniência. JSON round-trip e duas execuções mantiveram canônico idêntico.
+A primeira versão provava somente `nucleo(...)` direto. A versão corrigida passa `ALIASES` como último argumento opcional de `executar(...)` e `colisaoDe(...)`, que o encaminham para `nucleo(...)`; chamadas antigas sem aliases permanecem inalteradas.
+
+Dois lofts com `origemId` 10 e 20 foram selecionados por alias direto e composto. A união pintou oito faces. Ao inserir um cubo antes dos lofts, as mesmas oito faces locais foram selecionadas, apesar de os IDs posicionais mudarem. `transladar` aplicado ao alias direto não invalidou nem os aliases nem a proveniência; o mesmo alias foi usado novamente por `liso` e atingiu exatamente as quatro faces já movidas. JSON round-trip e duas execuções mantiveram canônico idêntico.
 
 Não existem IDs globais escondidos: `ALIASES` guarda somente origem estável e faixa; o índice de faces continua efêmero em `st.origens`. A fixture não usa índice do PASSO como identidade.
 
@@ -32,7 +34,9 @@ Não existem IDs globais escondidos: `ALIASES` guarda somente origem estável e 
 - alias encadeado: órfão e nenhuma pintura;
 - origem inexistente: órfão e nenhuma pintura;
 - faixa inexistente: órfão e nenhuma pintura;
-- origem duplicada: a resolução de origem grita ambiguidade e a operação não aplica resultado parcial.
+- origem duplicada: o segundo `loft` torna a identidade ambígua; a resolução grita e a operação não aplica resultado parcial.
+
+Validação prévia rejeita estruturalmente tentativas de esconder IDs por `v`, `f`, `faces`, chaves extras, `unir` vazio, termos que não sejam `origem` e cadeia de alias.
 
 ## Revisão adversarial
 
@@ -40,4 +44,4 @@ Não há despachante de subagente disponível nesta sessão. Foi feito passe adv
 
 ## Veredito
 
-**PARCIAL.** A hipótese foi provada para aliases de duas proveniências de `loft` e transformação sem topologia. Ainda não prova outras primitivas, novas origens topológicas, remoção real de faixa nem sintaxe final.
+**APROVADO.** A hipótese mínima foi provada pela API pública para aliases de duas proveniências de `loft`, inserção anterior e transformação sem topologia. Ainda não aprova outras primitivas, novas origens topológicas, remoção real de faixa nem sintaxe final.
