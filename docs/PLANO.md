@@ -45,7 +45,7 @@ O desenho deve responder:
 
 **Prova de saída:** documento arquitetural e decisão formal, sem implementar tudo ainda. **Concluída:** a hipótese híbrida está registrada em [`arquitetura-identidade-estavel.md`](arquitetura-identidade-estavel.md); a sintaxe ilustrativa não está aprovada.
 
-## Fase 2 — Provar a arquitetura em fixtures pequenas — próxima
+## Fase 2 — Provar a arquitetura em fixtures pequenas — em andamento
 
 Não usar a moto. Criar peças mínimas para testar:
 
@@ -66,6 +66,8 @@ A prova deve mostrar:
 - não é necessário conhecer IDs globais.
 
 **Critério de saída:** fixtures completas sem regras especiais para um objeto específico.
+
+**Progresso:** a primeira fixture foi aprovada somente para `loft`: aliases diretos e multi-origem sobreviveram à inserção anterior e à transformação sem topologia, sem IDs globais escondidos. A próxima prova é uma primitiva simples; não testar ainda a moto, a interface nem operações topológicas.
 
 ## Fase 3 — Validar em mais de um gerador
 
@@ -167,4 +169,4 @@ Parar e redesenhar caso:
 
 ## Próximo passo imediato
 
-Executar somente a fixture mínima da Fase 2: dois `loft`s, alias direto, alias multi-origem, inserção de geometria anterior, transformação sem topologia, duplicatas e invalidação explícita. Ela deve reprovar a hipótese se precisar de IDs globais escondidos, atribuir composição a uma origem artificial ou não conseguir declarar preservação/invalidação. Não criar outras funcionalidades nem ampliar a sintaxe antes dessa prova.
+Aplicar o mesmo modelo da primeira fixture a uma primitiva simples. A prova deve reprovar a hipótese se precisar de IDs globais escondidos, atribuir composição a uma origem artificial ou não conseguir declarar preservação/invalidação. Não testar ainda moto, interface ou operações topológicas; não criar outras funcionalidades nem ampliar a sintaxe antes dessa prova.
