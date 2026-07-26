@@ -56,14 +56,23 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 | `mescla` | `de:[ids]`, `para:id` | solda; face de área zero some quieta |
 | `rotaciona` | `eixo` (`'x'\|'y'\|'z'`), `graus` (PARAM), `sel?` (`{v:[ids]}` e/ou `{f:[ids]}` e/ou `{regiao:{min,max}}` e/ou `{grupo:'nome'}`, default = malha inteira), `pivo?` (`[x,y,z]`, default = centroide da seleção) | SIMPLES: só move posição (`p' = pivo + R_eixo(graus)·(p−pivo)`); NUNCA cria vértice/face nem renumera. `regiao` é caixa delimitadora (min/max os dois OBRIGATÓRIOS, sem `Infinity`); `grupo` são as faces daquele `f.parte` |
 | `transladar` | `d` (`[x,y,z]`, PARAM, default `[0,0,0]`), `sel?` (o MESMO formato do `rotaciona`, default = malha inteira) | SIMPLES: `p' = p + d`, ADITIVO como o `moveV`; NUNCA cria vértice/face nem renumera; sem pivô (translação não usa). **É COMO SE POSICIONA UMA PRIMITIVA:** `cubo`/`cilindro`/`esfera`/`cone`/`plano`/`chamferBox` nascem PRESOS à origem e `lathe` sempre gira em torno de Y — nenhum aceita posição. Crie a primitiva e translade no passo seguinte (`sel` ausente = tudo que existe até ali; use `sel:{regiao}`/`{grupo}` pra mover só a peça nova quando já houver outra geometria) |
-| `espelha` | `eixo` (`'x'\|'y'\|'z'` — a coord. negada), `pos?` (PARAM, default 0), `sel?` (`{f:[ids]}`, default = todas as faces) | MEATY: DUPLICA a seleção refletida (`coord'=2·pos−coord`), ids novos do bloco do passo. **Weld:** vértice com a coord. do eixo EXATAMENTE `pos` é COMPARTILHADO (sem cópia — solda a costura sozinho); fora do plano duplica. Cantos da face nova saem em ordem REVERTIDA (mantém a normal pra fora); atributos (cor/material/parte/liso/solido) são herdados. Peça-exemplo `_espelhado.js` |
-| `pincel` | `modo:'face'` (`faces`, `cor`) ou `modo:'livre'` (`cor`,`raio`,`dureza`,`pontos:[{f,a,b}]`) | livre = dab face-local, acompanha a face |
-| `liso` | `faces:[ids]` | sombreado macio (padrão: chapado) |
-| `material` | `faces`, `usa` | + `MATERIAIS = {mat1:{cor,emissivo,aspereza,semLuz,mistura:'transparente'}}` exportado |
-| `parte` | `nome`, `faces:[ids]` | nomeia pra animação/material |
+| `espelha` | `eixo` (`'x'\|'y'\|'z'`), `pos?`, `sel?` uniforme | DUPLICA faces; `sel:{f}`/`{grupo}` aponta faces, `{v}` alcança faces incidentes e `{regiao}` só faces inteiras na caixa. Weld no plano; ids novos do bloco; winding revertido; atributos herdados. |
+| `pincel` | `modo:'face'` (`faces` legado OU `sel`, `cor`) ou `modo:'livre'` (`cor`,`raio`,`dureza`,`pontos:[{f,a,b}]`) | livre = dab face-local, acompanha a face; não aceita `sel` |
+| `liso` | `faces:[ids]` (legado) ou `sel` | sombreado macio (padrão: chapado) |
+| `material` | `faces` (legado) ou `sel`, `usa` | + `MATERIAIS = {mat1:{cor,emissivo,aspereza,semLuz,mistura:'transparente'}}` exportado |
+| `parte` | `nome`, `faces:[ids]` (legado) ou `sel` | nomeia pra animação/material/grupo |
 | `pesar` | `osso`, `faces:[ids]`, `peso` | skinning (acumula por vértice, normaliza top-4) |
-| `solido` | `faces:[ids]` | o que entra na colisão |
+| `solido` | `faces:[ids]` (legado) ou `sel` | o que entra na colisão |
 | `inflate` | `contornoLado:[[z,y],...]` (≥3 pontos, PARAM), `contornoTopo:[[z,x],...]` (idem), `divisoes` (TOPO, mín 2) | dois contornos 2D (plano z×y e z×x) viram VOLUME por interseção de dois prismas — não é malha booleana geral, é uma GRADE DE VOXEL (watertight por construção, mas o resultado sai BLOCKY/facetado — não suave). Ponto com aridade ≠ 2 (alça de curva reservada) GRITA e aborta, igual ao `contorno` do loft; <3 pontos idem; contornos que não se cruzam em nenhum voxel GRITA (volume vazio nunca é o que você queria). Vale largura≠altura — o único gerador sem seção circular. Peça-exemplo `_corpo.js` |
+
+**Seleção semântica (`sel`, D-129):** campos `v`, `f`, `grupo` e `regiao`
+podem coexistir e se unem. Em operações de FACE (`pincel` face, `liso`,
+`material`, `solido`, `parte`, `espelha`), `v` significa faces incidentes e
+`regiao` significa somente faces inteiramente dentro da caixa inclusiva. Para
+`rotaciona`/`transladar`/`displace`, região continua sendo os vértices dentro da
+caixa. `faces:[ids]` é compatibilidade para arquivo salvo; nunca misture com
+`sel`. Nome errado, id inválido, chave desconhecida, região incompleta/invertida
+ou seleção sem alvo **GRITA** — pare e corrija a lista, não tente adivinhar.
 
 **Animação/esqueleto** (exportados junto, opcionais): `ANIMACOES =
 {nome:{duracao,repete,trilhas:[{parte|osso,canal,chaves:[[t,v],...]}]}}` (canais

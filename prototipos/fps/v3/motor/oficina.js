@@ -144,37 +144,112 @@ function confereId(st, i, op, args) {
   return b;
 }
 
-/* resolverAlvosV (P8 do playground): resolve uma SELEÇÃO em vértices AFETADOS
-   — o formato de `sel` que o `rotaciona` já tinha desde o P3 (`{v:[ids]}`
-   e/ou `{f:[ids]}`, cantos da face), ampliado com DOIS jeitos novos de
-   apontar sem listar id: `regiao:{min:[x,y,z],max:[x,y,z]}` (caixa
-   delimitadora INCLUSIVA nos dois extremos, os dois `st.vec` — pode citar
-   PARAM; os DOIS lados são OBRIGATÓRIOS — `Infinity` como sentinela de "sem
-   limite" NÃO dá, o `st.num` já recusa não-finito por lei, D-118) e
-   `grupo:'nome'` (as faces com aquele `f.parte` — REUSA a nomeação que o
-   passo 13a já registra, não inventa um 2º jeito de agrupar). Os campos
-   presentes se UNEM (Set deduplicado); `sel==null` continua sendo a malha
-   INTEIRA (o default de sempre). Toda referência inválida (vértice/face
-   inexistente, `regiao` sem os dois lados, `grupo` sem nenhuma face) GRITA e
-   é ignorada — nunca corrompe (lei do envelope). */
-function resolverAlvosV(st, sel, op, i) {
-  if (sel == null) return new Set(st.V.keys());
-  const alvos = new Set();
-  for (const v of sel.v ?? []) { if (!st.V.has(v)) { grita(st, i, op, v, 'vértice inexistente na seleção'); continue; } alvos.add(v); }
-  for (const fid of sel.f ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, op, fid, 'face inexistente na seleção'); continue; } for (const v of f.vs) alvos.add(v); }
-  if (sel.regiao != null) {
-    if (!Array.isArray(sel.regiao.min) || !Array.isArray(sel.regiao.max)) grita(st, i, op, 'regiao', 'sel.regiao precisa de min E max, os dois [x,y,z] (sem sentinela infinita — os dois lados são obrigatórios)');
-    else {
-      const min = st.vec(sel.regiao.min), max = st.vec(sel.regiao.max);
-      for (const [v, p] of st.V) if (p[0] >= min[0] && p[0] <= max[0] && p[1] >= min[1] && p[1] <= max[1] && p[2] >= min[2] && p[2] <= max[2]) alvos.add(v);
+/* resolverSelecao (D-129): a ÚNICA semântica de `sel` da Oficina. Devolve os
+   dois alvos que uma op pode precisar: vértices e faces. `v` seleciona os
+   vértices literais E toda face que toca algum deles; `f` seleciona as faces
+   literais; `grupo` seleciona as faces cuja `f.parte` tem aquele nome; e
+   `regiao` seleciona os vértices dentro da caixa INCLUSIVA e as faces com
+   TODOS os cantos dentro dela. Campos presentes se UNEM. Assim uma região não
+   vaza meia face para uma operação de atributo, mas rotaciona/transladar
+   preservam exatamente a regra antiga: movem os vértices dentro da caixa.
+
+   A seleção é formato salvo: nunca ignora uma chave, uma referência ou uma
+   seleção vazia. `grita` leva op + tipo + causa; a lista continua executando
+   sem corromper o neutro. Só as ops que JÁ documentavam seleção vazia como
+   no-op (vértice) passam `vazioNoop`. */
+function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
+  if (sel == null) return { vertices: new Set(st.V.keys()), faces: new Set(st.F.keys()) };
+  if (typeof sel !== 'object' || Array.isArray(sel)) {
+    grita(st, i, op, 'sel', 'seleção inválida: sel precisa ser um objeto com v, f, grupo e/ou regiao');
+    return { vertices: new Set(), faces: new Set() };
+  }
+  const conhecidas = new Set(['v', 'f', 'grupo', 'regiao']);
+  for (const chave of Object.keys(sel)) if (!conhecidas.has(chave)) grita(st, i, op, `sel.${chave}`, `seleção desconhecida '${chave}' (só v, f, grupo e regiao)`);
+
+  const vertices = new Set(), faces = new Set();
+  const adicionaFace = (fid) => {
+    const f = st.F.get(fid);
+    if (!f) { grita(st, i, op, fid, 'face inexistente na seleção'); return; }
+    faces.add(fid); for (const v of f.vs) vertices.add(v);
+  };
+  let teveChave = false;
+  if (sel.v != null) {
+    teveChave = true;
+    if (!Array.isArray(sel.v)) grita(st, i, op, 'sel.v', 'seleção v inválida: precisa ser uma lista de ids de vértice');
+    else for (const v of sel.v) {
+      if (!st.V.has(v)) { grita(st, i, op, v, 'vértice inexistente na seleção'); continue; }
+      vertices.add(v);
+      for (const f of st.F.values()) if (f.vs.includes(v)) faces.add(f.id);
     }
   }
-  if (sel.grupo != null) {
-    let achou = false;
-    for (const f of st.F.values()) if (f.parte === sel.grupo) { achou = true; for (const v of f.vs) alvos.add(v); }
-    if (!achou) grita(st, i, op, sel.grupo, `grupo '${sel.grupo}' não tem nenhuma face (nome errado, ou a op 'parte' daquele nome ainda não rodou neste passo)`);
+  if (sel.f != null) {
+    teveChave = true;
+    if (!Array.isArray(sel.f)) grita(st, i, op, 'sel.f', 'seleção f inválida: precisa ser uma lista de ids de face');
+    else for (const fid of sel.f) adicionaFace(fid);
   }
-  return alvos;
+  if (sel.grupo != null) {
+    teveChave = true;
+    if (typeof sel.grupo !== 'string' || !sel.grupo) grita(st, i, op, 'sel.grupo', 'seleção grupo inválida: precisa ser um nome não-vazio');
+    else {
+      let achou = false;
+      for (const f of st.F.values()) if (f.parte === sel.grupo) { achou = true; adicionaFace(f.id); }
+      if (!achou) grita(st, i, op, sel.grupo, `grupo '${sel.grupo}' não tem nenhuma face válida (nome errado, ou a op 'parte' ainda não rodou)`);
+    }
+  }
+  if (sel.regiao != null) {
+    teveChave = true;
+    const r = sel.regiao;
+    if (typeof r !== 'object' || Array.isArray(r) || r == null || Object.keys(r).some((k) => k !== 'min' && k !== 'max') || !Object.hasOwn(r, 'min') || !Object.hasOwn(r, 'max')) {
+      grita(st, i, op, 'sel.regiao', 'seleção regiao inválida: precisa ter min E max (e só eles), os dois [x,y,z] finitos');
+    } else {
+      let min, max;
+      try { min = st.vec(r.min); max = st.vec(r.max); }
+      catch (e) { grita(st, i, op, 'sel.regiao', `seleção regiao inválida: ${e.message}`); }
+      if (min && max) {
+        if (min.some((v, k) => v > max[k])) grita(st, i, op, 'sel.regiao', 'seleção regiao inválida: min não pode ser maior que max');
+        else {
+          const dentro = (p) => p[0] >= min[0] && p[0] <= max[0] && p[1] >= min[1] && p[1] <= max[1] && p[2] >= min[2] && p[2] <= max[2];
+          for (const [v, p] of st.V) if (dentro(p)) vertices.add(v);
+          for (const f of st.F.values()) if (f.vs.every((v) => dentro(st.V.get(v)))) faces.add(f.id);
+        }
+      }
+    }
+  }
+  if (!teveChave) grita(st, i, op, 'sel', 'seleção vazia: informe v, f, grupo ou regiao');
+  if (!vertices.size && !faces.size && !vazioNoop) grita(st, i, op, 'sel', 'seleção vazia: nenhum alvo válido foi encontrado');
+  return { vertices, faces };
+}
+
+function resolverAlvosV(st, sel, op, i) { return resolverSelecao(st, sel, op, i, { vazioNoop: true }).vertices; }
+
+/* A assinatura histórica `faces:[ids]` continua igual. `faces` e `sel` na
+   mesma op seriam duas fontes concorrentes, então GRITAM em vez de unir por
+   acidente. Operações por face não têm seleção vazia documentada como no-op. */
+function resolverAlvosF(st, a, op, i, { todasQuandoAusente = false } = {}) {
+  if (a.faces != null && a.sel != null) {
+    grita(st, i, op, 'faces+sel', 'seleção ambígua: use faces:[ids] (legado) OU sel:{...}, nunca os dois');
+    return new Set();
+  }
+  if (a.faces != null) {
+    if (!Array.isArray(a.faces)) { grita(st, i, op, 'faces', 'seleção faces inválida: precisa ser uma lista de ids de face'); return new Set(); }
+    const faces = new Set();
+    for (const fid of a.faces) {
+      if (!st.F.has(fid)) { grita(st, i, op, fid, 'face inexistente na seleção'); continue; }
+      faces.add(fid);
+    }
+    if (!faces.size) grita(st, i, op, 'faces', 'seleção vazia: nenhum id de face válido foi encontrado');
+    return faces;
+  }
+  if (a.sel != null) {
+    const faces = resolverSelecao(st, a.sel, op, i).faces;
+    // Uma região pode conter vértice(s) mas nenhuma face INTEIRA; para uma op
+    // de atributo isso ainda é seleção vazia, nunca um no-op silencioso.
+    if (!faces.size) grita(st, i, op, 'sel', 'seleção vazia para faces: nenhum alvo de face válido foi encontrado');
+    return faces;
+  }
+  if (todasQuandoAusente) return new Set(st.F.keys());
+  grita(st, i, op, 'seleção', 'seleção ausente: use faces:[ids] (legado) ou sel:{...}');
+  return new Set();
 }
 
 /* ----------------------------------------------------------------------------
@@ -1233,11 +1308,11 @@ export const OPS = {
      FORMATO SALVO, travado por teste.
 
      SELEÇÃO (`sel`, opcional): AUSENTE = TODAS as faces atuais (`st.F`).
-     Presente = `{f:[ids]}` — as faces a espelhar (os cantos delas vêm
-     junto); SEM `sel.v` (diferente do `rotaciona`) — espelhar uma face exige
-     o CICLO de cantos pra reverter o winding, então a unidade de seleção é
-     sempre a FACE. Face inexistente GRITA (órfão) e é ignorada — nunca
-     corrompe. Sem nenhuma face válida selecionada, no-op.
+     Presente usa a semântica uniforme de `resolverSelecao`: `f`/`grupo`
+     apontam faces; `v` pega as faces que tocam algum vértice; `regiao` pega
+     só as faces inteiramente dentro da caixa. Espelhar continua operando em
+     CICLOS de face (os cantos vêm junto para reverter o winding). A forma
+     antiga `sel:{f:[ids]}` permanece byte-idêntica.
 
      REFLEXÃO: só a coordenada do EIXO muda — `coord' = 2·pos − coord` (as
      outras duas ficam intactas). `pos` (default 0) passa por `st.num` (pode
@@ -1286,14 +1361,8 @@ export const OPS = {
     const pos = st.num(a.pos ?? 0);
     const b = baseDoPasso(i);
 
-    // seleção de faces (AUSENTE = todas); dedup + ordena por id ORIGINAL crescente
-    const idsSel = new Set();
-    if (a.sel == null) { for (const fid of st.F.keys()) idsSel.add(fid); }
-    else {
-      if (a.sel.v != null) grita(st, i, 'espelha', 'sel.v', 'espelha só espelha FACES (use sel.f); sel.v foi IGNORADO — não vira no-op silencioso');   // N2: o par natural com o rotaciona (que aceita sel.v) confunde
-      for (const fid of a.sel.f ?? []) { if (!st.F.has(fid)) { grita(st, i, 'espelha', fid, 'face inexistente na seleção'); continue; } idsSel.add(fid); }
-    }
-    const faceIds = [...idsSel].sort((x, y) => x - y);
+    // seleção uniforme de faces (AUSENTE = todas); dedup + ordem original crescente
+    const faceIds = [...resolverAlvosF(st, a, 'espelha', i, { todasQuandoAusente: true })].sort((x, y) => x - y);
     if (!faceIds.length) return;
 
     // vértices afetados (cantos das faces selecionadas), deduplicados, ordem de id ORIGINAL crescente
@@ -1339,8 +1408,8 @@ export const OPS = {
   /* ---- atributos por face ---- */
   pincel(st, a, i) {
     const modo = a.modo ?? 'face';
-    if (modo === 'face') {   // passo 9: preenche faces INTEIRAS de uma cor chapada (f.cor). Compat pra trás: intocado.
-      for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'pincel', fid, 'face inexistente'); continue; } f.cor = a.cor ?? null; }
+    if (modo === 'face') {   // passo 9: preenche faces INTEIRAS de uma cor chapada (f.cor).
+      for (const fid of resolverAlvosF(st, a, 'pincel', i)) st.F.get(fid).cor = a.cor ?? null;
       return;
     }
     if (modo === 'livre') {
@@ -1353,6 +1422,7 @@ export const OPS = {
          o replay ser determinístico. Ordem de `pontos`/dos pushes = ordem de PINTURA
          (o rasterizador compõe mais nova por cima). Ponto com face inexistente GRITA
          (órfão), nunca corrompe (lei do envelope). */
+      if (a.sel != null || a.faces != null) return grita(st, i, 'pincel', 'seleção', "modo 'livre' usa pontos:[{f,a,b}], não faces/sel");
       const cor = a.cor ?? null, raio = st.num(a.raio ?? 0), dureza = st.num(a.dureza ?? 0);
       for (const pt of a.pontos ?? []) {
         const f = st.F.get(pt.f);
@@ -1363,8 +1433,8 @@ export const OPS = {
     }
     return grita(st, i, 'pincel', modo, `modo '${modo}' desconhecido (só 'face' e 'livre')`);
   },
-  solido(st, a, i) { for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'solido', fid, 'face inexistente'); continue; } f.solido = true; } },
-  liso(st, a, i) { for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'liso', fid, 'face inexistente'); continue; } f.liso = true; } },
+  solido(st, a, i) { for (const fid of resolverAlvosF(st, a, 'solido', i)) st.F.get(fid).solido = true; },
+  liso(st, a, i) { for (const fid of resolverAlvosF(st, a, 'liso', i)) st.F.get(fid).liso = true; },
 
   /* material (passo 12a): seta f.material = NOME de um material DECLARADO em
      MATERIAIS (a peça-nível, como PARAMS/TOPO). Só o NOME entra na face — mudar o
@@ -1377,7 +1447,7 @@ export const OPS = {
   material(st, a, i) {
     const usa = a.usa;
     if (!Object.hasOwn(st.materiais, usa)) return grita(st, i, 'material', usa, `material '${usa}' não existe em MATERIAIS`);
-    for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'material', fid, 'face inexistente'); continue; } f.material = usa; }
+    for (const fid of resolverAlvosF(st, a, 'material', i)) st.F.get(fid).material = usa;
   },
 
   /* parte (passo 13a): dá NOME a um conjunto de faces (`f.parte = nome`) — é o ALVO
@@ -1392,8 +1462,10 @@ export const OPS = {
      (replay determinístico); o pivô é metadado de animação, não muda a MALHA. */
   parte(st, a, i) {
     const nome = a.nome;
+    const alvos = resolverAlvosF(st, a, 'parte', i);
+    if (!alvos.size) return;
     st.partes[nome] = { pivo: a.pivo != null ? st.vec(a.pivo) : null };   // registro nome->{pivo}; pivo null => centroide (no adaptador)
-    for (const fid of a.faces ?? []) { const f = st.F.get(fid); if (!f) { grita(st, i, 'parte', fid, 'face inexistente'); continue; } f.parte = nome; }   // última atribuição vence
+    for (const fid of alvos) st.F.get(fid).parte = nome;   // última atribuição vence
   },
 
   /* pesar (passo 14a): soma `peso` de influência do OSSO aos VÉRTICES dados (`vs`)

@@ -206,9 +206,20 @@ formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Ofic
         dos P9a-c já funcionam em cima do que elas selecionam, de graça.
         2 achados reais ao rodar: um hook novo chamava `partesNomeadas()`
         de um escopo que não a enxerga (só `animCtl.partes()` tinha o
-        closure certo); e os botões de Grupo/Região não desabilitavam no
-        arrasto, ao contrário de todo botão desde o P9a — os dois
-        consertados antes da bancada formal.
+         closure certo); e os botões de Grupo/Região não desabilitavam no
+         arrasto, ao contrário de todo botão desde o P9a — os dois
+         consertados antes da bancada formal.
+  - [x] **P9e · seleção semântica no núcleo** (D-129, achado da 2ª corrida do
+        TETO) — a UI já conseguia SELECIONAR grupo/região, mas seis ops que a IA
+        escreve (`pincel` face, `liso`, `material`, `solido`, `parte`,
+        `espelha`) ainda só liam `faces:[ids]`; pior, `sel:{grupo:...}` podia
+        ser ignorado calado. `resolverSelecao` vira a fonte única: `{v,f,grupo,
+        regiao}` une fontes; para FACE, vértice significa faces incidentes e
+        região só faces inteiras na caixa. `faces` continua byte-compatível,
+        mas misturar `faces`+`sel`, chave desconhecida, grupo/id/região inválido
+        ou seleção vazia GRITA. Prova na moto: duas regiões exatas trocam 32
+        ids de `material` por `sel.regiao`, canônico idêntico; a compressão de
+        toda a peça fica para uma rodada de autoria, não é simulada aqui.
   - [x] **Espaço Material** (D-127) — não é um P9x: é o conserto que a
         investigação do fim do P9 achou. O chip "Material" da barra era HTML
         morto desde o 13b (sem `id`, sem listener — clicar nele não fazia

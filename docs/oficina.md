@@ -350,16 +350,41 @@ Sem o servidor no ar, cai pro download comum — funciona, mas você move o arqu
 | `extruda` | `sel`, `dist` | Puxa a seleção por `dist`. **Vértice** (cria um novo ligado por uma aresta), **aresta** (cria uma aresta nova + uma face) e **face** (paredes laterais; região usa só as arestas de borda — algoritmo acima). As três, não só face. |
 | `vira` | `face` | FEITO (P8a do playground, D-121, só núcleo — SINGULAR, uma face por passo, não a lista `faces:[ids]` que a linha especulativa citava; virar N faces é N passos). Inverte o winding (reverte `f.vs`, o que vira a normal via Newell). Não cria/apaga vértice/face, só a ORDEM. Face inexistente GRITA. **CARACTERÍSTICA (não bug, medida no teste):** virar uma face JÁ consistente com as vizinhas DESALINHA o pareamento de aresta do teste de manifold (a vizinha continua no sentido antigo) — o uso responsável é o oposto, consertar uma face que já nasceu de costas (aí virar RESTAURA o pareamento). `vira` não valida consistência com vizinhas — é ferramenta pontual, não correção automática de malha inteira (a ideia de "recalcular todas pra fora" da linha antiga do doc não foi construída — fica de fora do escopo do P8a). |
 | `escala` | `sel`, `fator`, `eixo?` | Sem eixo, uniforme. **Ainda NÃO existe como op de malha** — só existe hoje como CANAL de animação (`ANIMACOES[].trilhas[].canal:'escala'`, `motor/oficina.js` ~linha 850/987: multiplica a escala da PARTE por quadro, não mexe na malha salva). Não confundir os dois: esta linha é roteiro (op de edição, P8); o canal já funciona. |
-| `espelha` | `eixo` (`'x'\|'y'\|'z'` — a coordenada NEGADA), `pos?` (PARAM, default 0), `sel?` (`{f:[ids]}`, default = todas as faces) | FEITO (P3 do playground, só núcleo). DUPLICA a seleção refletida no plano `eixo=pos` (`coord' = 2·pos − coord`) — modela metade de um objeto bilateral, o espelho completa o resto. Ids NOVOS saem do BLOCO do passo (formato salvo). **Weld automático:** vértice com a coordenada do eixo EXATAMENTE `pos` (comparação exata, como o polo `raio===0` do lathe) é COMPARTILHADO — a face espelhada reusa o id ORIGINAL, sem duplicar; solda a costura sozinho pra quem modela com a borda encostada no plano (vértice quase-no-plano NÃO solda — ponha a borda em `pos` LITERAL, ou solde depois com `mescla`). Numeração travada por teste: reúne os cantos das faces selecionadas (dedup, ordem CRESCENTE de id original) — no plano → mapeia pra si mesmo; fora → próximo id livre do bloco, em ordem; cada face selecionada (ordem crescente de id) vira 1 face nova com os cantos mapeados em ordem REVERTIDA (desfaz a troca de mão da reflexão — mantém a normal pra fora, a lição D1). Atributos (cor/material/parte/liso/solido) são HERDADOS do original. Guarda de overflow (D3) independente pra vértice-novo e pra face-nova. Peça-exemplo `pecas/_espelhado.js` (cabeça com par de chifres, watertight). |
+| `espelha` | `eixo` (`'x'\|'y'\|'z'` — a coordenada NEGADA), `pos?` (PARAM, default 0), `sel?` (a seleção uniforme abaixo; ausente = todas as faces) | FEITO (P3; seleção semântica D-129). DUPLICA a seleção refletida no plano `eixo=pos` (`coord' = 2·pos − coord`) — modela metade de um objeto bilateral, o espelho completa o resto. Ids NOVOS saem do BLOCO do passo (formato salvo). **Weld automático:** vértice com a coordenada do eixo EXATAMENTE `pos` é COMPARTILHADO; fora do plano duplica. A face nova sai com os cantos em ordem REVERTIDA (normal para fora) e herda cor/material/parte/liso/solido. `sel:{v}` resolve as faces incidentes e `sel:{regiao}` somente as faces inteiras na caixa; a assinatura antiga `sel:{f:[ids]}` permanece byte-idêntica. Guarda de overflow (D3) independente pra vértice-novo e face-nova. Peça-exemplo `pecas/_espelhado.js` (watertight). |
 | `rotaciona` | `eixo` (`'x'\|'y'\|'z'`), `graus` (PARAM), `sel?` (`{v:[ids]}` e/ou `{f:[ids]}` e/ou `{regiao:{min,max}}` e/ou `{grupo:'nome'}`, default = a malha inteira), `pivo?` (`[x,y,z]`, default = centroide da seleção) | FEITO (P3 do playground, só núcleo; seleção ampliada no P8a, D-121). Gira a seleção em torno do PIVÔ (`p' = pivo + R_eixo(graus)·(p−pivo)`, a mesma convenção right-handed das matrizes de animação `mRotX/mRotY/mRotZ`). SIMPLES: só desloca posições (`st.V.set` in-place) — NUNCA cria vértice/face nem renumera (o oposto do `espelha` acima). A seleção resolve por `resolverAlvosV` (helper compartilhado, P8a): `regiao` é uma caixa delimitadora INCLUSIVA — `min`/`max` os dois OBRIGATÓRIOS (`st.vec`, sem sentinela `Infinity` — o `st.num` já recusa não-finito por lei, D-118); `grupo` são as faces daquele `f.parte` (reusa a nomeação do passo 13a, D-95) — grupo sem nenhuma face GRITA. Id/grupo inexistente na seleção GRITA, nunca corrompe. |
 | `transladar` | `d` (`[x,y,z]`, PARAM, default `[0,0,0]`), `sel?` (o MESMO formato do `rotaciona`, default = a malha inteira) | FEITO (D-128, achado pelo experimento do TETO — `docs/TETO.md`; só núcleo). Soma `d` a cada vértice da seleção (`p' = p + d`), ADITIVO como o `moveV` — acompanha a base, então mexer no PARAM remodela sem tocar em passo. SIMPLES: nunca cria vértice/face nem renumera, e NÃO consome o bloco de ids. Sem pivô (translação não depende de pivô). **É O IRMÃO QUE FALTAVA DO `rotaciona`:** dava pra GIRAR a malha inteira mas não pra TRANSLADAR nada maior que uma face (`moveV`=1 vértice, `moveF`=1 face, `moveA`=1 aresta) — e como 7 das 9 primitivas nascem PRESAS à origem (`cubo`/`cilindro`/`esfera`/`cone`/`plano`/`chamferBox` centrados com a base em y=0; `lathe` sempre em torno de Y), posicionar uma delas custava um `moveV` POR VÉRTICE (32+ passos por roda). Medido: a moto do TETO usou 7 das 25 ops e virou 100% `loft` — o único gerador com `pos` por seção. **O jeito de compor:** crie a primitiva, translade no passo seguinte (`sel` ausente = tudo que existe até ali; com geometria anterior no caminho, mire só a nova por `sel:{regiao}`/`{grupo}`). |
 | `mescla` | `de: [ids]`, `para: id` | Some as faces de área zero que sobrarem. |
 | `apagaFace` | `face` | FEITO (P8a do playground, D-121, só núcleo). Remove a face de `st.F`. Os VÉRTICES dela continuam existindo (podem estar em uso por outra face, ou não — um vértice sem face nenhuma não é erro, é normal ao abrir um buraco de propósito: porta, janela, ou preparo pra composição manual). Face inexistente GRITA. |
-| `pincel` | `modo`, `cor`, e o alvo conforme o modo | `modo: 'face'` preenche faces inteiras. `modo: 'livre'` recebe `raio`, `dureza` e `pontos: [{ f, a, b }]` — face e posição DENTRO dela, não coordenada de textura crua. Assim mover um vértice depois leva a tinta junto, em vez de deslizar. |
-| `liso` | `faces: [ids]` | Sombreado macio nessas faces. O padrão é chapado. |
-| `parte` | `nome`, `faces: [ids]` | Dá nome a um conjunto. É o que animação e material usam como alvo. |
-| `material` | `faces` ou `parte`, `usa` | Aplica um material declarado em `MATERIAIS`. |
-| `solido` | `faces: [ids]` | Marca o que entra na colisão. |
+| `pincel` | `modo`, `cor`, e o alvo conforme o modo | `modo:'face'` aceita `faces:[ids]` (legado) OU `sel` uniforme. `modo:'livre'` recebe `raio`, `dureza` e `pontos:[{f,a,b}]`, nunca `sel`. |
+| `liso` | `faces:[ids]` (legado) ou `sel` | Sombreado macio nas faces resolvidas. O padrão é chapado. |
+| `parte` | `nome`, `faces:[ids]` (legado) ou `sel` | Dá nome às faces resolvidas; é o alvo de animação e de `sel.grupo`. |
+| `material` | `faces:[ids]` (legado) ou `sel`, `usa` | Aplica um material declarado em `MATERIAIS`. |
+| `solido` | `faces:[ids]` (legado) ou `sel` | Marca as faces resolvidas que entram na colisão. |
+
+### Seleção uniforme (`sel`) — D-129
+
+`rotaciona`, `transladar`, `displace`, `espelha` e os atributos por face
+(`pincel` no modo `face`, `liso`, `material`, `solido`, `parte`) usam a MESMA
+seleção. Os campos presentes se unem, sem duplicar:
+
+```js
+sel: { f: [ids] }                         // faces literais
+sel: { v: [ids] }                         // vértices literais
+sel: { grupo: 'nome-da-parte' }           // faces já nomeadas por `parte`
+sel: { regiao: { min:[x,y,z], max:[x,y,z] } }
+```
+
+Para uma op de VÉRTICE, `f`/`grupo` adicionam os cantos das faces e `regiao`
+adiciona cada vértice dentro da caixa inclusiva — é o comportamento histórico de
+`rotaciona`/`transladar`. Para uma op de FACE, `v` alcança toda face incidente a
+algum vértice citado; `regiao` alcança somente a face cujos **todos** os cantos
+estão dentro da caixa. Isso evita pintar/materializar meia face por acidente.
+
+`faces:[ids]` permanece para todas as peças salvas e não pode aparecer junto de
+`sel` na mesma op: a mistura é ambígua e GRITA. Toda chave de seleção
+desconhecida, id/grupo inexistente, região sem `min`/`max` finitos ou invertida,
+e seleção sem alvo válido GRITA com a operação, o tipo e a causa; o passo não
+corrompe silenciosamente a malha. Não há sucesso silencioso.
 
 Toda operação precisa ser **determinística**: mesma lista, mesmo objeto,
 sempre. Nada de aleatório sem semente escrita no passo, senão reabrir o arquivo

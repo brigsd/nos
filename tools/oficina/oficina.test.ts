@@ -2237,6 +2237,91 @@ describe('P8 — edição restante (moveF/moveA/vira/apagaFace + seleção por r
   });
 });
 
+/* D-129 — seleção semântica para atributos e espelho. O contrato é deliberado:
+   `sel.v` alcança as faces incidentes; `sel.regiao` só alcança faces INTEIRAS na
+   caixa inclusiva. Assim o autor nunca pinta metade inesperada de uma face. */
+describe('D-129 — seleção semântica uniforme (atributos + espelha)', () => {
+  const cubo: any = ['cubo', { id: 0, lado: 1 }];
+
+  it('pincel por grupo e região atinge as faces previstas; material, solido, liso e parte reutilizam a mesma seleção', () => {
+    const n = nucleo([
+      cubo,
+      ['parte', { nome: 'topo', faces: [1] }],                         // assinatura legada preservada
+      ['pincel', { modo: 'face', sel: { grupo: 'topo' }, cor: '#ff0000' }],
+      ['material', { sel: { grupo: 'topo' }, usa: 'brilho' }],
+      ['solido', { sel: { regiao: { min: [-1, 0.9, -1], max: [1, 1.1, 1] } } }],
+      ['liso', { sel: { v: [4] } }],
+      ['parte', { nome: 'cantoTopo', sel: { v: [4] } }],
+    ] as any, {}, {}, { brilho: { cor: '#ffffff' } });
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.F.get(1)).toMatchObject({ cor: '#ff0000', material: 'brilho', solido: true, liso: true });
+    expect(n.F.get(0)).toMatchObject({ cor: null, material: null, solido: false });
+    // v4 é canto do topo e de duas paredes: seleção por vértice alcança as três faces incidentes.
+    expect([...n.F.values()].filter((f: any) => f.parte === 'cantoTopo').map((f: any) => f.id).sort()).toEqual([1, 2, 5]);
+  });
+
+  it('espelha por grupo e por região cria a metade nova, com a mesma contagem que sel.f', () => {
+    const porGrupo = nucleo([cubo, ['parte', { nome: 'topo', faces: [1] }], ['espelha', { eixo: 'x', sel: { grupo: 'topo' } }]], {}, {});
+    const porRegiao = nucleo([cubo, ['espelha', { eixo: 'x', sel: { regiao: { min: [-1, 0.9, -1], max: [1, 1.1, 1] } } }]], {}, {});
+    const legado = nucleo([cubo, ['espelha', { eixo: 'x', sel: { f: [1] } }]], {}, {});
+    for (const n of [porGrupo, porRegiao, legado]) { expect(n.orfaos).toHaveLength(0); expect(n.V.size).toBe(12); expect(n.F.size).toBe(7); }
+    expect(JSON.stringify(neutroCanonico(legado))).toBe(JSON.stringify(neutroCanonico(porRegiao))); // f antigo = região que contém só o topo
+  });
+
+  it('faces:[ids] legado permanece byte-idêntico ao sel.f; rotaciona e transladar preservam a seleção antiga', () => {
+    const legado = nucleo([cubo, ['pincel', { modo: 'face', faces: [1], cor: '#123456' }], ['liso', { faces: [1] }], ['solido', { faces: [1] }]], {}, {});
+    const novo = nucleo([cubo, ['pincel', { modo: 'face', sel: { f: [1] }, cor: '#123456' }], ['liso', { sel: { f: [1] } }], ['solido', { sel: { f: [1] } }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(legado))).toBe(JSON.stringify(neutroCanonico(novo)));
+    const movido = nucleo([cubo, ['transladar', { d: [1, 0, 0], sel: { f: [1] } }], ['rotaciona', { eixo: 'z', graus: 0, sel: { f: [1] } }]], {}, {});
+    expect(movido.orfaos).toHaveLength(0);
+    expect(movido.V.get(4)).toEqual([0.5, 1, -0.5]); expect(movido.V.get(0)).toEqual([-0.5, 0, -0.5]);
+  });
+
+  it('seleções inválidas, vazias, ambíguas, fora da peça e desconhecidas GRITAM sem corromper', () => {
+    const casos: any[] = [
+      ['pincel', { modo: 'face', sel: { grupo: 'naoexiste' }, cor: '#f00' }],
+      ['pincel', { modo: 'face', sel: { regiao: { min: [9, 9, 9], max: [10, 10, 10] } }, cor: '#f00' }],
+      ['pincel', { modo: 'face', sel: { regiao: { min: [-0.51, -0.1, -0.51], max: [-0.49, 0.1, -0.49] } }, cor: '#f00' }], // só v0: nenhuma face INTEIRA
+      ['pincel', { modo: 'face', sel: { regiao: { min: [0, 0, 0] } }, cor: '#f00' }],
+      ['pincel', { modo: 'face', sel: { regiao: { min: [0, 0, 0], max: [Infinity, 1, 1] } }, cor: '#f00' }],
+      ['pincel', { modo: 'face', sel: { surpresa: [1] }, cor: '#f00' }],
+      ['pincel', { modo: 'face', sel: { f: [] }, cor: '#f00' }],
+      ['pincel', { modo: 'face', faces: [1], sel: { f: [1] }, cor: '#f00' }],
+      ['pincel', { modo: 'face', sel: { f: [999] }, cor: '#f00' }],
+    ];
+    for (const passo of casos) {
+      const n = nucleo([cubo, passo], {}, {});
+      expect(n.orfaos.length).toBeGreaterThan(0);
+      expect(n.orfaos.every((o: any) => o.op === 'pincel')).toBe(true);
+      expect(n.F.get(1).cor).toBeNull();
+    }
+  });
+
+  it('grupo sem face viva e órfãos não viram sucesso silencioso nem deixam estado parcial', () => {
+    const n = nucleo([cubo, ['parte', { nome: 'sumiu', faces: [1] }], ['apagaFace', { face: 1 }], ['espelha', { eixo: 'x', sel: { grupo: 'sumiu' } }]], {}, {});
+    expect(n.orfaos.some((o: any) => o.op === 'espelha' && /grupo 'sumiu'/.test(o.motivo))).toBe(true);
+    expect(n.V.size).toBe(8); expect(n.F.size).toBe(5);  // espelho não chegou a alocar nada
+  });
+
+  it('medição na moto: os 32 ids de farol/lanterna viram duas regiões sem mudar a forma canônica', async () => {
+    const url = new URL('../../prototipos/fps/v3/pecas/moto.js', import.meta.url);
+    const moto: any = await import(fileURLToPath(url));
+    const regioes: any = {
+      farol: { min: [-0.058, 0.9499099168006007, 0.8691819833601201], max: [0.058, 1.0580900831993993, 0.914] },
+      lanterna: { min: [-0.078, 0.9520002755842918, -1.19], max: [0.078, 1.0299997244157082, -1.1298533865667473] },
+    };
+    const derivados = moto.PASSOS.map((p: any) => p[0] === 'material' && regioes[p[1].usa]
+      ? ['material', { sel: { regiao: regioes[p[1].usa] }, usa: p[1].usa }]
+      : p);
+    const original = nucleo(moto.PASSOS, moto.PARAMS, moto.TOPO, moto.MATERIAIS);
+    const semantica = nucleo(derivados, moto.PARAMS, moto.TOPO, moto.MATERIAIS);
+    expect(moto.PASSOS.find((p: any) => p[0] === 'material' && p[1].usa === 'farol')[1].faces.length).toBe(20);
+    expect(moto.PASSOS.find((p: any) => p[0] === 'material' && p[1].usa === 'lanterna')[1].faces.length).toBe(12);
+    expect(semantica.orfaos).toHaveLength(0);
+    expect(JSON.stringify(neutroCanonico(semantica))).toBe(JSON.stringify(neutroCanonico(original)));
+  });
+});
+
 /* P8b do playground — `chamferBox` (caixa com cantos/arestas chanfrados, o cubo
    cantelado). Prova por MEDIÇÃO, não recontagem de cabeça: a primeira derivação à
    mão desta topologia (puxar o vértice de canto por UM eixo só — "truncagem") dava
