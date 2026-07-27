@@ -2511,7 +2511,7 @@ describe('Fase 2 — fixture de aliases estáveis de cubo', () => {
     const duplicadoMisto = nucleo([cubo(0, 30), loft(BLOCO, 30), ['pincel', { modo: 'face', sel: { alias: 'topoCubo' }, cor: '#f00' }]], {}, {}, {}, null, aliases);
     for (const n of [duplicadoCubo, duplicadoMisto]) {
       expect(n.orfaos.some((o: any) => /duplicado/.test(o.motivo))).toBe(true);
-      expect(n.orfaos.some((o: any) => /ambígua/.test(o.motivo))).toBe(true);
+      expect(n.orfaos.some((o: any) => /origemId 30.*duplicado/.test(o.motivo))).toBe(true);
       expect(facesCom(n, 'cor', '#f00')).toHaveLength(0);
     }
     expect(() => nucleo([], {}, {}, {}, null, [['x', { origem: { op: 'cubo', id: 30, face: 'inexistente' } }]])).toThrow(/inválido/);
@@ -2526,6 +2526,38 @@ describe('Fase 2 — fixture de aliases estáveis de cubo', () => {
     expect(JSON.stringify(neutroCanonico(n).V)).toBe(JSON.stringify(neutroCanonico(puro).V));
     const errada = nucleo([loft(0, 30), ['pincel', { modo: 'face', sel: { alias: 'topoCubo' }, cor: '#f00' }]], {}, {}, {}, null, aliases);
     expect(errada.orfaos.some((o: any) => /foi declarada por 'loft'/.test(o.motivo))).toBe(true); expect(facesCom(errada, 'cor', '#f00')).toHaveLength(0);
+  });
+
+  it('declaração duplicada posterior invalida alias e sel.origem desde o início, sem bloquear outra identidade', () => {
+    const comSeguro: any = [...aliases, ['topoSeguro', { origem: { op: 'cubo', id: 40, face: 'topo' } }]];
+    const ordemA: any[] = [
+      cubo(0, 30),
+      ['pincel', { modo: 'face', sel: { alias: 'topoCubo' }, cor: '#f00' }],
+      ['parte', { nome: 'nao-nasce', sel: { alias: 'topoCubo' } }],
+      ['transladar', { d: [3, 0, 0], sel: { alias: 'topoCubo' } }],
+      ['liso', { sel: { origem: { op: 'cubo', id: 30, face: 'topo' } } }],
+      cubo(BLOCO * 5, 30),
+      cubo(BLOCO * 6, 40),
+      ['pincel', { modo: 'face', sel: { alias: 'topoSeguro' }, cor: '#0f0' }],
+    ];
+    const a = nucleo(ordemA, {}, {}, {}, null, comSeguro), puro = nucleo([cubo(0, 30)], {}, {});
+    const motivoA = a.orfaos.find((o: any) => o.op === 'pincel' && /duplicado nas declarações/.test(o.motivo))?.motivo;
+    expect(motivoA).toMatch(/passos 0 \(cubo\), 5 \(cubo\)/);
+    for (const op of ['pincel', 'parte', 'transladar', 'liso']) expect(a.orfaos.some((o: any) => o.op === op && /duplicado nas declarações/.test(o.motivo))).toBe(true);
+    expect(facesCom(a, 'cor', '#f00')).toHaveLength(0); expect(facesCom(a, 'parte', 'nao-nasce')).toHaveLength(0); expect(facesCom(a, 'liso', true)).toHaveLength(0);
+    expect(JSON.stringify([...a.V.entries()].filter(([id]) => id < BLOCO))).toBe(JSON.stringify([...puro.V.entries()]));
+    expect(facesCom(a, 'cor', '#0f0').map((f: any) => f.id)).toEqual([BLOCO * 6 + 1]); // identidade 40 segue independente
+
+    const ordemB: any[] = [
+      cubo(0, 30),
+      ['pincel', { modo: 'face', sel: { alias: 'topoCubo' }, cor: '#f00' }],
+      ['parte', { nome: 'tambem-nao', sel: { alias: 'topoCubo' } }],
+      loft(BLOCO * 3, 30),
+    ];
+    const b = nucleo(ordemB, {}, {}, {}, null, aliases);
+    expect(b.orfaos.some((o: any) => o.op === 'pincel' && /passos 0 \(cubo\), 3 \(loft\)/.test(o.motivo))).toBe(true);
+    expect(b.orfaos.some((o: any) => o.op === 'parte' && /duplicado nas declarações/.test(o.motivo))).toBe(true);
+    expect(facesCom(b, 'cor', '#f00')).toHaveLength(0); expect(facesCom(b, 'parte', 'tambem-nao')).toHaveLength(0);
   });
 });
 

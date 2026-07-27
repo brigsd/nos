@@ -136,28 +136,72 @@ function addF(st, id, vs) {
 function grita(st, i, op, ref, motivo) { st.orfaos.push({ passo: i, op, ref, motivo }); }
 
 /* Fase 2: a identidade é UMA só no objeto, independente do gerador. Cada
-   gerador publica apenas seu contrato local reexecutável; duplicata continua
-   registrada para que nenhuma seleção possa desempatar silenciosamente. */
+   contrato valida e resolve apenas sua coordenada local; o resolvedor comum
+   nunca precisa saber qual gerador a publicou. */
 const FACES_CUBO = new Set(['fundo', 'topo', 'tras', 'direita', 'frente', 'esquerda']);
 function registraOrigem(st, i, op, origemId, contrato) {
   const registros = st.origens.get(origemId) ?? [];
-  if (registros.length) grita(st, i, op, origemId, `origemId ${origemId} duplicado: a identidade deve ser única no objeto`);
   registros.push({ op, ...contrato });
   st.origens.set(origemId, registros);
 }
-function origemFormatoValido(origem) {
-  if (!origem || typeof origem !== 'object' || Array.isArray(origem) || !Object.hasOwn(origem, 'op') || !Object.hasOwn(origem, 'id') || !Number.isSafeInteger(origem.id) || origem.id < 0) return false;
-  if (origem.op === 'loft') {
-    const chaves = ['op', 'id', 'faixa', 'lado'];
-    return Object.keys(origem).every((k) => chaves.includes(k)) && Object.hasOwn(origem, 'faixa')
-      && Number.isSafeInteger(origem.faixa) && origem.faixa >= 0
-      && (origem.lado == null || (Number.isSafeInteger(origem.lado) && origem.lado >= 0));
-  }
-  if (origem.op === 'cubo') {
-    const chaves = ['op', 'id', 'face'];
-    return Object.keys(origem).every((k) => chaves.includes(k)) && Object.hasOwn(origem, 'face') && FACES_CUBO.has(origem.face);
-  }
-  return false;
+const CONTRATOS_ORIGEM = {
+  loft: {
+    validar(origem) {
+      const chaves = ['op', 'id', 'faixa', 'lado'];
+      if (!Object.keys(origem).every((k) => chaves.includes(k)) || !Object.hasOwn(origem, 'faixa') || !Number.isSafeInteger(origem.faixa) || origem.faixa < 0 || (origem.lado != null && (!Number.isSafeInteger(origem.lado) || origem.lado < 0))) return 'loft usa op, id, faixa e lado opcional inteiro não-negativo';
+      return null;
+    },
+    resolver(registro, origem) {
+      const faixa = registro.faixas[origem.faixa];
+      if (!faixa) return { erro: `faixa ${origem.faixa} fora do limite da origem loft:${origem.id}` };
+      if (!faixa.length) return { erro: `faixa ${origem.faixa} da origem loft:${origem.id} não tem faces laterais` };
+      if (origem.lado != null && origem.lado >= faixa.length) return { erro: `lado ${origem.lado} fora do limite da faixa ${origem.faixa} (0..${faixa.length - 1})` };
+      return { faces: origem.lado == null ? faixa : [faixa[origem.lado]] };
+    },
+  },
+  cubo: {
+    validar(origem) {
+      const chaves = ['op', 'id', 'face'];
+      if (!Object.keys(origem).every((k) => chaves.includes(k)) || !Object.hasOwn(origem, 'face') || !FACES_CUBO.has(origem.face)) return 'cubo usa op, id e face (fundo, topo, tras, direita, frente ou esquerda)';
+      return null;
+    },
+    resolver(registro, origem) {
+      const face = registro.faces[origem.face];
+      return face == null ? { erro: `face '${origem.face}' não existe na origem cubo:${origem.id}` } : { faces: [face] };
+    },
+  },
+};
+function validarOrigem(origem) {
+  if (!origem || typeof origem !== 'object' || Array.isArray(origem) || !Object.hasOwn(origem, 'op') || !Object.hasOwn(origem, 'id')) return { erro: 'origem precisa ser um objeto com op e id' };
+  const contrato = CONTRATOS_ORIGEM[origem.op];
+  if (!contrato) return { erro: `op de origem '${origem.op}' desconhecida` };
+  if (!Number.isSafeInteger(origem.id) || origem.id < 0) return { erro: 'id da origem precisa ser inteiro não-negativo' };
+  const erro = contrato.validar(origem);
+  return erro ? { erro } : { contrato };
+}
+function textoDeclaracoes(origemId, declaracoes) {
+  return `origemId ${origemId} ambígua: duplicado nas declarações dos passos ${declaracoes.map((d) => `${d.passo} (${d.op})`).join(', ')}`;
+}
+function mapearDeclaracoesOrigem(PASSOS) {
+  const declaracoes = new Map();
+  PASSOS.forEach((passo, i) => {
+    const [op, args = {}] = Array.isArray(passo) ? passo : [];
+    if (!CONTRATOS_ORIGEM[op] || !args || !Number.isSafeInteger(args.origemId) || args.origemId < 0) return;
+    const lista = declaracoes.get(args.origemId) ?? [];
+    lista.push({ passo: i, op }); declaracoes.set(args.origemId, lista);
+  });
+  return declaracoes;
+}
+function resolverOrigem(st, origem) {
+  const validacao = validarOrigem(origem);
+  if (validacao.erro) return { erro: `origem inválida: ${validacao.erro}` };
+  const declaracoes = st.declaracoesOrigem.get(origem.id) ?? [];
+  if (declaracoes.length > 1) return { erro: textoDeclaracoes(origem.id, declaracoes) };
+  const registros = st.origens.get(origem.id) ?? [];
+  if (!registros.length) return { erro: `origem ${origem.op}:${origem.id} inexistente ou ainda não criada` };
+  if (registros.length !== 1) return { erro: `origem ${origem.id} ambígua: ${registros.length} geradores declararam esta identidade` };
+  if (registros[0].op !== origem.op) return { erro: `origem ${origem.id} foi declarada por '${registros[0].op}', não por '${origem.op}'` };
+  return validacao.contrato.resolver(registros[0], origem);
 }
 
 /* valida o `id` opcional de uma primitiva contra a base posicional: se o
@@ -243,24 +287,9 @@ function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
   if (sel.origem != null) {
     teveChave = true;
     const origem = sel.origem;
-    if (!origemFormatoValido(origem)) {
-      grita(st, i, op, 'sel.origem', "seleção origem inválida: loft usa op, id, faixa e lado opcional; cubo usa op, id e face (fundo, topo, tras, direita, frente ou esquerda)");
-    } else {
-      const registros = st.origens.get(origem.id) ?? [];
-      if (!registros.length) grita(st, i, op, 'sel.origem', `origem ${origem.op}:${origem.id} inexistente ou ainda não criada`);
-      else if (registros.length !== 1) grita(st, i, op, 'sel.origem', `origem ${origem.id} ambígua: ${registros.length} geradores declararam esta identidade`);
-      else if (registros[0].op !== origem.op) grita(st, i, op, 'sel.origem.op', `origem ${origem.id} foi declarada por '${registros[0].op}', não por '${origem.op}'`);
-      else {
-        const registro = registros[0];
-        if (origem.op === 'loft') {
-          const faixa = registro.faixas[origem.faixa];
-          if (!faixa) grita(st, i, op, 'sel.origem.faixa', `faixa ${origem.faixa} fora do limite da origem loft:${origem.id}`);
-          else if (!faixa.length) grita(st, i, op, 'sel.origem.faixa', `faixa ${origem.faixa} da origem loft:${origem.id} não tem faces laterais`);
-          else if (origem.lado != null && origem.lado >= faixa.length) grita(st, i, op, 'sel.origem.lado', `lado ${origem.lado} fora do limite da faixa ${origem.faixa} (0..${faixa.length - 1})`);
-          else for (const fid of origem.lado == null ? faixa : [faixa[origem.lado]]) adicionaFace(fid);
-        } else adicionaFace(registro.faces[origem.face]);
-      }
-    }
+    const resultado = resolverOrigem(st, origem);
+    if (resultado.erro) grita(st, i, op, 'sel.origem', resultado.erro);
+    else for (const fid of resultado.faces) adicionaFace(fid);
   }
   if (sel.alias != null) {
     teveChave = true;
@@ -1614,12 +1643,18 @@ export function nucleo(PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO
   for (const ent of ALIASES) {
     if (!Array.isArray(ent) || ent.length !== 2 || typeof ent[0] !== 'string' || !ent[0]) throw new Error('oficina: alias inválido');
     if (aliases.has(ent[0])) throw new Error(`oficina: alias duplicado '${ent[0]}'`);
-    const direto = (x) => x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).length === 1 && origemFormatoValido(x.origem);
+    const direto = (x) => x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).length === 1 && !validarOrigem(x.origem).erro;
     const composto = ent[1] && typeof ent[1] === 'object' && !Array.isArray(ent[1]) && Object.keys(ent[1]).length === 1 && Array.isArray(ent[1].unir) && ent[1].unir.length && ent[1].unir.every(direto);
     if (!direto(ent[1]) && !composto) throw new Error(`oficina: alias '${ent[0]}' inválido: só origem ou unir de origens`);
     aliases.set(ent[0], ent[1]);
   }
-  const st = { V: new Map(), F: new Map(), orfaos: [], merges: [], partes: {}, origens: new Map(), aliases, num, vec, materiais: MATERIAIS, esqueleto, ossoSet, pesos: new Map() };
+  const declaracoesOrigem = mapearDeclaracoesOrigem(PASSOS);
+  const orfaosIniciais = [];
+  for (const [origemId, declaracoes] of declaracoesOrigem) if (declaracoes.length > 1) {
+    const motivo = textoDeclaracoes(origemId, declaracoes);
+    for (const declaracao of declaracoes.slice(1)) orfaosIniciais.push({ passo: declaracao.passo, op: declaracao.op, ref: origemId, motivo });
+  }
+  const st = { V: new Map(), F: new Map(), orfaos: orfaosIniciais, merges: [], partes: {}, origens: new Map(), declaracoesOrigem, aliases, num, vec, materiais: MATERIAIS, esqueleto, ossoSet, pesos: new Map() };
 
   PASSOS.forEach((passo, i) => {
     const [op, args = {}] = passo;

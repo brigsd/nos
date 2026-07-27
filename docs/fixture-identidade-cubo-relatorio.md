@@ -34,23 +34,39 @@ atingiu exatamente cinco faces. `executar(...)` devolveu o lote da parte do
 topo, e `colisaoDe(...)` por alias coincidiu com a seleção literal sem incluir
 um `loft` distante.
 
-Duplicar `origemId` entre dois cubos ou entre cubo e loft grita no segundo
-gerador e torna a identidade ambígua; nenhuma pintura é aplicada. Nome de face
-inválido, campo extra ou origem de gerador errado gritam. Uma união cujo loft
-não existe não aplica parcialmente pintura, `parte` ou transformação.
+Foi encontrada uma brecha: a duplicata só ficava visível quando o segundo
+gerador era executado; por isso um alias usado antes dela ainda podia atuar. A
+correção faz uma pré-varredura das declarações de `origemId` de cubo e loft
+antes de qualquer `PASSO`. Uma identidade repetida já nasce ambígua, com os
+passos e geradores declaradores no diagnóstico; `alias` e `sel.origem` direto
+falham tanto antes quanto depois da segunda declaração. Operações de outra
+identidade continuam normais.
+
+Duplicar `origemId` entre dois cubos ou entre cubo e loft agora grita desde o
+início do replay; nenhuma pintura, parte ou transformação é aplicada. Nome de
+face inválido, campo extra ou origem de gerador errado gritam. Uma união cujo
+loft não existe não aplica parcialmente pintura, `parte` ou transformação.
+
+Loft e cubo também passaram a usar o mesmo protocolo de contratos de origem:
+cada contrato valida sua coordenada local e resolve faces pelo registro
+efêmero, retornando o próprio diagnóstico quando a coordenada não existe. O
+resolvedor comum só localiza o contrato por `op`, valida e pede a resolução. Um
+terceiro gerador precisa registrar seu contrato e publicar seus dados locais
+com `registraOrigem`; não precisa alterar `resolverSelecao`.
 
 ## Revisão adversarial
 
 Passe adversarial solo: a chave do índice foi reduzida a `origemId`, não a
 `op:id`, para que cubo e loft não possam coexistir silenciosamente com a mesma
-identidade. O segundo registro continua guardado, impedindo que o primeiro ou
-o último vença por acaso. A seleção valida o contrato antes dos PASSOS e limpa
-os alvos da união quando qualquer termo falha; os testes travam esses dois
-casos, além de confirmar que a face local não vira uma direção do mundo.
+identidade. A pré-varredura fecha a falha temporal: o segundo registro não
+precisa mais ser alcançado para invalidar a identidade. A seleção valida o
+contrato antes dos PASSOS e limpa os alvos da união quando qualquer termo
+falha; os testes travam esses casos, além de confirmar que a face local não
+vira uma direção do mundo.
 
 ## Veredito
 
 **APROVADO.** O mesmo modelo de origem estável + contrato local + alias
-reexecutável funciona para uma primitiva simples sem estender a sintaxe de
-produção. A prova ainda não cobre outros geradores, interface ou operações
-topológicas.
+reexecutável funciona para uma primitiva simples, inclusive diante de duplicata
+declarada depois do uso, sem estender a sintaxe de produção. A prova ainda não
+cobre outros geradores, interface ou operações topológicas.
