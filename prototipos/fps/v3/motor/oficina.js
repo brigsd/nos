@@ -171,8 +171,9 @@ const CONTRATOS_ORIGEM = {
       if (!Object.keys(origem).every((k) => chaves.includes(k)) || !Object.hasOwn(origem, 'face') || !FACES_CUBO.has(origem.face)) return 'cubo usa op, id e face (fundo, topo, tras, direita, frente ou esquerda)';
       return null;
     },
-    resolver(_st, registro, origem) {
+    resolver(st, registro, origem) {
       const face = registro.faces[origem.face];
+      if (face != null && !st.F.has(face)) return { erro: `face '${origem.face}' da origem cubo:${origem.id} foi removida` };
       return face == null ? { erro: `face '${origem.face}' não existe na origem cubo:${origem.id}` } : { faces: [face] };
     },
   },
@@ -1263,6 +1264,16 @@ export const OPS = {
      face nenhuma não é erro, é normal ao abrir um buraco de propósito: porta,
      janela, ou preparo pra composição manual). Face inexistente GRITA. */
   apagaFace(st, a, i) {
+    if (a.face != null && a.sel != null) return grita(st, i, 'apagaFace', 'face+sel', 'seleção ambígua: use face:id (legado) OU sel:{...}, nunca os dois');
+    if (a.sel != null) {
+      const faces = resolverSelecao(st, a.sel, 'apagaFace', i).faces;
+      if (faces.size !== 1) {
+        if (faces.size > 1) grita(st, i, 'apagaFace', 'sel', 'seleção ambígua: apagaFace exige exatamente uma face');
+        return;
+      }
+      st.F.delete(faces.values().next().value);
+      return;
+    }
     const fid = a.face;
     if (!st.F.has(fid)) return grita(st, i, 'apagaFace', fid, 'face inexistente');
     st.F.delete(fid);

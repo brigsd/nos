@@ -41,6 +41,45 @@ describe('numeração determinística', () => {
   });
 });
 
+describe('Fase 3 - fixture de invalidacao estrutural por apagaFace', () => {
+  const ctx = { tex: { texCanvas: (w: number, h: number) => ({ width: w, height: h }) }, m4: { ident: () => new Float32Array(16) } };
+  const topo = { op: 'cubo', id: 70, face: 'topo' }, frente = { op: 'cubo', id: 70, face: 'frente' };
+  const aliases: any = [['topo', { origem: topo }], ['frente', { origem: frente }], ['topoEfrente', { unir: [{ origem: topo }, { origem: frente }] }]];
+  const cubo = (id = 0, origemId = 70): any => ['cubo', { id, lado: 1, origemId }];
+  const geo = (n: any) => { const c: any = neutroCanonico(n); return JSON.stringify({ V: c.V, F: c.F }); };
+
+  it('apaga topo pelo nome, invalida-o por inteiro e preserva frente', () => {
+    const antes = nucleo([cubo(), ['pincel', { modo: 'face', sel: { alias: 'topo' }, cor: '#123456' }]], {}, {}, {}, null, aliases);
+    expect(antes.orfaos).toHaveLength(0); expect(antes.F.get(1)!.cor).toBe('#123456');
+    const soRemocao = nucleo([cubo(), ['apagaFace', { sel: { alias: 'topo' } }]], {}, {}, {}, null, aliases);
+    const depois = nucleo([cubo(), ['apagaFace', { sel: { alias: 'topo' } }], ['pincel', { modo: 'face', sel: { alias: 'topo' }, cor: '#f00' }], ['parte', { nome: 'sumiu', sel: { alias: 'topo' } }], ['transladar', { d: [3, 0, 0], sel: { alias: 'topo' } }], ['pincel', { modo: 'face', sel: { alias: 'frente' }, cor: '#0f0' }]], {}, {}, {}, null, aliases);
+    expect(soRemocao.orfaos).toHaveLength(0); expect(soRemocao.F.has(1)).toBe(false);
+    for (const op of ['pincel', 'parte', 'transladar']) expect(depois.orfaos.some((o: any) => o.op === op && /removida/.test(o.motivo))).toBe(true);
+    expect(depois.F.get(4)!.cor).toBe('#0f0'); expect([...depois.F.values()].filter((f: any) => f.id !== 4 && (f.cor || f.parte || f.liso))).toEqual([]);
+    const semPinturaFrente = { ...depois, F: new Map([...depois.F].map(([id, f]: any) => [id, { ...f, cor: id === 4 ? null : f.cor }])) };
+    expect(geo(semPinturaFrente)).toBe(geo(soRemocao));
+  });
+
+  it('nunca recalcula topo para vizinha, face posterior ou outro cubo, inclusive com insercao anterior', () => {
+    const tentativas: any[] = [[cubo(), ['apagaFace', { sel: { alias: 'topo' } }], ['pincel', { modo: 'face', sel: { alias: 'topo' }, cor: '#f00' }]], [cubo(), ['apagaFace', { sel: { alias: 'topo' } }], cubo(BLOCO, 80), ['pincel', { modo: 'face', sel: { alias: 'topo' }, cor: '#f00' }]], [['cubo', { id: 0, lado: 0.25 }], cubo(BLOCO), ['apagaFace', { sel: { alias: 'topo' } }], ['cubo', { id: BLOCO * 2, lado: 1 }], ['pincel', { modo: 'face', sel: { alias: 'topo' }, cor: '#f00' }]]];
+    for (const passos of tentativas) { const n = nucleo(passos, {}, {}, {}, null, aliases); expect(n.orfaos.some((o: any) => /removida/.test(o.motivo))).toBe(true); expect([...n.F.values()].filter((f: any) => f.cor === '#f00')).toEqual([]); }
+  });
+
+  it('uniao e origem direta falham por inteiro; nao aplicam somente frente', () => {
+    const composta = nucleo([cubo(), ['apagaFace', { sel: { alias: 'topo' } }], ['pincel', { modo: 'face', sel: { alias: 'topoEfrente' }, cor: '#f00' }], ['parte', { nome: 'parcial', sel: { alias: 'topoEfrente' } }], ['transladar', { d: [2, 0, 0], sel: { alias: 'topoEfrente' } }]], {}, {}, {}, null, aliases);
+    const direta = nucleo([cubo(), ['apagaFace', { sel: { origem: topo } }], ['pincel', { modo: 'face', sel: { origem: topo }, cor: '#f00' }]], {}, {});
+    for (const n of [composta, direta]) expect(n.orfaos.some((o: any) => /removida/.test(o.motivo))).toBe(true);
+    expect(composta.F.get(4)!.cor).toBeNull(); expect(composta.F.get(4)!.parte).toBeNull(); expect(geo(composta)).toBe(geo(nucleo([cubo(), ['apagaFace', { sel: { alias: 'topo' } }]], {}, {}, {}, null, aliases))); expect([...direta.F.values()].some((f: any) => f.cor === '#f00')).toBe(false);
+  });
+
+  it('apagaFace aceita uma face pelo resolvedor comum e preserva face:id legado', () => {
+    const legado = nucleo([cubo(), ['apagaFace', { face: 1 }]], {}, {}); expect(legado.orfaos).toHaveLength(0); expect(legado.F.has(1)).toBe(false);
+    for (const args of [{ face: 1, sel: { alias: 'topo' } }, { sel: { f: [] } }, { sel: { alias: 'topoEfrente' } }]) { const n = nucleo([cubo(), ['apagaFace', args]], {}, {}, {}, null, aliases); expect(n.orfaos.length).toBeGreaterThan(0); expect(n.F.size).toBe(6); }
+    const viaApi: any = executar([cubo(), ['apagaFace', { sel: { alias: 'topo' } }]], {}, {}, ctx, {}, {}, null, aliases); expect(viaApi.lotes.reduce((s: number, l: any) => s + l.mesh.v.length, 0)).toBe(5 * 6 * 8);
+    const passos: any[] = [cubo(), ['apagaFace', { sel: { alias: 'topo' } }]]; expect(JSON.stringify(neutroCanonico(nucleo(passos, {}, {}, {}, null, aliases)))).toBe(JSON.stringify(neutroCanonico(nucleo(JSON.parse(JSON.stringify(passos)), {}, {}, {}, null, JSON.parse(JSON.stringify(aliases))))));
+  });
+});
+
 describe('identidade estável sob mudança de PARAM', () => {
   it('mudar raio/altura NÃO renumera nada — mesmos ids e mesma topologia, só posições diferem', () => {
     const passos = P([['pincel', { modo: 'face', faces: [0, 1], cor: '#abcdef' }], ['liso', { faces: [2] }]]);
