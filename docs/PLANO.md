@@ -69,7 +69,7 @@ A prova deve mostrar:
 
 **Concluída:** as fixtures de `loft` e cubo provaram aliases diretos e multi-origem pela API pública, inserção anterior e transformação sem topologia, sem IDs globais escondidos. As duas formas usam a mesma base de identidade e uma duplicata é detectada antes de qualquer PASSO. A sintaxe segue experimental e não está aprovada como formato definitivo.
 
-## Fase 3 — Validar em mais de um gerador — em andamento
+## Fase 3 — Validar em mais de um gerador — concluída
 
 A ideia não pode funcionar apenas no `loft`. Aplicar gradualmente a:
 
@@ -85,7 +85,7 @@ Cada gerador precisa expor uma coordenada local coerente.
 
 **Critério de saída:** uma mesma linguagem de seleção funciona em geradores diferentes.
 
-**Andamento:** a fixture de espelhamento foi aprovada: `espelha` cria uma origem derivada separada, com relação reexecutável entre original e cópia e saída atômica. O próximo teste é apagar uma parte nomeada e provar que seu nome é invalidado explicitamente, sem apontar para outra parte. Ainda não testar moto ou interface.
+**Concluída:** `loft`, cubo, transformação, espelhamento e remoção usaram a mesma linguagem de seleção estrutural. A remoção invalida explicitamente a parte, sem redirecionar seu nome, e as seleções compostas falham por inteiro. A sintaxe permanece experimental; moto e interface continuam fora desta prova.
 
 ## Fase 4 — Criar uma peça média do zero
 
@@ -171,4 +171,4 @@ Parar e redesenhar caso:
 
 ## Próximo passo imediato
 
-Aplicar o modelo experimental à invalidação explícita: apagar uma parte nomeada e provar que o nome deixa de resolver, sem redirecionar silenciosamente para outra parte. Não testar ainda moto, interface ou outras operações topológicas; não criar outras funcionalidades nem apresentar a sintaxe como definitiva antes dessa prova.
+Iniciar a Fase 4: escolher e criar uma única peça média do zero por um agente limpo, para medir criação e refinamento com a linguagem provada. Ainda sem moto e sem interface; a sintaxe estrutural continua experimental.
