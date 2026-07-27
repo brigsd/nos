@@ -144,6 +144,12 @@ function registraOrigem(st, i, op, origemId, contrato) {
   registros.push({ op, ...contrato });
   st.origens.set(origemId, registros);
 }
+function origensIguais(a, b) {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) || Array.isArray(b)) return false;
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k) && origensIguais(a[k], b[k]));
+}
 const CONTRATOS_ORIGEM = {
   loft: {
     validar(origem) {
@@ -151,7 +157,7 @@ const CONTRATOS_ORIGEM = {
       if (!Object.keys(origem).every((k) => chaves.includes(k)) || !Object.hasOwn(origem, 'faixa') || !Number.isSafeInteger(origem.faixa) || origem.faixa < 0 || (origem.lado != null && (!Number.isSafeInteger(origem.lado) || origem.lado < 0))) return 'loft usa op, id, faixa e lado opcional inteiro não-negativo';
       return null;
     },
-    resolver(registro, origem) {
+    resolver(_st, registro, origem) {
       const faixa = registro.faixas[origem.faixa];
       if (!faixa) return { erro: `faixa ${origem.faixa} fora do limite da origem loft:${origem.id}` };
       if (!faixa.length) return { erro: `faixa ${origem.faixa} da origem loft:${origem.id} não tem faces laterais` };
@@ -165,9 +171,29 @@ const CONTRATOS_ORIGEM = {
       if (!Object.keys(origem).every((k) => chaves.includes(k)) || !Object.hasOwn(origem, 'face') || !FACES_CUBO.has(origem.face)) return 'cubo usa op, id e face (fundo, topo, tras, direita, frente ou esquerda)';
       return null;
     },
-    resolver(registro, origem) {
+    resolver(_st, registro, origem) {
       const face = registro.faces[origem.face];
       return face == null ? { erro: `face '${origem.face}' não existe na origem cubo:${origem.id}` } : { faces: [face] };
+    },
+  },
+  espelha: {
+    validar(origem) {
+      const chaves = ['op', 'id', 'de'];
+      if (!Object.keys(origem).every((k) => chaves.includes(k)) || !Object.hasOwn(origem, 'de')) return 'espelha usa op, id e de';
+      const fonte = validarOrigem(origem.de);
+      return fonte.erro ? `espelha exige de estrutural válido: ${fonte.erro}` : null;
+    },
+    resolver(st, registro, origem) {
+      if (!origensIguais(origem.de, registro.derivaDe)) return { erro: `origem espelha:${origem.id} foi derivada de outra seleção estrutural` };
+      const fonte = resolverOrigem(st, origem.de);
+      if (fonte.erro) return { erro: `origem derivada inválida: ${fonte.erro}` };
+      const faces = [];
+      for (const original of fonte.faces) {
+        const copia = registro.copias.get(original);
+        if (copia == null || !st.F.has(copia)) return { erro: `cópia da face ${original} da origem derivada não existe` };
+        faces.push(copia);
+      }
+      return { faces };
     },
   },
 };
@@ -201,7 +227,7 @@ function resolverOrigem(st, origem) {
   if (!registros.length) return { erro: `origem ${origem.op}:${origem.id} inexistente ou ainda não criada` };
   if (registros.length !== 1) return { erro: `origem ${origem.id} ambígua: ${registros.length} geradores declararam esta identidade` };
   if (registros[0].op !== origem.op) return { erro: `origem ${origem.id} foi declarada por '${registros[0].op}', não por '${origem.op}'` };
-  return validacao.contrato.resolver(registros[0], origem);
+  return validacao.contrato.resolver(st, registros[0], origem);
 }
 
 /* valida o `id` opcional de uma primitiva contra a base posicional: se o
@@ -1462,9 +1488,27 @@ export const OPS = {
     if (ax < 0) return grita(st, i, 'espelha', eixo, `eixo '${eixo}' desconhecido (só 'x'/'y'/'z')`);
     const pos = st.num(a.pos ?? 0);
     const b = baseDoPasso(i);
+    const estrutural = a.origemId != null || a.derivaDe != null;
+    let derivaDe = null;
+    let faceIdsEstruturais = null;
+    if (estrutural) {
+      if (a.origemId == null || a.derivaDe == null) return grita(st, i, 'espelha', 'origemId+derivaDe', 'modo estrutural exige origemId e derivaDe juntos');
+      if (!Number.isSafeInteger(a.origemId) || a.origemId < 0) return grita(st, i, 'espelha', 'origemId', 'origemId precisa ser inteiro não-negativo');
+      const declaracoes = st.declaracoesOrigem.get(a.origemId) ?? [];
+      if (declaracoes.length > 1) return grita(st, i, 'espelha', 'origemId', textoDeclaracoes(a.origemId, declaracoes));
+      const fonte = validarOrigem(a.derivaDe);
+      if (fonte.erro) return grita(st, i, 'espelha', 'derivaDe', `derivaDe inválida: ${fonte.erro}`);
+      if (a.faces != null || !a.sel || typeof a.sel !== 'object' || Array.isArray(a.sel) || Object.keys(a.sel).length !== 1 || !Object.hasOwn(a.sel, 'origem')) return grita(st, i, 'espelha', 'sel', 'modo estrutural exige sel:{origem:...} direto, sem faces, alias, região ou ids literais');
+      const seletor = validarOrigem(a.sel.origem);
+      if (seletor.erro || !origensIguais(a.sel.origem, a.derivaDe)) return grita(st, i, 'espelha', 'sel.origem', 'sel.origem precisa ser a mesma origem estrutural declarada em derivaDe');
+      const resultado = resolverOrigem(st, a.derivaDe);
+      if (resultado.erro) return grita(st, i, 'espelha', 'derivaDe', resultado.erro);
+      derivaDe = a.derivaDe;
+      faceIdsEstruturais = [...resultado.faces].sort((x, y) => x - y);
+    }
 
     // seleção uniforme de faces (AUSENTE = todas); dedup + ordem original crescente
-    const faceIds = [...resolverAlvosF(st, a, 'espelha', i, { todasQuandoAusente: true })].sort((x, y) => x - y);
+    const faceIds = estrutural ? faceIdsEstruturais : [...resolverAlvosF(st, a, 'espelha', i, { todasQuandoAusente: true })].sort((x, y) => x - y);
     if (!faceIds.length) return;
 
     // vértices afetados (cantos das faces selecionadas), deduplicados, ordem de id ORIGINAL crescente
@@ -1492,6 +1536,7 @@ export const OPS = {
 
     // faces novas: cursor de face PRÓPRIO, cantos revertidos (desfaz a troca de mão do espelho)
     let cursorF = 0;
+    const copias = new Map();
     for (const fid of faceIds) {
       const f = st.F.get(fid);
       // face INTEIRAMENTE no plano (TODOS os cantos soldados): a espelhada teria os MESMOS cantos
@@ -1502,9 +1547,11 @@ export const OPS = {
       const vs = f.vs.map((v) => mapa.get(v)).reverse();
       const novo = b + cursorF; cursorF++;
       addF(st, novo, vs);
+      if (estrutural) copias.set(fid, novo);
       const nf = st.F.get(novo);
       nf.cor = f.cor; nf.material = f.material; nf.parte = f.parte; nf.liso = f.liso; nf.solido = f.solido;
     }
+    if (estrutural) registraOrigem(st, i, 'espelha', a.origemId, { derivaDe, copias });
   },
 
   /* ---- atributos por face ---- */

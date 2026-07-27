@@ -2561,6 +2561,124 @@ describe('Fase 2 — fixture de aliases estáveis de cubo', () => {
   });
 });
 
+describe('Fase 3 — fixture de origem derivada por espelha', () => {
+  const ctx = { tex: { texCanvas: (w: number, h: number) => ({ width: w, height: h }) }, m4: { ident: () => new Float32Array(16) } };
+  const original = { op: 'cubo', id: 30, face: 'topo' };
+  const copia = { op: 'espelha', id: 50, de: original };
+  const aliases: any = [
+    ['topoOriginal', { origem: original }],
+    ['topoEspelhado', { origem: copia }],
+    ['doisTopos', { unir: [{ origem: original }, { origem: copia }] }],
+  ];
+  const base = (): any[] => [
+    ['cubo', { id: 0, lado: 1, origemId: 30 }],
+    ['transladar', { d: [2, 0, 0] }],
+    ['espelha', { eixo: 'x', pos: 0, origemId: 50, derivaDe: original, sel: { origem: original } }],
+  ];
+  const facesCom = (n: any, chave: string, valor: any) => [...n.F.values()].filter((f: any) => f[chave] === valor).map((f: any) => f.id).sort((a: number, b: number) => a - b);
+
+  it('separa topo original e cópia, preserva os dois nomes após transformação e inserção anterior', () => {
+    const passos: any[] = [...base(),
+      ['pincel', { modo: 'face', sel: { alias: 'topoOriginal' }, cor: '#f00' }],
+      ['pincel', { modo: 'face', sel: { alias: 'topoEspelhado' }, cor: '#00f' }],
+      ['transladar', { d: [0, 1, 0], sel: { alias: 'topoEspelhado' } }],
+      ['liso', { sel: { alias: 'topoEspelhado' } }],
+    ];
+    const n = nucleo(passos, {}, {}, {}, null, aliases);
+    expect(n.orfaos).toHaveLength(0);
+    expect(facesCom(n, 'cor', '#f00')).toEqual([1]);
+    expect(facesCom(n, 'cor', '#00f')).toEqual([2000]);
+    expect(n.F.get(1)!.liso).toBe(false); expect(n.F.get(2000)!.liso).toBe(true);
+    const yOriginal = n.F.get(1)!.vs.reduce((s: number, v: number) => s + n.V.get(v)![1], 0) / 4;
+    const yCopia = n.F.get(2000)!.vs.reduce((s: number, v: number) => s + n.V.get(v)![1], 0) / 4;
+    expect(yCopia).toBe(yOriginal + 1);
+
+    const inserido = nucleo([
+      ['cubo', { id: 0, lado: 0.25 }],
+      ['cubo', { id: BLOCO, lado: 1, origemId: 30 }],
+      ['transladar', { d: [2, 0, 0] }],
+      ['espelha', { eixo: 'x', pos: 0, origemId: 50, derivaDe: original, sel: { origem: original } }],
+      ...passos.slice(3),
+    ], {}, {}, {}, null, aliases);
+    expect(inserido.orfaos).toHaveLength(0);
+    expect(facesCom(inserido, 'cor', '#f00')).toEqual([BLOCO + 1]);
+    expect(facesCom(inserido, 'cor', '#00f')).toEqual([BLOCO * 3]);
+
+    const ambos = nucleo([...base(), ['pincel', { modo: 'face', sel: { alias: 'doisTopos' }, cor: '#0f0' }]], {}, {}, {}, null, aliases);
+    expect(facesCom(ambos, 'cor', '#0f0')).toEqual([1, 2000]);
+    const canon = JSON.stringify(neutroCanonico(nucleo(passos, {}, {}, {}, null, aliases)));
+    expect(JSON.stringify(neutroCanonico(nucleo(passos, {}, {}, {}, null, aliases)))).toBe(canon);
+    expect(JSON.stringify(neutroCanonico(nucleo(JSON.parse(JSON.stringify(passos)), {}, {}, {}, null, JSON.parse(JSON.stringify(aliases)))))).toBe(canon);
+  });
+
+  it('executar recebe a origem espelhada pela API pública e nomeia só a cópia', () => {
+    const porAlias: any[] = [...base(), ['parte', { nome: 'tampo-espelhado', sel: { alias: 'topoEspelhado' } }]];
+    const literal: any[] = [...base(), ['parte', { nome: 'tampo-espelhado', faces: [2000] }]];
+    const viaApi: any = executar(porAlias, {}, {}, ctx, {}, {}, null, aliases);
+    const lote = viaApi.lotes.find((l: any) => l.parte === 'tampo-espelhado');
+    const loteLiteral = executar(literal, {}, {}, ctx).lotes.find((l: any) => l.parte === 'tampo-espelhado');
+    expect(lote).toBeDefined();
+    expect(lote.mesh.v.length).toBe(6 * 8);
+    expect(Array.from(lote.mesh.v)).toEqual(Array.from(loteLiteral.mesh.v));
+  });
+
+  it('declaração repetida da saída e fonte inexistente ou ambígua bloqueiam a origem derivada antes de qualquer uso', () => {
+    const duplicada: any[] = [
+      ['cubo', { id: 0, lado: 1, origemId: 30 }],
+      ['espelha', { eixo: 'x', origemId: 50, derivaDe: original, sel: { origem: original } }],
+      ['pincel', { modo: 'face', sel: { alias: 'topoEspelhado' }, cor: '#f00' }],
+      ['parte', { nome: 'nao-nasce', sel: { alias: 'topoEspelhado' } }],
+      ['transladar', { d: [2, 0, 0], sel: { alias: 'topoEspelhado' } }],
+      ['espelha', { eixo: 'x', origemId: 50, derivaDe: original, sel: { origem: original } }],
+    ];
+    const d = nucleo(duplicada, {}, {}, {}, null, aliases), puro = nucleo([duplicada[0]], {}, {});
+    expect(d.orfaos.some((o: any) => /passos 1 \(espelha\), 5 \(espelha\)/.test(o.motivo))).toBe(true);
+    for (const op of ['pincel', 'parte', 'transladar']) expect(d.orfaos.some((o: any) => o.op === op)).toBe(true);
+    expect(facesCom(d, 'cor', '#f00')).toEqual([]); expect(facesCom(d, 'parte', 'nao-nasce')).toEqual([]);
+    expect(JSON.stringify(d.V)).toBe(JSON.stringify(puro.V));
+
+    const inexistente = nucleo([['espelha', { eixo: 'x', origemId: 50, derivaDe: original, sel: { origem: original } }]], {}, {}, {}, null, aliases);
+    expect(inexistente.F.size).toBe(0); expect(inexistente.orfaos.some((o: any) => /inexistente/.test(o.motivo))).toBe(true);
+    const fonteDuplicada = nucleo([
+      ['cubo', { id: 0, lado: 1, origemId: 30 }], ['cubo', { id: BLOCO, lado: 1, origemId: 30 }],
+      ['espelha', { eixo: 'x', origemId: 50, derivaDe: original, sel: { origem: original } }],
+    ], {}, {}, {}, null, aliases);
+    expect(fonteDuplicada.F.has(2000)).toBe(false); expect(fonteDuplicada.orfaos.some((o: any) => /ambígua|duplicado/.test(o.motivo))).toBe(true);
+  });
+
+  it('modo estrutural rejeita fonte diferente, fontes literais e IDs escondidos sem criar cópia', () => {
+    const frente = { op: 'cubo', id: 30, face: 'frente' };
+    const casos: any[] = [
+      { origemId: 50 }, { derivaDe: original },
+      { origemId: 50, derivaDe: original, sel: { origem: frente } },
+      { origemId: 50, derivaDe: original, sel: { alias: 'topoOriginal' } },
+      { origemId: 50, derivaDe: original, sel: { regiao: { min: [0, 0, 0], max: [1, 1, 1] } } },
+      { origemId: 50, derivaDe: original, sel: { f: [1] } },
+      { origemId: 50, derivaDe: original, faces: [1], sel: { origem: original } },
+      ...['v', 'f', 'faces'].map((chave) => ({ origemId: 50, derivaDe: { ...original, [chave]: [1] }, sel: { origem: original } })),
+    ];
+    for (const args of casos) {
+      const n = nucleo([['cubo', { id: 0, lado: 1, origemId: 30 }], ['espelha', { eixo: 'x', ...args }]], {}, {}, {}, null, aliases);
+      expect(n.F.size).toBe(6); expect(n.orfaos.some((o: any) => o.op === 'espelha')).toBe(true);
+    }
+  });
+
+  it('face inteiramente no plano registra origem sem cópia e qualquer uso posterior grita sem efeito parcial', () => {
+    const plano: any[] = [
+      ['cubo', { id: 0, lado: 1, origemId: 30 }],
+      ['espelha', { eixo: 'y', pos: 1, origemId: 50, derivaDe: original, sel: { origem: original } }],
+      ['pincel', { modo: 'face', sel: { alias: 'topoEspelhado' }, cor: '#f00' }],
+      ['parte', { nome: 'nao-copia', sel: { alias: 'topoEspelhado' } }],
+      ['transladar', { d: [0, 2, 0], sel: { alias: 'topoEspelhado' } }],
+    ];
+    const n = nucleo(plano, {}, {}, {}, null, aliases), puro = nucleo([plano[0]], {}, {});
+    expect(n.F.size).toBe(6);
+    for (const op of ['pincel', 'parte', 'transladar']) expect(n.orfaos.some((o: any) => o.op === op && /cópia/.test(o.motivo))).toBe(true);
+    expect(facesCom(n, 'cor', '#f00')).toEqual([]); expect(facesCom(n, 'parte', 'nao-copia')).toEqual([]);
+    expect(JSON.stringify(n.V)).toBe(JSON.stringify(puro.V));
+  });
+});
+
 /* P8b do playground — chamferBox. */
 describe('P8b — chamferBox (caixa cantelada: cantos e arestas chanfrados)', () => {
   const newell = (V: any, vs: number[]) => {
