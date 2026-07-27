@@ -363,6 +363,12 @@ Sem o servidor no ar, cai pro download comum — funciona, mas você move o arqu
 
 ### Seleção uniforme (`sel`) — D-129 / D-131
 
+> **Experimental — não é formato definitivo.** `origemId`, `sel.origem` e
+> `ALIASES` são a prova da Fase 2, não uma sintaxe aprovada de produção. Loft e
+> cubo validaram a mesma base de identidade; a Fase 3 começa pelo espelhamento.
+> Peças antigas continuam no contrato legado e esta seção não autoriza migrar a
+> moto nem expor essa sintaxe na interface.
+
 `rotaciona`, `transladar`, `displace`, `espelha` e os atributos por face
 (`pincel` no modo `face`, `liso`, `material`, `solido`, `parte`) usam a MESMA
 seleção. Os campos presentes se unem, sem duplicar:

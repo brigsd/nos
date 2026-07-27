@@ -141,7 +141,7 @@ Não misturar várias capacidades novas na mesma rodada, salvo quando forem inse
 
 A moto provou criação nativa em `PASSOS` e revelou que o teto de refinamento continua inferior ao teto de criação. Seleção semântica e proveniência local foram provadas em escala mínima, mas a sintaxe mínima de proveniência resolveu apenas 12 IDs e não cobriu as outras listas da moto.
 
-A moto atual está congelada como espécime histórico e teste de regressão. Não haverá nova migração nem refinamento nela. A Fase 1 foi concluída: a arquitetura híbrida de origem estável, coordenada local, aliases no objeto e composição foi escolhida como hipótese para prova. A primeira fixture da Fase 2 foi aprovada para aliases diretos e multi-origem de `loft`, inclusive pela API pública, inserção anterior e transformação sem topologia; a fase continua em andamento. O próximo passo é provar o mesmo modelo em uma primitiva simples, sem testar a moto, a interface ou operações topológicas.
+A moto atual está congelada como espécime histórico e teste de regressão. Não haverá nova migração nem refinamento nela. A Fase 1 foi concluída: a arquitetura híbrida de origem estável, coordenada local, aliases no objeto e composição foi escolhida como hipótese para prova. A Fase 2 foi concluída: as fixtures de `loft` e cubo provaram aliases diretos e multi-origem pela API pública, inserção anterior, transformação sem topologia e a mesma base de identidade entre geradores. A Fase 3 começará pelo espelhamento; não testar ainda a moto nem a interface. A sintaxe continua experimental até essas provas.
 
 ## Não negociáveis
 
