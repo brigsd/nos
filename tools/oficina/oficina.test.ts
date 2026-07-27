@@ -2635,7 +2635,8 @@ describe('Fase 3 — fixture de origem derivada por espelha', () => {
     expect(d.orfaos.some((o: any) => /passos 1 \(espelha\), 5 \(espelha\)/.test(o.motivo))).toBe(true);
     for (const op of ['pincel', 'parte', 'transladar']) expect(d.orfaos.some((o: any) => o.op === op)).toBe(true);
     expect(facesCom(d, 'cor', '#f00')).toEqual([]); expect(facesCom(d, 'parte', 'nao-nasce')).toEqual([]);
-    expect(JSON.stringify(d.V)).toBe(JSON.stringify(puro.V));
+    expect(neutroCanonico(d).V).toEqual(neutroCanonico(puro).V);
+    expect(neutroCanonico(d).F).toEqual(neutroCanonico(puro).F);
 
     const inexistente = nucleo([['espelha', { eixo: 'x', origemId: 50, derivaDe: original, sel: { origem: original } }]], {}, {}, {}, null, aliases);
     expect(inexistente.F.size).toBe(0); expect(inexistente.orfaos.some((o: any) => /inexistente/.test(o.motivo))).toBe(true);
@@ -2663,7 +2664,7 @@ describe('Fase 3 — fixture de origem derivada por espelha', () => {
     }
   });
 
-  it('face inteiramente no plano registra origem sem cópia e qualquer uso posterior grita sem efeito parcial', () => {
+  it('face inteiramente no plano aborta a saída estrutural antes de alocar geometria e qualquer uso posterior grita sem efeito parcial', () => {
     const plano: any[] = [
       ['cubo', { id: 0, lado: 1, origemId: 30 }],
       ['espelha', { eixo: 'y', pos: 1, origemId: 50, derivaDe: original, sel: { origem: original } }],
@@ -2673,9 +2674,40 @@ describe('Fase 3 — fixture de origem derivada por espelha', () => {
     ];
     const n = nucleo(plano, {}, {}, {}, null, aliases), puro = nucleo([plano[0]], {}, {});
     expect(n.F.size).toBe(6);
-    for (const op of ['pincel', 'parte', 'transladar']) expect(n.orfaos.some((o: any) => o.op === op && /cópia/.test(o.motivo))).toBe(true);
+    for (const op of ['pincel', 'parte', 'transladar']) expect(n.orfaos.some((o: any) => o.op === op && /inexistente/.test(o.motivo))).toBe(true);
     expect(facesCom(n, 'cor', '#f00')).toEqual([]); expect(facesCom(n, 'parte', 'nao-copia')).toEqual([]);
-    expect(JSON.stringify(n.V)).toBe(JSON.stringify(puro.V));
+    expect(neutroCanonico(n).V).toEqual(neutroCanonico(puro).V);
+    expect(neutroCanonico(n).F).toEqual(neutroCanonico(puro).F);
+  });
+
+  it('uma fonte estrutural com faces copiáveis e uma face no plano produz zero cópias e não deixa saída parcial utilizável', () => {
+    const faixa = { op: 'loft', id: 40, faixa: 0 };
+    const saida = { op: 'espelha', id: 50, de: faixa };
+    const aliasesDaSaida: any = [['faixaEspelhada', { origem: saida }]];
+    const secoes = [
+      { pos: [0, 0, 0], contorno: [[-1, -1], [1, -1], [1, 1], [-1, 1]] },
+      { pos: [0, 1, 0], contorno: [[-1, -1], [1, -1], [1, 1], [-1, 1]] },
+    ];
+    const fonte: any[] = [['loft', { id: 0, origemId: 40, lados: 4, secoes }]];
+    const passos: any[] = [...fonte,
+      ['espelha', { eixo: 'x', pos: 1, origemId: 50, derivaDe: faixa, sel: { origem: faixa } }],
+      ['pincel', { modo: 'face', sel: { alias: 'faixaEspelhada' }, cor: '#f00' }],
+      ['parte', { nome: 'nao-copia', sel: { alias: 'faixaEspelhada' } }],
+      ['transladar', { d: [3, 0, 0], sel: { alias: 'faixaEspelhada' } }],
+    ];
+    const puro = nucleo(fonte, {}, {});
+    const fonteFaces = [...puro.F.values()];
+    expect(fonteFaces).toHaveLength(4);
+    expect(fonteFaces.filter((f: any) => f.vs.every((v: number) => puro.V.get(v)![0] === 1))).toHaveLength(1);
+    expect(fonteFaces.some((f: any) => f.vs.some((v: number) => puro.V.get(v)![0] !== 1))).toBe(true);
+
+    const n = nucleo(passos, {}, {}, {}, null, aliasesDaSaida);
+    expect(n.orfaos.some((o: any) => o.op === 'espelha' && /nenhuma cópia foi criada/.test(o.motivo))).toBe(true);
+    for (const op of ['pincel', 'parte', 'transladar']) expect(n.orfaos.some((o: any) => o.op === op && /inexistente/.test(o.motivo))).toBe(true);
+    expect(n.V.size).toBe(puro.V.size); expect(n.F.size).toBe(puro.F.size);
+    expect(neutroCanonico(n).V).toEqual(neutroCanonico(puro).V);
+    expect(neutroCanonico(n).F).toEqual(neutroCanonico(puro).F);
+    expect(facesCom(n, 'cor', '#f00')).toEqual([]); expect(facesCom(n, 'parte', 'nao-copia')).toEqual([]);
   });
 });
 

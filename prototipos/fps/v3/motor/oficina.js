@@ -1511,6 +1511,19 @@ export const OPS = {
     const faceIds = estrutural ? faceIdsEstruturais : [...resolverAlvosF(st, a, 'espelha', i, { todasQuandoAusente: true })].sort((x, y) => x - y);
     if (!faceIds.length) return;
 
+    /* A saída estrutural é uma origem completa, nunca um subconjunto acidental
+       da fonte. Antes de reservar qualquer id ou tocar na malha, confira TODAS
+       as faces: uma face sem posição ou inteiramente no plano não tem cópia
+       estrutural válida. O espelho legado conserva abaixo o comportamento
+       histórico de gritar e pular somente a face degenerada. */
+    if (estrutural) {
+      for (const fid of faceIds) {
+        const f = st.F.get(fid);
+        if (!f || f.vs.some((v) => !st.V.has(v))) return grita(st, i, 'espelha', fid, 'não foi possível criar a cópia estrutural: face ou vértice-fonte inexistente');
+        if (f.vs.every((v) => st.V.get(v)[ax] === pos)) return grita(st, i, 'espelha', fid, 'face inteiramente no plano do espelho — a saída estrutural seria incompleta; nenhuma cópia foi criada');
+      }
+    }
+
     // vértices afetados (cantos das faces selecionadas), deduplicados, ordem de id ORIGINAL crescente
     const afetados = new Set();
     for (const fid of faceIds) for (const v of st.F.get(fid).vs) afetados.add(v);
@@ -1543,7 +1556,7 @@ export const OPS = {
       // revertidos = uma face COINCIDENTE de normal OPOSTA no mesmo lugar (z-fight; e o teste de
       // manifold é CEGO a ela — as arestas se pareiam). GRITA e PULA (0 face, cursor NÃO avança),
       // o mesmo tratamento do `polo↔polo` degenerado do lathe.
-      if (f.vs.every((v) => mapa.get(v) === v)) { grita(st, i, 'espelha', fid, 'face inteiramente no plano do espelho — degenerado (a espelhada seria coincidente), pulada'); continue; }
+      if (!estrutural && f.vs.every((v) => mapa.get(v) === v)) { grita(st, i, 'espelha', fid, 'face inteiramente no plano do espelho — degenerado (a espelhada seria coincidente), pulada'); continue; }
       const vs = f.vs.map((v) => mapa.get(v)).reverse();
       const novo = b + cursorF; cursorF++;
       addF(st, novo, vs);

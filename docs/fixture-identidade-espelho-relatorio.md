@@ -54,8 +54,19 @@ equivalente literal desta fixture.
 - `derivaDe` diferente de `sel.origem`, campos únicos sem par e fontes
   literais ou geométricas gritam antes de criar geometria;
 - `v`, `f` e `faces` escondidos dentro de `de` são rejeitados pelo contrato;
-- se a face-fonte está toda no plano, a origem 50 é registrada sem cópia e uma
-  seleção posterior grita explicitamente, sem redirecionar para a original;
+- a primeira versão podia registrar uma saída estrutural incompleta: uma face
+  coplanar era pulada depois de já criar outras cópias. Agora o modo estrutural
+  examina toda a fonte antes de alocar vértices ou faces: se uma face está toda
+  no plano, ou uma cópia esperada não pode ser formada, a operação grita, não
+  registra a origem 50 e cria **zero** cópias;
+- a prova adversarial usa uma faixa de loft com quatro faces, uma coplanar e
+  outras copiáveis. Mesmo assim a saída é vazia por inteiro; o alias da saída
+  inexistente grita e não pinta, não cria parte nem translada a fonte. Vértices
+  e faces são comparados pela forma canônica ordenada, não por
+  `JSON.stringify(Map)`, que produziria `{}` e não provaria a geometria;
+- o espelho legado, sem `origemId` e `derivaDe`, conserva o comportamento
+  anterior: grita e pula apenas uma face degenerada, sem mudar sua numeração ou
+  as demais cópias;
 - determinismo e round-trip JSON permanecem canonicamente idênticos.
 
 ## Contrato comum e veredito
