@@ -1266,7 +1266,9 @@ export const OPS = {
   apagaFace(st, a, i) {
     if (a.face != null && a.sel != null) return grita(st, i, 'apagaFace', 'face+sel', 'seleção ambígua: use face:id (legado) OU sel:{...}, nunca os dois');
     if (a.sel != null) {
+      const diagnosticosAntes = st.orfaos.length;
       const faces = resolverSelecao(st, a.sel, 'apagaFace', i).faces;
+      if (st.orfaos.length !== diagnosticosAntes) return;
       if (faces.size !== 1) {
         if (faces.size > 1) grita(st, i, 'apagaFace', 'sel', 'seleção ambígua: apagaFace exige exatamente uma face');
         return;

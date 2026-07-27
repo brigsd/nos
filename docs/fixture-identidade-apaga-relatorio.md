@@ -42,6 +42,19 @@ Foram feitos apenas dois ajustes: `apagaFace` aceita experimentalmente
 estrutural do cubo verifica se a face registrada ainda está viva para informar
 explicitamente que ela foi removida.
 
+## Atomicidade da seleção destrutiva
+
+A primeira versão verificava somente a quantidade final de faces resolvidas.
+Isso podia aceitar o subconjunto válido de uma seleção parcialmente inválida,
+como `sel:{f:[1,999999]}`, e apagar a face `1` apesar do diagnóstico.
+
+O caminho destrutivo agora registra a quantidade de diagnósticos antes de usar
+o resolvedor comum e aborta se a resolução acrescentar qualquer um. Assim,
+face válida junto de face inexistente, origem válida junto de face inexistente,
+chave desconhecida ou grupo inexistente não apaga nada. Vértices e faces ficam
+exatamente como no cubo anterior, e diagnósticos posteriores de pintura, parte
+ou transformação não escondem o erro de `apagaFace`.
+
 ## Limite
 
 Esta rodada cobre somente cubo. Espelho, loft, extrusão, fusão, moto e

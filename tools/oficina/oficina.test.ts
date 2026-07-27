@@ -78,6 +78,27 @@ describe('Fase 3 - fixture de invalidacao estrutural por apagaFace', () => {
     const viaApi: any = executar([cubo(), ['apagaFace', { sel: { alias: 'topo' } }]], {}, {}, ctx, {}, {}, null, aliases); expect(viaApi.lotes.reduce((s: number, l: any) => s + l.mesh.v.length, 0)).toBe(5 * 6 * 8);
     const passos: any[] = [cubo(), ['apagaFace', { sel: { alias: 'topo' } }]]; expect(JSON.stringify(neutroCanonico(nucleo(passos, {}, {}, {}, null, aliases)))).toBe(JSON.stringify(neutroCanonico(nucleo(JSON.parse(JSON.stringify(passos)), {}, {}, {}, null, JSON.parse(JSON.stringify(aliases))))));
   });
+
+  it('aborta atomico quando a selecao tem alvo valido e qualquer diagnostico', () => {
+    const base = nucleo([cubo()], {}, {}, {}, null, aliases);
+    const casos: any[] = [
+      { f: [1, 999999] },
+      { origem: topo, f: [999999] },
+      { f: [1], campoInvalido: true },
+      { grupo: 'nao-existe', f: [1] },
+    ];
+    for (const sel of casos) {
+      const n = nucleo([cubo(), ['apagaFace', { sel }],
+        ['pincel', { modo: 'face', sel: { f: [999999] }, cor: '#f00' }],
+        ['parte', { nome: 'nao-esconde', sel: { f: [999999] } }],
+        ['transladar', { d: [2, 0, 0], sel: { f: [999999] } }],
+      ], {}, {}, {}, null, aliases);
+      expect(n.orfaos.some((o: any) => o.op === 'apagaFace')).toBe(true);
+      for (const op of ['pincel', 'parte', 'transladar']) expect(n.orfaos.some((o: any) => o.op === op)).toBe(true);
+      expect(n.F.has(1)).toBe(true);
+      expect(geo(n)).toBe(geo(base));
+    }
+  });
 });
 
 describe('identidade estável sob mudança de PARAM', () => {
