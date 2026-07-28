@@ -31,7 +31,7 @@ const OUT = join(HERE, 'out');
 const PECAS = join(REPO, 'prototipos/fps/v3/pecas');
 const GABARITOS = join(REPO, 'prototipos/fps/v3/gabaritos');
 const SKILL = join(REPO, '.claude/skills/criar-peca/SKILL.md');
-const OFICINA_DOC = join(REPO, 'docs/oficina.md');
+const OFICINA_DOC = join(REPO, 'docs/uso/oficina-contrato.md');
 
 const args = process.argv.slice(2);
 const nome = (args.find((a) => !a.startsWith('--')) || '').replace(/[^a-z0-9_-]/gi, '');
@@ -99,7 +99,7 @@ else {
    formato fixo. Regra: toda linha FEITO tem que existir em OPS; toda chave de
    OPS tem que ter uma linha FEITO; linha ROTEIRO cuja op JÁ existe em OPS é
    ACHADO (roteiro construído, doc não atualizado) — reportado como falha. */
-log('\n── manifesto (núcleo x docs/oficina.md) ──');
+log('\n── manifesto (núcleo x docs/uso/oficina-contrato.md) ──');
 {
   const feitoOficina = new Set();
   const roteiroOficina = new Set();
@@ -116,17 +116,17 @@ log('\n── manifesto (núcleo x docs/oficina.md) ──');
     const nomes = [...celulaOp.matchAll(/`([a-zA-Z]+)`/g)].map((m) => m[1]);
     if (status === 'FEITO') for (const n of nomes) feitoOficina.add(n);
     else if (status === 'ROTEIRO') for (const n of nomes) roteiroOficina.add(n);
-    else falha(`docs/oficina.md: linha de op com Status inesperado (${JSON.stringify(status)}): ${nomes.join(', ') || '(sem op)'}`);
+    else falha(`docs/uso/oficina-contrato.md: linha de op com Status inesperado (${JSON.stringify(status)}): ${nomes.join(', ') || '(sem op)'}`);
   }
   const opsSemFeito = [...opsNucleo].filter((o) => !feitoOficina.has(o));
   const feitoSemOp = [...feitoOficina].filter((o) => !opsNucleo.has(o));
   const roteiroJaConstruido = [...roteiroOficina].filter((o) => opsNucleo.has(o));
   if (opsSemFeito.length === 0 && feitoSemOp.length === 0 && roteiroJaConstruido.length === 0) {
-    ok('tabela de operações do oficina.md em dia com o núcleo');
+    ok('tabela de operações do oficina-contrato.md em dia com o núcleo');
   } else {
-    if (opsSemFeito.length) falha(`op(s) no núcleo SEM linha FEITO em docs/oficina.md: ${opsSemFeito.join(', ')}`);
-    if (feitoSemOp.length) falha(`docs/oficina.md marca FEITO uma op que NÃO existe no núcleo: ${feitoSemOp.join(', ')}`);
-    if (roteiroJaConstruido.length) falha(`docs/oficina.md marca ROTEIRO op(s) que JÁ existem no núcleo (achado — roteiro construído, doc desatualizado): ${roteiroJaConstruido.join(', ')}`);
+    if (opsSemFeito.length) falha(`op(s) no núcleo SEM linha FEITO em docs/uso/oficina-contrato.md: ${opsSemFeito.join(', ')}`);
+    if (feitoSemOp.length) falha(`docs/uso/oficina-contrato.md marca FEITO uma op que NÃO existe no núcleo: ${feitoSemOp.join(', ')}`);
+    if (roteiroJaConstruido.length) falha(`docs/uso/oficina-contrato.md marca ROTEIRO op(s) que JÁ existem no núcleo (achado — roteiro construído, doc desatualizado): ${roteiroJaConstruido.join(', ')}`);
   }
 }
 

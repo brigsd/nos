@@ -85,6 +85,7 @@ pt-BR) — sessão nova começa por ele e por este arquivo.
 
 - **`docs/uso/RECURSOS.md`** — este arquivo: o índice único de comandos, bancadas, skills, agentes e docs.
 - **`docs/uso/MAPA.md`** — a árvore do repo com resumo por arquivo (gerada, sempre fresca — `npm run mapa`).
+- **`docs/uso/oficina-contrato.md`** — o que vale HOJE na Oficina: formato salvo, identidade de vértice, vocabulário de operações (gateado por `npm run criar`), camadas do código e o contrato de como a IA emite peça.
 - **`docs/uso/oficina-referencia.md`** — o manual de como cada elemento da Oficina funciona hoje.
 - **`docs/uso/LORE.md`** — a restrição viva: todo texto de jogo obedece a este documento.
 
@@ -92,6 +93,7 @@ pt-BR) — sessão nova começa por ele e por este arquivo.
 
 - **`docs/rumo/NORTE.md`** — leitura obrigatória: objetivo maior, método experimental e não negociáveis do NÓS.
 - **`docs/rumo/PLANO.md`** — leitura obrigatória, **o roteiro vigente**: fases da evolução, critérios de saída e sinais para redesenhar a arquitetura; a moto atual está congelada como espécime histórico e teste de regressão.
+- **`docs/rumo/oficina-roteiro.md`** — o que foi projetado pra Oficina e ainda NÃO existe, mais as decisões de escopo (booleano, UV manual e three.js ficam de fora por decisão).
 - **`docs/rumo/VISION.md`** — o que o NÓS é e nunca será.
 - **`docs/rumo/FERRAMENTAS.md`** — o plano de potência das ferramentas (visão de longo prazo, quase nada construído ainda).
 - **`docs/rumo/AUDIO_E_CENAS.md`** — direção de música/voz/cenas — documento de direção, nada construído ainda.
@@ -103,6 +105,7 @@ pt-BR) — sessão nova começa por ele e por este arquivo.
 - **`docs/historico/DECISIONS-ARCHIVE.md`** — o detalhe das decisões arquivadas (D-01…D-54); só movido pra desafogar o registro principal.
 - **`docs/historico/playground.md`** — o épico (D-113) que fechou o vocabulário + forma-como-número + a camada IA de laço único — ENCERRADO, exceto a Aba Desenho.
 - **`docs/historico/TETO.md`** — o experimento que mediu onde o vocabulário da Oficina parava (3 corridas), encerrado.
+- **`docs/historico/oficina-projeto.md`** — o registro de projeto da Oficina: o racional do que já foi construído, os preparos de motor concluídos e a Ordem de construção encerrada.
 - **`docs/historico/diagnostico-subpartes-semanticas.md`** — diagnóstico das referências literais de face da moto antes da seleção semântica — medição de estado passado + recomendação.
 - **`docs/historico/teto-moto-relatorio.md`** — relatório de execução da 1ª corrida da moto no TETO.
 - **`docs/historico/teto-moto-refino-relatorio.md`** — relatório de execução do refino da moto (2ª corrida).

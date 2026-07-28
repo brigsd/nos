@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-133 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+136 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -36,7 +36,7 @@
 
 ## docs/
 
-- `oficina.md` — A Oficina — editor de objetos dentro do jogo
+- `oficina.md` — A Oficina — índice do design
 
 ## docs/historico/
 
@@ -48,6 +48,7 @@
 - `fixture-identidade-cubo-relatorio.md` — Fixture — identidade estável de cubo
 - `fixture-identidade-espelho-relatorio.md` — Fixture — identidade estrutural do espelho
 - `fixture-identidade-estavel-relatorio.md` — Fixture — identidade estável de loft
+- `oficina-projeto.md` — Oficina — o registro de projeto
 - `playground.md` — O Playground — o épico da criação por IA
 - `proveniencia-local-fixture.md` — Fixture de proveniência local de loft
 - `teto-moto-refino-3-relatorio.md` — TETO — relatório da 3ª corrida de refino da moto
@@ -78,11 +79,13 @@
 - `PLANO.md` — PLANO — evolução da linguagem de criação do NÓS
 - `VISION.md` — Visão — NÓS
 - `arquitetura-identidade-estavel.md` — Arquitetura — identidade estável de objetos e subpartes
+- `oficina-roteiro.md` — Oficina — o que ainda não existe
 
 ## docs/uso/
 
 - `LORE.md` — Lore — a bíblia do NÓS
 - `RECURSOS.md` — Recursos do coder — o índice único
+- `oficina-contrato.md` — Oficina — o contrato vigente
 - `oficina-referencia.md` — Oficina — referência de como cada coisa funciona
 
 ## prototipos/fps/v3/
