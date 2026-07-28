@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-136 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+137 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -166,6 +166,7 @@
 - `auditar.mjs` — auditar.mjs — o GATE de senso crítico [cpu] numa peça REAL (D-60). Roda os críticos validados pelo benchmark (lint-de-malha, distancia-paleta, seam, banding,…
 - `criar.mjs` — criar.mjs — P7 do playground (D-120): A CAMADA IA, laço único.
 - `executar.mjs` — executar.mjs — a bancada do REPLAY da OFICINA (passo 1), sem browser. Roda a lista de PASSOS de uma peça, serializa a lista, re-parseia e re-executa, e afirm…
+- `gabarito-selecao.mjs` — gabarito-selecao.mjs — a PROVA ZERO da Fase 3.5 (docs/rumo/PLANO.md): mede, peça por peça, que uma mudança no núcleo (`motor/oficina.js`) não mudou o resulta…
 - `gabarito.mjs` — gabarito.mjs — P5 do playground (D-118): FORMA COMO NÚMERO. Mede a silhueta RENDERIZADA de uma peça contra um CONTORNO de referência (o gabarito, desenhado à…
 - `jogar.mjs` — jogar.mjs — o olho do ALICERCE jogável do v3 (D-61).
 - `oficina.mjs` — oficina.mjs — a bancada da CÂMERA DO EDITOR + OVERLAY DA MALHA + ARRASTO DE VÉRTICE (Oficina, passos 2-4).

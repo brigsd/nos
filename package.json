@@ -24,6 +24,8 @@
     "porteiro": "node tools/bancadas/porteiro.mjs",
     "auditar": "node tools/bancadas/auditar.mjs",
     "gabarito": "node tools/bancadas/gabarito.mjs",
+    "gabarito:selecao": "node tools/bancadas/gabarito-selecao.mjs",
+    "gabarito:selecao:check": "node tools/bancadas/gabarito-selecao.mjs --check",
     "criar": "node tools/bancadas/criar.mjs",
     "bench": "node tools/bancadas/bench/benchmark.mjs",
     "mapa": "node tools/mapa/mapa.mjs",

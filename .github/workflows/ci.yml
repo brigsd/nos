@@ -29,6 +29,9 @@ jobs:
       - name: Unit Tests
         run: npm run test
 
+      - name: Prova Zero — seleção de peças byte-idêntica ao gabarito
+        run: npm run gabarito:selecao:check
+
       - name: Mapa do repositório em dia
         run: npm run mapa:check
 

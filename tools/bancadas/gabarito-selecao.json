@@ -1,0 +1,75 @@
+{
+  "hashTotal": "ae599048f660e2a4e64269a560354adf576bafb8d75d3fda6fdab701f1838b51",
+  "pecas": {
+    "_corpo": {
+      "hash": "7d27db600d985a54700b89303ab112dad9f72fa47e0ad45711c0d4508de63023",
+      "vertices": 218,
+      "faces": 216
+    },
+    "_espelhado": {
+      "hash": "992981953dafde8f3b8e8d473c2d8873349af0249a3332e80590a2d73d29c2a8",
+      "vertices": 58,
+      "faces": 68
+    },
+    "_galho": {
+      "hash": "d0011787414ec3871177ef3338f80c2019b760b94db4888b11c2ee6fd4857cac",
+      "vertices": 52,
+      "faces": 60
+    },
+    "_oficina-anim": {
+      "hash": "72577395fb636b8b68389ce4c97eefd09e8a782c1a388f89fbc0311b9b2c962c",
+      "vertices": 28,
+      "faces": 20
+    },
+    "_oficina-esqueleto": {
+      "hash": "4438955c91546f6e56e08530c2dba07daf9e3cd2444c49c6ef25d3b05dcde09b",
+      "vertices": 16,
+      "faces": 14
+    },
+    "_oficina-materiais": {
+      "hash": "270fe9a2d4538ca8007beca02839b669bea51b30eb95597df99137a3749f60ef",
+      "vertices": 20,
+      "faces": 12
+    },
+    "_oficina-toco": {
+      "hash": "b942959582654ea55be3eecb0f6177f3c6f8cca65b67e593d3f6ce5c41b84f4f",
+      "vertices": 19,
+      "faces": 14
+    },
+    "_oficina-transp": {
+      "hash": "957b9717d6af4b963e9a5f7b266b6383a84fa7a36c3b07fffa01f728bb2901e4",
+      "vertices": 16,
+      "faces": 12
+    },
+    "_pedra": {
+      "hash": "aae80e62c42bad0a9a99cb1e29432f3f5b86f7828b4c6015ad71a740929202d6",
+      "vertices": 24,
+      "faces": 26
+    },
+    "_primitivas": {
+      "hash": "91e77f82e01e417c96815c4b82d6f5e5552f626e921b1d72f810565b11185099",
+      "vertices": 86,
+      "faces": 85
+    },
+    "_torno": {
+      "hash": "c2d3cc983ff9828293534a75b88ef45b3b6d3425c2cf00f68a8cd9bb704b17d6",
+      "vertices": 98,
+      "faces": 108
+    },
+    "_vazio": {
+      "hash": "ea84606f0ade2558db13e8c5334df10bf16e9f297f2c4daddac7917fc8856f9b",
+      "vertices": 0,
+      "faces": 0
+    },
+    "_viga": {
+      "hash": "6b29863da19f82b31147d5a97aa48d72ece6987ee26a741dd6e25a4c4dce1a1f",
+      "vertices": 14,
+      "faces": 16
+    },
+    "moto": {
+      "hash": "13fdc7f2f507e237fcf63b793303ecc59f13fa7275d6fe97e3545215bdcb281a",
+      "vertices": 1470,
+      "faces": 1600
+    }
+  }
+}
