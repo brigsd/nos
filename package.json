@@ -29,7 +29,9 @@
     "mapa": "node tools/mapa/mapa.mjs",
     "mapa:check": "node tools/mapa/mapa.mjs --check",
     "docs:toc": "node tools/mapa/toc.mjs",
-    "docs:toc:check": "node tools/mapa/toc.mjs --check"
+    "docs:toc:check": "node tools/mapa/toc.mjs --check",
+    "docs:links": "node tools/mapa/links.mjs",
+    "docs:links:check": "node tools/mapa/links.mjs --check"
   },
   "dependencies": {
     "ajv": "^8.20.0"

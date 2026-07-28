@@ -1814,7 +1814,7 @@ gerando tudo por código, zero arquivo, como o Nós faz. Os carregadores de `.gl
 e afins são capacidade disponível, não obrigação. A frase "precisaríamos do
 three.js pra trazer coisa de fora" era condicional, e a condição não se aplica.
 
-**Trazer objeto de fora já tem lugar previsto.** No `docs/PORTALS_PROTOCOL.md`,
+**Trazer objeto de fora já tem lugar previsto.** No `docs/legado/PORTALS_PROTOCOL.md`,
 o campo `clientHint` existe pra um mundo federado avisar que precisa de outro
 cliente ou tem mecânica própria. Como cada repositório é um planeta com o
 cliente dele, **nosso renderizador nunca carrega `.glb` de estranho**.
