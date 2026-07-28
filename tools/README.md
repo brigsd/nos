@@ -20,7 +20,7 @@ tools/
                somexportar.mjs— round-trip do exportar de som (npm run somexportar)
                bench/         — benchmark dos críticos (defeitos plantados → placar F1)
                out/           — PNGs/saídas (gitignorado; evidência regenerável)
-  mapa/        mapa.mjs (docs/MAPA.md gerado dos cabeçalhos + gate mapa:check) e
+  mapa/        mapa.mjs (docs/uso/MAPA.md gerado dos cabeçalhos + gate mapa:check) e
                toc.mjs (índice de docs/oficina.md + gate docs:toc:check)
   som/         Testes vitest do núcleo de som (somnucleo/somanalise/somexport)
   oficina/     Testes vitest do núcleo da Oficina (motor/oficina.js)
@@ -30,6 +30,6 @@ tools/
 
 **Pré-requisito das bancadas visuais:** `npm ci` na raiz, uma vez (o Playwright
 está nas devDependencies; o Chromium já vem no ambiente — as bancadas avisam se
-faltar). O índice único de comandos com exemplos: **`docs/RECURSOS.md`**.
+faltar). O índice único de comandos com exemplos: **`docs/uso/RECURSOS.md`**.
 
 Regra: **ferramenta nova de coder (bancada/auditoria) nasce em `tools/bancadas/`**.

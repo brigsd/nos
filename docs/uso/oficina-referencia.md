@@ -81,9 +81,9 @@ Os passos citam os parâmetros por **nome** (`raio: 'troncoR'`, não `raio: 0.34
 
 ## Onde está o resto
 
-- [`docs/oficina.md`](./oficina.md) — o design completo e o roteiro ("Ordem de construção").
-- [`docs/DECISIONS.md`](./DECISIONS.md) — o porquê de cada passo (D-77 núcleo · D-78 câmera · D-79 lente · D-80 overlay · D-81 arrasto · D-82 undo · D-83 gizmo+painel).
-- [`docs/MAPA.md`](./MAPA.md) — a árvore de arquivos do repo.
+- [`docs/oficina.md`](../oficina.md) — o design completo e o roteiro ("Ordem de construção").
+- [`docs/historico/DECISIONS.md`](../historico/DECISIONS.md) — o porquê de cada passo (D-77 núcleo · D-78 câmera · D-79 lente · D-80 overlay · D-81 arrasto · D-82 undo · D-83 gizmo+painel).
+- [`docs/uso/MAPA.md`](./MAPA.md) — a árvore de arquivos do repo.
 
 > Mantido no fecho de cada passo, junto com a decisão e o checklist. Enxuto de
 > propósito: aponta pro spec e pro código quando você quiser o fundo.

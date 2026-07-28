@@ -16,7 +16,7 @@ Convenções fixas: todo trabalho vai pra **`main`** direto; respostas e docs em
 
 ## Gates (rode antes de todo commit)
 
-**Os leves, sempre:** `npm run mapa:check` (todo arquivo rastreado precisa de um comentário de cabeçalho — **arquivo novo sem cabeçalho quebra o gate**; após criar arquivos, `git add -A` → `npm run mapa` → re-stage `docs/MAPA.md`), `npm run docs:toc:check`, `npm run typecheck`, `npm run test`.
+**Os leves, sempre:** `npm run mapa:check` (todo arquivo rastreado precisa de um comentário de cabeçalho — **arquivo novo sem cabeçalho quebra o gate**; após criar arquivos, `git add -A` → `npm run mapa` → re-stage `docs/uso/MAPA.md`), `npm run docs:toc:check`, `npm run typecheck`, `npm run test`.
 
 **A matriz cheia, pra qualquer coisa que encoste na Oficina ou no jogo** (é o que de fato roda toda rodada do playground, D-118→D-127) — os 4 acima **mais**:
 
@@ -52,7 +52,7 @@ Depois que ele volta: **reproduza a verificação você mesmo** (não confie no 
 
 ## A revisão adversarial — POR RISCO, e o papel não é dispensável
 
-O que muda com o solo é **quem** faz, não **se** faz. Em trabalho de formato salvo ela é obrigatória (regra 4 do `docs/playground.md`); rodando solo, é um passe DELIBERADO no próprio diff, com a cabeça de quem quer quebrar — não a releitura satisfeita de quem acabou de escrever.
+O que muda com o solo é **quem** faz, não **se** faz. Em trabalho de formato salvo ela é obrigatória (regra 4 do `docs/historico/playground.md`); rodando solo, é um passe DELIBERADO no próprio diff, com a cabeça de quem quer quebrar — não a releitura satisfeita de quem acabou de escrever.
 
 - **Dispense** quando o núcleo de risco é provado por medição OBJETIVA e é interface (ex.: migração byte-idêntica; câmera a 0.00px). Um segundo passe não acha o que uma prova byte-idêntica já fecha.
 - **Rode** quando é FUNDAÇÃO, encosta no FORMATO SALVO (irreversível), ou tem conta de julgamento. É onde mora o bug: o passe adversarial pegou a normal invertida do cilindro (Oficina passo 1), a roda no arrasto (passo 4), o Ctrl+Z no arrasto (passo 5), o cusp do `loft` e o não-finito de TODA op (P4/D-117), a face coplanar cega ao manifold (P3/D-116).
@@ -66,7 +66,7 @@ O olho erra em normal, luz, alinhamento e geometria (D-65); e a IA **não escuta
 
 ## Registre a decisão
 
-Toda decisão importante entra em `docs/DECISIONS.md`. **Confira o formato REAL antes de escrever** (o arquivo tem duas eras e é fácil errar de zona): as decisões antigas (D-01…D-54) são linhas curtas de índice com o detalhe no `DECISIONS-ARCHIVE.md`, e existe um header `## Decisões ativas — em detalhe`; mas as recentes (D-113→) **não usam nenhum dos dois** — cada uma é **UM bullet longo e narrativo**, com o porquê inteiro dentro, inserido em ordem reverso-cronológica (a mais nova primeiro) na zona que PRECEDE aquele header. Uma entrada só, não índice+detalhe. Antes de inserir, `grep -c "D-<nº>"` pra confirmar que o número está livre.
+Toda decisão importante entra em `docs/historico/DECISIONS.md`. **Confira o formato REAL antes de escrever** (o arquivo tem duas eras e é fácil errar de zona): as decisões antigas (D-01…D-54) são linhas curtas de índice com o detalhe no `DECISIONS-ARCHIVE.md`, e existe um header `## Decisões ativas — em detalhe`; mas as recentes (D-113→) **não usam nenhum dos dois** — cada uma é **UM bullet longo e narrativo**, com o porquê inteiro dentro, inserido em ordem reverso-cronológica (a mais nova primeiro) na zona que PRECEDE aquele header. Uma entrada só, não índice+detalhe. Antes de inserir, `grep -c "D-<nº>"` pra confirmar que o número está livre.
 
 O que a entrada tem que carregar: o **porquê** (o que evita re-debater), as decisões de formato salvo fixadas, os **achados reais** com a causa medida (não "consertei um bug"), e os NÚMEROS da prova. Marque também o checklist do roteiro relevante (`[x]`). Decisão que reserva arquitetura ou deixa nuance aberta: escreva a nuance, pra não apodrecer.
 

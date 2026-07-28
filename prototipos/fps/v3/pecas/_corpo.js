@@ -1,6 +1,6 @@
 /* PEÇA-EXEMPLO do P6 do playground: um CORPO — o volume que só `inflate` faz
    hoje (dois contornos 2D, lado e topo, virando um sólido por interseção de
-   prismas). É o caso que `docs/playground.md` cita como motivação: "a régua
+   prismas). É o caso que `docs/historico/playground.md` cita como motivação: "a régua
    do capítulo seguinte é o dragão... falta só a carne orgânica" — aqui é só
    um corpo oval achatado (o torso de um bicho pequeno), mas prova o
    mecanismo: `contornoLado` (plano z×y) e `contornoTopo` (plano z×x) são

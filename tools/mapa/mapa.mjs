@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* mapa.mjs — gera docs/MAPA.md: a árvore do repositório com o resumo de cada
+/* mapa.mjs — gera docs/uso/MAPA.md: a árvore do repositório com o resumo de cada
    arquivo. O resumo NÃO mora aqui: mora no PRÓPRIO arquivo (primeiro
    comentário de cabeçalho; H1 nos .md) — este script só projeta. Assim o mapa
    não vira segunda verdade que apodrece: renomeou/criou/apagou arquivo ou
@@ -14,10 +14,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const SAIDA = path.join(REPO, 'docs', 'MAPA.md');
+const SAIDA = path.join(REPO, 'docs', 'uso', 'MAPA.md');
 const CODIGO = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.html']);
 const DOCS = new Set(['.md']);
-const IGNORAR = new Set(['docs/MAPA.md']); // o mapa não se auto-lista
+const IGNORAR = new Set(['docs/uso/MAPA.md']); // o mapa não se auto-lista
 
 const rastreados = execFileSync('git', ['ls-files'], { cwd: REPO, encoding: 'utf8' })
   .split('\n').filter(Boolean)
@@ -133,12 +133,12 @@ if (process.argv.includes('--check')) {
   try { atual = readFileSync(SAIDA, 'utf8'); } catch { /* nunca gerado */ }
   if (atual !== texto) {
     falhou = true;
-    console.error('mapa:check FALHOU — docs/MAPA.md está desatualizado. Rode `npm run mapa` e commite junto.');
+    console.error('mapa:check FALHOU — docs/uso/MAPA.md está desatualizado. Rode `npm run mapa` e commite junto.');
   }
   if (falhou) process.exit(1);
   console.log(`mapa:check ok — ${rastreados.length} arquivos, mapa em dia, todos com cabeçalho.`);
 } else {
   mkdirSync(path.dirname(SAIDA), { recursive: true });
   writeFileSync(SAIDA, texto);
-  console.log(`mapa: ${rastreados.length} arquivos -> docs/MAPA.md${semCabecalho.length ? ` (ATENÇÃO: ${semCabecalho.length} sem cabeçalho)` : ''}`);
+  console.log(`mapa: ${rastreados.length} arquivos -> docs/uso/MAPA.md${semCabecalho.length ? ` (ATENÇÃO: ${semCabecalho.length} sem cabeçalho)` : ''}`);
 }

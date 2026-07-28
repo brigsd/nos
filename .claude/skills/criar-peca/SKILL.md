@@ -35,7 +35,7 @@ passa a apontar pra outra face.
 
 **Vocabulário IMPLEMENTADO hoje** (o resto da tabela do `docs/oficina.md` é
 roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épico
-`docs/playground.md`, e esta tabela DEVE ser atualizada a cada op entregue):
+`docs/historico/playground.md`, e esta tabela DEVE ser atualizada a cada op entregue):
 
 | op | args | nota |
 |---|---|---|

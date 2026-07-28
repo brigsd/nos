@@ -1,8 +1,8 @@
 /* moto — MOTOCICLETA FUTURISTA ESTILIZADA, 100% em PASSOS (nenhuma linha de
    geometria em JS: `construir` é só `executar`). É a peça da 1ª corrida do
-   experimento do TETO (docs/TETO.md) REFINADA na 2ª e na 3ª, a partir das
-   críticas do ideador — os relatórios estão em docs/teto-moto-refino-relatorio.md
-   e docs/teto-moto-refino-3-relatorio.md.
+   experimento do TETO (docs/historico/TETO.md) REFINADA na 2ª e na 3ª, a partir das
+   críticas do ideador — os relatórios estão em docs/historico/teto-moto-refino-relatorio.md
+   e docs/historico/teto-moto-refino-3-relatorio.md.
 
    O QUE MUDOU NO REFINO (antes: 51 passos, 492 V / 558 F, 7 ops)
      1 RODAS — o perfil deixou de ser um domo liso. Agora tem CUBO saliente,

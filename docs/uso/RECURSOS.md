@@ -18,7 +18,7 @@ o Chromium já vem no ambiente). Sem isso, as bancadas saem avisando.
 |---|---|
 | `npm run typecheck` | `tsc --noEmit` (strict) sobre os testes .ts de `tools/som` + `tools/oficina` |
 | `npm test` | Vitest — os testes de núcleo (`tools/**/*.test.ts`) |
-| `npm run mapa:check` | O mapa do repo está em dia? Falha se `docs/MAPA.md` estiver velho ou se algum arquivo estiver SEM cabeçalho — criou arquivo? dê cabeçalho e rode `npm run mapa` |
+| `npm run mapa:check` | O mapa do repo está em dia? Falha se `docs/uso/MAPA.md` estiver velho ou se algum arquivo estiver SEM cabeçalho — criou arquivo? dê cabeçalho e rode `npm run mapa` |
 | `npm run docs:toc:check` | O índice de `docs/oficina.md` está em dia? (regenerar: `npm run docs:toc`) |
 
 ### Bancadas — objeto / render
@@ -50,7 +50,7 @@ o Chromium já vem no ambiente). Sem isso, as bancadas saem avisando.
 | Comando | O que faz |
 |---|---|
 | `npm run servir` | Servidor local do v3 (`no-store`): `oficina.html`/`som.html` com SALVAR de verdade (`POST /oficina/salvar` → `pecas/`, `POST /som/salvar` → `pecas-som/`) |
-| `npm run mapa` / `docs:toc` | Regenera `docs/MAPA.md` / o índice de `docs/oficina.md` |
+| `npm run mapa` / `docs:toc` | Regenera `docs/uso/MAPA.md` / o índice de `docs/oficina.md` |
 
 ## Skills — `.claude/skills/`
 
@@ -63,7 +63,7 @@ o Chromium já vem no ambiente). Sem isso, as bancadas saem avisando.
 
 ## Agentes — `.claude/agents/` (D-24, D-106)
 
-O orquestrador briefa e integra, registrando em `docs/DECISIONS.md`.
+O orquestrador briefa e integra, registrando em `docs/historico/DECISIONS.md`.
 
 | Agente | Papel | Quando despachar | Modelo |
 |---|---|---|---|
@@ -76,13 +76,13 @@ aposentados — vivem no histórico do git.
 
 ## Docs de orientação
 
-- **`docs/NORTE.md`** — leitura obrigatória: objetivo maior, método experimental e não negociáveis do NÓS.
-- **`docs/PLANO.md`** — leitura obrigatória: fases da evolução, critérios de saída e sinais para redesenhar a arquitetura; a moto atual está congelada como espécime histórico e teste de regressão.
+- **`docs/rumo/NORTE.md`** — leitura obrigatória: objetivo maior, método experimental e não negociáveis do NÓS.
+- **`docs/rumo/PLANO.md`** — leitura obrigatória: fases da evolução, critérios de saída e sinais para redesenhar a arquitetura; a moto atual está congelada como espécime histórico e teste de regressão.
 - **`CLAUDE.md`** — o acordo de trabalho + as regras (jóias, determinismo, pt-BR).
-- **`docs/oficina.md`** — o roteiro da Oficina (Ordem de construção + specs). `docs/oficina-referencia.md` — o manual de como cada elemento funciona.
-- **`docs/playground.md`** — o ÉPICO ativo (D-113): fechar o vocabulário + forma-como-número + a camada IA de laço único. O que construir em seguida mora aqui.
-- **`docs/DECISIONS.md`** — TODAS as decisões (índice + detalhe; histórico em `DECISIONS-ARCHIVE.md`).
-- **`docs/MAPA.md`** — a árvore do repo com resumo por arquivo (gerada, sempre fresca).
-- **`docs/LORE.md`** / **`docs/VISION.md`** — narrativa / o que o NÓS é e não é.
-- **`docs/FERRAMENTAS.md`** — o plano de potência das ferramentas (visão). `docs/AUDIO_E_CENAS.md` — direção de música/voz/cenas (nada construído).
-- **`docs/legado/`** — os docs d'O Coração (o mundo 2D congelado) — leitura histórica.
+- **`docs/oficina.md`** — o roteiro da Oficina (Ordem de construção + specs). `docs/uso/oficina-referencia.md` — o manual de como cada elemento funciona.
+- **`docs/historico/playground.md`** — o ÉPICO ativo (D-113): fechar o vocabulário + forma-como-número + a camada IA de laço único. O que construir em seguida mora aqui.
+- **`docs/historico/DECISIONS.md`** — TODAS as decisões (índice + detalhe; histórico em `DECISIONS-ARCHIVE.md`).
+- **`docs/uso/MAPA.md`** — a árvore do repo com resumo por arquivo (gerada, sempre fresca).
+- **`docs/uso/LORE.md`** / **`docs/rumo/VISION.md`** — narrativa / o que o NÓS é e não é.
+- **`docs/rumo/FERRAMENTAS.md`** — o plano de potência das ferramentas (visão). `docs/rumo/AUDIO_E_CENAS.md` — direção de música/voz/cenas (nada construído).
+- **`docs/historico/legado/`** — os docs d'O Coração (o mundo 2D congelado) — leitura histórica.

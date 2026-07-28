@@ -36,24 +36,18 @@
 
 ## docs/
 
-- `AUDIO_E_CENAS.md` — Áudio e cenas — música, voz e cutscenes (direção)
+- `oficina.md` — A Oficina — editor de objetos dentro do jogo
+
+## docs/historico/
+
 - `DECISIONS-ARCHIVE.md` — Arquivo de Decisões — NÓS (D-01…D-54)
 - `DECISIONS.md` — Registro de Decisões — NÓS
-- `FERRAMENTAS.md` — FERRAMENTAS — o plano da potência (D-56)
-- `LORE.md` — Lore — a bíblia do NÓS
-- `NORTE.md` — NORTE — objetivo e método do NÓS
-- `PLANO.md` — PLANO — evolução da linguagem de criação do NÓS
-- `RECURSOS.md` — Recursos do coder — o índice único
 - `TETO.md` — O TETO — medir o que a Oficina de fato cria
-- `VISION.md` — Visão — NÓS
-- `arquitetura-identidade-estavel.md` — Arquitetura — identidade estável de objetos e subpartes
 - `diagnostico-subpartes-semanticas.md` — Diagnóstico — subpartes semânticas da moto
 - `fixture-identidade-apaga-relatorio.md` — Fixture — identidade estrutural ao apagar
 - `fixture-identidade-cubo-relatorio.md` — Fixture — identidade estável de cubo
 - `fixture-identidade-espelho-relatorio.md` — Fixture — identidade estrutural do espelho
 - `fixture-identidade-estavel-relatorio.md` — Fixture — identidade estável de loft
-- `oficina-referencia.md` — Oficina — referência de como cada coisa funciona
-- `oficina.md` — A Oficina — editor de objetos dentro do jogo
 - `playground.md` — O Playground — o épico da criação por IA
 - `proveniencia-local-fixture.md` — Fixture de proveniência local de loft
 - `teto-moto-refino-3-relatorio.md` — TETO — relatório da 3ª corrida de refino da moto
@@ -62,7 +56,7 @@
 - `teto-selecao-semantica-relatorio.md` — TETO — medição da seleção semântica na moto
 - `walkthrough_colaborador4.md` — Resumo de Alterações — Colaborador 4 (branch `colaborador4`)
 
-## docs/legado/
+## docs/historico/legado/
 
 - `ARCHITECTURE.md` — Arquitetura — NÓS
 - `CIDADE.md` — A Clareira — a cidade d'O Coração
@@ -75,6 +69,21 @@
 - `PORTALS_PROTOCOL.md` — Protocolo dos Portais — R6
 - `README.md` — Legado — os docs d'O Coração (o mundo 2D congelado)
 - `walkthrough_colaborador2.md` — Resumo de Alterações — Colaborador 2 (T5, T6, T8, T9)
+
+## docs/rumo/
+
+- `AUDIO_E_CENAS.md` — Áudio e cenas — música, voz e cutscenes (direção)
+- `FERRAMENTAS.md` — FERRAMENTAS — o plano da potência (D-56)
+- `NORTE.md` — NORTE — objetivo e método do NÓS
+- `PLANO.md` — PLANO — evolução da linguagem de criação do NÓS
+- `VISION.md` — Visão — NÓS
+- `arquitetura-identidade-estavel.md` — Arquitetura — identidade estável de objetos e subpartes
+
+## docs/uso/
+
+- `LORE.md` — Lore — a bíblia do NÓS
+- `RECURSOS.md` — Recursos do coder — o índice único
+- `oficina-referencia.md` — Oficina — referência de como cada coisa funciona
 
 ## prototipos/fps/v3/
 
@@ -167,7 +176,7 @@
 ## tools/bancadas/bench/
 
 - `benchmark.mjs` — benchmark.mjs — mede QUAIS ferramentas de senso crítico ajudam (D-60). Casos = peças reais × (limpo + cada defeito plantado). Separa NÚCLEO (defeito real/óbv…
-- `gabarito-nucleo.mjs` — gabarito-nucleo.mjs — P5 do playground (docs/playground.md): FORMA COMO NÚMERO. Lógica PURA (sem Playwright/browser — unit-testável) por trás da bancada `gab…
+- `gabarito-nucleo.mjs` — gabarito-nucleo.mjs — P5 do playground (docs/historico/playground.md): FORMA COMO NÚMERO. Lógica PURA (sem Playwright/browser — unit-testável) por trás da ba…
 - `gabarito-nucleo.test.ts` — Vitest do NÚCLEO PURO da bancada de gabarito (P5 do playground, D-118): máscara por diferença de fundo (+ o corte do HUD), filtro de componente pequeno (o pi…
 - `mutacoes.mjs` — mutacoes.mjs — DEFEITOS PLANTADOS pro benchmark de senso crítico (D-60). Cada mutação injeta UM defeito de UM domínio numa peça recém-construída (aplicada em…
 - `pngstats.mjs` — pngstats.mjs — decodifica um PNG (8-bit, colortype 2/6) via zlib. Sem dependência externa. `decodePng` devolve os pixels CRUS (usado pelo porteiro via `pngSt…
@@ -186,7 +195,7 @@
 ## tools/mapa/
 
 - `links.mjs` — links.mjs — o gate de referência: varre todo arquivo rastreado por menções a `docs/<...>.md` (caminho com barra, não prosa solta) e reprova quando o caminho …
-- `mapa.mjs` — mapa.mjs — gera docs/MAPA.md: a árvore do repositório com o resumo de cada arquivo. O resumo NÃO mora aqui: mora no PRÓPRIO arquivo (primeiro comentário de c…
+- `mapa.mjs` — mapa.mjs — gera docs/uso/MAPA.md: a árvore do repositório com o resumo de cada arquivo. O resumo NÃO mora aqui: mora no PRÓPRIO arquivo (primeiro comentário …
 - `toc.mjs` — toc.mjs — gera o índice (sumário) de um doc ENTRE os marcadores <!-- TOC --> e <!-- /TOC -->, a partir dos títulos `##` dele. Mesma filosofia do mapa: o índi…
 
 ## tools/oficina/

@@ -4,7 +4,7 @@
    árvore não é simétrica, e não deve virar ruído) — fail-open no que não foi
    prometido, cobrado no que foi.
 
-   POR QUE EXISTE (D-128): o experimento do TETO (docs/TETO.md) pediu uma moto
+   POR QUE EXISTE (D-128): o experimento do TETO (docs/historico/TETO.md) pediu uma moto
    SIMÉTRICA e a peça saiu com 12 de 492 vértices sem par espelhado (desvio máx
    4.45e-3, a armadilha de frame do `loft` — ver o cabeçalho da op). NENHUM gate
    pegava: nem `auditar`, nem `porteiro`, nem `criar`. O desvio é sub-visual (4,5

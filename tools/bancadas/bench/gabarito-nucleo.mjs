@@ -1,4 +1,4 @@
-/* gabarito-nucleo.mjs — P5 do playground (docs/playground.md): FORMA COMO
+/* gabarito-nucleo.mjs — P5 do playground (docs/historico/playground.md): FORMA COMO
    NÚMERO. Lógica PURA (sem Playwright/browser — unit-testável) por trás da
    bancada `gabarito.mjs`: extrai a silhueta do OBJETO por DIFERENÇA contra um
    render do FUNDO vazio (a peça `_vazio` — mesmo céu/chão, sem objeto),
@@ -74,7 +74,7 @@ export function extrairSilhueta(fundo, obj, opts = {}) {
   return filtrarComponentesPequenos(bruta, opts.minTam ?? MIN_COMPONENTE);
 }
 
-/* CONTORNO (o formato do P5, docs/playground.md): lista de pontos [x,y]
+/* CONTORNO (o formato do P5, docs/historico/playground.md): lista de pontos [x,y]
    normalizados 0..1 (x direita, y BAIXO — convenção de imagem, casa direto
    com pixel row-major), fechada IMPLICITAMENTE (não repete o primeiro
    ponto). Alça de curva RESERVADA no 3º elemento — a mesma lei fail-closed

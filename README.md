@@ -30,7 +30,7 @@ Ele pulsou por ~250 batidas e hoje está **congelado**: vive como demo (**Clarei
 
 - [`docs/oficina.md`](docs/oficina.md) — o roteiro do Atelier: a Oficina de objeto + som, passo a passo.
 - [`CLAUDE.md`](CLAUDE.md) — as regras de trabalho: as duas jóias (`render.js` / `motor/som.js`), as três camadas e a prova por medição.
-- [`docs/DECISIONS.md`](docs/DECISIONS.md) — o registro de toda decisão do projeto.
+- [`docs/historico/DECISIONS.md`](docs/historico/DECISIONS.md) — o registro de toda decisão do projeto.
 
 ## Como contribuir
 

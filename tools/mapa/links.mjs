@@ -27,9 +27,9 @@ const PADRAO = /\bdocs\/[A-Za-z0-9_.\-\/]+\.md\b/g;
 /* Allowlist: exatamente 2, com o motivo. Chave = "arquivo:caminho citado". */
 const ALLOWLIST = new Map([
   // caminho errado num doc arquivado; o arquivo real é CLAUDE.md na raiz.
-  ['docs/legado/PORTALS_PROTOCOL.md:docs/CLAUDE.md', 'caminho errado herdado — o real é CLAUDE.md na raiz'],
+  ['docs/historico/legado/PORTALS_PROTOCOL.md:docs/CLAUDE.md', 'caminho errado herdado — o real é CLAUDE.md na raiz'],
   // arquivo genuinamente inexistente, citado pelo DECISIONS-ARCHIVE.md como registro histórico de uma branch já descartada.
-  ['docs/DECISIONS-ARCHIVE.md:docs/R3_COMPARATIVO_RENDER.md', 'arquivo nunca existiu na main — citado como registro de branch descartada'],
+  ['docs/historico/DECISIONS-ARCHIVE.md:docs/R3_COMPARATIVO_RENDER.md', 'arquivo nunca existiu na main — citado como registro de branch descartada'],
 ]);
 
 const rastreados = execFileSync('git', ['ls-files'], { cwd: REPO, encoding: 'utf8' })

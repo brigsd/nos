@@ -18,6 +18,6 @@ O olho erra em normal, luz, alinhamento, geometria e som. Onde der, o número: `
 
 ## Git e entrega
 
-- Branch `wip/...` a partir de `origin/main` (`git fetch origin main` primeiro). Commit com mensagem PT-BR clara, **SEM trailer**. **NÃO dê push nem merge** — o orquestrador verifica, registra a decisão em `docs/DECISIONS.md` e mescla.
-- Gates antes de reportar: `npm test`, `npm run typecheck`, `npm run mapa:check` (rode `npm run mapa` se criar arquivo, e re-stage `docs/MAPA.md`), `npm run docs:toc:check`, + a bancada da feature.
+- Branch `wip/...` a partir de `origin/main` (`git fetch origin main` primeiro). Commit com mensagem PT-BR clara, **SEM trailer**. **NÃO dê push nem merge** — o orquestrador verifica, registra a decisão em `docs/historico/DECISIONS.md` e mescla.
+- Gates antes de reportar: `npm test`, `npm run typecheck`, `npm run mapa:check` (rode `npm run mapa` se criar arquivo, e re-stage `docs/uso/MAPA.md`), `npm run docs:toc:check`, + a bancada da feature.
 - **Relatório curto**: os NÚMEROS reais (bancada + o diff da jóia se tocou), o hash do commit no branch, e as surpresas / notas de escopo. Se algo ficou fora, diga — silêncio vira dívida.

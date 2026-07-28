@@ -1705,7 +1705,7 @@ describe('P4 — loft (seções ao longo de um caminho 3D)', () => {
     expect(piorCurvo).toBeLessThan(0.99);    // e de fato ESTRESSOU (não é um caminho quase-reto disfarçado)
   });
 
-  /* P5 (docs/playground.md): a chave `secao` reservada virou `contorno` de
+  /* P5 (docs/historico/playground.md): a chave `secao` reservada virou `contorno` de
      verdade — seção NÃO-circular no núcleo do loft. Geometria conferida por
      MEDIÇÃO (harness, não recontada no olho — a lição do D-116): caminho reto
      em Y, quadrado [[1,1],[-1,1],[-1,-1],[1,-1]] (CCW por shoelace) entre dois
@@ -2968,7 +2968,7 @@ describe('P8c — displace (deslocamento por ruído seedado ao longo da normal)'
 
 /* D-128 — `transladar` (soma um deslocamento a uma seleção). O IRMÃO do
    `rotaciona`: mesma semântica de `sel`, e igualmente SIMPLES (NUNCA cria id).
-   Nasceu do experimento do TETO (docs/TETO.md): o vocabulário girava a malha
+   Nasceu do experimento do TETO (docs/historico/TETO.md): o vocabulário girava a malha
    inteira mas não transladava nada maior que UMA face, e as 7 primitivas presas
    à origem ficavam inutilizáveis em composição.
 
