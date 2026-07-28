@@ -2459,6 +2459,92 @@ describe('D-130 — seleção por origem local de loft', () => {
   });
 });
 
+/* D-130 (Fase 3.5, Rodada A) — o eixo que faltava: `faixa` passa a ser
+   opcional na mesma semântica que `lado` já tinha (ausente = "todas"). Isso
+   abre, sem sintaxe nova: `{lado}` sem faixa = a COLUNA (uma face por faixa);
+   `{}` = a origem inteira. É aditivo — `faixa` ausente GRITAVA antes, e a
+   Prova Zero (tools/bancadas/gabarito-selecao.mjs) mede que nenhuma peça já
+   shipada mudou. */
+describe('D-130 (Rodada A) — sel.origem com faixa opcional (loft) e face opcional (cubo)', () => {
+  const secoes = [0, 1, 2, 3].map((y) => ({ pos: [0, y, 0], raio: 1 }));
+  const loft = (id: number, origemId = 1000): any => ['loft', { id, origemId, lados: 4, secoes }];
+  const pintaOrigem = (extra: any = {}): any => ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 1000, ...extra } }, cor: '#123456' }];
+  const pintados = (n: any) => [...n.F.values()].filter((f: any) => f.cor === '#123456').map((f: any) => f.id).sort((a: number, b: number) => a - b);
+
+  it('coluna: {lado:3} seleciona exatamente uma face por faixa, byte a byte com a lista manual', () => {
+    const n = nucleo([loft(0), pintaOrigem({ lado: 3 })], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(pintados(n)).toEqual([3, 7, 11]); // faixa0=[0..3], faixa1=[4..7], faixa2=[8..11] — o 4º lado de cada
+  });
+
+  it('coluna: {lado:0} e {lado:1} também batem com a lista manual (não é só o último lado)', () => {
+    expect(pintados(nucleo([loft(0), pintaOrigem({ lado: 0 })], {}, {}))).toEqual([0, 4, 8]);
+    expect(pintados(nucleo([loft(0), pintaOrigem({ lado: 1 })], {}, {}))).toEqual([1, 5, 9]);
+  });
+
+  it('origem inteira: {} bate com a união de todas as faixas', () => {
+    const n = nucleo([loft(0), pintaOrigem()], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(pintados(n)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    const legado = nucleo([loft(0), ['pincel', { modo: 'face', faces: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(n))).toBe(JSON.stringify(neutroCanonico(legado)));
+  });
+
+  it('{faixa:2} continua idêntico ao de hoje (regressão explícita)', () => {
+    const n = nucleo([loft(0), pintaOrigem({ faixa: 2 })], {}, {});
+    expect(pintados(n)).toEqual([8, 9, 10, 11]);
+  });
+
+  it('lado fora do limite GRITA e não seleciona parcial (nem a coluna, nem nenhuma faixa)', () => {
+    const n = nucleo([loft(0), pintaOrigem({ lado: 99 })], {}, {});
+    expect(n.orfaos.some((o: any) => o.op === 'pincel' && /lado 99 fora do limite/.test(o.motivo))).toBe(true);
+    expect(pintados(n)).toEqual([]); // nada foi pintado — nem parcialmente
+  });
+
+  it('erro não vaza alvo: a op inteira não aplica nada quando {} não acha nenhuma face (origem sem faixa nenhuma)', () => {
+    // origem com id inexistente: sem geradores, resolverOrigem já grita antes de chegar no contrato — cobre o caminho comum de "seleção vazia nunca é parcial"
+    const n = nucleo([loft(0), ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 4242 } } }, ]], {}, {});
+    expect(n.orfaos.some((o: any) => o.op === 'pincel' && /inexistente/.test(o.motivo))).toBe(true);
+    expect(pintados(n)).toEqual([]);
+  });
+
+  it('composição: {} e {lado} funcionam também com transladar/rotaciona (o mesmo resolvedor de sempre)', () => {
+    // vértices esperados = os cantos das faces da coluna 0 (0,4,8), derivados do próprio pincel/faces — não de índice adivinhado
+    const marcado = nucleo([loft(0), pintaOrigem({ lado: 0 })], {}, {});
+    const vTocados = new Set<number>();
+    for (const fid of [0, 4, 8]) for (const v of marcado.F.get(fid)!.vs) vTocados.add(v);
+
+    const nColuna = nucleo([loft(0), ['transladar', { d: [1, 0, 0], sel: { origem: { op: 'loft', id: 1000, lado: 0 } } }]], {}, {});
+    expect(nColuna.orfaos).toHaveLength(0);
+    const base = nucleo([loft(0)], {}, {});
+    for (const v of vTocados) expect(nColuna.V.get(v)![0]).toBe(base.V.get(v)![0] + 1); // a coluna 0 andou
+    for (let v = 0; v < 16; v++) if (!vTocados.has(v)) expect(nColuna.V.get(v)).toEqual(base.V.get(v)); // o resto ficou parado
+
+    const nTudo = nucleo([loft(0), ['rotaciona', { eixo: 'y', graus: 0, sel: { origem: { op: 'loft', id: 1000 } } }]], {}, {});
+    expect(nTudo.orfaos).toHaveLength(0);
+  });
+
+  it('cubo: face opcional = as 6 faces, byte a byte com a lista manual', () => {
+    const n = nucleo([['cubo', { id: 0, origemId: 30, lado: 1 }], ['pincel', { modo: 'face', sel: { origem: { op: 'cubo', id: 30 } }, cor: '#123456' }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(pintados(n)).toEqual([0, 1, 2, 3, 4, 5]);
+    const legado = nucleo([['cubo', { id: 0, lado: 1 }], ['pincel', { modo: 'face', faces: [0, 1, 2, 3, 4, 5], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(n))).toBe(JSON.stringify(neutroCanonico(legado)));
+  });
+
+  it('cubo: apagaFace remove uma face da união, e removê-las todas GRITA (nenhuma face viva)', () => {
+    const n = nucleo([['cubo', { id: 0, origemId: 30, lado: 1 }], ['apagaFace', { face: 0 }], ['pincel', { modo: 'face', sel: { origem: { op: 'cubo', id: 30 } }, cor: '#123456' }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(pintados(n)).toEqual([1, 2, 3, 4, 5]);
+
+    const semNenhuma: any[] = [['cubo', { id: 0, origemId: 30, lado: 1 }]];
+    for (const f of [0, 1, 2, 3, 4, 5]) semNenhuma.push(['apagaFace', { face: f }]);
+    semNenhuma.push(['pincel', { modo: 'face', sel: { origem: { op: 'cubo', id: 30 } }, cor: '#123456' }]);
+    const nVazio = nucleo(semNenhuma, {}, {});
+    expect(nVazio.orfaos.some((o: any) => o.op === 'pincel' && /nenhuma face viva/.test(o.motivo))).toBe(true);
+  });
+});
+
 describe('Fase 2 — fixture de aliases estáveis de loft', () => {
   const ctx = { tex: { texCanvas: (w: number, h: number) => ({ width: w, height: h }) }, m4: { ident: () => new Float32Array(16) } };
   const secoes = [0, 1, 2, 3].map((y) => ({ pos: [0, y, 0], raio: 1 }));
