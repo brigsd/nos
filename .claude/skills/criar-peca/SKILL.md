@@ -65,8 +65,15 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 | `solido` | `faces:[ids]` (legado) ou `sel` | o que entra na colisão |
 | `inflate` | `contornoLado:[[z,y],...]` (≥3 pontos, PARAM), `contornoTopo:[[z,x],...]` (idem), `divisoes` (TOPO, mín 2) | dois contornos 2D (plano z×y e z×x) viram VOLUME por interseção de dois prismas — não é malha booleana geral, é uma GRADE DE VOXEL (watertight por construção, mas o resultado sai BLOCKY/facetado — não suave). Ponto com aridade ≠ 2 (alça de curva reservada) GRITA e aborta, igual ao `contorno` do loft; <3 pontos idem; contornos que não se cruzam em nenhum voxel GRITA (volume vazio nunca é o que você queria). Vale largura≠altura — o único gerador sem seção circular. Peça-exemplo `_corpo.js` |
 
-**Seleção semântica (`sel`, D-129/D-130/D-131):** campos `v`, `f`, `grupo`,
-`regiao` e `origem` podem coexistir e se unem. `origem` existe para `loft` e
+**Seleção semântica (`sel`, D-129/D-130/D-131):** campos `tudo`, `v`, `f`,
+`grupo`, `regiao` e `origem` podem coexistir e se unem. `sel:{tudo:true}` é a
+ÚNICA forma explícita de "a peça inteira" — todos os vértices e todas as
+faces vivos (Rodada B da Fase 3.5). Só aceita o literal `true`
+(`false`/`1`/`'sim'` GRITAM). **Deliberadamente diferente de `sel` ausente,
+que continua GRITANDO**: ausência nunca virou "tudo" — um erro de digitação
+(`fases:` em vez de `faces:`) não pode pintar a peça inteira em silêncio; só
+a palavra `tudo:true` escrita de propósito faz isso. `origem` existe para
+`loft` e
 `cubo`. No loft, `sel:{origem:{op:'loft',id,faixa?,lado?}}` endereça a grade
 de duas dimensões da origem — **`faixa` e `lado` são os DOIS opcionais**
 (D-130, Rodada A da Fase 3.5), ausente = "todos" nesse eixo: `{faixa}` é o

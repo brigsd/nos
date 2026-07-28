@@ -292,6 +292,7 @@ Sem o servidor no ar, cai pro download comum — funciona, mas você move o arqu
 seleção. Os campos presentes se unem, sem duplicar:
 
 ```js
+sel: { tudo: true }                       // a peça inteira — todos os vértices e faces vivos
 sel: { f: [ids] }                         // faces literais
 sel: { v: [ids] }                         // vértices literais
 sel: { grupo: 'nome-da-parte' }           // faces já nomeadas por `parte`
@@ -299,6 +300,16 @@ sel: { regiao: { min:[x,y,z], max:[x,y,z] } }
 sel: { origem: { op:'loft', id:1000, faixa?:2, lado?:1 } }
 sel: { origem: { op:'cubo', id:30, face?:'topo' } }
 ```
+
+`tudo` (D-129, Rodada B da Fase 3.5) é a única forma **explícita** de dizer "a
+peça inteira": só aceita o literal `true` — `tudo:false`/`1`/`'sim'` GRITAM,
+porque um valor aceito em silêncio ensinaria a próxima peça a escrever
+besteira que passa. `tudo` une com as outras chaves como qualquer campo de
+`sel` (redundante com outra chave não é erro). **Isto é deliberadamente
+diferente de `sel` ausente, que continua GRITANDO** — a leitura óbvia seria
+"ausente = tudo", mas isso destruiria o fail-closed: um erro de digitação
+(`fases:` no lugar de `faces:`) passaria a pintar a peça inteira em silêncio.
+Só a palavra `tudo:true`, escrita de propósito, significa a peça inteira.
 
 Para uma op de VÉRTICE, `f`/`grupo` adicionam os cantos das faces e `regiao`
 adiciona cada vértice dentro da caixa inclusiva — é o comportamento histórico de

@@ -2380,6 +2380,57 @@ describe('D-129 — seleção semântica uniforme (atributos + espelha)', () => 
     expect(semantica.orfaos).toHaveLength(0);
     expect(JSON.stringify(neutroCanonico(semantica))).toBe(JSON.stringify(neutroCanonico(original)));
   });
+
+  /* Rodada B da Fase 3.5: `sel.tudo` é a única forma EXPLÍCITA de "a peça
+     inteira" — deliberadamente diferente de `sel` ausente, que continua
+     gritando (o teste-trava abaixo prova isso). Ponto único: resolverSelecao. */
+  it('sel:{tudo:true} pinta todas as faces, byte a byte igual à lista de ids à mão', () => {
+    const comTudo = nucleo([cubo, ['pincel', { modo: 'face', sel: { tudo: true }, cor: '#9e4539' }]], {}, {});
+    const comLista = nucleo([cubo, ['pincel', { modo: 'face', sel: { f: [0, 1, 2, 3, 4, 5] }, cor: '#9e4539' }]], {}, {});
+    expect(comTudo.orfaos).toHaveLength(0);
+    expect(JSON.stringify(neutroCanonico(comTudo))).toBe(JSON.stringify(neutroCanonico(comLista)));
+    expect([...comTudo.F.values()].every((f: any) => f.cor === '#9e4539')).toBe(true);
+  });
+
+  it('sel:{tudo:...} com valor que não é o literal true GRITA (1, "sim", false)', () => {
+    for (const valor of [false, 1, 'sim', null]) {
+      const n = nucleo([cubo, ['pincel', { modo: 'face', sel: { tudo: valor }, cor: '#f00' }]], {}, {});
+      if (valor === null) {
+        // tudo:null é o mesmo que ausente (sel.tudo != null falha) — cai na regra "sel vazia" abaixo.
+        expect(n.orfaos.some((o: any) => o.op === 'pincel')).toBe(true);
+      } else {
+        expect(n.orfaos.some((o: any) => o.op === 'pincel' && (o.ref === 'sel.tudo' || /sel\.tudo/.test(o.motivo ?? '')))).toBe(true);
+      }
+      expect(n.F.get(1).cor).toBeNull();
+    }
+  });
+
+  it('sel ausente continua gritando exatamente como hoje — tudo não muda essa regra (teste-trava)', () => {
+    const n = nucleo([cubo, ['pincel', { modo: 'face', cor: '#f00' }]], {}, {});
+    expect(n.orfaos.some((o: any) => o.op === 'pincel')).toBe(true);
+    expect(n.F.get(1).cor).toBeNull();
+  });
+
+  it('sel:{tudo:true, f:[...]} é união — redundante, não é erro; resultado é a peça inteira', () => {
+    const n = nucleo([cubo, ['pincel', { modo: 'face', sel: { tudo: true, f: [1] }, cor: '#00ff00' }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect([...n.F.values()].every((f: any) => f.cor === '#00ff00')).toBe(true);
+  });
+
+  it('depois de apagaFace, sel:{tudo:true} não seleciona a face removida', () => {
+    const n = nucleo([cubo, ['apagaFace', { face: 1 }], ['pincel', { modo: 'face', sel: { tudo: true }, cor: '#00f' }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(n.F.has(1)).toBe(false);
+    expect(n.F.size).toBe(5);
+    expect([...n.F.values()].every((f: any) => f.cor === '#00f')).toBe(true);
+  });
+
+  it('sel:{tudo:true} também funciona numa op de vértice (transladar)', () => {
+    const comTudo = nucleo([cubo, ['transladar', { d: [1, 0, 0], sel: { tudo: true } }]], {}, {});
+    const semSel = nucleo([cubo, ['transladar', { d: [1, 0, 0] }]], {}, {}); // ausente = malha inteira, já era assim (P8)
+    expect(comTudo.orfaos).toHaveLength(0);
+    expect(JSON.stringify(neutroCanonico(comTudo))).toBe(JSON.stringify(neutroCanonico(semSel)));
+  });
 });
 
 /* P8b do playground — `chamferBox` (caixa com cantos/arestas chanfrados, o cubo

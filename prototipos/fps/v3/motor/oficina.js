@@ -286,14 +286,17 @@ function confereId(st, i, op, args) {
   return b;
 }
 
-/* resolverSelecao (D-129): a ÚNICA semântica de `sel` da Oficina. Devolve os
-   dois alvos que uma op pode precisar: vértices e faces. `v` seleciona os
-   vértices literais E toda face que toca algum deles; `f` seleciona as faces
-   literais; `grupo` seleciona as faces cuja `f.parte` tem aquele nome; e
-   `regiao` seleciona os vértices dentro da caixa INCLUSIVA e as faces com
-   TODOS os cantos dentro dela. Campos presentes se UNEM. Assim uma região não
-   vaza meia face para uma operação de atributo, mas rotaciona/transladar
-   preservam exatamente a regra antiga: movem os vértices dentro da caixa.
+/* resolverSelecao (D-129, `tudo` na Rodada B): a ÚNICA semântica de `sel` da
+   Oficina. Devolve os dois alvos que uma op pode precisar: vértices e faces.
+   `tudo:true` seleciona TODOS os vértices e TODAS as faces vivas — é a única
+   forma EXPLÍCITA de dizer "a peça inteira" (ver comentário no corpo: por que
+   não é `sel` ausente); `v` seleciona os vértices literais E toda face que
+   toca algum deles; `f` seleciona as faces literais; `grupo` seleciona as
+   faces cuja `f.parte` tem aquele nome; e `regiao` seleciona os vértices
+   dentro da caixa INCLUSIVA e as faces com TODOS os cantos dentro dela.
+   Campos presentes se UNEM. Assim uma região não vaza meia face para uma
+   operação de atributo, mas rotaciona/transladar preservam exatamente a
+   regra antiga: movem os vértices dentro da caixa.
 
    A seleção é formato salvo: nunca ignora uma chave, uma referência ou uma
    seleção vazia. `grita` leva op + tipo + causa; a lista continua executando
@@ -302,11 +305,11 @@ function confereId(st, i, op, args) {
 function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
   if (sel == null) return { vertices: new Set(st.V.keys()), faces: new Set(st.F.keys()) };
   if (typeof sel !== 'object' || Array.isArray(sel)) {
-    grita(st, i, op, 'sel', 'seleção inválida: sel precisa ser um objeto com v, f, grupo, regiao, origem e/ou alias');
+    grita(st, i, op, 'sel', 'seleção inválida: sel precisa ser um objeto com tudo, v, f, grupo, regiao, origem e/ou alias');
     return { vertices: new Set(), faces: new Set() };
   }
-  const conhecidas = new Set(['v', 'f', 'grupo', 'regiao', 'origem', 'alias']);
-  for (const chave of Object.keys(sel)) if (!conhecidas.has(chave)) grita(st, i, op, `sel.${chave}`, `seleção desconhecida '${chave}' (só v, f, grupo, regiao, origem e alias)`);
+  const conhecidas = new Set(['tudo', 'v', 'f', 'grupo', 'regiao', 'origem', 'alias']);
+  for (const chave of Object.keys(sel)) if (!conhecidas.has(chave)) grita(st, i, op, `sel.${chave}`, `seleção desconhecida '${chave}' (só tudo, v, f, grupo, regiao, origem e alias)`);
 
   const vertices = new Set(), faces = new Set();
   const adicionaFace = (fid) => {
@@ -315,6 +318,18 @@ function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
     faces.add(fid); for (const v of f.vs) vertices.add(v);
   };
   let teveChave = false;
+  /* `tudo` (D-129/Rodada B): a única forma EXPLÍCITA de dizer "a peça inteira".
+     Só aceita `true` literal — `tudo:false`/`1`/`'sim'` GRITAM, porque um valor
+     estranho aceito em silêncio ensinaria a próxima IA a escrever besteira que
+     passa. UNE com as outras chaves, como todo campo de `sel` já faz (redundante
+     com outra chave não é erro). Isto é DELIBERADAMENTE diferente de `sel`
+     ausente, que continua gritando: ausência nunca vira "tudo" por acidente —
+     só a palavra explícita `tudo:true` significa a peça inteira. */
+  if (sel.tudo != null) {
+    teveChave = true;
+    if (sel.tudo !== true) grita(st, i, op, 'sel.tudo', "seleção tudo inválida: só aceita o literal true");
+    else { for (const v of st.V.keys()) vertices.add(v); for (const fid of st.F.keys()) faces.add(fid); }
+  }
   if (sel.v != null) {
     teveChave = true;
     if (!Array.isArray(sel.v)) grita(st, i, op, 'sel.v', 'seleção v inválida: precisa ser uma lista de ids de vértice');
@@ -383,7 +398,7 @@ function resolverSelecao(st, sel, op, i, { vazioNoop = false } = {}) {
       }
     }
   }
-  if (!teveChave) grita(st, i, op, 'sel', 'seleção vazia: informe v, f, grupo, regiao ou origem');
+  if (!teveChave) grita(st, i, op, 'sel', 'seleção vazia: informe tudo, v, f, grupo, regiao ou origem');
   if (!vertices.size && !faces.size && !vazioNoop) grita(st, i, op, 'sel', 'seleção vazia: nenhum alvo válido foi encontrado');
   return { vertices, faces };
 }
@@ -1401,11 +1416,12 @@ export const OPS = {
 
      SELEÇÃO (`sel`, opcional, via `resolverAlvosV` — P8 do playground): AUSENTE
      = a malha INTEIRA (todos os vértices atuais de `st.V`) — é ESTE o caso que
-     posiciona uma primitiva recém-criada. Presente = `{v:[ids]}` e/ou
-     `{f:[ids]}` (cantos da face) e/ou `{regiao:{min,max}}` e/ou
-     `{grupo:'nome'}` (as faces daquele `f.parte`) — os campos presentes se
-     UNEM, DEDUPLICADOS num Set. Referência inválida GRITA (órfão) e é ignorada
-     — nunca corrompe (lei do envelope). Seleção vazia é no-op determinístico.
+     posiciona uma primitiva recém-criada. Presente = `{tudo:true}` (a peça
+     inteira, explícito) e/ou `{v:[ids]}` e/ou `{f:[ids]}` (cantos da face)
+     e/ou `{regiao:{min,max}}` e/ou `{grupo:'nome'}` (as faces daquele
+     `f.parte`) — os campos presentes se UNEM, DEDUPLICADOS num Set. Referência
+     inválida GRITA (órfão) e é ignorada — nunca corrompe (lei do envelope).
+     Seleção vazia é no-op determinístico.
 
      DESLOCAMENTO (`d`, `[x,y,z]`, via `st.vec` — pode citar PARAM, como todo
      ponto dimensional): `p' = p + d`, ADITIVO como o `moveV` (acompanha a base
@@ -1433,9 +1449,10 @@ export const OPS = {
 
      SELEÇÃO (`sel`, opcional, via `resolverAlvosV` — P8 do playground):
      AUSENTE = a malha INTEIRA (todos os vértices atuais de `st.V`). Presente
-     = `{v:[ids]}` e/ou `{f:[ids]}` (cantos da face) e/ou `{regiao:{min,max}}`
-     (caixa delimitadora) e/ou `{grupo:'nome'}` (as faces daquele `f.parte`) —
-     os campos presentes se UNEM, DEDUPLICADOS num Set. Referência inválida
+     = `{tudo:true}` (a peça inteira, explícito) e/ou `{v:[ids]}` e/ou
+     `{f:[ids]}` (cantos da face) e/ou `{regiao:{min,max}}` (caixa
+     delimitadora) e/ou `{grupo:'nome'}` (as faces daquele `f.parte`) — os
+     campos presentes se UNEM, DEDUPLICADOS num Set. Referência inválida
      (vértice/face/grupo) GRITA (órfão) e é ignorada — nunca corrompe (lei do
      envelope).
 
