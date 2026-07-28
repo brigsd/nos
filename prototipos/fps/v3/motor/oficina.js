@@ -152,29 +152,75 @@ function origensIguais(a, b) {
 }
 const CONTRATOS_ORIGEM = {
   loft: {
+    /* Fase 3.5, Rodada A: `faixa` era obrigatória — agora é opcional com a MESMA
+       semântica que `lado` já tinha (ausente = "todos"). Isso abre, sem
+       sintaxe nova: `{faixa}` = o anel (como antes); `{faixa,lado}` = uma
+       face (como antes); `{lado}` sem faixa = a COLUNA (uma face por faixa,
+       no mesmo lado); `{}` = todas as faces laterais da origem inteira. É
+       ADITIVO: `faixa` ausente hoje GRITAVA, então nenhuma peça existente usa
+       essa forma — a Prova Zero (`gabarito:selecao`) mede isso, não a
+       argumentação. */
     validar(origem) {
       const chaves = ['op', 'id', 'faixa', 'lado'];
-      if (!Object.keys(origem).every((k) => chaves.includes(k)) || !Object.hasOwn(origem, 'faixa') || !Number.isSafeInteger(origem.faixa) || origem.faixa < 0 || (origem.lado != null && (!Number.isSafeInteger(origem.lado) || origem.lado < 0))) return 'loft usa op, id, faixa e lado opcional inteiro não-negativo';
+      const msg = 'loft usa op, id, faixa opcional e lado opcional, os dois inteiros não-negativos';
+      if (!Object.keys(origem).every((k) => chaves.includes(k))) return msg;
+      if (origem.faixa != null && (!Number.isSafeInteger(origem.faixa) || origem.faixa < 0)) return msg;
+      if (origem.lado != null && (!Number.isSafeInteger(origem.lado) || origem.lado < 0)) return msg;
       return null;
     },
     resolver(_st, registro, origem) {
-      const faixa = registro.faixas[origem.faixa];
-      if (!faixa) return { erro: `faixa ${origem.faixa} fora do limite da origem loft:${origem.id}` };
-      if (!faixa.length) return { erro: `faixa ${origem.faixa} da origem loft:${origem.id} não tem faces laterais` };
-      if (origem.lado != null && origem.lado >= faixa.length) return { erro: `lado ${origem.lado} fora do limite da faixa ${origem.faixa} (0..${faixa.length - 1})` };
-      return { faces: origem.lado == null ? faixa : [faixa[origem.lado]] };
+      if (origem.faixa != null) {
+        const faixa = registro.faixas[origem.faixa];
+        if (!faixa) return { erro: `faixa ${origem.faixa} fora do limite da origem loft:${origem.id}` };
+        if (!faixa.length) return { erro: `faixa ${origem.faixa} da origem loft:${origem.id} não tem faces laterais` };
+        if (origem.lado != null && origem.lado >= faixa.length) return { erro: `lado ${origem.lado} fora do limite da faixa ${origem.faixa} (0..${faixa.length - 1})` };
+        return { faces: origem.lado == null ? faixa : [faixa[origem.lado]] };
+      }
+      if (!registro.faixas.length) return { erro: `origem loft:${origem.id} não tem faixas` };
+      if (origem.lado != null) {
+        // a COLUNA: uma face por faixa, no mesmo `lado`. Faixa vazia (segmento
+        // degenerado polo-polo) é PULADA; lado fora do limite em qualquer
+        // faixa NÃO-vazia GRITA o passo inteiro — nunca seleciona parcial.
+        const faces = [];
+        for (const faixa of registro.faixas) {
+          if (!faixa.length) continue;
+          if (origem.lado >= faixa.length) return { erro: `lado ${origem.lado} fora do limite em alguma faixa da origem loft:${origem.id} (0..${faixa.length - 1}) — a coluna exige lado válido em toda faixa não-vazia` };
+          faces.push(faixa[origem.lado]);
+        }
+        if (!faces.length) return { erro: `origem loft:${origem.id} não tem nenhuma faixa com face lateral` };
+        return { faces };
+      }
+      // nem faixa nem lado: TODAS as faces laterais (a união de toda faixa).
+      const faces = [];
+      for (const faixa of registro.faixas) faces.push(...faixa);
+      if (!faces.length) return { erro: `origem loft:${origem.id} não tem nenhuma face lateral` };
+      return { faces };
     },
   },
   cubo: {
+    /* Fase 3.5, Rodada A: `face` era obrigatória — agora é opcional; ausente =
+       as 6 faces (pulando as já removidas por `apagaFace`). Simétrico ao
+       loft acima. */
     validar(origem) {
       const chaves = ['op', 'id', 'face'];
-      if (!Object.keys(origem).every((k) => chaves.includes(k)) || !Object.hasOwn(origem, 'face') || !FACES_CUBO.has(origem.face)) return 'cubo usa op, id e face (fundo, topo, tras, direita, frente ou esquerda)';
+      const msg = 'cubo usa op, id e face opcional (fundo, topo, tras, direita, frente ou esquerda)';
+      if (!Object.keys(origem).every((k) => chaves.includes(k))) return msg;
+      if (origem.face != null && !FACES_CUBO.has(origem.face)) return msg;
       return null;
     },
     resolver(st, registro, origem) {
-      const face = registro.faces[origem.face];
-      if (face != null && !st.F.has(face)) return { erro: `face '${origem.face}' da origem cubo:${origem.id} foi removida` };
-      return face == null ? { erro: `face '${origem.face}' não existe na origem cubo:${origem.id}` } : { faces: [face] };
+      if (origem.face != null) {
+        const face = registro.faces[origem.face];
+        if (face != null && !st.F.has(face)) return { erro: `face '${origem.face}' da origem cubo:${origem.id} foi removida` };
+        return face == null ? { erro: `face '${origem.face}' não existe na origem cubo:${origem.id}` } : { faces: [face] };
+      }
+      const faces = [];
+      for (const nome of FACES_CUBO) {
+        const face = registro.faces[nome];
+        if (face != null && st.F.has(face)) faces.push(face);
+      }
+      if (!faces.length) return { erro: `origem cubo:${origem.id} não tem nenhuma face viva` };
+      return { faces };
     },
   },
   espelha: {

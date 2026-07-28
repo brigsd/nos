@@ -2510,7 +2510,7 @@ describe('Fase 2 — fixture de aliases estáveis de loft', () => {
     for (const escondido of [
       { v: [0] }, { f: [0] }, { faces: [0] }, { origem: { op: 'loft', id: 10, faixa: 1 }, extra: true }, { unir: [] },
       { origem: { op: 'loft', id: 10, faixa: 1, v: [0] } }, { origem: { op: 'loft', id: 10, faixa: 1, f: [0] } }, { origem: { op: 'loft', id: 10, faixa: 1, faces: [0] } },
-      { origem: null }, { origem: { op: 'loft', id: 10 } }, { origem: { op: 'cilindro', id: 10, faixa: 1 } },
+      { origem: null }, { origem: { op: 'cilindro', id: 10, faixa: 1 } },
       { unir: [{ origem: { op: 'loft', id: 10, faixa: 1, faces: [0] } }] }, { unir: [{ alias: 'faixaA' }] },
     ]) expect(() => nucleo([['cubo', { id: 0, lado: Infinity }]], {}, {}, {}, null, [['x', escondido]])).toThrow(/alias.*inválido/);
   });
