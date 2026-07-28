@@ -89,6 +89,38 @@ Cada gerador precisa expor uma coordenada local coerente.
 
 **Concluída:** `loft`, cubo, transformação, espelhamento e remoção usaram a mesma linguagem de seleção estrutural. A remoção invalida explicitamente a parte, sem redirecionar seu nome, e as seleções compostas falham por inteiro. A sintaxe permanece experimental; moto e interface continuam fora desta prova.
 
+## Fase 3.5 — Fechar as três lacunas de endereçamento — concluída
+
+Fase não prevista, aberta por **medição** sobre a moto congelada: 6.512 ids escritos
+à mão, 98% deles dentro de progressões aritméticas cujos passos são os próprios
+valores de `TOPO` da peça. As Fases 2/3 não podiam revelar isso — suas fixtures
+testam geradores isolados, e as causas só doem em peça real com atributos por cima.
+
+Três causas, três correções (detalhe e prova em D-139):
+
+| causa | % dos ids | correção |
+|---|---|---|
+| não havia como dizer "tudo" | 77,6% | `sel:{tudo:true}`, explícito — seleção ausente continua gritando |
+| não havia como dizer "alternado" | 18,6% | filtro de progressão `{passo,fase}` nos eixos de `sel.origem` |
+| grade de dois eixos, um endereçável | 3,8% | `faixa`/`face` opcionais — abre a coluna e a origem inteira |
+
+**Prova de saída, com agente limpo:** `_galho.js` foi de **160 ids à mão para 0**,
+com o objeto construído byte-idêntico; uma peça nova (`caixa-ferramentas.js`) nasceu
+com **0 ids**. Rede de segurança permanente: `npm run gabarito:selecao:check`, no CI.
+
+**O que a fase descobriu e não resolveu** — é isto que escolhe o trabalho seguinte:
+
+- o gargalo maior não é ENDEREÇAR, é **EXPRESSAR**. O agente limpo não escreveu id
+  nenhum, mas travou em (i) o bloco de ids ser `posição-do-passo × 1000` e não
+  escolhível — numerar por tipo de peça custou 234 órfãos e recontagem manual a
+  cada passo inserido antes; (ii) não existir posicionamento **relativo** ("encosta
+  a tampa no topo do corpo") nem expressão entre dois PARAMS num campo de passo;
+- `lathe` não registra `sel.origem`, embora seja a mesma família do `loft`;
+- não há **intervalo** de faixa (`{de,ate}`), só paridade;
+- `pesar` é a única op que ainda não aceita `sel`.
+
+Nada disso vira trabalho por catálogo: a Fase 4 mede e a falha observada escolhe a ordem.
+
 ## Fase 4 — Criar uma peça média do zero
 
 Antes da nova moto, criar um objeto menor, mas com partes variadas. Exemplos adequados: capacete; câmera; tênis; drone; cadeira mecânica.
