@@ -1,5 +1,5 @@
 {
-  "hashTotal": "ae599048f660e2a4e64269a560354adf576bafb8d75d3fda6fdab701f1838b51",
+  "hashTotal": "eb57f7e25c666d45e0ff7d49b87d69b259d6bb8493c08e812b0f4f09836a10b6",
   "pecas": {
     "_corpo": {
       "hash": "7d27db600d985a54700b89303ab112dad9f72fa47e0ad45711c0d4508de63023",
@@ -65,6 +65,11 @@
       "hash": "6b29863da19f82b31147d5a97aa48d72ece6987ee26a741dd6e25a4c4dce1a1f",
       "vertices": 14,
       "faces": 16
+    },
+    "caixa-ferramentas": {
+      "hash": "8543e26be33701d096b606fc5ed24ac301aa46aa6b713c1fae9adcbc0c080de3",
+      "vertices": 178,
+      "faces": 166
     },
     "moto": {
       "hash": "13fdc7f2f507e237fcf63b793303ecc59f13fa7275d6fe97e3545215bdcb281a",
