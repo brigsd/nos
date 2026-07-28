@@ -31,6 +31,7 @@ const OUT = join(HERE, 'out');
 const PECAS = join(REPO, 'prototipos/fps/v3/pecas');
 const GABARITOS = join(REPO, 'prototipos/fps/v3/gabaritos');
 const SKILL = join(REPO, '.claude/skills/criar-peca/SKILL.md');
+const OFICINA_DOC = join(REPO, 'docs/oficina.md');
 
 const args = process.argv.slice(2);
 const nome = (args.find((a) => !a.startsWith('--')) || '').replace(/[^a-z0-9_-]/gi, '');
@@ -90,6 +91,43 @@ if (semDoc.length === 0 && semOp.length === 0) ok('vocabulário da skill criar-p
 else {
   if (semDoc.length) falha(`op(s) no núcleo SEM doc na skill: ${semDoc.join(', ')}`);
   if (semOp.length) falha(`skill documenta op que NÃO existe (ou não é mais) no núcleo: ${semOp.join(', ')}`);
+}
+
+/* 2b · manifesto x docs/oficina.md (Rodada 3, D-120 estendido): a "Lista de
+   operações" tem uma coluna Status (FEITO|ROTEIRO), marcação estruturada —
+   não a prosa livre da Observação, que cita "FEITO" e "NÃO existe" sem
+   formato fixo. Regra: toda linha FEITO tem que existir em OPS; toda chave de
+   OPS tem que ter uma linha FEITO; linha ROTEIRO cuja op JÁ existe em OPS é
+   ACHADO (roteiro construído, doc não atualizado) — reportado como falha. */
+log('\n── manifesto (núcleo x docs/oficina.md) ──');
+{
+  const feitoOficina = new Set();
+  const roteiroOficina = new Set();
+  const texto = readFileSync(OFICINA_DOC, 'utf8').split('\n');
+  let dentro = false;
+  for (const linha of texto) {
+    if (linha.startsWith('| Status | Operação |')) { dentro = true; continue; }
+    if (!dentro) continue;
+    if (!linha.startsWith('|')) break;
+    if (linha.startsWith('|---')) continue;
+    const celulas = linha.split('|');
+    const status = (celulas[1] || '').trim();
+    const celulaOp = celulas[2] || '';
+    const nomes = [...celulaOp.matchAll(/`([a-zA-Z]+)`/g)].map((m) => m[1]);
+    if (status === 'FEITO') for (const n of nomes) feitoOficina.add(n);
+    else if (status === 'ROTEIRO') for (const n of nomes) roteiroOficina.add(n);
+    else falha(`docs/oficina.md: linha de op com Status inesperado (${JSON.stringify(status)}): ${nomes.join(', ') || '(sem op)'}`);
+  }
+  const opsSemFeito = [...opsNucleo].filter((o) => !feitoOficina.has(o));
+  const feitoSemOp = [...feitoOficina].filter((o) => !opsNucleo.has(o));
+  const roteiroJaConstruido = [...roteiroOficina].filter((o) => opsNucleo.has(o));
+  if (opsSemFeito.length === 0 && feitoSemOp.length === 0 && roteiroJaConstruido.length === 0) {
+    ok('tabela de operações do oficina.md em dia com o núcleo');
+  } else {
+    if (opsSemFeito.length) falha(`op(s) no núcleo SEM linha FEITO em docs/oficina.md: ${opsSemFeito.join(', ')}`);
+    if (feitoSemOp.length) falha(`docs/oficina.md marca FEITO uma op que NÃO existe no núcleo: ${feitoSemOp.join(', ')}`);
+    if (roteiroJaConstruido.length) falha(`docs/oficina.md marca ROTEIRO op(s) que JÁ existem no núcleo (achado — roteiro construído, doc desatualizado): ${roteiroJaConstruido.join(', ')}`);
+  }
 }
 
 /* 3 · AUDITAR (headless — os críticos de senso crítico [cpu]) */
