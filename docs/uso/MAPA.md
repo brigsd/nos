@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-132 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+133 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -194,6 +194,7 @@
 
 ## tools/mapa/
 
+- `fatiar.mjs` — fatiar.mjs — a rede de segurança do fatiamento de um doc grande (o alvo hoje é docs/oficina.md). Dois modos, SÓ mecânica — a classificação de qual seção vai …
 - `links.mjs` — links.mjs — o gate de referência: varre todo arquivo rastreado por menções a `docs/<...>.md` (caminho com barra, não prosa solta) e reprova quando o caminho …
 - `mapa.mjs` — mapa.mjs — gera docs/uso/MAPA.md: a árvore do repositório com o resumo de cada arquivo. O resumo NÃO mora aqui: mora no PRÓPRIO arquivo (primeiro comentário …
 - `toc.mjs` — toc.mjs — gera o índice (sumário) de um doc ENTRE os marcadores <!-- TOC --> e <!-- /TOC -->, a partir dos títulos `##` dele. Mesma filosofia do mapa: o índi…

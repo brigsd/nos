@@ -1,0 +1,24 @@
+{
+  "_leia_primeiro": "Allowlist do tools/mapa/fatiar.mjs --conferir. Cada entrada excusa linha(s) do arquivo ORIGINAL da checagem de 'apareceu em alguma saída' — porque o fatiamento as altera DE PROPÓSITO, não porque o conteúdo se perdeu. Preenchida na Rodada 4a (a ferramenta) prevendo o fatiamento real de docs/oficina.md na Rodada 4b — até lá não é consumida por nenhum fatiamento de verdade. tipo 'linha': um número de linha exato. tipo 'bloco': tudo entre a primeira linha que casa 'inicio' e a primeira, depois dela, que casa 'fim' (inclusive as duas pontas). tipo 'padrao': toda linha do arquivo que casa a regex, onde quer que apareça. Todos os padrões/regex são JavaScript (new RegExp), sem flags. Se o arquivo NÃO tiver o campo 'arquivo', a entrada vale pra qualquer --conferir (nenhuma entrada hoje é assim).",
+  "entradas": [
+    {
+      "arquivo": "docs/oficina.md",
+      "tipo": "linha",
+      "linha": 1,
+      "motivo": "cabeçalho H1 original ('# A Oficina — editor de objetos dentro do jogo'); cada arquivo de saída do fatiamento recebe um cabeçalho H1 NOVO próprio — não é conteúdo perdido, é o cabeçalho de propósito de cada peça."
+    },
+    {
+      "arquivo": "docs/oficina.md",
+      "tipo": "bloco",
+      "inicio": "^<!-- TOC -->$",
+      "fim": "^<!-- /TOC -->$",
+      "motivo": "o bloco do índice (TOC) é gerado por tools/mapa/toc.mjs a partir dos títulos H2 do PRÓPRIO arquivo (ver skill oficina); cada saída do fatiamento regenera o seu, com seus próprios títulos — o índice velho não precisa sobreviver linha a linha."
+    },
+    {
+      "arquivo": "docs/oficina.md",
+      "tipo": "linha",
+      "linha": 3,
+      "motivo": "a premissa falsa 'Nada disso está construído ainda' (D-77→D-127 provam o contrário) — reescrita na Rodada 4b, não copiada pra nenhuma saída."
+    }
+  ]
+}
