@@ -83,6 +83,16 @@ export const PASSOS = [
      gigante no atlas"), só que POR ID (não por faixa inteira): como todo bloco
      de 11 ids CONSECUTIVOS (a largura do atlas) contém as duas paridades, NENHUMA
      linha do atlas pode ficar monocromática — prova por construção, não sorte. */
+  // BLOQUEADO: eu queria endereçar estes 4 pinceis por FAIXA+PARIDADE DE LADO do
+  // perfil (`sel.origem`, o mesmo mecanismo que uso em _galho.js pra não escrever
+  // id nenhum à mão), mas `sel.origem` só existe pra `loft` e `cubo` — a op `lathe`
+  // (motor/oficina.js, função `lathe(st,a,i)`) nunca chama `registraOrigem`, então
+  // não tem como declarar `origemId` no passo nem endereçar faixa/lado depois.
+  // Tentei contornar com `sel.regiao` (caixa por Y), mas o perfil tem um segmento
+  // FLAT no polo do pé (`[0,0]` -> `['pesR',0]`, os dois em y=0) que ocupa o MESMO
+  // y=0 do início do próximo segmento (`['pesR',0]` -> `['pesR','pesH']`) — uma
+  // caixa em Y não separa os dois sem também cortar o segundo ao meio. Não achei
+  // seleção honesta pra "faixa X, lado par/ímpar" quando o gerador é `lathe`.
   // pé + talo: madeira escura, 2 tons (faixas seg0..seg3 -> F 0..47)
   ['pincel', { modo: 'face', faces: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46], cor: '#9e4539' }],
   ['pincel', { modo: 'face', faces: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47], cor: '#7a3045' }],
@@ -92,11 +102,20 @@ export const PASSOS = [
   // cabeça: acento dourado, 2 tons (faixas seg7..seg8 -> F 84..107)
   ['pincel', { modo: 'face', faces: [84, 86, 88, 90, 92, 94, 96, 98, 100, 102, 104, 106], cor: '#f9c22b' }],
   ['pincel', { modo: 'face', faces: [85, 87, 89, 91, 93, 95, 97, 99, 101, 103, 105, 107], cor: '#fbb954' }],
+  // BLOQUEADO: eu queria dizer "faixas 1..7 do perfil" (todo o corpo arredondado,
+  // excluindo só os dois leques de polo) via `sel.origem`, pela mesma razão do
+  // bloco acima (`lathe` não registra origem). Também tentei `sel.regiao`: o topo
+  // (faixa 8, leque da cabeça) TEM y-range próprio (miocY=1.01 a topoY=1.09) e dava
+  // pra excluir por uma caixa com y máximo < 1.01 — mas a faixa 0 (leque do pé,
+  // achatada em y=0) some no MESMO y=0 do início da faixa 1 (a parede reta do pé),
+  // então não existe fronteira em Y que separe as duas sem cortar a faixa 1 junto.
+  // Não achei seleção honesta pra "intervalo de faixas" sem listar id à mão.
   // sombreado macio no CORPO arredondado (as faixas de anel, F 12..95) — os dois
   // leques de polo (F 0..11 pé, F 96..107 topo) ficam CHAPADOS, como as tampas do cilindro
   ['liso', { faces: [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95] }],
-  // o peão inteiro entra na colisão (como o _oficina-toco faz com o tronco)
-  ['solido', { faces: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107] }],
+  // o peão inteiro entra na colisão (como o _oficina-toco faz com o tronco) — `tudo:true`
+  // não depende de origem/faixa, funciona igual pra lathe e loft: todo vértice/face vivo.
+  ['solido', { sel: { tudo: true } }],
 ];
 
 export const meta = {

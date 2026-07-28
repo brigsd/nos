@@ -66,6 +66,7 @@ export const TOPO = { lados: 10 };
 export const PASSOS = [
   ['loft', {
     id: 0,
+    origemId: 0,   // registra a origem estrutural do loft — é o que permite endereçar por faixa/lado abaixo (sel.origem só existe pra `loft`/`cubo`, não pra `lathe` — ver _torno.js)
     lados: 'lados',
     secoes: [
       { pos: [0, 0, 0], raio: 0 },                        // polo: fecha a BASE (onde o galho nasceria do tronco)
@@ -79,24 +80,34 @@ export const PASSOS = [
   }],
 
   /* Cor por ZONA (metade grossa/escura, metade fina/clara), alternando 2 tons
-     POR PARIDADE de id DENTRO de cada zona — não um bloco chapado só. `cols`
-     do atlas (ceil(√60)=8) é MENOR que o tamanho de cada zona (30 faces),
-     então uma zona inteira de UMA cor só faria uma faixa do atlas ficar
-     monocromática e o crítico `detector-de-banding` acusa (a mesma manha do
-     `_torno.js`/`_espelhado.js`: como todo bloco de 8 ids CONSECUTIVOS — a
-     largura do atlas — contém as duas paridades, NENHUMA linha do atlas pode
-     ficar monocromática — prova por construção, não sorte). */
-  // zona A (base grossa: leque da base + 2 primeiros segmentos de anel -> F 0..29): casca escura, 2 tons
-  ['pincel', { modo: 'face', faces: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28], cor: '#9e4539' }],
-  ['pincel', { modo: 'face', faces: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29], cor: '#7a3045' }],
-  // zona B (metade fina: 2 últimos segmentos de anel + leque da ponta -> F 30..59): casca clara, 2 tons
-  ['pincel', { modo: 'face', faces: [30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58], cor: '#cd683d' }],
-  ['pincel', { modo: 'face', faces: [31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59], cor: '#e6904e' }],
-  // sombreado macio só no CORPO arredondado (os 4 segmentos de anel, F 10..49) — os dois
-  // leques de polo (F 0..9 base, F 50..59 ponta) ficam CHAPADOS, como as tampas do cilindro/torno
-  ['liso', { faces: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49] }],
+     POR PARIDADE DE LADO dentro de cada faixa — não um bloco chapado só (o
+     crítico `detector-de-banding` cobra, ver nota original abaixo). Endereçado
+     por `sel.origem`: cada faixa (0=leque base, 1..4=anéis, 5=leque ponta) é
+     um passo do CAMINHO do loft, e `lado:{passo:2,fase}` é a paridade DENTRO
+     da faixa — nenhum id de face escrito à mão. Zona A = faixas 0..2 (F 0..29,
+     base grossa); zona B = faixas 3..5 (F 30..59, metade fina). */
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 0, lado: { passo: 2, fase: 0 } } }, cor: '#9e4539' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 0, lado: { passo: 2, fase: 1 } } }, cor: '#7a3045' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 1, lado: { passo: 2, fase: 0 } } }, cor: '#9e4539' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 1, lado: { passo: 2, fase: 1 } } }, cor: '#7a3045' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 2, lado: { passo: 2, fase: 0 } } }, cor: '#9e4539' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 2, lado: { passo: 2, fase: 1 } } }, cor: '#7a3045' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 3, lado: { passo: 2, fase: 0 } } }, cor: '#cd683d' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 3, lado: { passo: 2, fase: 1 } } }, cor: '#e6904e' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 4, lado: { passo: 2, fase: 0 } } }, cor: '#cd683d' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 4, lado: { passo: 2, fase: 1 } } }, cor: '#e6904e' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 5, lado: { passo: 2, fase: 0 } } }, cor: '#cd683d' }],
+  ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 0, faixa: 5, lado: { passo: 2, fase: 1 } } }, cor: '#e6904e' }],
+  // sombreado macio só no CORPO arredondado — as faixas 1..4 (os 4 segmentos de anel), uma por
+  // passo (não há filtro de progressão que pegue {1,2,3,4} de dentro de 0..5 — é um INTERVALO, não
+  // uma paridade; o vocabulário só declara paridade sobre índice, não faixa/até). Os dois leques de
+  // polo (faixa 0 = base, faixa 5 = ponta) ficam CHAPADOS, como as tampas do cilindro/torno.
+  ['liso', { sel: { origem: { op: 'loft', id: 0, faixa: 1 } } }],
+  ['liso', { sel: { origem: { op: 'loft', id: 0, faixa: 2 } } }],
+  ['liso', { sel: { origem: { op: 'loft', id: 0, faixa: 3 } } }],
+  ['liso', { sel: { origem: { op: 'loft', id: 0, faixa: 4 } } }],
   // o galho inteiro entra na colisão (como o tronco do _oficina-toco e o corpo do _torno)
-  ['solido', { faces: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59] }],
+  ['solido', { sel: { tudo: true } }],
 ];
 
 export const meta = {
