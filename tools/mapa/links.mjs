@@ -87,6 +87,20 @@ for (const arquivo of rastreados) {
 const RECURSOS = 'docs/uso/RECURSOS.md';
 const MANIFESTO_EXCECOES = new Set([RECURSOS, 'docs/uso/MAPA.md']);
 
+/* Citar uma PASTA cobre o que está dentro dela. É o caso do
+   `docs/historico/legado/`: são 11 docs de uma era encerrada, e enumerá-los
+   um a um infla a porta de entrada com o que ninguém deve ler. O critério do
+   manifesto é "nada fica inalcançável", e um ponteiro pra pasta alcança.
+
+   É uma lista EXPLÍCITA, e não uma regra geral de "pasta citada cobre o
+   conteúdo", por duas armadilhas medidas: (1) o padrão de pasta casa o
+   prefixo de qualquer arquivo citado, então `docs/rumo/PLANO.md` isentaria
+   `docs/rumo/` inteira; (2) mesmo exigindo a pasta sozinha, o RECURSOS usa
+   `docs/uso/`, `docs/rumo/` e `docs/historico/` como TÍTULO de seção — e aí
+   as três se isentam e o manifesto vira no-op. Lista explícita não expande
+   sozinha. */
+const PASTAS_BLOCO = ['docs/historico/legado/'];
+
 const citadosNoRecursos = new Set();
 if (existsSync(path.join(REPO, RECURSOS))) {
   const texto = readFileSync(path.join(REPO, RECURSOS), 'utf8');
@@ -99,7 +113,9 @@ const semManifesto = [];
 if (existsSync(path.join(REPO, RECURSOS))) {
   for (const doc of todosDocsMd) {
     if (MANIFESTO_EXCECOES.has(doc)) continue;
-    if (!citadosNoRecursos.has(doc)) semManifesto.push(doc);
+    if (citadosNoRecursos.has(doc)) continue;
+    if (PASTAS_BLOCO.some((p) => doc.startsWith(p))) continue;
+    semManifesto.push(doc);
   }
 }
 
@@ -123,7 +139,8 @@ if (semManifesto.length) {
   console.error(`docs:links — ${semManifesto.length} doc(s) sob docs/ não citado(s) por ${RECURSOS}:`);
   for (const doc of semManifesto) console.error(`  ${doc} → falta citar em ${RECURSOS}`);
 } else {
-  console.log(`docs:links ok — todos os docs sob docs/ estão citados por ${RECURSOS} (${todosDocsMd.length - MANIFESTO_EXCECOES.size} exigidos).`);
+  const porPasta = todosDocsMd.filter((d) => !MANIFESTO_EXCECOES.has(d) && !citadosNoRecursos.has(d)).length;
+  console.log(`docs:links ok — todos os docs sob docs/ alcançáveis pelo ${RECURSOS} (${citadosNoRecursos.size} citados direto, ${porPasta} por pasta).`);
 }
 
 if (check && (falhas.length || semManifesto.length)) process.exit(1);

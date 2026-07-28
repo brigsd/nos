@@ -95,13 +95,13 @@ pt-BR) — sessão nova começa por ele e por este arquivo.
 - **`docs/rumo/VISION.md`** — o que o NÓS é e nunca será.
 - **`docs/rumo/FERRAMENTAS.md`** — o plano de potência das ferramentas (visão de longo prazo, quase nada construído ainda).
 - **`docs/rumo/AUDIO_E_CENAS.md`** — direção de música/voz/cenas — documento de direção, nada construído ainda.
-- **`docs/rumo/arquitetura-identidade-estavel.md`** — proposta arquitetural de identidade estável de objetos/subpartes entre frames; delimita o que a Fase 1 do `PLANO.md` prova em fixture antes de mudar o núcleo.
+- **`docs/rumo/arquitetura-identidade-estavel.md`** — proposta arquitetural de identidade estável de objetos e subpartes (origem + coordenada local + aliases), pra uma seleção sobreviver à edição da peça; é a hipótese que as fases do `PLANO.md` provam em fixture antes de mudar o núcleo.
 
 ### `docs/historico/` — o que se fez e o que se aprendeu (imutável)
 
 - **`docs/historico/DECISIONS.md`** — TODAS as decisões (índice + detalhe das ativas).
 - **`docs/historico/DECISIONS-ARCHIVE.md`** — o detalhe das decisões arquivadas (D-01…D-54); só movido pra desafogar o registro principal.
-- **`docs/historico/playground.md`** — o ÉPICO ativo (D-113): fechar o vocabulário + forma-como-número + a camada IA de laço único, fechado exceto a Aba Desenho.
+- **`docs/historico/playground.md`** — o épico (D-113) que fechou o vocabulário + forma-como-número + a camada IA de laço único — ENCERRADO, exceto a Aba Desenho.
 - **`docs/historico/TETO.md`** — o experimento que mediu onde o vocabulário da Oficina parava (3 corridas), encerrado.
 - **`docs/historico/diagnostico-subpartes-semanticas.md`** — diagnóstico das referências literais de face da moto antes da seleção semântica — medição de estado passado + recomendação.
 - **`docs/historico/teto-moto-relatorio.md`** — relatório de execução da 1ª corrida da moto no TETO.
@@ -114,18 +114,7 @@ pt-BR) — sessão nova começa por ele e por este arquivo.
 - **`docs/historico/fixture-identidade-apaga-relatorio.md`** — prova de identidade estrutural ao apagar (Fase 3).
 - **`docs/historico/proveniencia-local-fixture.md`** — fixture de proveniência local de loft.
 - **`docs/historico/walkthrough_colaborador4.md`** — resumo de alterações de uma branch antiga de colaborador, sobre o protótipo FPS v3.
-- **`docs/historico/legado/`** — os docs d'O Coração (o mundo 2D congelado, D-109/D-111) — leitura histórica. Arquivo a arquivo:
-  - **`docs/historico/legado/README.md`** — o índice do legado, ponto de entrada.
-  - **`docs/historico/legado/ARCHITECTURE.md`** — a arquitetura técnica d'O Coração.
-  - **`docs/historico/legado/CIDADE.md`** — a Clareira, a cidade do mundo 2D.
-  - **`docs/historico/legado/CODER.md`** — a bancada do coder daquela era (D-35).
-  - **`docs/historico/legado/COMUNICACAO.md`** — protocolo ideador↔coder de identificação de objetos/áreas (D-33).
-  - **`docs/historico/legado/CONTINUITY.md`** — o registro de "onde paramos" d'O Coração.
-  - **`docs/historico/legado/GDD.md`** — o Game Design Document d'O Coração.
-  - **`docs/historico/legado/HABITANTES.md`** — proposta de mentes que jogam o jogo.
-  - **`docs/historico/legado/IMPLEMENTATION_PLAN.md`** — o plano de implementação d'O Coração.
-  - **`docs/historico/legado/PORTALS_PROTOCOL.md`** — o protocolo dos portais (R6).
-  - **`docs/historico/legado/walkthrough_colaborador2.md`** — resumo de alterações de outra branch antiga de colaborador.
+- **`docs/historico/legado/`** — os 11 docs d'O Coração (o mundo 2D congelado, D-109/D-111) — leitura histórica; o `README.md` de lá é o ponto de entrada.
 
 ### Fora das três pastas — deliberadamente
 
