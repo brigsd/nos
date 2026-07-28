@@ -34,3 +34,6 @@ jobs:
 
       - name: Índice da oficina em dia
         run: npm run docs:toc:check
+
+      - name: Referências a docs/*.md resolvem
+        run: npm run docs:links:check

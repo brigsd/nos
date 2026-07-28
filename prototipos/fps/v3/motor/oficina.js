@@ -53,7 +53,7 @@ function normalDaFace(V, vs) {
    saída sempre — não pretende ser aleatório de verdade, só parecer). `ruido3` amostra
    os 8 cantos do RETICULADO que envolve o ponto e interpola por smoothstep (suave, sem
    quina em cada célula do reticulado) — é "value noise" clássico, devolve sempre
-   [0,1). FORMATO SALVO (docs/playground.md regra 4): a fórmula em si é o que faz o
+   [0,1). FORMATO SALVO (docs/historico/playground.md regra 4): a fórmula em si é o que faz o
    `displace` de uma peça salva reproduzir o mesmo relevo sempre — mudar hash3/ruido3
    reformaria toda peça que usa `displace`, como renumerar mudaria a malha. */
 function hash3(x, y, z, seed) { const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + seed * 269.5) * 43758.5453123; return s - Math.floor(s); }
@@ -442,7 +442,7 @@ export const OPS = {
   },
 
   /* ---- P1 do playground: esfera / cone / plano — geradores novos, mesmas leis ----
-     NUMERAÇÃO É FORMATO SALVO (docs/playground.md, regra 4): a numeração de vértice
+     NUMERAÇÃO É FORMATO SALVO (docs/historico/playground.md, regra 4): a numeração de vértice
      e de face de cada op abaixo está documentada AQUI e travada por teste — depois
      de shipada, NUNCA muda (peça salva depende dela). Winding sempre com a normal
      pra FORA (a convenção do cubo/cilindro — a lição D1 das tampas). Guarda de
@@ -755,7 +755,7 @@ export const OPS = {
      doc citava): `perfil` já é do `lathe` com outra FORMA (`[raio,y]` 2D);
      reusar o nome confundiria os dois.
 
-     CONTORNO explícito (P5, docs/playground.md) — substitui `raio` por
+     CONTORNO explícito (P5, docs/historico/playground.md) — substitui `raio` por
      `contorno: [[u,w], ...]` com EXATAMENTE `lados` pontos no plano LOCAL do
      anel (os eixos `fr.u`/`fr.w` do transporte paralelo, o mesmo `ca,sa` que
      o círculo calculava de `cos/sin·raio`) — destrava seção NÃO-circular
@@ -824,7 +824,7 @@ export const OPS = {
        de caminho reto; o loft generaliza pro caminho curvo.
 
      ⚠ CAMINHO SIMÉTRICO **NÃO** GERA MALHA SIMÉTRICA (D-128, achado pelo
-     experimento do TETO — docs/TETO.md). Consequência direta do transporte
+     experimento do TETO — docs/historico/TETO.md). Consequência direta do transporte
      paralelo descrito acima: o frame de cada anel é PROPAGADO a partir da
      PRIMEIRA seção, então ele depende do HISTÓRICO do caminho, não só da
      posição da seção. Um caminho cujos `pos` são simétricos em torno de um
@@ -1331,7 +1331,7 @@ export const OPS = {
   },
 
   /* ---- P3 do playground: espelha + rotaciona — as duas transformam uma SELEÇÃO,
-     mas de jeitos opostos (docs/playground.md): `rotaciona` é SIMPLES (só move
+     mas de jeitos opostos (docs/historico/playground.md): `rotaciona` é SIMPLES (só move
      posição, nunca cria id); `espelha` é MEATY (duplica a seleção refletida,
      ids NOVOS — formato salvo). Juntas destravam objeto bilateral (metade
      modelada + espelho vira o todo; uma parte pode nascer torta/rodada). ---- */
@@ -1341,7 +1341,7 @@ export const OPS = {
      em POSIÇÃO (`st.V.set` in-place) — NUNCA cria vértice/face, NUNCA renumera,
      NÃO consome o bloco de ids do passo. Determinístico (só soma).
 
-     POR QUE ELA EXISTE (D-128, o achado do experimento do TETO — docs/TETO.md):
+     POR QUE ELA EXISTE (D-128, o achado do experimento do TETO — docs/historico/TETO.md):
      o vocabulário sabia GIRAR a malha inteira (`rotaciona` com `sel` ausente)
      mas não sabia TRANSLADAR nada maior que UMA face — `moveV` move 1 vértice,
      `moveF` 1 face, `moveA` 1 aresta. E das 9 primitivas, 7 nascem PRESAS à
