@@ -131,6 +131,25 @@ A peça deve nascer sem listas grandes de IDs e depois receber críticas de refi
 
 **Critério de saída:** um agente limpo consegue criar e outro consegue refinar.
 
+**Rodada feita (D-140), veredito PARCIAL.** A corrida existia numa branch parada e
+foi resgatada: `pecas/drone-inspecao.js` — 93 passos, 20 origens, 22 partes,
+**0 ids literais**, 0 órfãos —, criada por um agente limpo e depois **refinada por
+crítica sem regenerar**, preservando origens, nomes e parâmetros. Relatórios em
+[`fase4-drone-inspecao-criacao-relatorio.md`](../historico/fase4-drone-inspecao-criacao-relatorio.md)
+e [`fase4-drone-inspecao-refino-relatorio.md`](../historico/fase4-drone-inspecao-refino-relatorio.md).
+
+O critério técnico foi cumprido; o veredito não é APROVADO porque `auditar` reprova
+(banding + desvio de paleta) e não havia gabarito de silhueta. **O que a rodada
+achou e ainda não foi resolvido:** (1) o motor não publica `origemId` para
+`cilindro` — o mesmo buraco do `lathe`, achado de novo e às cegas pela Fase 3.5;
+(2) uma classe de defeito que **nenhum gate vê**: um nome agregado pode resolver
+menos do que promete (`rotoresDianteiros` resolvia uma pá só, com tudo verde). Os
+gates conferem se a referência EXISTE, nunca se o nome SIGNIFICA o que diz.
+
+A fase segue ABERTA: falta uma corrida com a peça nascendo já sob o vocabulário da
+Fase 3.5 (`tudo`/coluna/padrão), e uma medição do eixo EXPRESSAR — âncoras,
+posicionamento relativo e reuso —, que a D-139 apontou como o gargalo maior.
+
 ## Fase 5 — Moto nova por imagens de referência
 
 Um agente limpo receberá imagens de uma moto diferente da atual: lateral; frente; traseira; vista 3/4. Ele não poderá ler nem copiar a moto antiga.

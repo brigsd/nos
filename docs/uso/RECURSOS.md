@@ -116,6 +116,8 @@ pt-BR) — sessão nova começa por ele e por este arquivo.
 - **`docs/historico/fixture-identidade-espelho-relatorio.md`** — prova de identidade estrutural sob `espelha` (Fase 3), experimental.
 - **`docs/historico/fixture-identidade-apaga-relatorio.md`** — prova de identidade estrutural ao apagar (Fase 3).
 - **`docs/historico/proveniencia-local-fixture.md`** — fixture de proveniência local de loft.
+- **`docs/historico/fase4-drone-inspecao-criacao-relatorio.md`** — corrida de CRIAÇÃO da Fase 4: um agente limpo cria o drone do zero, 0 ids literais. Veredito PARCIAL.
+- **`docs/historico/fase4-drone-inspecao-refino-relatorio.md`** — corrida de REFINO da mesma peça por crítica, editando sem regenerar. Medições antes/depois. Veredito PARCIAL.
 - **`docs/historico/walkthrough_colaborador4.md`** — resumo de alterações de uma branch antiga de colaborador, sobre o protótipo FPS v3.
 - **`docs/historico/legado/`** — os 11 docs d'O Coração (o mundo 2D congelado, D-109/D-111) — leitura histórica; o `README.md` de lá é o ponto de entrada.
 

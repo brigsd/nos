@@ -1,5 +1,5 @@
 {
-  "hashTotal": "eb57f7e25c666d45e0ff7d49b87d69b259d6bb8493c08e812b0f4f09836a10b6",
+  "hashTotal": "9567e0089781b70b4ce9f4a1d9319aa1d1a7089f59449d5e298a5774627f29d8",
   "pecas": {
     "_corpo": {
       "hash": "7d27db600d985a54700b89303ab112dad9f72fa47e0ad45711c0d4508de63023",
@@ -70,6 +70,11 @@
       "hash": "8543e26be33701d096b606fc5ed24ac301aa46aa6b713c1fae9adcbc0c080de3",
       "vertices": 178,
       "faces": 166
+    },
+    "drone-inspecao": {
+      "hash": "7db1f6eb1438be74b1389b27407da948b1cc486ecfce9e51010842fccfba4022",
+      "vertices": 228,
+      "faces": 174
     },
     "moto": {
       "hash": "13fdc7f2f507e237fcf63b793303ecc59f13fa7275d6fe97e3545215bdcb281a",
