@@ -298,6 +298,7 @@ sel: { v: [ids] }                         // vértices literais
 sel: { grupo: 'nome-da-parte' }           // faces já nomeadas por `parte`
 sel: { regiao: { min:[x,y,z], max:[x,y,z] } }
 sel: { origem: { op:'loft', id:1000, faixa?:2, lado?:1 } }
+sel: { origem: { op:'loft', id:1000, lado:{passo:2, fase:0} } }   // filtro de progressão (Rodada C)
 sel: { origem: { op:'cubo', id:30, face?:'topo' } }
 ```
 
@@ -342,17 +343,56 @@ inclusive entre geradores, grita e permanece ambígua. Em `loft`,
 dentro da faixa) — e **os dois são opcionais** (D-130, Rodada A da Fase 3.5),
 com a mesma semântica: ausente = "todos" nesse eixo.
 
+**Filtro de progressão `{passo, fase}` (D-130, Rodada C da Fase 3.5):** cada
+eixo (`faixa` e `lado`) aceita, além de inteiro e de ausente, um filtro que
+seleciona vários índices de uma vez — o índice `k` do eixo entra se
+`k % passo === fase`. Nasceu de uma medição: 18,6% dos ids escritos à mão
+numa peça real (a moto) eram progressões de passo 2 (`0,2,4,…` /`1,3,5,…`)
+porque o `detector-de-banding` exige tom alternado entre faces vizinhas e a
+linguagem não tinha como dizer "alternado" — a IA já fazia essa aritmética na
+mão; agora ela declara.
+
+```js
+sel: { origem: { op:'loft', id:1000, lado: {passo:2, fase:0} } }   // lados pares, em todas as faixas
+sel: { origem: { op:'loft', id:1000, lado: {passo:2, fase:1} } }   // lados ímpares
+sel: { origem: { op:'loft', id:1000, faixa: {passo:3, fase:0} } }  // cada terceiro anel
+```
+
+`passo` é inteiro `≥ 1`; `fase` é inteiro em `[0, passo)`; fora disso, tipo
+errado (string, fracionário) ou um dos dois faltando (`{passo:2}` sozinho,
+`{fase:0}` sozinho) **GRITA** — não assume `fase:0` por padrão, o mesmo
+princípio fail-closed do `tudo:true` (D-129): a palavra tem que ser explícita
+por inteiro, nunca adivinhada de um objeto pela metade. `{passo:1, fase:0}` é
+a identidade (todos os índices) — é a checagem de sanidade do vocabulário, e
+está travada por teste. Os dois eixos compõem exatamente como já compunham
+com inteiro/ausente: `{lado:{passo:2,fase:0}}` sem `faixa` é "os lados pares
+de todas as faixas"; `{faixa:{passo:2,fase:0}, lado:1}` é "o lado 1 de cada
+faixa par". **Um validador/resolvedor ÚNICO de eixo é compartilhado pelos
+dois campos** (não duplica a lógica de `faixa` pra `lado`).
+
+**Armadilha, vale sempre que este vocabulário for citado:** paridade sobre
+ÍNDICE só é válida onde a conectividade é REGULAR. É o caso aqui e só aqui —
+os eixos de `sel.origem` SÃO a grade regular do próprio gerador. **Não
+estenda isto** para `sel.f` (lista de ids quaisquer, sem grade) nem para ids
+globais (sem eixo nenhum). O `cubo` não recebe filtro — a `face` dele é
+NOMINAL (`fundo`, `topo`, …), não um eixo numérico.
+
 | seleção | significa |
 |---|---|
 | `{faixa:2}` | o anel 2 (todas as faces daquela faixa) |
 | `{faixa:2, lado:1}` | uma face só |
 | `{lado:1}` (sem `faixa`) | a **coluna** 1 — uma face por faixa, no mesmo lado |
 | `{}` (nem faixa nem lado) | todas as faces laterais da origem inteira |
+| `{lado:{passo:2,fase:0}}` | os lados pares de todas as faixas |
+| `{faixa:{passo:2,fase:0}}` | as faixas pares inteiras |
+| `{faixa:{passo:2,fase:0}, lado:{passo:2,fase:1}}` | lados ímpares só nas faixas pares |
 
 Não há tampas. Faixa sem face lateral (segmento degenerado polo-polo) é
-PULADA na união e na coluna; `lado` fora do limite em **qualquer** faixa
-não-vazia GRITA o passo inteiro, nunca seleciona parcial; se a união de
-todas as faixas não render face nenhuma, GRITA (fail-closed). Em `cubo`,
+PULADA na união, na coluna e no filtro; `lado` fora do limite em **qualquer**
+faixa não-vazia (inteiro) GRITA o passo inteiro, nunca seleciona parcial; um
+filtro de progressão que não casa **nenhum** índice também GRITA (seleção
+vazia, nunca no-op) — em qualquer um dos dois eixos; se a união de todas as
+faixas não render face nenhuma, GRITA (fail-closed). Em `cubo`,
 `op:'cubo'` + `id:30` usa uma única `face` local, também **opcional**
 (mesma rodada): `fundo` (-y), `topo` (+y), `tras` (-z), `direita` (+x),
 `frente` (+z) ou `esquerda` (-x) — e ausente = as 6 faces (pulando as que já

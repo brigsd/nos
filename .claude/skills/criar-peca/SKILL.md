@@ -85,10 +85,24 @@ anel local zero-based; `{faixa,lado}` é uma face só; `{lado}` sem `faixa` é a
 **coluna** (uma face por faixa, no mesmo lado — pula faixa sem lateral, e
 lado fora do limite em qualquer faixa GRITA sem selecionar parcial); `{}` é
 toda a origem (a união de todas as faixas; se nenhuma render face, GRITA).
-Sem tampas. No cubo, `sel:{origem:{op:'cubo',id,face?}}` — `face` também
-opcional: ausente = as 6 faces (pulando as já removidas por `apagaFace`; se
-nenhuma sobrar, GRITA). Essa proveniência é reconstruída no núcleo, não
-entra no canônico; `id` posicional do PASSO não ganha novo significado.
+**Cada eixo também aceita um FILTRO DE PROGRESSÃO `{passo,fase}`** (D-130,
+Rodada C da Fase 3.5) — o índice `k` daquele eixo entra se
+`k%passo===fase`: `{lado:{passo:2,fase:0}}` são os lados pares de toda faixa,
+`{lado:{passo:2,fase:1}}` os ímpares, `{faixa:{passo:3,fase:0}}` cada
+terceiro anel. `passo` inteiro `≥1`, `fase` inteiro em `[0,passo)`, **os dois
+juntos sempre** (`{passo:2}` sozinho GRITA — não assume `fase:0`); fora disso
+GRITA. `{passo:1,fase:0}` é a identidade (todos). É a forma de dizer
+"alternado" sem listar `[0,2,4,…]` à mão — nasceu de medir que 18,6% dos ids
+de uma peça real eram exatamente essa progressão, escrita pra satisfazer o
+`detector-de-banding`. **Só vale aqui**: paridade sobre índice exige
+conectividade REGULAR, e os eixos de `sel.origem` são a única grade regular
+do vocabulário — não estenda para `sel.f` nem ids globais. **O `cubo` NÃO
+recebe filtro** — a `face` dele é nominal (`fundo`/`topo`/…), não um eixo
+numérico. Sem tampas. No cubo, `sel:{origem:{op:'cubo',id,face?}}` — `face`
+também opcional: ausente = as 6 faces (pulando as já removidas por
+`apagaFace`; se nenhuma sobrar, GRITA). Essa proveniência é reconstruída no
+núcleo, não entra no canônico; `id` posicional do PASSO não ganha novo
+significado.
 Campos `v`, `f`, `grupo` e `regiao` podem coexistir e se unem. Em operações
 de FACE (`pincel` face, `liso`,
 `material`, `solido`, `parte`, `espelha`), `v` significa faces incidentes e

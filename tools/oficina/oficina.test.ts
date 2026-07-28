@@ -2619,6 +2619,99 @@ describe('D-130 (Rodada A) — sel.origem com faixa opcional (loft) e face opcio
   });
 });
 
+/* D-130 (Fase 3.5, Rodada C) — o filtro de progressão `{passo,fase}` nos dois
+   eixos de sel.origem do loft. `lados:4`, 5 seções → 4 faixas de 4 lados cada
+   (faixa0=[0..3], faixa1=[4..7], faixa2=[8..11], faixa3=[12..15]). */
+describe('D-130 (Rodada C) — filtro de progressão {passo,fase} nos eixos de sel.origem (loft)', () => {
+  const secoes = [0, 1, 2, 3, 4].map((y) => ({ pos: [0, y, 0], raio: 1 }));
+  const loft = (id: number, origemId = 1000): any => ['loft', { id, origemId, lados: 4, secoes }];
+  const pintaOrigem = (extra: any = {}): any => ['pincel', { modo: 'face', sel: { origem: { op: 'loft', id: 1000, ...extra } }, cor: '#123456' }];
+  const pintados = (n: any) => [...n.F.values()].filter((f: any) => f.cor === '#123456').map((f: any) => f.id).sort((a: number, b: number) => a - b);
+
+  it('lado pares e ímpares (sem faixa) batem byte a byte com a lista manual', () => {
+    const pares = nucleo([loft(0), pintaOrigem({ lado: { passo: 2, fase: 0 } })], {}, {});
+    expect(pares.orfaos).toHaveLength(0);
+    expect(pintados(pares)).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+    const paresLegado = nucleo([loft(0), ['pincel', { modo: 'face', faces: [0, 2, 4, 6, 8, 10, 12, 14], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(pares))).toBe(JSON.stringify(neutroCanonico(paresLegado)));
+
+    const impares = nucleo([loft(0), pintaOrigem({ lado: { passo: 2, fase: 1 } })], {}, {});
+    expect(impares.orfaos).toHaveLength(0);
+    expect(pintados(impares)).toEqual([1, 3, 5, 7, 9, 11, 13, 15]);
+    const imparesLegado = nucleo([loft(0), ['pincel', { modo: 'face', faces: [1, 3, 5, 7, 9, 11, 13, 15], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(impares))).toBe(JSON.stringify(neutroCanonico(imparesLegado)));
+  });
+
+  it('faixa pares e ímpares (sem lado) batem byte a byte com a lista manual', () => {
+    const pares = nucleo([loft(0), pintaOrigem({ faixa: { passo: 2, fase: 0 } })], {}, {});
+    expect(pintados(pares)).toEqual([0, 1, 2, 3, 8, 9, 10, 11]);
+    const impares = nucleo([loft(0), pintaOrigem({ faixa: { passo: 2, fase: 1 } })], {}, {});
+    expect(pintados(impares)).toEqual([4, 5, 6, 7, 12, 13, 14, 15]);
+  });
+
+  it('{passo:1, fase:0} é a identidade — todos os índices, nos dois eixos', () => {
+    const porLado = nucleo([loft(0), pintaOrigem({ lado: { passo: 1, fase: 0 } })], {}, {});
+    expect(pintados(porLado)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    const porFaixa = nucleo([loft(0), pintaOrigem({ faixa: { passo: 1, fase: 0 } })], {}, {});
+    expect(pintados(porFaixa)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    const semNada = nucleo([loft(0), pintaOrigem()], {}, {});
+    expect(JSON.stringify(neutroCanonico(porLado))).toBe(JSON.stringify(neutroCanonico(semNada)));
+  });
+
+  it('filtro malformado GRITA: passo 0/negativo/fracionário, fase negativa/≥passo, tipo errado, chave faltando', () => {
+    const casos: any[] = [
+      { passo: 0, fase: 0 }, { passo: -1, fase: 0 }, { passo: 1.5, fase: 0 },
+      { passo: 2, fase: -1 }, { passo: 2, fase: 2 }, { passo: 2, fase: 3 },
+      { passo: '2', fase: 0 }, { passo: 2 }, { fase: 0 },
+    ];
+    for (const lado of casos) {
+      const n = nucleo([loft(0), pintaOrigem({ lado })], {}, {});
+      expect(n.orfaos.some((o: any) => o.op === 'pincel')).toBe(true);
+      expect([...n.F.values()].some((f: any) => f.cor === '#123456')).toBe(false);
+    }
+    // o mesmo malformado no eixo faixa também GRITA (o validador é único, compartilhado pelos dois eixos)
+    for (const faixa of casos) {
+      const n = nucleo([loft(0), pintaOrigem({ faixa })], {}, {});
+      expect(n.orfaos.some((o: any) => o.op === 'pincel')).toBe(true);
+      expect([...n.F.values()].some((f: any) => f.cor === '#123456')).toBe(false);
+    }
+  });
+
+  it('filtro que não casa nenhum índice GRITA (seleção vazia, nunca no-op)', () => {
+    // eixo lado tem 4 índices (0..3): passo 5, fase 4 nunca casa
+    const nLado = nucleo([loft(0), pintaOrigem({ lado: { passo: 5, fase: 4 } })], {}, {});
+    expect(nLado.orfaos.some((o: any) => o.op === 'pincel' && /não casa nenhum índice/.test(o.motivo))).toBe(true);
+    expect(pintados(nLado)).toEqual([]);
+    // eixo faixa tem 4 índices (0..3): mesmo filtro
+    const nFaixa = nucleo([loft(0), pintaOrigem({ faixa: { passo: 5, fase: 4 } })], {}, {});
+    expect(nFaixa.orfaos.some((o: any) => o.op === 'pincel' && /não casa nenhum índice/.test(o.motivo))).toBe(true);
+    expect(pintados(nFaixa)).toEqual([]);
+  });
+
+  it('composição com a Rodada A: filtro em lado sem faixa, filtro em faixa sem lado, e os dois juntos', () => {
+    // filtro em lado sem faixa já coberto acima; aqui confirma que é a MESMA coisa
+    // que a coluna generalizada (Rodada A) — testado junto com faixa explícita:
+    const soFaixa2 = nucleo([loft(0), pintaOrigem({ faixa: 2, lado: { passo: 2, fase: 0 } })], {}, {});
+    expect(pintados(soFaixa2)).toEqual([8, 10]); // faixa2=[8..11], lados pares dela
+
+    // os dois eixos filtrados ao mesmo tempo: faixas pares × lados ímpares
+    const cruzado = nucleo([loft(0), pintaOrigem({ faixa: { passo: 2, fase: 0 }, lado: { passo: 2, fase: 1 } })], {}, {});
+    expect(pintados(cruzado)).toEqual([1, 3, 9, 11]); // faixa0 lado{1,3} + faixa2 lado{1,3}
+  });
+
+  it('composição com {tudo:true} da Rodada B: união é consistente — tudo já cobre o filtro, sem erro nem duplicata', () => {
+    const n = nucleo([loft(0), ['pincel', { modo: 'face', sel: { tudo: true, origem: { op: 'loft', id: 1000, lado: { passo: 2, fase: 0 } } }, cor: '#123456' }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(pintados(n)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]); // igual a {tudo:true} sozinho
+  });
+
+  it('cubo continua SEM filtro: {passo,fase} na face do cubo GRITA (eixo nominal, não numérico)', () => {
+    const n = nucleo([['cubo', { id: 0, origemId: 30, lado: 1 }], ['pincel', { modo: 'face', sel: { origem: { op: 'cubo', id: 30, face: { passo: 2, fase: 0 } as any } }, cor: '#123456' }]], {}, {});
+    expect(n.orfaos.some((o: any) => o.op === 'pincel')).toBe(true);
+    expect([...n.F.values()].some((f: any) => f.cor === '#123456')).toBe(false);
+  });
+});
+
 describe('Fase 2 — fixture de aliases estáveis de loft', () => {
   const ctx = { tex: { texCanvas: (w: number, h: number) => ({ width: w, height: h }) }, m4: { ident: () => new Float32Array(16) } };
   const secoes = [0, 1, 2, 3].map((y) => ({ pos: [0, y, 0], raio: 1 }));

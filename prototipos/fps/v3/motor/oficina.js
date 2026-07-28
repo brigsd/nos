@@ -150,6 +150,48 @@ function origensIguais(a, b) {
   const ka = Object.keys(a), kb = Object.keys(b);
   return ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k) && origensIguais(a[k], b[k]));
 }
+/* Fase 3.5, Rodada C: o validador/resolvedor ÚNICO de EIXO — usado nos dois
+   eixos do loft (`faixa` e `lado`), pra não duplicar a lógica. Um eixo aceita
+   três formas: AUSENTE (todos os índices), um INTEIRO (um índice só) ou um
+   FILTRO DE PROGRESSÃO `{passo,fase}` (o índice `k` casa se `k%passo===fase`
+   — `{passo:1,fase:0}` é a identidade, todos os índices). A medição que abriu
+   esta rodada (docs/rumo/... / PLANO da Fase 3.5) achou 18,6% dos ids da moto
+   em progressões de passo 2 escritas à mão (`0,2,4,…`) porque o gate
+   `detector-de-banding` exige tom alternado e a linguagem não sabia dizer
+   "alternado" — a progressão é o MESMO mecanismo que a IA já executava na
+   mão, só que agora declarado uma vez em vez de expandido em lista.
+
+   DECISÃO: `{passo:2}` sem `fase` (ou `{fase:0}` sem `passo`) GRITA — não
+   assume `fase:0` por padrão. É o mesmo princípio do `tudo:true` (D-129):
+   fail-closed prefere obrigar a palavra explícita a adivinhar em silêncio o
+   que a IA quis dizer; um objeto pela metade quase sempre é descuido, não
+   intenção, e assumir 0 esconderia esse descuido.
+
+   ARMADILHA (documentar sempre que este vocabulário for citado): paridade
+   sobre ÍNDICE só é válida onde a conectividade é REGULAR. É o caso aqui e só
+   aqui — os eixos de `sel.origem` SÃO a grade regular do próprio gerador
+   (`faixa`/`lado` do loft). Não estender isto para `sel.f` (lista de ids
+   quaisquer, sem grade) nem para ids globais (que não têm eixo nenhum). */
+function validarEixo(valor) {
+  if (valor == null) return true;
+  if (Number.isSafeInteger(valor) && valor >= 0) return true;
+  if (valor && typeof valor === 'object' && !Array.isArray(valor)) {
+    const chaves = Object.keys(valor);
+    if (chaves.length === 2 && chaves.includes('passo') && chaves.includes('fase')) {
+      const { passo, fase } = valor;
+      return Number.isSafeInteger(passo) && passo >= 1 && Number.isSafeInteger(fase) && fase >= 0 && fase < passo;
+    }
+  }
+  return false;
+}
+// índices de 0..tamanho-1 que casam com um eixo já validado (null=todos, inteiro=um só, {passo,fase}=progressão)
+function indicesEixo(valor, tamanho) {
+  if (valor == null) { const r = []; for (let k = 0; k < tamanho; k++) r.push(k); return r; }
+  if (typeof valor === 'number') return valor < tamanho ? [valor] : [];
+  const { passo, fase } = valor;
+  const r = []; for (let k = 0; k < tamanho; k++) if (k % passo === fase) r.push(k); return r;
+}
+
 const CONTRATOS_ORIGEM = {
   loft: {
     /* Fase 3.5, Rodada A: `faixa` era obrigatória — agora é opcional com a MESMA
@@ -159,41 +201,58 @@ const CONTRATOS_ORIGEM = {
        no mesmo lado); `{}` = todas as faces laterais da origem inteira. É
        ADITIVO: `faixa` ausente hoje GRITAVA, então nenhuma peça existente usa
        essa forma — a Prova Zero (`gabarito:selecao`) mede isso, não a
-       argumentação. */
+       argumentação.
+
+       Rodada C: cada eixo (`faixa`, `lado`) aceita também o filtro de
+       progressão `{passo,fase}` — ver `validarEixo`/`indicesEixo` acima. */
     validar(origem) {
       const chaves = ['op', 'id', 'faixa', 'lado'];
-      const msg = 'loft usa op, id, faixa opcional e lado opcional, os dois inteiros não-negativos';
+      const msg = 'loft usa op, id, faixa opcional e lado opcional — cada eixo aceita inteiro não-negativo, ausente (todos), ou filtro de progressão {passo,fase} (passo inteiro ≥1, fase inteira em [0,passo), os dois obrigatórios juntos)';
       if (!Object.keys(origem).every((k) => chaves.includes(k))) return msg;
-      if (origem.faixa != null && (!Number.isSafeInteger(origem.faixa) || origem.faixa < 0)) return msg;
-      if (origem.lado != null && (!Number.isSafeInteger(origem.lado) || origem.lado < 0)) return msg;
+      if (!validarEixo(origem.faixa)) return msg;
+      if (!validarEixo(origem.lado)) return msg;
       return null;
     },
     resolver(_st, registro, origem) {
-      if (origem.faixa != null) {
-        const faixa = registro.faixas[origem.faixa];
-        if (!faixa) return { erro: `faixa ${origem.faixa} fora do limite da origem loft:${origem.id}` };
-        if (!faixa.length) return { erro: `faixa ${origem.faixa} da origem loft:${origem.id} não tem faces laterais` };
-        if (origem.lado != null && origem.lado >= faixa.length) return { erro: `lado ${origem.lado} fora do limite da faixa ${origem.faixa} (0..${faixa.length - 1})` };
-        return { faces: origem.lado == null ? faixa : [faixa[origem.lado]] };
-      }
-      if (!registro.faixas.length) return { erro: `origem loft:${origem.id} não tem faixas` };
-      if (origem.lado != null) {
-        // a COLUNA: uma face por faixa, no mesmo `lado`. Faixa vazia (segmento
-        // degenerado polo-polo) é PULADA; lado fora do limite em qualquer
-        // faixa NÃO-vazia GRITA o passo inteiro — nunca seleciona parcial.
-        const faces = [];
-        for (const faixa of registro.faixas) {
-          if (!faixa.length) continue;
-          if (origem.lado >= faixa.length) return { erro: `lado ${origem.lado} fora do limite em alguma faixa da origem loft:${origem.id} (0..${faixa.length - 1}) — a coluna exige lado válido em toda faixa não-vazia` };
-          faces.push(faixa[origem.lado]);
+      const totalFaixas = registro.faixas.length;
+      if (!totalFaixas) return { erro: `origem loft:${origem.id} não tem faixas` };
+      const faixaExplicita = typeof origem.faixa === 'number';
+      let faixaIdx;
+      if (origem.faixa == null || typeof origem.faixa === 'object') {
+        faixaIdx = indicesEixo(origem.faixa, totalFaixas);
+        if (typeof origem.faixa === 'object' && !faixaIdx.length) {
+          const { passo, fase } = origem.faixa;
+          return { erro: `filtro de faixa {passo:${passo},fase:${fase}} não casa nenhum índice em 0..${totalFaixas - 1} na origem loft:${origem.id}` };
         }
-        if (!faces.length) return { erro: `origem loft:${origem.id} não tem nenhuma faixa com face lateral` };
-        return { faces };
+      } else {
+        if (origem.faixa >= totalFaixas) return { erro: `faixa ${origem.faixa} fora do limite da origem loft:${origem.id}` };
+        faixaIdx = [origem.faixa];
       }
-      // nem faixa nem lado: TODAS as faces laterais (a união de toda faixa).
+
+      const ladoExplicito = typeof origem.lado === 'number';
       const faces = [];
-      for (const faixa of registro.faixas) faces.push(...faixa);
-      if (!faces.length) return { erro: `origem loft:${origem.id} não tem nenhuma face lateral` };
+      for (const fi of faixaIdx) {
+        const faixa = registro.faixas[fi];
+        if (!faixa.length) {
+          // faixa degenerada (segmento polo-polo, sem face lateral): explícita
+          // GRITA sempre; em união/coluna/filtro é PULADA — nunca escolhida sozinha.
+          if (faixaExplicita) return { erro: `faixa ${fi} da origem loft:${origem.id} não tem faces laterais` };
+          continue;
+        }
+        if (origem.lado == null) { faces.push(...faixa); continue; }
+        if (ladoExplicito) {
+          if (origem.lado >= faixa.length) return { erro: `lado ${origem.lado} fora do limite da faixa ${fi} da origem loft:${origem.id} (0..${faixa.length - 1})` };
+          faces.push(faixa[origem.lado]);
+        } else {
+          const idxLado = indicesEixo(origem.lado, faixa.length);
+          if (!idxLado.length) {
+            const { passo, fase } = origem.lado;
+            return { erro: `filtro de lado {passo:${passo},fase:${fase}} não casa nenhum índice em 0..${faixa.length - 1} na faixa ${fi} da origem loft:${origem.id}` };
+          }
+          for (const li of idxLado) faces.push(faixa[li]);
+        }
+      }
+      if (!faces.length) return { erro: `origem loft:${origem.id} não tem nenhuma face lateral correspondente` };
       return { faces };
     },
   },
