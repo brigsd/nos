@@ -2425,6 +2425,29 @@ describe('D-129 — seleção semântica uniforme (atributos + espelha)', () => 
     expect([...n.F.values()].every((f: any) => f.cor === '#00f')).toBe(true);
   });
 
+  /* A TRAVA DA SEMÂNTICA TEMPORAL (achado do revisor adversarial). `tudo` é um
+     seletor de ligação TARDIA: significa "o que está vivo NAQUELE passo", não
+     "a peça final". É a mesma regra de `sel` ausente e do `espelha` sem
+     seleção — mas o NOME sugere o contrário, e `sel` é formato salvo, então a
+     escolha é irreversível. Sem este teste, uma rodada futura poderia
+     "consertar" `tudo` pra significar a peça final e nada falharia. */
+  it('sel:{tudo:true} resolve NO PASSO: geometria criada DEPOIS não é atingida', () => {
+    const n = nucleo([cubo, ['pincel', { modo: 'face', sel: { tudo: true }, cor: '#111111' }], ['extruda', { face: 1, dist: 0.3 }]], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    const semCor = [...n.F.values()].filter((f: any) => f.cor === null);
+    expect(semCor.length).toBeGreaterThan(0); // as paredes novas da extrusão nasceram DEPOIS do tudo
+  });
+
+  it('sel:{tudo:true} resolve NO PASSO: geometria inserida ANTES passa a ser atingida, sem gritar', () => {
+    const so = nucleo([cubo, ['parte', { sel: { tudo: true }, nome: 'corpo' }]], {}, {});
+    const comExtra = nucleo([cubo, ['cilindro', { raio: 0.3, altura: 0.2, lados: 6 }], ['parte', { sel: { tudo: true }, nome: 'corpo' }]], {}, {});
+    const noCorpo = (n: any) => [...n.F.values()].filter((f: any) => f.parte === 'corpo').length;
+    expect(so.orfaos).toHaveLength(0);
+    expect(comExtra.orfaos).toHaveLength(0);
+    // inserir um passo de geometria ANTES alarga o alcance do `tudo` — em silêncio, por construção.
+    expect(noCorpo(comExtra)).toBeGreaterThan(noCorpo(so));
+  });
+
   it('sel:{tudo:true} também funciona numa op de vértice (transladar)', () => {
     const comTudo = nucleo([cubo, ['transladar', { d: [1, 0, 0], sel: { tudo: true } }]], {}, {});
     const semSel = nucleo([cubo, ['transladar', { d: [1, 0, 0] }]], {}, {}); // ausente = malha inteira, já era assim (P8)

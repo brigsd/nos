@@ -72,8 +72,12 @@ faces vivos (Rodada B da Fase 3.5). Só aceita o literal `true`
 (`false`/`1`/`'sim'` GRITAM). **Deliberadamente diferente de `sel` ausente,
 que continua GRITANDO**: ausência nunca virou "tudo" — um erro de digitação
 (`fases:` em vez de `faces:`) não pode pintar a peça inteira em silêncio; só
-a palavra `tudo:true` escrita de propósito faz isso. `origem` existe para
-`loft` e
+a palavra `tudo:true` escrita de propósito faz isso. **`tudo` resolve no
+momento do PASSO**: geometria criada depois não é atingida, e geometria
+inserida antes passa a ser — sem gritar. Se o alcance precisa sobreviver à
+reordenação da lista, use `grupo`, `origem` ou ids. A op `pesar` ainda não
+aceita `sel` (só `vs:`/`faces:`), então não dá pra dizer `tudo` nela.
+`origem` existe para `loft` e
 `cubo`. No loft, `sel:{origem:{op:'loft',id,faixa?,lado?}}` endereça a grade
 de duas dimensões da origem — **`faixa` e `lado` são os DOIS opcionais**
 (D-130, Rodada A da Fase 3.5), ausente = "todos" nesse eixo: `{faixa}` é o

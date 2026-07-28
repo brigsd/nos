@@ -311,6 +311,23 @@ diferente de `sel` ausente, que continua GRITANDO** — a leitura óbvia seria
 (`fases:` no lugar de `faces:`) passaria a pintar a peça inteira em silêncio.
 Só a palavra `tudo:true`, escrita de propósito, significa a peça inteira.
 
+**`tudo` resolve NO MOMENTO DO PASSO, não na peça final** — e isto é a
+armadilha da edição, então leia com atenção. Geometria criada DEPOIS não é
+atingida (pinta `tudo`, depois extruda: as paredes novas nascem sem cor);
+geometria inserida ANTES **passa a ser atingida, e não grita** — inserir um
+`cilindro` antes de um `['parte', {sel:{tudo:true}}]` põe o cilindro dentro
+daquela parte, em silêncio. É a mesma regra de `sel` ausente e do `espelha`
+sem seleção, e é deliberada: reordenar passos muda o alcance de um `tudo`. Se
+você quer um alcance que NÃO se mexa quando a lista muda, use `grupo`,
+`origem` ou a lista de ids. Travado por teste em `tools/oficina/oficina.test.ts`.
+
+Duas ressalvas do fail-closed, medidas: (1) gritar por um campo **não** impede
+os outros de agir — `sel:{tudo:'sim', f:[1]}` grita `sel.tudo` **e** pinta a
+face 1 (regra preexistente de `sel`; o órfão é fatal nas bancadas, então não
+chega a peça publicada); (2) por isso o exemplo do `fases:` acima só protege
+quando não há `tudo` no mesmo objeto — `sel:{tudo:true, fases:[1]}` grita pelo
+campo desconhecido **e** pinta a peça inteira.
+
 Para uma op de VÉRTICE, `f`/`grupo` adicionam os cantos das faces e `regiao`
 adiciona cada vértice dentro da caixa inclusiva — é o comportamento histórico de
 `rotaciona`/`transladar`. Para uma op de FACE, `v` alcança toda face incidente a
