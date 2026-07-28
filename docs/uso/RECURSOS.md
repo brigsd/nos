@@ -76,13 +76,57 @@ aposentados — vivem no histórico do git.
 
 ## Docs de orientação
 
+Índice de TODOS os docs de `docs/` — agrupados por status (a pasta é o critério: `uso/` é
+verdade agora, `rumo/` é o que se pretende, `historico/` é o que se fez e o que se
+aprendeu). `CLAUDE.md`, na raiz, é o acordo de trabalho + as regras (jóias, determinismo,
+pt-BR) — sessão nova começa por ele e por este arquivo.
+
+### `docs/uso/` — verdade agora
+
+- **`docs/uso/RECURSOS.md`** — este arquivo: o índice único de comandos, bancadas, skills, agentes e docs.
+- **`docs/uso/MAPA.md`** — a árvore do repo com resumo por arquivo (gerada, sempre fresca — `npm run mapa`).
+- **`docs/uso/oficina-referencia.md`** — o manual de como cada elemento da Oficina funciona hoje.
+- **`docs/uso/LORE.md`** — a restrição viva: todo texto de jogo obedece a este documento.
+
+### `docs/rumo/` — o que se pretende
+
 - **`docs/rumo/NORTE.md`** — leitura obrigatória: objetivo maior, método experimental e não negociáveis do NÓS.
-- **`docs/rumo/PLANO.md`** — leitura obrigatória: fases da evolução, critérios de saída e sinais para redesenhar a arquitetura; a moto atual está congelada como espécime histórico e teste de regressão.
-- **`CLAUDE.md`** — o acordo de trabalho + as regras (jóias, determinismo, pt-BR).
-- **`docs/oficina.md`** — o roteiro da Oficina (Ordem de construção + specs). `docs/uso/oficina-referencia.md` — o manual de como cada elemento funciona.
-- **`docs/historico/playground.md`** — o ÉPICO ativo (D-113): fechar o vocabulário + forma-como-número + a camada IA de laço único. O que construir em seguida mora aqui.
-- **`docs/historico/DECISIONS.md`** — TODAS as decisões (índice + detalhe; histórico em `DECISIONS-ARCHIVE.md`).
-- **`docs/uso/MAPA.md`** — a árvore do repo com resumo por arquivo (gerada, sempre fresca).
-- **`docs/uso/LORE.md`** / **`docs/rumo/VISION.md`** — narrativa / o que o NÓS é e não é.
-- **`docs/rumo/FERRAMENTAS.md`** — o plano de potência das ferramentas (visão). `docs/rumo/AUDIO_E_CENAS.md` — direção de música/voz/cenas (nada construído).
-- **`docs/historico/legado/`** — os docs d'O Coração (o mundo 2D congelado) — leitura histórica.
+- **`docs/rumo/PLANO.md`** — leitura obrigatória, **o roteiro vigente**: fases da evolução, critérios de saída e sinais para redesenhar a arquitetura; a moto atual está congelada como espécime histórico e teste de regressão.
+- **`docs/rumo/VISION.md`** — o que o NÓS é e nunca será.
+- **`docs/rumo/FERRAMENTAS.md`** — o plano de potência das ferramentas (visão de longo prazo, quase nada construído ainda).
+- **`docs/rumo/AUDIO_E_CENAS.md`** — direção de música/voz/cenas — documento de direção, nada construído ainda.
+- **`docs/rumo/arquitetura-identidade-estavel.md`** — proposta arquitetural de identidade estável de objetos/subpartes entre frames; delimita o que a Fase 1 do `PLANO.md` prova em fixture antes de mudar o núcleo.
+
+### `docs/historico/` — o que se fez e o que se aprendeu (imutável)
+
+- **`docs/historico/DECISIONS.md`** — TODAS as decisões (índice + detalhe das ativas).
+- **`docs/historico/DECISIONS-ARCHIVE.md`** — o detalhe das decisões arquivadas (D-01…D-54); só movido pra desafogar o registro principal.
+- **`docs/historico/playground.md`** — o ÉPICO ativo (D-113): fechar o vocabulário + forma-como-número + a camada IA de laço único, fechado exceto a Aba Desenho.
+- **`docs/historico/TETO.md`** — o experimento que mediu onde o vocabulário da Oficina parava (3 corridas), encerrado.
+- **`docs/historico/diagnostico-subpartes-semanticas.md`** — diagnóstico das referências literais de face da moto antes da seleção semântica — medição de estado passado + recomendação.
+- **`docs/historico/teto-moto-relatorio.md`** — relatório de execução da 1ª corrida da moto no TETO.
+- **`docs/historico/teto-moto-refino-relatorio.md`** — relatório de execução do refino da moto (2ª corrida).
+- **`docs/historico/teto-moto-refino-3-relatorio.md`** — relatório de execução da 3ª corrida de refino da moto.
+- **`docs/historico/teto-selecao-semantica-relatorio.md`** — medição da correção que tirou atributos/espelho de listas de IDs de face, trocando por seleção semântica.
+- **`docs/historico/fixture-identidade-cubo-relatorio.md`** — prova de identidade estável (rótulos persistentes de subpartes) no fixture do cubo.
+- **`docs/historico/fixture-identidade-estavel-relatorio.md`** — prova de identidade estável no fixture de loft.
+- **`docs/historico/fixture-identidade-espelho-relatorio.md`** — prova de identidade estrutural sob `espelha` (Fase 3), experimental.
+- **`docs/historico/fixture-identidade-apaga-relatorio.md`** — prova de identidade estrutural ao apagar (Fase 3).
+- **`docs/historico/proveniencia-local-fixture.md`** — fixture de proveniência local de loft.
+- **`docs/historico/walkthrough_colaborador4.md`** — resumo de alterações de uma branch antiga de colaborador, sobre o protótipo FPS v3.
+- **`docs/historico/legado/`** — os docs d'O Coração (o mundo 2D congelado, D-109/D-111) — leitura histórica. Arquivo a arquivo:
+  - **`docs/historico/legado/README.md`** — o índice do legado, ponto de entrada.
+  - **`docs/historico/legado/ARCHITECTURE.md`** — a arquitetura técnica d'O Coração.
+  - **`docs/historico/legado/CIDADE.md`** — a Clareira, a cidade do mundo 2D.
+  - **`docs/historico/legado/CODER.md`** — a bancada do coder daquela era (D-35).
+  - **`docs/historico/legado/COMUNICACAO.md`** — protocolo ideador↔coder de identificação de objetos/áreas (D-33).
+  - **`docs/historico/legado/CONTINUITY.md`** — o registro de "onde paramos" d'O Coração.
+  - **`docs/historico/legado/GDD.md`** — o Game Design Document d'O Coração.
+  - **`docs/historico/legado/HABITANTES.md`** — proposta de mentes que jogam o jogo.
+  - **`docs/historico/legado/IMPLEMENTATION_PLAN.md`** — o plano de implementação d'O Coração.
+  - **`docs/historico/legado/PORTALS_PROTOCOL.md`** — o protocolo dos portais (R6).
+  - **`docs/historico/legado/walkthrough_colaborador2.md`** — resumo de alterações de outra branch antiga de colaborador.
+
+### Fora das três pastas — deliberadamente
+
+- **`docs/oficina.md`** — o roteiro da Oficina (Ordem de construção + specs), MISTO (os três tempos verbais dentro dele) e por isso não classificado numa pasta; em fatiamento.

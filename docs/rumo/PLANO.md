@@ -1,5 +1,7 @@
 # PLANO — evolução da linguagem de criação do NÓS
 
+> **VIGENTE.** Este é o roteiro ativo do NÓS — sessão nova começa por aqui.
+
 Este plano preserva as decisões, fases, critérios de saída e sinais de arquitetura errada que orientam a próxima etapa do NÓS.
 
 ## Objetivo final

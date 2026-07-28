@@ -1,5 +1,7 @@
 # A Oficina — editor de objetos dentro do jogo
 
+> **MISTO** — mistura os três tempos verbais (feito/decidido/planejado); em fatiamento (Rodada 4 da reorg de docs).
+
 Documento de projeto. Nada disso está construído ainda; serve pra decidir antes
 de escrever código, e pra registrar POR QUE cada coisa é como é.
 

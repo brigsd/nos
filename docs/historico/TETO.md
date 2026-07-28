@@ -1,5 +1,7 @@
 # O TETO — medir o que a Oficina de fato cria
 
+> **ENCERRADO** — 3 corridas.
+
 Este documento não propõe capacidade nova. Ele mede **onde o vocabulário atual
 para**, com uma criação de verdade, pra que a próxima evolução seja escolhida por
 falha observada em vez de palpite.

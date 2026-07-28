@@ -1,5 +1,7 @@
 # O Playground — o épico da criação por IA
 
+> **ENCERRADO**, exceto a Aba Desenho (o único item `[ ]` deste roteiro).
+
 O objetivo: um ambiente onde a IA cria conteúdo de verdade — **"a IA modelou a
 moto do Tron, um dragão, um navio" dentro do estilo do jogo** — sem sair do
 formato de PASSOS. Não é uma ferramenta nova: é fechar o vocabulário da Oficina

@@ -8,7 +8,14 @@
    reescrever caminho ali seria editar registro. Allowlist de 2 exceções
    conhecidas, com o motivo escrito abaixo. `npm run docs:links` imprime;
    `npm run docs:links:check` sai ≠0 em qualquer falha. Zero dependências (git
-   ls-files + fs). */
+   ls-files + fs).
+
+   Segunda checagem (Rodada 2 da reorg de docs): o MANIFESTO. Todo `.md` sob
+   `docs/` tem que ser citado (caminho `docs/<...>.md` completo) pelo
+   `docs/uso/RECURSOS.md` — a porta de entrada. Só duas exceções, o próprio
+   `RECURSOS.md` e `docs/uso/MAPA.md` (gerado, se auto-referenciaria em loop).
+   Trava em código o defeito que motivou esta rodada: o índice "de tudo" que
+   não indexava metade dos docs. */
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
@@ -76,6 +83,26 @@ for (const arquivo of rastreados) {
   }
 }
 
+/* --- manifesto: todo doc sob docs/ tem que ser citado pelo RECURSOS.md --- */
+const RECURSOS = 'docs/uso/RECURSOS.md';
+const MANIFESTO_EXCECOES = new Set([RECURSOS, 'docs/uso/MAPA.md']);
+
+const citadosNoRecursos = new Set();
+if (existsSync(path.join(REPO, RECURSOS))) {
+  const texto = readFileSync(path.join(REPO, RECURSOS), 'utf8');
+  let m;
+  PADRAO.lastIndex = 0;
+  while ((m = PADRAO.exec(texto))) citadosNoRecursos.add(m[0]);
+}
+
+const semManifesto = [];
+if (existsSync(path.join(REPO, RECURSOS))) {
+  for (const doc of todosDocsMd) {
+    if (MANIFESTO_EXCECOES.has(doc)) continue;
+    if (!citadosNoRecursos.has(doc)) semManifesto.push(doc);
+  }
+}
+
 const check = process.argv.includes('--check');
 
 if (falhas.length) {
@@ -92,4 +119,11 @@ if (falhas.length) {
   console.log(`docs:links ok — todas as referências docs/*.md resolvem (${rastreados.length} arquivos varridos).`);
 }
 
-if (check && falhas.length) process.exit(1);
+if (semManifesto.length) {
+  console.error(`docs:links — ${semManifesto.length} doc(s) sob docs/ não citado(s) por ${RECURSOS}:`);
+  for (const doc of semManifesto) console.error(`  ${doc} → falta citar em ${RECURSOS}`);
+} else {
+  console.log(`docs:links ok — todos os docs sob docs/ estão citados por ${RECURSOS} (${todosDocsMd.length - MANIFESTO_EXCECOES.size} exigidos).`);
+}
+
+if (check && (falhas.length || semManifesto.length)) process.exit(1);
