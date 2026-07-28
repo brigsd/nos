@@ -296,8 +296,8 @@ sel: { f: [ids] }                         // faces literais
 sel: { v: [ids] }                         // vértices literais
 sel: { grupo: 'nome-da-parte' }           // faces já nomeadas por `parte`
 sel: { regiao: { min:[x,y,z], max:[x,y,z] } }
-sel: { origem: { op:'loft', id:1000, faixa:2, lado?:1 } }
-sel: { origem: { op:'cubo', id:30, face:'topo' } }
+sel: { origem: { op:'loft', id:1000, faixa?:2, lado?:1 } }
+sel: { origem: { op:'cubo', id:30, face?:'topo' } }
 ```
 
 Para uma op de VÉRTICE, `f`/`grupo` adicionam os cantos das faces e `regiao`
@@ -309,11 +309,27 @@ estão dentro da caixa. Isso evita pintar/materializar meia face por acidente.
 `origemId` identifica uma origem no objeto inteiro e encontra o contrato local
 no índice interno reconstruído a cada `nucleo` (nunca no canônico); duplicata,
 inclusive entre geradores, grita e permanece ambígua. Em `loft`,
-`op:'loft'` + `id:1000` usa `faixa` zero-based (`2` liga as seções 2 e 3) e
-`lado` opcional, também zero-based; não há tampas. Em `cubo`,
-`op:'cubo'` + `id:30` usa uma única `face` local: `fundo` (-y), `topo` (+y),
-`tras` (-z), `direita` (+x), `frente` (+z) ou `esquerda` (-x). Esses nomes são
-locais ao cubo e sobrevivem a transformação sem topologia. A identidade
+`op:'loft'` + `id:1000` endereça a grade de duas dimensões da origem —
+`faixa` (o anel, zero-based; `2` liga as seções 2 e 3) e `lado` (zero-based,
+dentro da faixa) — e **os dois são opcionais** (D-130, Rodada A da Fase 3.5),
+com a mesma semântica: ausente = "todos" nesse eixo.
+
+| seleção | significa |
+|---|---|
+| `{faixa:2}` | o anel 2 (todas as faces daquela faixa) |
+| `{faixa:2, lado:1}` | uma face só |
+| `{lado:1}` (sem `faixa`) | a **coluna** 1 — uma face por faixa, no mesmo lado |
+| `{}` (nem faixa nem lado) | todas as faces laterais da origem inteira |
+
+Não há tampas. Faixa sem face lateral (segmento degenerado polo-polo) é
+PULADA na união e na coluna; `lado` fora do limite em **qualquer** faixa
+não-vazia GRITA o passo inteiro, nunca seleciona parcial; se a união de
+todas as faixas não render face nenhuma, GRITA (fail-closed). Em `cubo`,
+`op:'cubo'` + `id:30` usa uma única `face` local, também **opcional**
+(mesma rodada): `fundo` (-y), `topo` (+y), `tras` (-z), `direita` (+x),
+`frente` (+z) ou `esquerda` (-x) — e ausente = as 6 faces (pulando as que já
+foram removidas por `apagaFace`; se nenhuma sobrar viva, GRITA). Esses nomes
+são locais ao cubo e sobrevivem a transformação sem topologia. A identidade
 posicional `id` do PASSO permanece como sempre; `origemId` é a identidade
 estável aditiva exigida por esta seleção.
 

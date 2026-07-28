@@ -65,13 +65,21 @@ roteiro, ainda não existe — não use; o plano de fechar as lacunas é o épic
 | `solido` | `faces:[ids]` (legado) ou `sel` | o que entra na colisão |
 | `inflate` | `contornoLado:[[z,y],...]` (≥3 pontos, PARAM), `contornoTopo:[[z,x],...]` (idem), `divisoes` (TOPO, mín 2) | dois contornos 2D (plano z×y e z×x) viram VOLUME por interseção de dois prismas — não é malha booleana geral, é uma GRADE DE VOXEL (watertight por construção, mas o resultado sai BLOCKY/facetado — não suave). Ponto com aridade ≠ 2 (alça de curva reservada) GRITA e aborta, igual ao `contorno` do loft; <3 pontos idem; contornos que não se cruzam em nenhum voxel GRITA (volume vazio nunca é o que você queria). Vale largura≠altura — o único gerador sem seção circular. Peça-exemplo `_corpo.js` |
 
-**Seleção semântica (`sel`, D-129/D-131):** campos `v`, `f`, `grupo`, `regiao` e
-`origem` podem coexistir e se unem. `origem` por enquanto é só para loft:
-o loft declara `origemId` estável e `sel:{origem:{op:'loft',id,faixa,lado?}}`
-escolhe faces laterais da faixa local zero-based (sem tampas). Essa proveniência
-é reconstruída no núcleo, não entra no canônico; `id` posicional do PASSO não
-ganha novo significado. Campos `v`, `f`, `grupo` e `regiao`
-podem coexistir e se unem. Em operações de FACE (`pincel` face, `liso`,
+**Seleção semântica (`sel`, D-129/D-130/D-131):** campos `v`, `f`, `grupo`,
+`regiao` e `origem` podem coexistir e se unem. `origem` existe para `loft` e
+`cubo`. No loft, `sel:{origem:{op:'loft',id,faixa?,lado?}}` endereça a grade
+de duas dimensões da origem — **`faixa` e `lado` são os DOIS opcionais**
+(D-130, Rodada A da Fase 3.5), ausente = "todos" nesse eixo: `{faixa}` é o
+anel local zero-based; `{faixa,lado}` é uma face só; `{lado}` sem `faixa` é a
+**coluna** (uma face por faixa, no mesmo lado — pula faixa sem lateral, e
+lado fora do limite em qualquer faixa GRITA sem selecionar parcial); `{}` é
+toda a origem (a união de todas as faixas; se nenhuma render face, GRITA).
+Sem tampas. No cubo, `sel:{origem:{op:'cubo',id,face?}}` — `face` também
+opcional: ausente = as 6 faces (pulando as já removidas por `apagaFace`; se
+nenhuma sobrar, GRITA). Essa proveniência é reconstruída no núcleo, não
+entra no canônico; `id` posicional do PASSO não ganha novo significado.
+Campos `v`, `f`, `grupo` e `regiao` podem coexistir e se unem. Em operações
+de FACE (`pincel` face, `liso`,
 `material`, `solido`, `parte`, `espelha`), `v` significa faces incidentes e
 `regiao` significa somente faces inteiramente dentro da caixa inclusiva. Para
 `rotaciona`/`transladar`/`displace`, região continua sendo os vértices dentro da
