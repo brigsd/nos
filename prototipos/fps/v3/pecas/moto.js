@@ -1,5 +1,23 @@
 /* moto — MOTOCICLETA FUTURISTA ESTILIZADA, 100% em PASSOS (nenhuma linha de
-   geometria em JS: `construir` é só `executar`). É a peça da 1ª corrida do
+   geometria em JS: `construir` é só `executar`).
+
+   ⚠ ESPÉCIME DE FALHA — NÃO USE COMO REFERÊNCIA, nem de código nem de forma.
+   Ela está congelada (Fase 0 do docs/rumo/PLANO.md) e serve a UM propósito só:
+   régua de regressão do núcleo (`npm run gabarito:selecao`). São dois defeitos
+   registrados, não um:
+     • CÓDIGO — 6.512 ids de vértice/face escritos à mão, 98% deles dentro de
+       progressões aritméticas cujos passos são os próprios valores de TOPO.
+       Não foi desleixo: era a única forma de dizer o que se queria dizer, e é
+       a medição que motivou a Fase 3.5 (coluna, "tudo" e padrão em sel.origem).
+     • FORMA — o pedido do ideador era uma moto no estilo do filme Tron Legacy.
+       O resultado não chegou perto disso; mesmo como moto futurista low-poly,
+       é rascunho. Fica como linha de base do teto de CRIAÇÃO A PARTIR DE
+       REFERÊNCIA — é contra ela que a moto nova da Fase 5 vai ser comparada.
+   Nenhuma das duas coisas se conserta aqui: a moto apresentável é a da Fase 5,
+   feita do zero com as imagens de referência. Refinar esta peça só gastaria
+   esforço e quebraria o gabarito.
+
+   É a peça da 1ª corrida do
    experimento do TETO (docs/historico/TETO.md) REFINADA na 2ª e na 3ª, a partir das
    críticas do ideador — os relatórios estão em docs/historico/teto-moto-refino-relatorio.md
    e docs/historico/teto-moto-refino-3-relatorio.md.

@@ -92,7 +92,7 @@ pt-BR) — sessão nova começa por ele e por este arquivo.
 ### `docs/rumo/` — o que se pretende
 
 - **`docs/rumo/NORTE.md`** — leitura obrigatória: objetivo maior, método experimental e não negociáveis do NÓS.
-- **`docs/rumo/PLANO.md`** — leitura obrigatória, **o roteiro vigente**: fases da evolução, critérios de saída e sinais para redesenhar a arquitetura; a moto atual está congelada como espécime histórico e teste de regressão.
+- **`docs/rumo/PLANO.md`** — leitura obrigatória, **o roteiro vigente**: fases da evolução, critérios de saída e sinais para redesenhar a arquitetura; a moto atual está congelada como **espécime de falha** — serve de régua de regressão, e não é referência nem de código (6.512 ids à mão) nem de forma (o pedido era o estilo de Tron Legacy; o resultado é rascunho).
 - **`docs/rumo/oficina-roteiro.md`** — o que foi projetado pra Oficina e ainda NÃO existe, mais as decisões de escopo (booleano, UV manual e three.js ficam de fora por decisão).
 - **`docs/rumo/VISION.md`** — o que o NÓS é e nunca será.
 - **`docs/rumo/FERRAMENTAS.md`** — o plano de potência das ferramentas (visão de longo prazo, quase nada construído ainda).
