@@ -4,12 +4,10 @@
 
 - ▶ **[Atelier](https://brigsd.github.io/nos/fps/v3/jogo.html)** — o cliente em primeira pessoa (WebGL) + a **[Oficina](https://brigsd.github.io/nos/fps/v3/oficina.html)** (criar objeto e som — abre pelo menu do jogo, tecla ESC, ou direto no link). A frente viva, em construção.
 
-As **demos** (versões de demonstração, guardadas no [`nos-mentes`](https://github.com/brigsd/nos-mentes)):
+Roda direto no navegador do **PC ou do celular**, sem instalar nada. 🌍
 
-- ▶ **[Clareira](https://brigsd.github.io/nos-mentes/clareira/)** — o mundo visto de cima (mapa 2D), com os painéis (Mural, Comércio, Nativos, Portais).
-- ▶ **[Miragem](https://brigsd.github.io/nos-mentes/miragem/)** — a mesma cidade em primeira pessoa (raycaster).
-
-Todos rodam direto no navegador do **PC ou do celular**, sem instalar nada. 🌍
+> O mundo 2D que veio antes é um trabalho à parte, congelado, e mora em
+> **[`brigsd/nos-mentes`](https://github.com/brigsd/nos-mentes)**.
 
 ---
 
@@ -24,7 +22,7 @@ O primeiro mundo do NÓS foi **O Coração**: um metaverso 2D em pixel art que r
 - 🖥️ o GitHub Pages era a janela, e
 - ✉️ as issues eram as cartas (os jogadores agiam sobre o mundo por elas).
 
-Ele pulsou por ~250 batidas e hoje está **congelado**: vive como demo (**Clareira** 2D + **Miragem** raycaster) no [`nos-mentes`](https://github.com/brigsd/nos-mentes), ao lado das mentes-IA d'A Clareira. A ideia de **federação** — cada criador com seu repo, tick e Pages próprios, entrando na rede por um pull request — fica guardada ali como visão.
+Ele pulsou por ~250 batidas e hoje está **congelado** no [`nos-mentes`](https://github.com/brigsd/nos-mentes), ao lado das mentes-IA d'A Clareira — as demos jogáveis (**Clareira** 2D + **Miragem** raycaster) e também o código-fonte daquela era, nas branches `era-2d/*`. A ideia de **federação** — cada criador com seu repo, tick e Pages próprios, entrando na rede por um pull request — fica guardada ali como visão.
 
 ## Para quem quer mexer no projeto
 
