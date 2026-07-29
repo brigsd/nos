@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-139 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+141 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -44,6 +44,8 @@
 - `DECISIONS.md` — Registro de Decisões — NÓS
 - `TETO.md` — O TETO — medir o que a Oficina de fato cria
 - `diagnostico-subpartes-semanticas.md` — Diagnóstico — subpartes semânticas da moto
+- `fase4-drone-inspecao-criacao-relatorio.md` — Relatório de criação — drone-inspecao
+- `fase4-drone-inspecao-refino-relatorio.md` — Relatório de refinamento — drone-inspecao
 - `fixture-identidade-apaga-relatorio.md` — Fixture — identidade estrutural ao apagar
 - `fixture-identidade-cubo-relatorio.md` — Fixture — identidade estável de cubo
 - `fixture-identidade-espelho-relatorio.md` — Fixture — identidade estrutural do espelho
