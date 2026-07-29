@@ -17,15 +17,23 @@ const nome = (process.argv.slice(2).find((a) => !a.startsWith('--')) || '_oficin
 
 const { nucleo, neutroCanonico, colisaoDe } = await import(pathToFileURL(join(REPO, 'prototipos/fps/v3/motor/oficina.js')).href);
 const peca = await import(pathToFileURL(join(REPO, 'prototipos/fps/v3/pecas', `${nome}.js`)).href);
-const { PASSOS, PARAMS = {}, TOPO = {} } = peca;
+/* MATERIAIS e ESQUELETO entram no núcleo junto com o resto do envelope. Ficaram
+   de fora daqui até 2026-07-29, e o efeito era um ÓRFÃO FALSO: a op `material`
+   procurava o nome em `{}` e gritava "material 'x' não existe em MATERIAIS" em
+   TODA peça com material — inclusive nas duas peças-exemplo do próprio assunto,
+   `_oficina-materiais` e `_oficina-transp`. A bancada estava vermelha nelas
+   desde que os materiais existem (D-93/D-94) e ninguém viu, porque ninguém
+   rodou o replay nessas peças. O `criar.mjs` sempre passou os dois — eram duas
+   bancadas discordando sobre a mesma peça. */
+const { PASSOS, PARAMS = {}, TOPO = {}, MATERIAIS = {}, ESQUELETO = null } = peca;
 if (!Array.isArray(PASSOS)) { console.error(`peça ${nome} não exporta PASSOS (é uma peça-objeto da Oficina?)`); process.exit(2); }
 
 /* 1 · executa */
-const n1 = neutroCanonico(nucleo(PASSOS, PARAMS, TOPO));
+const n1 = neutroCanonico(nucleo(PASSOS, PARAMS, TOPO, MATERIAIS, ESQUELETO));
 
 /* 2 · serializa os PASSOS (o que o arquivo salva), re-parseia, re-executa */
 const PASSOS2 = JSON.parse(JSON.stringify(PASSOS));
-const n2 = neutroCanonico(nucleo(PASSOS2, JSON.parse(JSON.stringify(PARAMS)), JSON.parse(JSON.stringify(TOPO))));
+const n2 = neutroCanonico(nucleo(PASSOS2, JSON.parse(JSON.stringify(PARAMS)), JSON.parse(JSON.stringify(TOPO)), MATERIAIS, ESQUELETO));
 
 /* 3 · afirma neutro IDÊNTICO */
 const s1 = JSON.stringify(n1), s2 = JSON.stringify(n2);
