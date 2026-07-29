@@ -2424,14 +2424,18 @@ export function executar(PASSOS, PARAMS, TOPO, ctx, MATERIAIS = {}, ANIMACOES = 
   const neutro = nucleo(PASSOS, PARAMS, TOPO, MATERIAIS, ESQUELETO, ALIASES);
   if (!ctx || !ctx.tex || !ctx.tex.texCanvas) throw new Error('oficina.executar precisa de ctx {tex,...} do motor v3');
   if (neutro.orfaos.length && typeof console !== 'undefined') console.warn(`oficina: ${neutro.orfaos.length} órfão(s) —`, neutro.orfaos);
-  const { lotes, tex, partes, esqueleto } = adaptarV3(neutro, ctx, MATERIAIS);
+  const { lotes, tex, atlas, partes, esqueleto } = adaptarV3(neutro, ctx, MATERIAIS);
   const infoPorLote = lotes.map((L) => L.parte || null);   // PARALELO aos lotes (mesma ordem que o render mapeia)
   const animar = montarAnimar(ANIMACOES, infoPorLote, partes, esqueleto);   // 14a: esqueleto resolvido -> trilhas de OSSO viram L.ossos
   const ident = () => (ctx.m4 ? ctx.m4.ident() : undefined);
   /* 14a: lote skinado nasce na BIND POSE (L.ossos = N identidades) — o render sobe isso
      e a peça renderiza em repouso mesmo SEM `animar`. Com `animar`, ele sobrescreve por
      quadro. Lote sem esqueleto não ganha L.ossos (o render nem olha). */
-  return { lotes: lotes.map((L) => ({ ...L, tex, matriz: ident(), ...(L.esqueleto ? { ossos: bindPoseOssos(L.nOssos) } : {}) })), animar, camera: { e: 1.05, r: 2.9 } };
+  /* `atlas` (tamanho de célula/gutter do atlas por face, D-90) sai ANEXADO ao retorno —
+     campo NOVO, ninguém que já lia {lotes,animar,camera} quebra. É pra ferramenta de
+     auditoria (detector-de-banding) saber o tamanho de CÉLULA sem duplicar o número
+     mágico ATLAS_TILE num segundo lugar; a peça/render seguem ignorando o campo. */
+  return { lotes: lotes.map((L) => ({ ...L, tex, matriz: ident(), ...(L.esqueleto ? { ossos: bindPoseOssos(L.nOssos) } : {}) })), animar, camera: { e: 1.05, r: 2.9 }, atlas };
 }
 
 /* colisaoDe: SÓ a geometria (sem adaptador/textura/pincel) -> descritor de

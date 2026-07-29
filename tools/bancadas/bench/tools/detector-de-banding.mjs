@@ -6,6 +6,14 @@
          no topo/base da imagem) e SALTA forte contra as linhas de fora nos dois
          lados. Isso separa a faixa injetada de flats legítimos, que ou encostam
          numa borda da imagem (céu/chão em CLAMP) ou são curtos demais.
+         EXCEÇÃO (não é defeito): o atlas de textura por face (D-90) é, POR
+         DESENHO, um mosaico de células de cor chapada — uma face pintada de cor
+         sólida é UMA célula de UMA cor, e várias faces seguidas na mesma linha
+         do atlas com a mesma cor viram uma faixa chapada legítima. O sinal que
+         separa isso de defeito real: alinhamento à GRADE do atlas — a faixa
+         começa numa fronteira de célula (y0 múltiplo de `tile`) E tem altura
+         múltipla exata de `tile`. Fora da grade, continua acusando (é o caso da
+         mutação plantada do bench, que injeta a partir de h/2 sem essa forma).
      (b) RUÍDO ALEATÓRIO — chuvisco RGB: cada pixel destoa muito do vizinho. Uma
          faixa de linhas com diferença-média-adjacente ALTÍSSIMA (muito acima do
          dither/fbm moderado das texturas limpas). Exijo uma CORRIDA de linhas
@@ -53,7 +61,7 @@ function ruidoLinha(d, w, y) {
   return s / (w - 1);
 }
 
-function analisarTex(f, li, w, h, d) {
+function analisarTex(f, li, w, h, d, tile) {
   // chaves de linha chapada
   const key = new Array(h);
   for (let y = 0; y < h; y++) key[y] = chaveLinhaChapada(d, w, y);
@@ -67,7 +75,10 @@ function analisarTex(f, li, w, h, d) {
       if (k && !k.endsWith(',0') && len >= LEN_MIN) {
         const y0 = s, y1 = y - 1;
         const interior = y0 > 0 && y1 < h - 1;              // não encosta em borda da imagem
-        if (interior) {
+        // alinhado à grade de células do atlas (D-90): começa em fronteira de tile
+        // E tem altura múltipla exata do tile -> mosaico de cor-por-face, não defeito.
+        const alinhadoAoAtlas = tile > 0 && y0 % tile === 0 && len % tile === 0;
+        if (interior && !alinhadoAoAtlas) {
           const tj = saltoLinhas(d, w, h, y0 - 1, y0);
           const bj = saltoLinhas(d, w, h, y1, y1 + 1);
           if (tj >= JUMP_MIN && bj >= JUMP_MIN) {
@@ -95,13 +106,17 @@ function analisarTex(f, li, w, h, d) {
 
 export function analisar(built, { pixels }) {
   const f = [];
+  // tamanho de célula do atlas (D-90): vem do PRÓPRIO lote (`built.atlas.tile`,
+  // anexado pelo `executar`/`adaptarV3`) — nunca um 32 escrito à mão aqui; peça
+  // sem atlas (ou versão antiga do núcleo) cai em 0, que nunca alinha nada.
+  const tile = (built.atlas && built.atlas.tile) || 0;
   built.lotes.forEach((L, li) => {
     const t = L.tex;
     if (!t) return;
     let w, h, d;
     try { ({ w, h, data: d } = pixels(t)); } catch { return; }
     if (!d || w < 4 || h < 4) return;
-    analisarTex(f, li, w, h, d);
+    analisarTex(f, li, w, h, d, tile);
   });
   return f;
 }
