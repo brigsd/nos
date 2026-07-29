@@ -11,7 +11,7 @@ Roda direto no navegador do **PC ou do celular**, sem instalar nada. 🌍
 
 ---
 
-**NÓS** é um metaverso que vive **inteiramente dentro do GitHub** — sem servidor próprio: o código é o jogo e o Pages é a janela. A frente viva é o **Atelier**: um cliente em primeira pessoa (WebGL) com a **Oficina**, onde se cria cada objeto e cada som direto no navegador. A peça criada **é** a lista de passos que a reconstrói — nada é opaco, tudo é editável e refeito passo a passo.
+**NÓS** é um metaverso que roda **inteiramente dentro do GitHub**, sem servidor próprio: o repositório guarda o jogo e o GitHub Pages o publica. A frente em desenvolvimento é o **Atelier**: um cliente em primeira pessoa (WebGL) com a **Oficina**, onde se cria cada objeto e cada som direto no navegador. Um objeto não é salvo como malha pronta: o arquivo guarda a lista de operações que o constrói. Dá para ler essa lista, mudar qualquer passo dela e reconstruir o objeto.
 
 ## História — O Coração
 
