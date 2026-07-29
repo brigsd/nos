@@ -64,7 +64,7 @@ export const TOPO = { divisoes: 12 };
    contrário do lathe/loft) — travada por teste, não por contagem prevista
    aqui (a forma decide quantos voxels ficam "dentro"). */
 export const PASSOS = [
-  ['inflate', { id: 0, contornoLado: ovo(ampLado), contornoTopo: ovo(ampTopo), divisoes: 'divisoes' }],
+  ['inflate', { contornoLado: ovo(ampLado), contornoTopo: ovo(ampTopo), divisoes: 'divisoes' }],
 
   // 2 tons, alternando por PARIDADE de id — não um bloco chapado só (o detector-de-banding cobra)
   ['pincel', { modo: 'face', faces: Array.from({ length: 108 }, (_, k) => k * 2), cor: '#7f708a' }],

@@ -43,7 +43,7 @@ export const ESQUELETO = {
    dirigido por SEG. Anéis (ids): base 0..3 · junta1 4..7 · junta2 1000..1003 · ponta
    2000..2003 (o bloco 1000/2000 vem da POSIÇÃO do passo de extruda, D-77). */
 export const PASSOS = [
-  ['cubo',    { id: 0, larg: 'larg', alt: 'seg', prof: 'larg' }],   // segmento 0: base 0..3 (y=0), anel 4..7 (y=seg); faces 0..5
+  ['cubo',    { larg: 'larg', alt: 'seg', prof: 'larg' }],   // segmento 0: base 0..3 (y=0), anel 4..7 (y=seg); faces 0..5
   ['extruda', { face: 1, dist: 'seg' }],                            // segmento 1: anel 1000..1003 (y=2·seg); a tampa (face 1) sobe
   ['extruda', { face: 1, dist: 'seg' }],                            // segmento 2: anel 2000..2003 (y=3·seg); a tampa (face 1) sobe
 

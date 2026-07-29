@@ -71,7 +71,6 @@ const RETANGULO = [
      seg3 (s3 -> polo ponta)      -> F 12..15 (leque, a tampa da ponta) */
 export const PASSOS = [
   ['loft', {
-    id: 0,
     lados: 'lados',
     secoes: [
       { pos: [0, 0, 0], raio: 0 },                       // polo: fecha a BASE

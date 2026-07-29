@@ -49,9 +49,9 @@ const moverBraco = [];
 for (let k = 0; k < 8; k++) moverBraco.push(['moveV', { v: ARM_BASE + k, d: ['bracoX', 0, 0] }]);
 
 export const PASSOS = [
-  ['cilindro', { id: 0, raio: 'rodaR', altura: 'rodaH', lados: 'lados' }],   // engrenagem (lados 0..7, fundo 8, topo 9)
+  ['cilindro', { raio: 'rodaR', altura: 'rodaH', lados: 'lados' }],   // engrenagem (lados 0..7, fundo 8, topo 9)
   ['extruda',  { face: 0, dist: 'dente' }],                                   // DENTE: puxa a face lateral 0 (cap vira face 0; paredes 1000..1003)
-  ['cubo',     { id: 2000, larg: 'bracoW', alt: 'bracoH', prof: 'bracoW' }],  // braço (faces 2000..2005) na origem
+  ['cubo',     { larg: 'bracoW', alt: 'bracoH', prof: 'bracoW' }],  // braço (faces 2000..2005) na origem
   ...moverBraco,                                                             // desloca o braço pro lado da engrenagem
   /* NOMEIA as partes. `roda` SEM pivo -> o adaptador usa o CENTROIDE (gira no lugar).
      `braco` COM pivo na BASE (bracoX,0,0) -> balança pendurado pela base (override). */

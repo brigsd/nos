@@ -20,7 +20,7 @@ export const TOPO = { lados: 8 };
 /* exportado (não `const` privado): sem isto a Oficina não relê a lista e o
    arquivo nunca mais reabre pra edição. Os passos citam o NOME do parâmetro. */
 export const PASSOS = [
-  ['cilindro', { id: 0, raio: 'troncoR', altura: 'troncoH', lados: 'lados' }],
+  ['cilindro', { raio: 'troncoR', altura: 'troncoH', lados: 'lados' }],
   ['extruda',  { face: 0, dist: 0.14 }],                 // toco de galho: puxa a face lateral 0
   ['moveV',    { v: 2, d: [0.05, 0, 0.04] }],            // raiz: empurra um canto ORIGINAL da base (id estável)
   ['mescla',   { de: [1001], para: 1002 }],              // solda dois cantos NOVOS do galho (de/para gravados)

@@ -26,7 +26,7 @@ export const MATERIAIS = {
 
 /* faces do cilindro de 10 lados: 0..9 lados, 10 fundo (-y), 11 topo (+y). */
 export const PASSOS = [
-  ['cilindro', { id: 0, raio: 'raio', altura: 'altura', lados: 'lados' }],
+  ['cilindro', { raio: 'raio', altura: 'altura', lados: 'lados' }],
   ['liso',     { faces: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] }],                 // barril macio
   ['material', { faces: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], usa: 'casca' }],   // casca: cor + brilho especular espalhado
   ['material', { faces: [11], usa: 'brasa' }],                             // topo: brasa que BRILHA (emissivo + semLuz)

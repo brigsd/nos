@@ -58,7 +58,6 @@ export const TOPO = { lados: 12 };
      seg8 (mioc -> polo topo)-> F 96..107  (leque, a tampa de cima) */
 export const PASSOS = [
   ['lathe', {
-    id: 0,
     lados: 'lados',
     perfil: [
       [0, 0],                   // polo: fecha o FUNDO (o pé)

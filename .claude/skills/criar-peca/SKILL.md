@@ -26,6 +26,18 @@ polígonos) e faces 0..9 (laterais 0..7, fundo 8, topo 9); um `extruda` no passo
 1 cria a partir de 1000. A numeração depende só da POSIÇÃO do passo — id que
 aponta pro nada GRITA (órfão), nunca corrompe.
 
+**NÃO ESCREVA `id:` num passo.** O campo é opcional e o núcleo calcula sozinho
+pela posição; escrever só serve pra você errar. Se escrever um valor diferente
+da posição, GRITA (`id X ≠ base da posição Y — a posição manda`), e o erro
+CASCATEIA: toda referência posterior àquele bloco vira órfã. Foi exatamente
+isso que custou **234 órfãos** e uma reescrita inteira na medição da Fase 3.5
+— o agente escolheu os blocos por tipo de peça (corpo=1000, tampa=2000) porque
+os exemplos escreviam `id:`, e aí intercalar um passo de apoio (`transladar`,
+`pincel`) deslocou a posição de tudo que vinha depois. As peças-exemplo foram
+limpas: nenhuma escreve `id:` hoje. **`origemId` é outra coisa** — esse VOCÊ
+escolhe, é a identidade estrutural que `sel.origem` endereça, e não tem
+relação com a posição do passo.
+
 **Lei que vale pra TODA op:** número tem que ser FINITO e ponto tem que ser
 `[x,y,z]`. `NaN`/`Infinity` ou aridade errada = **throw** (a peça inteira morre,
 de propósito). Não é preciosismo: num TOPO o estrago é invisível a todos os

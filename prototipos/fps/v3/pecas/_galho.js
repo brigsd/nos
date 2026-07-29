@@ -65,7 +65,6 @@ export const TOPO = { lados: 10 };
      seg5 (s5 -> polo ponta)      -> F 50..59  (leque, a tampa da ponta) */
 export const PASSOS = [
   ['loft', {
-    id: 0,
     origemId: 0,   // registra a origem estrutural do loft — é o que permite endereçar por faixa/lado abaixo (sel.origem só existe pra `loft`/`cubo`, não pra `lathe` — ver _torno.js)
     lados: 'lados',
     secoes: [

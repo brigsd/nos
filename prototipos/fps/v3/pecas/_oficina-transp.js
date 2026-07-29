@@ -22,8 +22,8 @@ export const MATERIAIS = {
 
 /* dois cubos concêntricos: passo 0 = núcleo (faces 0..5), passo 1 = casca (1000..1005). */
 export const PASSOS = [
-  ['cubo',     { id: 0, lado: 'nucleo' }],
-  ['cubo',     { id: 1000, lado: 'casca' }],
+  ['cubo',     { lado: 'nucleo' }],
+  ['cubo',     { lado: 'casca' }],
   ['material', { faces: [0, 1, 2, 3, 4, 5], usa: 'brasa' }],                       // núcleo aceso, opaco
   ['material', { faces: [1000, 1001, 1002, 1003, 1004, 1005], usa: 'vidro' }],     // casca de vidro, transparente
   ['solido',   { faces: [1000, 1001, 1002, 1003, 1004, 1005] }],                   // a casca é a parede de colisão

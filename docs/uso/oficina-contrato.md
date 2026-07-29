@@ -176,13 +176,22 @@ export const TOPO = { lados: 8 };
 /* exportado, e não `const`: a ferramenta precisa ler a lista de volta pra
    você continuar editando. Sem o export, o arquivo só roda, não reabre. */
 export const PASSOS = [
-  ['cilindro', { id: 1, raio: 'troncoR', altura: 'troncoH', lados: 'lados' }],
+  ['cilindro', { raio: 'troncoR', altura: 'troncoH', lados: 'lados' }],
   ['extruda',  { face: 12, dist: 0.4 }],
   ['moveV',    { v: 7, d: [0.1, 0, -0.05] }],
   ['mescla',   { de: [7, 12], para: 31 }],
   ['pincel',   { modo: 'face', faces: [3, 4, 5], cor: '#4a7c3f' }],
   ['solido',   { faces: [0, 1, 2, 3] }],
 ];
+
+/* NENHUM passo escreve `id:`. O campo existe e é OPCIONAL — o núcleo calcula o
+   bloco pela POSIÇÃO do passo (`posição × 1000`), e escrever um valor
+   diferente GRITA (`id X ≠ base da posição Y — a posição manda`). Escrever o
+   valor CERTO também não ajuda: no momento em que você insere um passo antes,
+   todos os que vêm depois mudam de posição, e o erro CASCATEIA em cada
+   referência àquele bloco. Foi assim que uma corrida da Fase 3.5 colecionou
+   234 órfãos. Regra prática: não escreva. `origemId` é outra coisa — esse VOCÊ
+   escolhe, e não depende da posição. */
 
 export const meta = {
   nome: 'toco',

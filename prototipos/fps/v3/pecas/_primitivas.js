@@ -25,9 +25,9 @@ export const TOPO = { esferaAneis: 6, esferaLados: 10, coneLados: 8, chaoSeg: 4 
                                         (leque sul 1000..1009, faixas 1010..1049, leque norte 1050..1059)
      passo 2 (cone, 8 lados)         -> vértices 2000..2008 (ápice 2008), faces 2000..2008 (tampa 2008) */
 export const PASSOS = [
-  ['plano',  { id: 0, largura: 'chaoL', profundidade: 'chaoP', seg: 'chaoSeg' }],
-  ['esfera', { id: 1000, raio: 'esferaR', aneis: 'esferaAneis', lados: 'esferaLados' }],
-  ['cone',   { id: 2000, raio: 'coneR', altura: 'coneAlt', lados: 'coneLados' }],
+  ['plano',  { largura: 'chaoL', profundidade: 'chaoP', seg: 'chaoSeg' }],
+  ['esfera', { raio: 'esferaR', aneis: 'esferaAneis', lados: 'esferaLados' }],
+  ['cone',   { raio: 'coneR', altura: 'coneAlt', lados: 'coneLados' }],
   /* desloca o cone inteiro pra +x, vértice a vértice (ainda não existe mover-objeto):
      anel da base 2000..2007 + ápice 2008 — os ids saem DIRETO da numeração da op. */
   ['moveV', { v: 2000, d: [1.0, 0, 0] }],

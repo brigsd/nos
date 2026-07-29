@@ -68,9 +68,9 @@ export const TOPO = { cabecaAneis: 6, cabecaLados: 10 };
                   as 4 faces novas nascem em 15000..15003 (cantos revertidos, normal
                   pra fora). Ids conferidos por MEDIÇÃO no teste (não recontados no olho). */
 export const PASSOS = [
-  ['esfera', { id: 0, raio: 'cabecaRaio', aneis: 'cabecaAneis', lados: 'cabecaLados' }],
+  ['esfera', { raio: 'cabecaRaio', aneis: 'cabecaAneis', lados: 'cabecaLados' }],
 
-  ['plano', { id: 1000, largura: 'chifreAltura', profundidade: 'chifreProf', seg: 1 }],
+  ['plano', { largura: 'chifreAltura', profundidade: 'chifreProf', seg: 1 }],
   /* reposiciona o quadrado deitado (y=0, cantos em x=±0.08,z=±0.07) pra ficar
      de pé, encostado EXATO em x=0, com y variando 0.52..0.68 (perto do topo
      da cabeça — a esfera vai de y=0 a y=2·cabecaRaio=0.84) — a "troca" de

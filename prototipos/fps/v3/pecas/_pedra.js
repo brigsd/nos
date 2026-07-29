@@ -29,7 +29,7 @@ export const TOPO = {};   // nem chamferBox nem displace têm parâmetro que mud
    são literais 0..25 por isso — não precisam ser medidos peça a peça, como
    o `_corpo.js` (inflate) precisa (lá a contagem depende da grade de voxel). */
 export const PASSOS = [
-  ['chamferBox', { id: 0, larg: 'larg', alt: 'alt', prof: 'prof', chanfro: 'chanfro' }],
+  ['chamferBox', { larg: 'larg', alt: 'alt', prof: 'prof', chanfro: 'chanfro' }],
   ['displace', { amplitude: 'amp', frequencia: 'freq', semente: 'semente' }],
 
   // 2 tons, alternando por PARIDADE de id — não um bloco chapado só (o detector-de-banding cobra)
