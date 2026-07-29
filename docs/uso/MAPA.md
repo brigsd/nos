@@ -5,7 +5,7 @@
 > projeção. `npm run mapa:check` (CI) falha se isto estiver velho ou se
 > algum arquivo-fonte estiver sem cabeçalho.
 
-141 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
+142 arquivos (código `.js .mjs .cjs .ts .tsx .html` + docs `.md`).
 
 ## (raiz)
 
@@ -149,6 +149,7 @@
 - `casa-toras.js` — PEÇA: casa-toras — a cabana de toras aprovada pelo ideador (D-54f). Toras VERTICAIS castanho-mel (tons reais, D-54f), janelas-ABERTURA com moldura+cruzeta+du…
 - `drone-inspecao.js` — PEÇA MÉDIA DA FASE 4 — drone quadricóptero compacto de inspeção. PASSOS é a fonte de verdade: o corpo, a tampa, os quatro braços, os quatro rotores, as pás, …
 - `ilha-chao.js` — PEÇA: ilha-chao — o primeiro retalho de CHÃO do v3 (port da natureza v2). Ilha flutuante NA ESCALA DA V2 (o mundo é uma grade 64×64 tiles; a ilha tem ~56 uni…
+- `lanterna.js` — PEÇA: uma LANTERNA DE MÃO — corpo cilíndrico (cabo), cabeça mais larga, lente (material emissivo), um interruptor (cubo embutido na lateral) e uma alça de pe…
 - `moto.js` — moto — MOTOCICLETA FUTURISTA ESTILIZADA, 100% em PASSOS (nenhuma linha de geometria em JS: `construir` é só `executar`).
 - `vegetacao-cartoon.js` — PEÇA: vegetacao-cartoon — a PROVA da vegetação plantável (D-64). Planta um PRADO cartoon: tufos de grama (assados numa malha por variante -> poucos draws), f…
 

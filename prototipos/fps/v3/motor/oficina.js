@@ -192,22 +192,29 @@ function indicesEixo(valor, tamanho) {
   const r = []; for (let k = 0; k < tamanho; k++) if (k % passo === fase) r.push(k); return r;
 }
 
-const CONTRATOS_ORIGEM = {
-  loft: {
-    /* Fase 3.5, Rodada A: `faixa` era obrigatória — agora é opcional com a MESMA
-       semântica que `lado` já tinha (ausente = "todos"). Isso abre, sem
-       sintaxe nova: `{faixa}` = o anel (como antes); `{faixa,lado}` = uma
-       face (como antes); `{lado}` sem faixa = a COLUNA (uma face por faixa,
-       no mesmo lado); `{}` = todas as faces laterais da origem inteira. É
-       ADITIVO: `faixa` ausente hoje GRITAVA, então nenhuma peça existente usa
-       essa forma — a Prova Zero (`gabarito:selecao`) mede isso, não a
-       argumentação.
+/* Fase 4 (drone/torno/lanterna): `loft` e `lathe` compartilham a MESMA estrutura de
+   origem — faixas (segmentos consecutivos) × lados —, então o contrato é uma
+   FÁBRICA parametrizada só pelo NOME da op (usado nas mensagens de erro), em vez
+   de duas cópias da mesma lógica. `registro.faixas` é um array por SEGMENTO
+   consecutivo (`faixas[idx]` = lista de ids de face daquele segmento, vazia
+   quando o segmento é polo↔polo — não emitiu face e não avança o cursor), a
+   mesma forma que o `loft` já monta.
 
-       Rodada C: cada eixo (`faixa`, `lado`) aceita também o filtro de
-       progressão `{passo,fase}` — ver `validarEixo`/`indicesEixo` acima. */
+   Fase 3.5, Rodada A: `faixa` era obrigatória — agora é opcional com a MESMA
+   semântica que `lado` já tinha (ausente = "todos"). Isso abre, sem sintaxe
+   nova: `{faixa}` = o anel (como antes); `{faixa,lado}` = uma face (como
+   antes); `{lado}` sem faixa = a COLUNA (uma face por faixa, no mesmo lado);
+   `{}` = todas as faces laterais da origem inteira. É ADITIVO: `faixa`
+   ausente hoje GRITAVA, então nenhuma peça existente usa essa forma — a
+   Prova Zero (`gabarito:selecao`) mede isso, não a argumentação.
+
+   Rodada C: cada eixo (`faixa`, `lado`) aceita também o filtro de progressão
+   `{passo,fase}` — ver `validarEixo`/`indicesEixo` acima. */
+function contratoFaixaLado(op) {
+  return {
     validar(origem) {
       const chaves = ['op', 'id', 'faixa', 'lado'];
-      const msg = 'loft usa op, id, faixa opcional e lado opcional — cada eixo aceita inteiro não-negativo, ausente (todos), ou filtro de progressão {passo,fase} (passo inteiro ≥1, fase inteira em [0,passo), os dois obrigatórios juntos)';
+      const msg = `${op} usa op, id, faixa opcional e lado opcional — cada eixo aceita inteiro não-negativo, ausente (todos), ou filtro de progressão {passo,fase} (passo inteiro ≥1, fase inteira em [0,passo), os dois obrigatórios juntos)`;
       if (!Object.keys(origem).every((k) => chaves.includes(k))) return msg;
       if (!validarEixo(origem.faixa)) return msg;
       if (!validarEixo(origem.lado)) return msg;
@@ -215,17 +222,17 @@ const CONTRATOS_ORIGEM = {
     },
     resolver(_st, registro, origem) {
       const totalFaixas = registro.faixas.length;
-      if (!totalFaixas) return { erro: `origem loft:${origem.id} não tem faixas` };
+      if (!totalFaixas) return { erro: `origem ${op}:${origem.id} não tem faixas` };
       const faixaExplicita = typeof origem.faixa === 'number';
       let faixaIdx;
       if (origem.faixa == null || typeof origem.faixa === 'object') {
         faixaIdx = indicesEixo(origem.faixa, totalFaixas);
         if (typeof origem.faixa === 'object' && !faixaIdx.length) {
           const { passo, fase } = origem.faixa;
-          return { erro: `filtro de faixa {passo:${passo},fase:${fase}} não casa nenhum índice em 0..${totalFaixas - 1} na origem loft:${origem.id}` };
+          return { erro: `filtro de faixa {passo:${passo},fase:${fase}} não casa nenhum índice em 0..${totalFaixas - 1} na origem ${op}:${origem.id}` };
         }
       } else {
-        if (origem.faixa >= totalFaixas) return { erro: `faixa ${origem.faixa} fora do limite da origem loft:${origem.id}` };
+        if (origem.faixa >= totalFaixas) return { erro: `faixa ${origem.faixa} fora do limite da origem ${op}:${origem.id}` };
         faixaIdx = [origem.faixa];
       }
 
@@ -236,23 +243,81 @@ const CONTRATOS_ORIGEM = {
         if (!faixa.length) {
           // faixa degenerada (segmento polo-polo, sem face lateral): explícita
           // GRITA sempre; em união/coluna/filtro é PULADA — nunca escolhida sozinha.
-          if (faixaExplicita) return { erro: `faixa ${fi} da origem loft:${origem.id} não tem faces laterais` };
+          if (faixaExplicita) return { erro: `faixa ${fi} da origem ${op}:${origem.id} não tem faces laterais` };
           continue;
         }
         if (origem.lado == null) { faces.push(...faixa); continue; }
         if (ladoExplicito) {
-          if (origem.lado >= faixa.length) return { erro: `lado ${origem.lado} fora do limite da faixa ${fi} da origem loft:${origem.id} (0..${faixa.length - 1})` };
+          if (origem.lado >= faixa.length) return { erro: `lado ${origem.lado} fora do limite da faixa ${fi} da origem ${op}:${origem.id} (0..${faixa.length - 1})` };
           faces.push(faixa[origem.lado]);
         } else {
           const idxLado = indicesEixo(origem.lado, faixa.length);
           if (!idxLado.length) {
             const { passo, fase } = origem.lado;
-            return { erro: `filtro de lado {passo:${passo},fase:${fase}} não casa nenhum índice em 0..${faixa.length - 1} na faixa ${fi} da origem loft:${origem.id}` };
+            return { erro: `filtro de lado {passo:${passo},fase:${fase}} não casa nenhum índice em 0..${faixa.length - 1} na faixa ${fi} da origem ${op}:${origem.id}` };
           }
           for (const li of idxLado) faces.push(faixa[li]);
         }
       }
-      if (!faces.length) return { erro: `origem loft:${origem.id} não tem nenhuma face lateral correspondente` };
+      if (!faces.length) return { erro: `origem ${op}:${origem.id} não tem nenhuma face lateral correspondente` };
+      return { faces };
+    },
+  };
+}
+
+const CONTRATOS_ORIGEM = {
+  loft: contratoFaixaLado('loft'),
+  /* lathe — MESMA estrutura de faixas × lados que o loft (o `lathe` é o TEMPLATE
+     de que o `loft` generalizou, ver o comentário da op `lathe` mais abaixo);
+     reusa a fábrica acima em vez de duplicar validar/resolver. */
+  lathe: contratoFaixaLado('lathe'),
+  /* cilindro — dois eixos INDEPENDENTES (não uma grade faixa×lado como o
+     loft/lathe): `lado` é numérico sobre as L faces LATERAIS; `tampa` é
+     NOMINAL ('fundo'|'topo'), como o `face` do cubo — sem filtro de
+     progressão (não é um eixo de índice regular, são só duas faces). Os dois
+     UNEM: `lado` presente contribui as laterais resolvidas; `tampa` presente
+     contribui aquela tampa; NENHUM dos dois presente = todas as LATERAIS,
+     sem tampa nenhuma (a convenção `{}` do loft/lathe, e o que resolve o
+     BLOQUEADO 2 da lanterna — "só a lateral, não as tampas"). */
+  cilindro: {
+    validar(origem) {
+      const chaves = ['op', 'id', 'lado', 'tampa'];
+      const msg = "cilindro usa op, id, lado opcional (eixo numérico sobre as faces laterais: inteiro, ausente = todas, ou filtro de progressão {passo,fase}) e tampa opcional ('fundo' ou 'topo')";
+      if (!Object.keys(origem).every((k) => chaves.includes(k))) return msg;
+      if (!validarEixo(origem.lado)) return msg;
+      if (origem.tampa != null && origem.tampa !== 'fundo' && origem.tampa !== 'topo') return msg;
+      return null;
+    },
+    resolver(st, registro, origem) {
+      const ladoPresente = origem.lado != null;
+      const tampaPresente = origem.tampa != null;
+      const faces = [];
+      if (ladoPresente || !tampaPresente) {   // explícito, OU nenhum dos dois -> default = todas as laterais
+        const totalLaterais = registro.laterais.length;
+        if (typeof origem.lado === 'number') {
+          // lado EXPLÍCITO (um índice só): fora do limite ou já removido nomeiam a causa,
+          // a mesma distinção do `face` do cubo (índice inválido != face que já existiu e sumiu).
+          if (origem.lado >= totalLaterais) return { erro: `lado ${origem.lado} fora do limite da origem cilindro:${origem.id} (0..${totalLaterais - 1})` };
+          const f = registro.laterais[origem.lado];
+          if (!st.F.has(f)) return { erro: `lado ${origem.lado} da origem cilindro:${origem.id} foi removido` };
+          faces.push(f);
+        } else {
+          // ausente (todas) ou filtro {passo,fase}: união silenciosa, pulando lado já removido
+          // (a mesma convenção do cubo pra `face` ausente — remover uma lateral é normal, não erro).
+          const idxLado = indicesEixo(origem.lado, totalLaterais);
+          if (typeof origem.lado === 'object' && !idxLado.length) {
+            const { passo, fase } = origem.lado;
+            return { erro: `filtro de lado {passo:${passo},fase:${fase}} não casa nenhum índice em 0..${totalLaterais - 1} na origem cilindro:${origem.id}` };
+          }
+          for (const li of idxLado) { const f = registro.laterais[li]; if (st.F.has(f)) faces.push(f); }
+        }
+      }
+      if (tampaPresente) {
+        const f = registro.tampas[origem.tampa];
+        if (f == null || !st.F.has(f)) return { erro: `tampa '${origem.tampa}' da origem cilindro:${origem.id} foi removida` };
+        faces.push(f);
+      }
+      if (!faces.length) return { erro: `origem cilindro:${origem.id} não tem nenhuma face correspondente` };
       return { faces };
     },
   },
@@ -549,16 +614,21 @@ export const OPS = {
 
   cilindro(st, a, i) {
     const b = confereId(st, i, 'cilindro', a);
+    if (a.origemId != null && (!Number.isSafeInteger(a.origemId) || a.origemId < 0)) return grita(st, i, 'cilindro', 'origemId', 'origemId precisa ser inteiro não-negativo');
     const r = st.num(a.raio ?? 0.5);
     const h = st.num(a.altura ?? 1);
     const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // `lados` é TOPO: muda a CONTAGEM
     if (2 * L > BLOCO) throw new Error(`oficina: cilindro com ${L} lados estoura o bloco de ids (${BLOCO}); máx ${(BLOCO / 2) | 0}`);   // D3: guarda de overflow por-passo
     for (let k = 0; k < L; k++) { const t = (k / L) * Math.PI * 2; addV(st, b + k, [Math.cos(t) * r, 0, Math.sin(t) * r]); }
     for (let k = 0; k < L; k++) { const t = (k / L) * Math.PI * 2; addV(st, b + L + k, [Math.cos(t) * r, h, Math.sin(t) * r]); }
-    for (let k = 0; k < L; k++) { const n = (k + 1) % L; addF(st, b + k, [b + k, b + L + k, b + L + n, b + n]); } // lados (normal radial pra fora)
+    const laterais = [];
+    for (let k = 0; k < L; k++) { const n = (k + 1) % L; addF(st, b + k, [b + k, b + L + k, b + L + n, b + n]); laterais.push(b + k); } // lados (normal radial pra fora)
     // tampas: MESMO winding do cubo (fundo pra-frente -> normal -y; topo revertido -> +y). Inverter apaga a luz da tampa — era o bug D1.
     const fundo = []; for (let k = 0; k < L; k++) fundo.push(b + k); addF(st, b + L, fundo);          // -y
     const topo = []; for (let k = L - 1; k >= 0; k--) topo.push(b + L + k); addF(st, b + L + 1, topo); // +y
+    /* origemId (Fase 4): `laterais[k]` é a face lateral k (0..L-1), o eixo
+       numérico `lado`; `tampas` dá as duas faces nominais `fundo`/`topo`. */
+    if (a.origemId != null) registraOrigem(st, i, 'cilindro', a.origemId, { laterais, tampas: { fundo: b + L, topo: b + L + 1 } });
   },
 
   /* ---- P1 do playground: esfera / cone / plano — geradores novos, mesmas leis ----
@@ -805,6 +875,7 @@ export const OPS = {
      qualquer vértice — throw como a esfera/cone/plano. */
   lathe(st, a, i) {
     const b = confereId(st, i, 'lathe', a);
+    if (a.origemId != null && (!Number.isSafeInteger(a.origemId) || a.origemId < 0)) return grita(st, i, 'lathe', 'origemId', 'origemId precisa ser inteiro não-negativo');
     const perfil = a.perfil ?? [];
     if (perfil.length < 2) return grita(st, i, 'lathe', perfil.length, `perfil precisa de ao menos 2 pontos (tem ${perfil.length})`);
     const L = Math.max(3, st.num(a.lados ?? 8) | 0);   // TOPO (pra TODO o perfil): muda a CONTAGEM
@@ -847,18 +918,21 @@ export const OPS = {
 
     // FACES — cursor de face análogo, por segmento consecutivo (i,i+1)
     let fCursor = 0;
+    // origemId (Fase 4): faixas[idx] = ids de face do segmento idx (vazia se polo↔polo) — a MESMA forma que o loft já monta, ver `contratoFaixaLado`.
+    const faixas = Array.from({ length: info.length - 1 }, () => []);
     for (let idx = 0; idx < info.length - 1; idx++) {
       const A = info[idx], B = info[idx + 1];
       if (A.polo && B.polo) { grita(st, i, 'lathe', idx, 'polo↔polo adjacente — perfil degenerado, sem face neste segmento'); continue; }   // 0 faces, cursor não avança
       if (!A.polo && !B.polo) {
-        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [A.ids[j], B.ids[j], B.ids[n], A.ids[n]]); }   // anel<->anel: quads (a faixa da esfera)
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L, fid = b + fCursor + j; addF(st, fid, [A.ids[j], B.ids[j], B.ids[n], A.ids[n]]); faixas[idx].push(fid); }   // anel<->anel: quads (a faixa da esfera)
       } else if (A.polo) {
-        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [A.id, B.ids[j], B.ids[n]]); }   // polo embaixo -> anel em cima: leque SUL
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L, fid = b + fCursor + j; addF(st, fid, [A.id, B.ids[j], B.ids[n]]); faixas[idx].push(fid); }   // polo embaixo -> anel em cima: leque SUL
       } else {
-        for (let j = 0; j < L; j++) { const n = (j + 1) % L; addF(st, b + fCursor + j, [B.id, A.ids[n], A.ids[j]]); }   // anel embaixo -> polo em cima: leque NORTE (invertido)
+        for (let j = 0; j < L; j++) { const n = (j + 1) % L, fid = b + fCursor + j; addF(st, fid, [B.id, A.ids[n], A.ids[j]]); faixas[idx].push(fid); }   // anel embaixo -> polo em cima: leque NORTE (invertido)
       }
       fCursor += L;
     }
+    if (a.origemId != null) registraOrigem(st, i, 'lathe', a.origemId, { faixas });
   },
 
   /* loft — P4 do playground: uma sequência de SEÇÕES (círculo de raio variável)

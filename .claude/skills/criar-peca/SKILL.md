@@ -89,16 +89,23 @@ momento do PASSO**: geometria criada depois não é atingida, e geometria
 inserida antes passa a ser — sem gritar. Se o alcance precisa sobreviver à
 reordenação da lista, use `grupo`, `origem` ou ids. A op `pesar` ainda não
 aceita `sel` (só `vs:`/`faces:`), então não dá pra dizer `tudo` nela.
-`origem` existe para `loft` e
-`cubo`. No loft, `sel:{origem:{op:'loft',id,faixa?,lado?}}` endereça a grade
-de duas dimensões da origem — **`faixa` e `lado` são os DOIS opcionais**
-(D-130, Rodada A da Fase 3.5), ausente = "todos" nesse eixo: `{faixa}` é o
-anel local zero-based; `{faixa,lado}` é uma face só; `{lado}` sem `faixa` é a
-**coluna** (uma face por faixa, no mesmo lado — pula faixa sem lateral, e
-lado fora do limite em qualquer faixa GRITA sem selecionar parcial); `{}` é
-toda a origem (a união de todas as faixas; se nenhuma render face, GRITA).
-**Cada eixo também aceita um FILTRO DE PROGRESSÃO `{passo,fase}`** (D-130,
-Rodada C da Fase 3.5) — o índice `k` daquele eixo entra se
+`origem` existe para `loft`, `lathe`, `cubo` e `cilindro` (Fase 4 — os quatro
+geradores que a IA usa pra corpo arredondado; `esfera`/`cone` ainda não
+publicam origem, a falha observada não apareceu neles ainda). No loft
+**e no lathe** (o `lathe` reusa o MESMO contrato do loft, faixa×lado — é o
+TEMPLATE de que o loft generalizou), `sel:{origem:{op:'loft'|'lathe',id,
+faixa?,lado?}}` endereça a grade de duas dimensões da origem — **`faixa` e
+`lado` são os DOIS opcionais** (D-130, Rodada A da Fase 3.5), ausente =
+"todos" nesse eixo: `{faixa}` é o anel/segmento local zero-based;
+`{faixa,lado}` é uma face só; `{lado}` sem `faixa` é a **coluna** (uma face
+por faixa, no mesmo lado — pula faixa sem lateral, e lado fora do limite em
+qualquer faixa GRITA sem selecionar parcial); `{}` é toda a origem (a união
+de todas as faixas; se nenhuma render face, GRITA). No lathe, "faixa" é o
+SEGMENTO entre dois pontos consecutivos do perfil (a mesma contagem da
+guarda `polo↔polo` da op: segmento degenerado não emite face, é pulado na
+união e GRITA se endereçado explícito, igual a uma faixa sem lateral no
+loft). **Cada eixo também aceita um FILTRO DE PROGRESSÃO `{passo,fase}`**
+(D-130, Rodada C da Fase 3.5) — o índice `k` daquele eixo entra se
 `k%passo===fase`: `{lado:{passo:2,fase:0}}` são os lados pares de toda faixa,
 `{lado:{passo:2,fase:1}}` os ímpares, `{faixa:{passo:3,fase:0}}` cada
 terceiro anel. `passo` inteiro `≥1`, `fase` inteiro em `[0,passo)`, **os dois
@@ -112,9 +119,22 @@ do vocabulário — não estenda para `sel.f` nem ids globais. **O `cubo` NÃO
 recebe filtro** — a `face` dele é nominal (`fundo`/`topo`/…), não um eixo
 numérico. Sem tampas. No cubo, `sel:{origem:{op:'cubo',id,face?}}` — `face`
 também opcional: ausente = as 6 faces (pulando as já removidas por
-`apagaFace`; se nenhuma sobrar, GRITA). Essa proveniência é reconstruída no
-núcleo, não entra no canônico; `id` posicional do PASSO não ganha novo
-significado.
+`apagaFace`; se nenhuma sobrar, GRITA).
+
+No **cilindro** (Fase 4, D-13x — a lacuna que travava a peça `lanterna` e a
+reescrita do `_torno`), `sel:{origem:{op:'cilindro',id,lado?,tampa?}}` usa
+DOIS eixos INDEPENDENTES, não a grade faixa×lado do loft/lathe: `lado` é
+NUMÉRICO sobre as `L` faces LATERAIS (inteiro | ausente = todas | filtro
+`{passo,fase}`, o mesmo `validarEixo`); `tampa` é NOMINAL (`'fundo'` ou
+`'topo'`, sem filtro de progressão — é a mesma convenção do `face` do cubo,
+duas faces só). Os dois se UNEM: `lado` presente contribui as laterais
+resolvidas, `tampa` presente contribui aquela tampa; **nenhum dos dois
+presente = TODAS as laterais, sem tampa nenhuma** (a mesma convenção `{}` do
+loft/lathe — resolve "só a lateral, não as tampas" sem precisar separar por
+`sel.regiao`, que não consegue: os cantos da tampa caem na MESMA caixa que os
+da lateral). Tampa removida por `apagaFace` GRITA se endereçada explícita.
+Essa proveniência é reconstruída no núcleo, não entra no canônico; `id`
+posicional do PASSO não ganha novo significado.
 Campos `v`, `f`, `grupo` e `regiao` podem coexistir e se unem. Em operações
 de FACE (`pincel` face, `liso`,
 `material`, `solido`, `parte`, `espelha`), `v` significa faces incidentes e

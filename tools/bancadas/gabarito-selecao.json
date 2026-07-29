@@ -1,5 +1,5 @@
 {
-  "hashTotal": "9567e0089781b70b4ce9f4a1d9319aa1d1a7089f59449d5e298a5774627f29d8",
+  "hashTotal": "14b9dcab5dbbf48f5b4ae4de5e692b093b11fc696f6ff839fea17305f39507f3",
   "pecas": {
     "_corpo": {
       "hash": "7d27db600d985a54700b89303ab112dad9f72fa47e0ad45711c0d4508de63023",
@@ -75,6 +75,11 @@
       "hash": "7db1f6eb1438be74b1389b27407da948b1cc486ecfce9e51010842fccfba4022",
       "vertices": 228,
       "faces": 174
+    },
+    "lanterna": {
+      "hash": "711e2c57837371eb8559715b5a18c7f94cad8f1baa556d9bb3033731ab1e1b93",
+      "vertices": 64,
+      "faces": 42
     },
     "moto": {
       "hash": "13fdc7f2f507e237fcf63b793303ecc59f13fa7275d6fe97e3545215bdcb281a",

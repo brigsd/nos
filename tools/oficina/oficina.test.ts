@@ -3364,3 +3364,183 @@ describe('D-128 — transladar (posiciona uma seleção; o que faltava pra compo
     expect(a).toBe(b);
   });
 });
+
+/* Fase 4 (achado por três corridas cegas independentes — drone da Fase 4, reescrita
+   do _torno.js e a lanterna BLOQUEADA): `sel.origem` só existia pra `loft`/`cubo`.
+   `lathe` reusa o MESMO contrato do loft (faixa×lado, `contratoFaixaLado`); os
+   testes espelham fielmente D-130 Rodada A/C, trocando loft por lathe. */
+describe('Fase 4 — sel.origem para lathe (mesmo contrato do loft: faixa × lado)', () => {
+  // perfil [[1,y]] com y=0..4 -> 5 pontos, todos anel (raio>0): 4 segmentos anel<->anel = 4 faixas de `lados` faces cada
+  const perfil = [0, 1, 2, 3, 4].map((y) => [1, y]);
+  const lathe = (id: number, origemId = 1000): any => ['lathe', { id, origemId, lados: 4, perfil }];
+  const pintaOrigem = (extra: any = {}): any => ['pincel', { modo: 'face', sel: { origem: { op: 'lathe', id: 1000, ...extra } }, cor: '#123456' }];
+  const pintados = (n: any) => [...n.F.values()].filter((f: any) => f.cor === '#123456').map((f: any) => f.id).sort((a: number, b: number) => a - b);
+
+  it('coluna {lado:3} e {faixa:2} batem byte a byte com a lista manual equivalente (via neutroCanonico)', () => {
+    const nColuna = nucleo([lathe(0), pintaOrigem({ lado: 3 })], {}, {});
+    expect(nColuna.orfaos).toHaveLength(0);
+    expect(pintados(nColuna)).toEqual([3, 7, 11, 15]); // faixa0=[0..3], faixa1=[4..7], faixa2=[8..11], faixa3=[12..15]
+    const colunaLegado = nucleo([lathe(0), ['pincel', { modo: 'face', faces: [3, 7, 11, 15], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(nColuna))).toBe(JSON.stringify(neutroCanonico(colunaLegado)));
+
+    const nFaixa = nucleo([lathe(0), pintaOrigem({ faixa: 2 })], {}, {});
+    expect(pintados(nFaixa)).toEqual([8, 9, 10, 11]);
+    const faixaLegado = nucleo([lathe(0), ['pincel', { modo: 'face', faces: [8, 9, 10, 11], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(nFaixa))).toBe(JSON.stringify(neutroCanonico(faixaLegado)));
+  });
+
+  it('eixo ausente = todos: {} é a união de todas as faixas, byte a byte com a lista manual', () => {
+    const n = nucleo([lathe(0), pintaOrigem()], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(pintados(n)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    const legado = nucleo([lathe(0), ['pincel', { modo: 'face', faces: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(n))).toBe(JSON.stringify(neutroCanonico(legado)));
+  });
+
+  it('filtro de progressão par/ímpar em lado e em faixa batem byte a byte com a lista manual', () => {
+    const ladoPar = nucleo([lathe(0), pintaOrigem({ lado: { passo: 2, fase: 0 } })], {}, {});
+    expect(pintados(ladoPar)).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+    const ladoParLegado = nucleo([lathe(0), ['pincel', { modo: 'face', faces: [0, 2, 4, 6, 8, 10, 12, 14], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(ladoPar))).toBe(JSON.stringify(neutroCanonico(ladoParLegado)));
+
+    const faixaImpar = nucleo([lathe(0), pintaOrigem({ faixa: { passo: 2, fase: 1 } })], {}, {});
+    expect(pintados(faixaImpar)).toEqual([4, 5, 6, 7, 12, 13, 14, 15]);
+  });
+
+  it('{passo:1,fase:0} é a identidade — todos os índices, nos dois eixos', () => {
+    const porLado = nucleo([lathe(0), pintaOrigem({ lado: { passo: 1, fase: 0 } })], {}, {});
+    const semNada = nucleo([lathe(0), pintaOrigem()], {}, {});
+    expect(JSON.stringify(neutroCanonico(porLado))).toBe(JSON.stringify(neutroCanonico(semNada)));
+    const porFaixa = nucleo([lathe(0), pintaOrigem({ faixa: { passo: 1, fase: 0 } })], {}, {});
+    expect(JSON.stringify(neutroCanonico(porFaixa))).toBe(JSON.stringify(neutroCanonico(semNada)));
+  });
+
+  it('índice fora do limite e filtro malformado GRITAM (nos dois eixos), sem pintar nada', () => {
+    const foraDoLimite = nucleo([lathe(0), pintaOrigem({ lado: 99 })], {}, {});
+    expect(foraDoLimite.orfaos.some((o: any) => o.op === 'pincel' && /lado 99 fora do limite/.test(o.motivo))).toBe(true);
+    expect(pintados(foraDoLimite)).toEqual([]);
+
+    const faixaForaDoLimite = nucleo([lathe(0), pintaOrigem({ faixa: 99 })], {}, {});
+    expect(faixaForaDoLimite.orfaos.some((o: any) => o.op === 'pincel' && /faixa 99 fora do limite/.test(o.motivo))).toBe(true);
+
+    for (const malformado of [{ passo: 0, fase: 0 }, { passo: 2, fase: 2 }, { passo: 2 }, { fase: 0 }]) {
+      const n = nucleo([lathe(0), pintaOrigem({ lado: malformado })], {}, {});
+      expect(n.orfaos.some((o: any) => o.op === 'pincel')).toBe(true);
+      expect(pintados(n)).toEqual([]);
+    }
+  });
+
+  it('filtro que não casa nenhum índice GRITA (seleção vazia, nunca no-op)', () => {
+    const n = nucleo([lathe(0), pintaOrigem({ lado: { passo: 5, fase: 4 } })], {}, {});
+    expect(n.orfaos.some((o: any) => o.op === 'pincel' && /não casa nenhum índice/.test(o.motivo))).toBe(true);
+    expect(pintados(n)).toEqual([]);
+  });
+
+  it('faixa degenerada (segmento polo↔polo) é pulada na união e GRITA se endereçada explícita', () => {
+    // perfil polo(y=0) -> polo(y=1) -> anel(y=2) -> anel(y=3): o segmento 0 (polo<->polo) não emite
+    // face -> faixas[0] fica vazia; segmento 1 (polo->anel) e segmento 2 (anel->anel) emitem normal
+    const perfilComPolo = [[0, 0], [0, 1], [1, 2], [1, 3]];
+    const n = nucleo([['lathe', { id: 0, origemId: 1000, lados: 4, perfil: perfilComPolo }], pintaOrigem()], {}, {});
+    expect(n.orfaos.some((o: any) => o.op === 'lathe' && /polo↔polo/.test(o.motivo))).toBe(true); // o próprio lathe já grita o segmento degenerado
+    expect(pintados(n)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]); // a união pula o segmento 0 (vazio), pega os segmentos 1 e 2
+
+    const explicito = nucleo([['lathe', { id: 0, origemId: 1000, lados: 4, perfil: perfilComPolo }], pintaOrigem({ faixa: 0 })], {}, {});
+    expect(explicito.orfaos.some((o: any) => o.op === 'pincel' && /não tem faces laterais/.test(o.motivo))).toBe(true);
+  });
+});
+
+/* Fase 4 — sel.origem para cilindro: dois eixos INDEPENDENTES (`lado` numérico
+   sobre as laterais, `tampa` nominal fundo/topo) em vez da grade faixa×lado do
+   loft/lathe. `{}` = todas as laterais, SEM as tampas (resolve o BLOQUEADO 2 da
+   lanterna: "só a lateral, não as tampas" — os cantos da tampa caem na mesma
+   caixa que os das laterais, então `sel.regiao` não conseguia separar). */
+describe('Fase 4 — sel.origem para cilindro (lado numérico + tampa nominal)', () => {
+  const cil = (id: number, origemId = 2000): any => ['cilindro', { id, origemId, lados: 6, raio: 1, altura: 1 }];
+  // faces: lados 6+0..6+5, fundo 6+6, topo 6+7 — mas a base do passo já soma; usar ids relativos ao passo(0)=0
+  const pintaOrigem = (extra: any = {}): any => ['pincel', { modo: 'face', sel: { origem: { op: 'cilindro', id: 2000, ...extra } }, cor: '#123456' }];
+  const pintados = (n: any) => [...n.F.values()].filter((f: any) => f.cor === '#123456').map((f: any) => f.id).sort((a: number, b: number) => a - b);
+
+  it('{} (nem lado nem tampa) seleciona só as 6 laterais, byte a byte com a lista manual — NÃO pega as tampas', () => {
+    const n = nucleo([cil(0), pintaOrigem()], {}, {});
+    expect(n.orfaos).toHaveLength(0);
+    expect(pintados(n)).toEqual([0, 1, 2, 3, 4, 5]); // laterais 0..5 — SEM o fundo(6) nem o topo(7)
+    const legado = nucleo([cil(0), ['pincel', { modo: 'face', faces: [0, 1, 2, 3, 4, 5], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(n))).toBe(JSON.stringify(neutroCanonico(legado)));
+  });
+
+  it('lado inteiro seleciona uma lateral só, byte a byte com a lista manual', () => {
+    const n = nucleo([cil(0), pintaOrigem({ lado: 3 })], {}, {});
+    expect(pintados(n)).toEqual([3]);
+    const legado = nucleo([cil(0), ['pincel', { modo: 'face', faces: [3], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(n))).toBe(JSON.stringify(neutroCanonico(legado)));
+  });
+
+  it('filtro de progressão par/ímpar em lado bate byte a byte com a lista manual (o caso do detector-de-banding)', () => {
+    const pares = nucleo([cil(0), pintaOrigem({ lado: { passo: 2, fase: 0 } })], {}, {});
+    expect(pintados(pares)).toEqual([0, 2, 4]);
+    const legadoPares = nucleo([cil(0), ['pincel', { modo: 'face', faces: [0, 2, 4], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(pares))).toBe(JSON.stringify(neutroCanonico(legadoPares)));
+
+    const impares = nucleo([cil(0), pintaOrigem({ lado: { passo: 2, fase: 1 } })], {}, {});
+    expect(pintados(impares)).toEqual([1, 3, 5]);
+  });
+
+  it('{passo:1,fase:0} é a identidade — todos os lados', () => {
+    const porLado = nucleo([cil(0), pintaOrigem({ lado: { passo: 1, fase: 0 } })], {}, {});
+    const semNada = nucleo([cil(0), pintaOrigem()], {}, {});
+    expect(JSON.stringify(neutroCanonico(porLado))).toBe(JSON.stringify(neutroCanonico(semNada)));
+  });
+
+  it('tampa explícita (fundo/topo) seleciona só aquela face, byte a byte — e NÃO traz as laterais junto', () => {
+    const fundo = nucleo([cil(0), pintaOrigem({ tampa: 'fundo' })], {}, {});
+    expect(pintados(fundo)).toEqual([6]);
+    const topo = nucleo([cil(0), pintaOrigem({ tampa: 'topo' })], {}, {});
+    expect(pintados(topo)).toEqual([7]);
+    const legadoFundo = nucleo([cil(0), ['pincel', { modo: 'face', faces: [6], cor: '#123456' }]], {}, {});
+    expect(JSON.stringify(neutroCanonico(fundo))).toBe(JSON.stringify(neutroCanonico(legadoFundo)));
+  });
+
+  it('os dois presentes = união (lado + tampa)', () => {
+    const n = nucleo([cil(0), pintaOrigem({ lado: 0, tampa: 'topo' })], {}, {});
+    expect(pintados(n)).toEqual([0, 7]);
+  });
+
+  it('tampa removida por apagaFace GRITA quando endereçada explicitamente', () => {
+    const n = nucleo([cil(0), ['apagaFace', { face: 7 }], pintaOrigem({ tampa: 'topo' })], {}, {});
+    expect(n.orfaos.some((o: any) => o.op === 'pincel' && /tampa 'topo'.*foi removida/.test(o.motivo))).toBe(true);
+    expect(pintados(n)).toEqual([]);
+    // mas {} continua funcionando (só as laterais, que não foram tocadas)
+    const semTampa = nucleo([cil(0), ['apagaFace', { face: 7 }], pintaOrigem()], {}, {});
+    expect(pintados(semTampa)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('lado explícito removido por apagaFace GRITA nomeando o lado (a mesma distinção do cubo); a união segue pulando em silêncio', () => {
+    const explicito = nucleo([cil(0), ['apagaFace', { face: 2 }], pintaOrigem({ lado: 2 })], {}, {});
+    expect(explicito.orfaos.some((o: any) => o.op === 'pincel' && /lado 2.*foi removido/.test(o.motivo))).toBe(true);
+    expect(pintados(explicito)).toEqual([]);
+
+    const uniao = nucleo([cil(0), ['apagaFace', { face: 2 }], pintaOrigem()], {}, {});
+    expect(uniao.orfaos).toHaveLength(0); // {} pula o lado removido em silêncio, como o cubo faz com face
+    expect(pintados(uniao)).toEqual([0, 1, 3, 4, 5]);
+  });
+
+  it('lado inteiro fora do limite GRITA e não seleciona parcial; filtro que não casa nada GRITA', () => {
+    const foraDoLimite = nucleo([cil(0), pintaOrigem({ lado: 99 })], {}, {});
+    expect(foraDoLimite.orfaos.some((o: any) => o.op === 'pincel' && /lado 99 fora do limite/.test(o.motivo))).toBe(true);
+    expect(pintados(foraDoLimite)).toEqual([]);
+
+    const semCasar = nucleo([cil(0), pintaOrigem({ lado: { passo: 9, fase: 8 } })], {}, {});
+    expect(semCasar.orfaos.some((o: any) => o.op === 'pincel' && /não casa nenhum índice/.test(o.motivo))).toBe(true);
+    expect(pintados(semCasar)).toEqual([]);
+  });
+
+  it('tampa inválida e chave desconhecida GRITAM', () => {
+    const tampaInvalida = nucleo([cil(0), pintaOrigem({ tampa: 'lateral' as any })], {}, {});
+    expect(tampaInvalida.orfaos.some((o: any) => o.op === 'pincel')).toBe(true);
+    expect(pintados(tampaInvalida)).toEqual([]);
+
+    const chaveDesconhecida = nucleo([cil(0), ['pincel', { modo: 'face', sel: { origem: { op: 'cilindro', id: 2000, faixa: 1 } as any }, cor: '#123456' }]], {}, {});
+    expect(chaveDesconhecida.orfaos.some((o: any) => o.op === 'pincel')).toBe(true);
+    expect(pintados(chaveDesconhecida)).toEqual([]);
+  });
+});

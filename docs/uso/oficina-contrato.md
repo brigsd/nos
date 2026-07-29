@@ -294,7 +294,11 @@ Sem o servidor no ar, cai pro download comum — funciona, mas você move o arqu
 > `ALIASES` são a prova da Fase 2, não uma sintaxe aprovada de produção. Loft e
 > cubo validaram a mesma base de identidade; a Fase 3 começa pelo espelhamento.
 > Peças antigas continuam no contrato legado e esta seção não autoriza migrar a
-> moto nem expor essa sintaxe na interface.
+> moto nem expor essa sintaxe na interface. **Fase 4** estendeu `sel.origem`
+> pra `lathe` (reusa o MESMO contrato do loft: faixa×lado) e `cilindro` (dois
+> eixos independentes: `lado` numérico sobre as laterais, `tampa` nominal) —
+> três medições cegas (o drone, a reescrita do `_torno`, a lanterna) esbarraram
+> na mesma lacuna, sem se enxergar.
 
 `rotaciona`, `transladar`, `displace`, `espelha` e os atributos por face
 (`pincel` no modo `face`, `liso`, `material`, `solido`, `parte`) usam a MESMA
@@ -308,7 +312,9 @@ sel: { grupo: 'nome-da-parte' }           // faces já nomeadas por `parte`
 sel: { regiao: { min:[x,y,z], max:[x,y,z] } }
 sel: { origem: { op:'loft', id:1000, faixa?:2, lado?:1 } }
 sel: { origem: { op:'loft', id:1000, lado:{passo:2, fase:0} } }   // filtro de progressão (Rodada C)
+sel: { origem: { op:'lathe', id:1000, faixa?:2, lado?:1 } }       // MESMO contrato do loft (Fase 4)
 sel: { origem: { op:'cubo', id:30, face?:'topo' } }
+sel: { origem: { op:'cilindro', id:2000, lado?:1, tampa?:'topo' } }   // dois eixos independentes (Fase 4)
 ```
 
 `tudo` (D-129, Rodada B da Fase 3.5) é a única forma **explícita** de dizer "a
@@ -352,6 +358,29 @@ inclusive entre geradores, grita e permanece ambígua. Em `loft`,
 dentro da faixa) — e **os dois são opcionais** (D-130, Rodada A da Fase 3.5),
 com a mesma semântica: ausente = "todos" nesse eixo.
 
+**`lathe` (Fase 4) reusa EXATAMENTE o mesmo contrato do `loft`** — a mesma
+função `contratoFaixaLado` do núcleo, parametrizada só pelo nome da op nas
+mensagens de erro — porque a estrutura é idêntica: `faixa` é o SEGMENTO entre
+dois pontos consecutivos do perfil (o `lathe` é o TEMPLATE de que o `loft`
+generalizou o frame; a grade faixa×lado já existia nos dois, só o `loft` a
+publicava). Um segmento polo↔polo não emite face — a mesma faixa "sem
+laterais" do loft — e é pulado na união/coluna/filtro, GRITANDO só se
+endereçado explícito.
+
+**`cilindro` (Fase 4) usa DOIS EIXOS INDEPENDENTES, não a grade faixa×lado** —
+`op:'cilindro'` + `id:2000` endereça `lado` (numérico sobre as `L` faces
+LATERAIS: inteiro, ausente = todas, ou filtro `{passo,fase}` — o mesmo
+`validarEixo`) e `tampa` (nominal, `'fundo'` ou `'topo'` — sem filtro de
+progressão, a mesma convenção do `face` do cubo: são só duas faces, não um
+eixo de índice). Os dois se UNEM: `lado` presente contribui as laterais
+resolvidas, `tampa` presente contribui aquela face; **nenhum dos dois
+presente = TODAS as laterais, sem tampa nenhuma** (a mesma convenção `{}` do
+loft/lathe). Foi exatamente essa lacuna — nem `sel.regiao` (a caixa da tampa
+e da lateral se sobrepõem) nem `sel.origem` (não existia pra `cilindro`)
+sabiam dizer "só a lateral" — que bloqueou a peça `lanterna` (dois BLOQUEADO
+registrados nela) e a reescrita do `_torno`. Tampa removida por `apagaFace`
+GRITA se endereçada explícita, como a face removida do cubo.
+
 **Filtro de progressão `{passo, fase}` (D-130, Rodada C da Fase 3.5):** cada
 eixo (`faixa` e `lado`) aceita, além de inteiro e de ausente, um filtro que
 seleciona vários índices de uma vez — o índice `k` do eixo entra se
@@ -381,10 +410,11 @@ dois campos** (não duplica a lógica de `faixa` pra `lado`).
 
 **Armadilha, vale sempre que este vocabulário for citado:** paridade sobre
 ÍNDICE só é válida onde a conectividade é REGULAR. É o caso aqui e só aqui —
-os eixos de `sel.origem` SÃO a grade regular do próprio gerador. **Não
-estenda isto** para `sel.f` (lista de ids quaisquer, sem grade) nem para ids
-globais (sem eixo nenhum). O `cubo` não recebe filtro — a `face` dele é
-NOMINAL (`fundo`, `topo`, …), não um eixo numérico.
+os eixos de `sel.origem` SÃO a grade regular do próprio gerador (`faixa`/`lado`
+do loft/lathe, `lado` do cilindro). **Não estenda isto** para `sel.f` (lista
+de ids quaisquer, sem grade) nem para ids globais (sem eixo nenhum). O `cubo`
+não recebe filtro — a `face` dele é NOMINAL (`fundo`, `topo`, …), não um eixo
+numérico; a `tampa` do `cilindro` é a mesma exceção nominal.
 
 | seleção | significa |
 |---|---|
@@ -396,19 +426,35 @@ NOMINAL (`fundo`, `topo`, …), não um eixo numérico.
 | `{faixa:{passo:2,fase:0}}` | as faixas pares inteiras |
 | `{faixa:{passo:2,fase:0}, lado:{passo:2,fase:1}}` | lados ímpares só nas faixas pares |
 
-Não há tampas. Faixa sem face lateral (segmento degenerado polo-polo) é
-PULADA na união, na coluna e no filtro; `lado` fora do limite em **qualquer**
-faixa não-vazia (inteiro) GRITA o passo inteiro, nunca seleciona parcial; um
-filtro de progressão que não casa **nenhum** índice também GRITA (seleção
-vazia, nunca no-op) — em qualquer um dos dois eixos; se a união de todas as
-faixas não render face nenhuma, GRITA (fail-closed). Em `cubo`,
-`op:'cubo'` + `id:30` usa uma única `face` local, também **opcional**
-(mesma rodada): `fundo` (-y), `topo` (+y), `tras` (-z), `direita` (+x),
-`frente` (+z) ou `esquerda` (-x) — e ausente = as 6 faces (pulando as que já
-foram removidas por `apagaFace`; se nenhuma sobrar viva, GRITA). Esses nomes
-são locais ao cubo e sobrevivem a transformação sem topologia. A identidade
-posicional `id` do PASSO permanece como sempre; `origemId` é a identidade
-estável aditiva exigida por esta seleção.
+Não há tampas (no loft/lathe). Faixa sem face lateral (segmento degenerado
+polo-polo) é PULADA na união, na coluna e no filtro; `lado` fora do limite em
+**qualquer** faixa não-vazia (inteiro) GRITA o passo inteiro, nunca seleciona
+parcial; um filtro de progressão que não casa **nenhum** índice também GRITA
+(seleção vazia, nunca no-op) — em qualquer um dos dois eixos; se a união de
+todas as faixas não render face nenhuma, GRITA (fail-closed). Tudo isso vale
+IGUAL pro `lathe` (mesmo contrato, mesma tabela abaixo — troque "faixa" por
+"segmento"). Em `cubo`, `op:'cubo'` + `id:30` usa uma única `face` local,
+também **opcional** (mesma rodada): `fundo` (-y), `topo` (+y), `tras` (-z),
+`direita` (+x), `frente` (+z) ou `esquerda` (-x) — e ausente = as 6 faces
+(pulando as que já foram removidas por `apagaFace`; se nenhuma sobrar viva,
+GRITA). Esses nomes são locais ao cubo e sobrevivem a transformação sem
+topologia. A identidade posicional `id` do PASSO permanece como sempre;
+`origemId` é a identidade estável aditiva exigida por esta seleção.
+
+| seleção (cilindro) | significa |
+|---|---|
+| `{}` (nem lado nem tampa) | todas as `L` faces LATERAIS, sem tampa nenhuma |
+| `{lado:1}` | uma face lateral só |
+| `{lado:{passo:2,fase:0}}` | os lados pares (o caso do `detector-de-banding`) |
+| `{tampa:'fundo'}` | só o fundo (não traz as laterais junto) |
+| `{lado:1, tampa:'topo'}` | união: a lateral 1 + o topo |
+
+`lado` fora do limite GRITA o passo inteiro, nunca seleciona parcial; filtro
+de progressão que não casa nenhum índice GRITA (seleção vazia); tampa
+inválida (nem `'fundo'` nem `'topo'`) e chave desconhecida (ex.: `faixa` —
+que é do loft/lathe, não do cilindro) GRITAM; tampa já removida por
+`apagaFace` GRITA se endereçada explícita. `id` posicional do PASSO
+permanece como sempre; `origemId` é a identidade estável aditiva.
 
 `faces:[ids]` permanece para todas as peças salvas e não pode aparecer junto de
 `sel` na mesma op: a mistura é ambígua e GRITA. Toda chave de seleção
